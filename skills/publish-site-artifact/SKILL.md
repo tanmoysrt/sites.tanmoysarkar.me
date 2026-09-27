@@ -39,4 +39,6 @@ Marp references: [CLI](https://github.com/marp-team/marp-cli) and [slide transit
 
 ## Publish
 
+Before publication, review all new or changed source and generated files. Never publish PII; remove private names, contact details, addresses, IDs, and personal records from `raw/` and public output. Ask the user about unexplained high-entropy data, including token-like strings, encoded blobs, or binaries, and leave it out until confirmed safe. Do not rely on `.gitignore` to catch sensitive content.
+
 Run `gh auth status` before publication. For a new direct HTML page, use the `gh api` PUT command in `llms.txt`; include the existing file SHA when updating. For a generated or multi-file artifact, use `gh repo clone tanmoysrt/sites.tanmoysarkar.me`, then commit and push the source and generated files. Do not use raw token-based HTTP publishing. Publish only when the user has asked for it. Confirm the public URL works before reporting success.

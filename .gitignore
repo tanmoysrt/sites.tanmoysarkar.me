@@ -4,30 +4,79 @@
 !.env.example
 !.env.sample
 !.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
 .envrc
 *.pem
+*.key
 *.p12
 *.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
 
-# Dependencies and virtual environments
+# JavaScript and Node.js
 node_modules/
 bower_components/
+jspm_packages/
+web_modules/
 .pnpm-store/
+.npm/
+.node-gyp/
+**/.yarn/cache/
+**/.yarn/unplugged/
+**/.yarn/build-state.yml
+**/.yarn/install-state.gz
+.pnp.*
+.eslintcache
+.stylelintcache
+.sass-cache/
+*.tsbuildinfo
+.node_repl_history
+
+# Python
 .venv/
 venv/
+env/
+ENV/
 __pycache__/
 *.py[cod]
+.Python
+*.egg
+*.egg-info/
+.eggs/
+.ipynb_checkpoints/
+.hypothesis/
+.pdm-build/
+pip-wheel-metadata/
+wheels/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Rust and Go
+target/
+*.rs.bk
+bin/
+vendor/
+*.test
+*.out
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.dSYM/
 
 # Local caches and test output
 .cache/
 .parcel-cache/
 .vite/
 .turbo/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.tox/
-.nox/
 .coverage
 .coverage.*
 coverage/
@@ -35,13 +84,14 @@ htmlcov/
 .nyc_output/
 playwright-report/
 test-results/
+junit.xml
+nosetests.xml
 
 # Intermediate builds; published pages live in research/, learning/, or plans/
 _site/
 dist/
 build/
 out/
-target/
 .next/
 .nuxt/
 .output/
