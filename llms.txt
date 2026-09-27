@@ -1,0 +1,32 @@
+# sites.tanmoysarkar.me
+
+A minimal dumpyard for LLM-generated static sites. Repository: `tanmoysrt/sites.tanmoysarkar.me`, branch `main`.
+
+Read `skills/publish-site-artifact/SKILL.md` before creating a report, guide, plan, or presentation.
+
+## Add a static page
+
+Use a lowercase kebab-case slug. Write a self-contained `index.html` at `research/<slug>/`, `learning/<slug>/`, or `plans/<slug>/`. Keep assets in the page's folder. Give the page a meaningful HTML `<title>`.
+
+## Add a presentation
+
+Choose `research`, `learning`, or `plans` based on the deck's purpose. Use Slidev. Put editable source at `decks/<section>/<slug>/slides.md`, then run `npm ci` and `npm run build:deck -- <section> <slug>`. This builds the public files at `<section>/<slug>/`. Set a meaningful Slidev `title`, `titleTemplate: '%s'`, `colorSchema: light`, and `routerMode: hash` in the deck frontmatter.
+
+## Publishing: GitHub CLI is required
+
+Check `gh auth status` first. Do not put tokens in files or use raw HTTP requests to publish.
+
+For a **new single-page artifact**, run this from the repository root after replacing the path:
+
+```sh
+PAGE_PATH='research/<slug>/index.html'
+CONTENT="$(base64 < "$PAGE_PATH" | tr -d '\n')"
+gh api "repos/tanmoysrt/sites.tanmoysarkar.me/contents/$PAGE_PATH" \
+  -X PUT -f message="Add $PAGE_PATH" -f branch=main -f content="$CONTENT"
+```
+
+To update an existing page, first get its SHA with `gh api "repos/tanmoysrt/sites.tanmoysarkar.me/contents/$PAGE_PATH" --jq .sha`, then add `-f sha="<the-sha>"` to the PUT command.
+
+For a presentation or other multi-file artifact, use `gh repo clone tanmoysrt/sites.tanmoysarkar.me`, add both source and built files in that clone, then commit and push. The Pages workflow regenerates section listings and deploys the site after the push.
+
+Only publish when the person requesting the artifact asks for publication. Verify the public URL before reporting success. Never commit secrets.
