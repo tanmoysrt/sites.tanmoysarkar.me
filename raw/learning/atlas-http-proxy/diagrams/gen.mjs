@@ -504,9 +504,52 @@ function partial(stage) {
   d.save(`partial-${stage}`, alts[stage - 1])
 }
 
+function health(stage) {
+  const d = new Diagram(1160, 380, { panel: true })
+  const check = (address, name) => [cell('net', 'HTTPS · port 443', `Route 53 → ${address}`), cell('tls', 'TLS', `SNI ${name}.par-1.example.com`), cell('payload', 'HTTP', 'GET /healthz')]
+  d.box(20, 150, 200, 80, 'Route 53\nhealth checkers', { kind: 'dns' })
+  d.note(120, 262, 'every 30 s\nport 443 · SNI', { size: 14 })
+  d.box(430, 30, 240, 70, 'proxy-001\n203.0.113.11', { kind: 'proxy' })
+  if (stage === 2 || stage === 3) d.box(430, 155, 240, 70, 'proxy-002\nno answer', { dashed: true, muted: true })
+  else d.box(430, 155, 240, 70, `proxy-002\n${stage === 4 ? 'back' : NODE}`, { kind: 'proxy' })
+  d.box(430, 280, 240, 70, 'proxy-003\n203.0.113.13', { kind: 'proxy' })
+  d.group(860, 60, 280, 250, 'proxy.par-1.example.com')
+  d.label(1000, 125, '203.0.113.11', { size: 20, mono: true })
+  if (stage === 3) d.label(1000, 175, 'removed', { size: 20, mono: true, color: ACCENT, bold: true })
+  else d.label(1000, 175, NODE, { size: 20, mono: true, color: stage === 4 ? ACCENT : INK, bold: stage === 4 })
+  d.label(1000, 225, '203.0.113.13', { size: 20, mono: true })
+  d.note(1000, 285, 'multivalue A · TTL 120 s', { size: 14 })
+  const arrows = [
+    { stage: 1, pts: [[222, 170], [428, 65]], frame: check('203.0.113.11', 'proxy-001') },
+    { stage: 1, until: 1, pts: [[222, 190], [428, 190]], n: 1, text: 'GET /healthz', ly: 172, frame: check(NODE, 'proxy-002') },
+    { stage: 1, pts: [[222, 210], [428, 315]], frame: check('203.0.113.13', 'proxy-003') },
+    { stage: 2, until: 3, pts: [[222, 190], [428, 190]], n: 2, text: 'no answer, twice', ly: 172, dashed: true, drop: true, frame: check(NODE, 'proxy-002') },
+    { stage: 3, pts: [[120, 148], [120, 12], [1000, 12], [1000, 58]], n: 3, text: 'stop returning .12', lx: 800, ly: 34, frame: [cell('dns', 'DNS answer', 'proxy.par-1.example.com · A .11, .13')] },
+    { stage: 4, pts: [[222, 196], [428, 196]], n: 4, text: '204 twice', ly: 176, frame: check(NODE, 'proxy-002') },
+  ]
+  flow(d, arrows.filter((a) => !a.until || stage <= a.until), stage)
+  for (const [y, current] of [[65, stage === 1], [190, stage === 1 || stage === 4], [315, stage === 1]]) {
+    if (y === 190 && (stage === 2 || stage === 3)) continue
+    d.note(700, y, '204', { accent: current, anchor: 'start', size: 17 })
+  }
+  notes(d, [
+    { stage: 2, x: 325, y: 216, text: 'about 60 s' },
+    { stage: 3, x: 800, y: 366, text: 'resolvers can keep the old answer for up to 120 s' },
+    { stage: 4, x: 800, y: 366, text: 'healthy again: back in the answer' },
+  ], stage)
+  const alts = [
+    'Route 53 health checkers send HTTPS GET /healthz to each proxy node every 30 seconds. Each node answers 204.',
+    'proxy-002 stops answering. The checkers get no answer twice, which takes about 60 seconds.',
+    'Route 53 marks proxy-002 unhealthy and stops returning 203.0.113.12 in the answer for proxy.par-1.example.com. Resolvers can keep the old answer for up to 120 seconds.',
+    'proxy-002 answers 204 on 2 checks again. Route 53 puts 203.0.113.12 back in the answer.',
+  ]
+  d.save(`health-${stage}`, alts[stage - 1])
+}
+
 overview()
 node()
 siteKey()
 autoProxy()
 customDomain()
 for (const stage of [1, 2, 3]) { request(stage); write(stage); partial(stage) }
+for (const stage of [1, 2, 3, 4]) health(stage)
