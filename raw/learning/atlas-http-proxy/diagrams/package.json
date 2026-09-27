@@ -1,14 +1,7 @@
 {
   "private": true,
   "type": "module",
-  "scripts": {
-    "render": "node render.mjs"
-  },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.18.1",
-    "esbuild": "^0.28.2",
-    "puppeteer-core": "^25.12.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "roughjs": "^4.6.6"
   }
 }

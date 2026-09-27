@@ -1,7 +1,7 @@
 ---
 marp: true
 title: 'Atlas HTTP proxy: how a site name reaches its VM'
-description: How the Atlas HTTP proxy routes a web request to a tenant VM, how route changes reach every node, how Route 53 health checks remove a failed node, and what still works when a node fails.
+description: How the Atlas HTTP proxy routes a web request to a tenant VM, how route changes reach every node, and what still works when a node fails.
 theme: default
 paginate: true
 style: |
@@ -31,13 +31,13 @@ style: |
   section::after { color: #adb5bd; font-size: 16px; }
   section.lead { justify-content: center; text-align: center; }
   section.lead h1 { font-size: 66px; margin: 8px 0 6px; }
+  section.center { justify-content: center; }
+  section.center h1 { text-align: center; }
+  section.center p { text-align: center; }
   section.pause { justify-content: center; }
   section.pause h1 { font-size: 52px; font-weight: 600; margin: 0; }
   section.pause p { color: #6c757d; margin: 12px 0 0; }
   section.small table { font-size: 20px; }
-  .motion video, .motion img { display: block; width: 1120px; }
-  .motion img { display: none; }
-  @media (prefers-reduced-motion: reduce) { .motion video { display: none; } .motion img { display: block; } }
 ---
 
 <!-- _class: lead -->
@@ -53,14 +53,16 @@ How a site name reaches its VM
 
 # The browser knows a name. Atlas must find a VM.
 
-- The browser asks for `erp.par-1.example.com`
+- A browser asks for `erp.par-1.example.com`
 - The site runs on a tenant VM, on one Metal host
 - The VM can move to another host
-- A proxy node can fail
+- Proxy nodes can fail
 
-*The proxy must connect the name to the VM, even when a node fails.*
+*The proxy connects the name to the VM. It must keep working when a part of the cluster fails.*
 
 ---
+
+<!-- _class: center -->
 
 # Three questions, three answers
 
@@ -71,10 +73,11 @@ How a site name reaches its VM
 # A VM move changes no route
 
 - Each VM has one private IPv6 address in the region: its **mesh address**
-- A route maps a site to a mesh address: `erp → fdaa:1:0:2::b`
-- A move keeps the mesh address. WG Mesh finds the new host.
+- A route maps a site name to a mesh address, such as `erp → fdaa:1:0:2::b`
+- The mesh address stays the same when the VM moves to another host
+- WG Mesh finds the new host
 
-*A route changes only when a site moves to another VM.*
+*So a route changes only when a site moves to another VM.*
 
 ---
 
@@ -82,7 +85,7 @@ How a site name reaches its VM
 
 ![w:1120 One proxy node runs OpenResty and the control daemon. Public clients reach OpenResty, which reads the route maps in shared memory for each request and sends traffic to site VMs. Central and Atlas send route changes to the control daemon. The daemon writes the maps through admin.sock, saves cluster-state.json, and replicates changes with peer nodes.](assets/node.svg)
 
-*1 to 5 nodes per region · OpenResty: data plane · control daemon: control plane*
+*A region has 1 to 5 nodes. Each node is a service VM. OpenResty is the data plane. The control daemon is the control plane.*
 
 ---
 
@@ -92,7 +95,7 @@ How a site name reaches its VM
 
 | Part | Owns | Does not own |
 |---|---|---|
-| **Atlas app** | Proxy VMs, DNS, health checks, wildcard certificate, passwords, peer membership, Cargo routes | Tenant site routes |
+| **Atlas app** | Proxy VMs, DNS, wildcard certificate, passwords, peer membership, Cargo routes | Tenant site routes |
 | **Central** | Tenant site and custom-domain routes | Proxy nodes |
 | **OpenResty** | Public traffic, from the local maps | Map changes |
 | **Control daemon** | Route validation, saved snapshot, replication | Request forwarding |
@@ -105,29 +108,47 @@ How a site name reaches its VM
 1. **One request:** how a site request reaches its VM
 2. **Other names:** custom domains and auto-proxy names
 3. **Route changes:** how the leader copies a change to every node
-4. **Failures:** health checks, partial writes, and recovery
+4. **Failures:** what still works, and what to retry
 5. **Operation:** add a node, look at a node, find the code
 
 ---
 
 <!-- header: '1 · One request' -->
+<!-- _transition: fade 250ms -->
 
-# One request, from name to VM
+# DNS returns a proxy node
 
-<div class="motion">
-<video src="assets/request.mp4" poster="assets/request.png" autoplay loop muted playsinline aria-label="The browser asks Route 53 for erp.par-1.example.com and gets the IPv4 address of one healthy proxy node. It sends HTTPS to that node. OpenResty ends TLS with the wildcard certificate and reads erp in its local site map: fdaa:1:0:2::b. OpenResty sends plain HTTP to port 80 on that address, and WG Mesh carries it to the Metal host that runs the VM."></video>
-<img src="assets/request.png" alt="The browser asks Route 53 for erp.par-1.example.com and gets the IPv4 address of one healthy proxy node. It sends HTTPS to that node. OpenResty ends TLS with the wildcard certificate and reads erp in its local site map: fdaa:1:0:2::b. OpenResty sends plain HTTP to port 80 on that address, and WG Mesh carries it to the Metal host that runs the VM.">
-</div>
+![w:1120 The browser asks DNS for erp.par-1.example.com. Route 53 answers with the IPv4 address of one healthy proxy node.](assets/request-1.svg)
 
-*DNS picks the node · the map picks the VM · WG Mesh picks the host*
+*`*.par-1.example.com` is a CNAME to `proxy.par-1.example.com`. Route 53 returns one A record for each healthy node.*
 
 ---
+
+<!-- _transition: fade 250ms -->
+
+# OpenResty ends TLS and reads its map
+
+![w:1120 The browser sends HTTPS to the proxy node. OpenResty ends TLS with the wildcard certificate and reads erp in its local site map: fdaa:1:0:2::b.](assets/request-2.svg)
+
+*One regional wildcard certificate covers every site name. The map lookup is in local memory.*
+
+---
+
+# WG Mesh carries HTTP to the VM
+
+![w:1120 OpenResty sends plain HTTP to port 80 on fdaa:1:0:2::b. WG Mesh carries it to the Metal host that runs the VM.](assets/request-3.svg)
+
+*The VM gets HTTP on port 80. WireGuard encrypts the packets between hosts.*
+
+---
+
+<!-- _class: center -->
 
 # How OpenResty finds the site key
 
 ![w:1120 The name erp.par-1.example.com. A brace marks erp as the site key and par-1.example.com as the wildcard zone from /var/lib/nginx/region. The site map gives erp → fdaa:1:0:2::b.](assets/site-key.svg)
 
-*Only one label below the zone · a site address of `-` returns `503`*
+*Only a name exactly one label below the zone uses the site map. A site address of `-` returns `503`.*
 
 ---
 
@@ -135,9 +156,9 @@ How a site name reaches its VM
 
 - OpenResty reads its own copy of the maps
 - It does not ask the control daemon or other nodes
-- A node that loses its peers still serves every route it knows
+- So a node that loses its peers still serves all the routes that it knows
 
-*Keep this when you change the data plane. A write outage is not a traffic outage.*
+*Keep this property when you change the data plane. It is why a write outage is not a traffic outage.*
 
 ---
 
@@ -153,34 +174,51 @@ How a site name reaches its VM
 | **Auto-proxy** | `site-lpc8lqa.par-1.example.com` | Proxy, wildcard certificate | The name itself |
 | **Control** | `proxy.par-1.example.com` | Proxy, wildcard certificate | Control daemon, `127.0.0.1:9000` |
 
-*Plain HTTP on port 80 uses the same maps. The site API reserves `proxy` and `proxy-*`.*
+*Plain HTTP on port 80 uses the same maps and goes to port 80 on the VM. The site API reserves `proxy` and `proxy-*`.*
 
 ---
 
 # Custom domain: the proxy does not decrypt
 
-<div class="motion">
-<video src="assets/custom-domain.mp4" poster="assets/custom-domain.png" autoplay loop muted playsinline aria-label="The browser sends HTTPS for www.customer.com to a proxy node. OpenResty reads only the SNI name and finds the VM in its SNI map. It sends the unchanged TLS stream to port 443 on the VM, after a PROXY protocol v2 header with the client address. The VM holds the certificate."></video>
-<img src="assets/custom-domain.png" alt="The browser sends HTTPS for www.customer.com to a proxy node. OpenResty reads only the SNI name and finds the VM in its SNI map. It sends the unchanged TLS stream to port 443 on the VM, after a PROXY protocol v2 header with the client address. The VM holds the certificate.">
-</div>
+![w:1120 The browser sends HTTPS for www.customer.com. OpenResty reads only the SNI name, finds the VM in its SNI map, and sends the unchanged TLS stream to port 443 on the VM with a PROXY protocol v2 header that carries the client address. The VM holds the certificate.](assets/custom-domain.svg)
 
-*SNI: the name in the TLS hello · no SNI: dropped · unknown domain: placeholder certificate and error page*
+*SNI (Server Name Indication) is the name in the TLS hello. The VM must accept PROXY protocol v2, a short header that gives it the real client address.*
 
 ---
 
-# Auto-proxy: the name is the address
+# Custom domain edge cases
+
+- A TLS connection with no SNI: OpenResty drops it
+- An unknown custom domain: a placeholder certificate and an error page
+- An HTTP-01 challenge for a custom domain goes to the VM on port 80
+- A domain in the wildcard zone is refused by the domains API (`409`)
+
+*HTTP and stream workers keep separate maps. The SNI bridge socket gives both the same state.*
+
+---
+
+# Why auto-proxy names exist
+
+- A new VM needs a URL before anyone saves a site route
+- The name carries the tenant and VM numbers
+- OpenResty calculates the mesh address from the name
+- No cluster write, no stored route
+
+---
+
+<!-- _class: center -->
+
+# The name is the address
 
 ![w:1120 The name site-lpc8lqa.par-1.example.com has the prefix site-, the base-36 label lpc8lqa, and the zone. The label decodes to 47244640258, which is 11 shifted left by 32 bits, or tenant 2. OpenResty puts the numbers into the mesh address fdaa:1:0:2::b: the region prefix from config, tenant 2, and VM 11.](assets/auto-proxy.svg)
-
-*A new VM gets a URL before any route exists · no cluster write*
 
 ---
 
 # Auto-proxy rules
 
-- Configured prefixes only, such as `site-` or `*-vm-`
-- Canonical lowercase label: 19 digits or fewer, no leading zero, 96 bits or fewer
-- The control daemon reserves these names. A site route cannot hide one.
+- Only configured prefixes, such as `site-` or `*-vm-`
+- A canonical lowercase label: at most 19 digits, no leading zero, at most 96 bits
+- The control daemon reserves these names, so a site route cannot hide one
 - The name gives identity, not location. WG Mesh still finds the host.
 
 *A route is not access. Tenant and guest firewall rules still apply.*
@@ -196,14 +234,31 @@ Where the map comes from
 
 ---
 
-# One change, from Central to every node
+<!-- _transition: fade 250ms -->
 
-<div class="motion">
-<video src="assets/write.mp4" poster="assets/write.png" autoplay loop muted playsinline aria-label="Central sends PATCH /v1/sites/erp to proxy-001, a follower, which forwards it to proxy-002, the leader. The leader applies the change, moves the generation from 41 to 42, and sends it to proxy-003, proxy-004, and proxy-005 at the same time. proxy-003 and proxy-004 acknowledge. With the leader that is 3 of 5, so the leader returns 200 through the follower. proxy-005 is late and catches up later."></video>
-<img src="assets/write.png" alt="Central sends PATCH /v1/sites/erp to proxy-001, a follower, which forwards it to proxy-002, the leader. The leader applies the change, moves the generation from 41 to 42, and sends it to proxy-003, proxy-004, and proxy-005 at the same time. proxy-003 and proxy-004 acknowledge. With the leader that is 3 of 5, so the leader returns 200 through the follower. proxy-005 is late and catches up later.">
-</div>
+# Any node accepts, the follower forwards
 
-*Any ready node accepts · only the leader orders · forward 1500 ms · peer request 200 ms*
+![w:1120 Central sends PATCH /v1/sites/erp to proxy-001, a follower. The follower forwards the change to proxy-002, the leader.](assets/write-1.svg)
+
+*The nodes elect one leader. Only the leader orders changes. The forward timeout is 1500 ms.*
+
+---
+
+<!-- _transition: fade 250ms -->
+
+# The leader applies, then sends to all peers
+
+![w:1120 The leader applies the change, moves the generation from 41 to 42, and sends the change to proxy-003, proxy-004, and proxy-005 at the same time.](assets/write-2.svg)
+
+*The generation counts changes. Each peer request has a 200 ms timeout.*
+
+---
+
+# Enough acknowledgements, then success
+
+![w:1120 proxy-003 and proxy-004 acknowledge. With the leader that is 3 of 5, so the leader returns 200 with the new generation through the follower. proxy-005 is late and catches up later.](assets/write-3.svg)
+
+*A later heartbeat makes the late node install the leader's snapshot.*
 
 ---
 
@@ -219,18 +274,18 @@ Where the map comes from
 | 4 | 3 | 1 |
 | 5 | 3 | 2 |
 
-*The count includes the leader. 3 nodes elect with 2 votes, but a write needs all 3.*
+*The count includes the leader. Election and write use different counts: 3 nodes elect a leader with 2 votes, but a write needs all 3.*
 
 ---
 
 # Leader election
 
 - The leader sends a heartbeat every 100 ms
-- No heartbeat for 300 to 450 ms (random): a follower starts an election
+- A follower that hears nothing for 300 to 450 ms (random) starts an election
 - A candidate needs a majority of votes
 - Each voter compares the candidate's term and generation with its own
 
-*A leader that sees a higher term becomes a follower.*
+*A leader that sees a higher term in a heartbeat response becomes a follower.*
 
 ---
 
@@ -244,11 +299,11 @@ curl -X PATCH \
   https://proxy.par-1.example.com/v1/sites/erp
 ```
 
-- `$TOKEN`: the regional proxy password, or a signed JWT
-- JWT `scope` selects the maps, such as `site:*`. `constraints` can limit the names.
+- `$TOKEN` is the regional proxy password or a signed JWT
+- A JWT `scope` claim selects the maps, such as `site:*`. A `constraints` claim can limit the names.
 - Success returns `X-Atlas-Proxy-Generation`
 
-*API reference: `GET /docs` on each node*
+*The API reference is at `GET /docs` on each node.*
 
 ---
 
@@ -267,42 +322,31 @@ curl -X PATCH \
 
 ---
 
-# How Route 53 stops sending traffic to a failed node
+<!-- _transition: fade 250ms -->
 
-<div class="motion">
-<video src="assets/health.mp4" poster="assets/health.png" autoplay loop muted playsinline aria-label="Route 53 health checkers send HTTPS GET /healthz to each proxy node every 30 seconds, and each node answers 204. proxy-002 stops answering. After 2 failed checks, Route 53 marks it unhealthy and stops returning 203.0.113.12 in the answer for proxy.par-1.example.com. Resolvers can keep the old answer for up to 120 seconds. When proxy-002 passes 2 checks again, Route 53 puts its address back."></video>
-<img src="assets/health.png" alt="Route 53 health checkers send HTTPS GET /healthz to each proxy node every 30 seconds, and each node answers 204. proxy-002 stops answering. After 2 failed checks, Route 53 marks it unhealthy and stops returning 203.0.113.12 in the answer for proxy.par-1.example.com. Resolvers can keep the old answer for up to 120 seconds. When proxy-002 passes 2 checks again, Route 53 puts its address back.">
-</div>
+# A change reaches 2 of 3 nodes
 
-*Atlas creates one health check per node · `proxy.<zone>` has one multivalue A record per node*
+![w:1120 A 3-node region with proxy-003 down. Central sends a route change to proxy-001, the leader. The leader and proxy-002 apply generation 42. proxy-003 does not answer.](assets/partial-1.svg)
 
----
-
-<!-- _class: small -->
-
-# What `/healthz` checks
-
-| Check | Catches |
-|---|---|
-| The control daemon has loaded its state | A daemon that is still starting |
-| OpenResty answers on its admin socket | OpenResty is down |
-| OpenResty holds the routes of the saved snapshot | OpenResty restarted with empty maps |
-| **Not checked:** the leader | A node without a write quorum keeps its traffic |
-
-- Through OpenResty on port 443: it also tests TLS and the certificate
-- Detect: about 60 s (2 checks × 30 s) · cached answers: up to 120 s more
-- All nodes unhealthy: Route 53 returns all records
+*3 nodes need 3 acknowledgements. proxy-003 is down.*
 
 ---
 
-# A 503 can still change a route
+<!-- _transition: fade 250ms -->
 
-<div class="motion">
-<video src="assets/partial.mp4" poster="assets/partial.png" autoplay loop muted playsinline aria-label="A 3-node region with proxy-003 down. Central sends a route change to proxy-001, the leader. The leader and proxy-002 apply generation 42, but proxy-003 does not answer. proxy-002 acknowledges, but 2 of 3 is not enough, so the leader returns 503 and keeps the change. proxy-003 comes back, and a leader heartbeat makes it install the newest snapshot. Central sends the same change again, and the leader returns 200."></video>
-<img src="assets/partial.png" alt="A 3-node region with proxy-003 down. Central sends a route change to proxy-001, the leader. The leader and proxy-002 apply generation 42, but proxy-003 does not answer. proxy-002 acknowledges, but 2 of 3 is not enough, so the leader returns 503 and keeps the change. proxy-003 comes back, and a leader heartbeat makes it install the newest snapshot. Central sends the same change again, and the leader returns 200.">
-</div>
+# The leader returns 503 and keeps the change
 
-*No rollback · a `503` does not prove the route stayed the same · every change is safe to repeat*
+![w:1120 proxy-002 acknowledges, but 2 of 3 is not enough. The leader returns 503. The leader and proxy-002 keep generation 42 and do not roll back.](assets/partial-2.svg)
+
+*There is no rollback. A `503` does not prove that the route stayed the same.*
+
+---
+
+# Send the same change again
+
+![w:1120 proxy-003 comes back. A leader heartbeat makes it install the newest snapshot. Central sends the same change again, and the leader returns 200 after 3 of 3 acknowledgements.](assets/partial-3.svg)
+
+*Every route change is safe to repeat. A replace sends the full map, an update sets one key, and a delete of an absent key succeeds.*
 
 ---
 
@@ -334,15 +378,20 @@ curl -X PATCH \
 
 <!-- _class: small -->
 
-# DNS names for one region
+# DNS names and health routes
 
 | Name | Record | TTL |
 |---|---|---:|
 | `proxy-NNN.<zone>` | A record for one node: peers and health checks | 3600 s |
-| `proxy.<zone>` | Multivalue A: one health-checked record per node | 120 s |
+| `proxy.<zone>` | Multivalue A: one record for each healthy node | 120 s |
 | `*.<zone>` | CNAME to `proxy.<zone>` | 3600 s |
 
-*`/readyz` gates DNS publication. `/healthz` keeps the node in DNS after that. Archive removes the regional record, the health check, and the node record, then the VM.*
+| Route | Checks | Used by |
+|---|---|---|
+| `/healthz` | The node can serve traffic | Route 53, all the time |
+| `/readyz` | Synced, knows a leader, OpenResty ready | Atlas, before DNS publication |
+
+*`/healthz` ignores the leader. A node without a write quorum keeps its traffic.*
 
 ---
 
@@ -356,8 +405,8 @@ curl -H "Authorization: Bearer $TOKEN" \
   https://proxy-002.par-1.example.com/v1/cluster/status
 ```
 
-- `cluster/status`: node ID, role, leader, term, generation, readiness
-- Needs a token with the `*` scope, or the proxy password
+- `cluster/status` gives the node ID, role, leader, term, generation, and readiness
+- It needs a token with the `*` scope, or the proxy password
 
 *Do not edit the files in `/var/lib/nginx` while the services run.*
 
@@ -373,11 +422,11 @@ curl -H "Authorization: Bearer $TOKEN" \
 | `services/http-proxy/nginx/lua/http/auto_proxy.lua` | Auto-proxy name decoding |
 | `services/http-proxy/nginx/lua/stream/sni_router.lua` | Custom-domain TLS pass-through |
 | `services/http-proxy/control/proxy_control/cluster.py` | Election, replication, recovery |
-| `services/http-proxy/control/proxy_control/main.py` | Control API and health routes |
-| `atlas/service/core/proxy/provisioning.py` | Node setup, readiness, DNS, health checks |
-| `atlas/atlas/core/dns_providers/route53.py` | Route 53 records and health checks |
+| `services/http-proxy/control/proxy_control/main.py` | Control API routes |
+| `services/http-proxy/control/proxy_control/auth.py` | Passwords and tokens |
+| `atlas/service/core/proxy/provisioning.py` | Node setup, readiness, DNS |
 
-*Tests: `services/http-proxy/control/tests` and `services/http-proxy/tests`*
+*Tests: `services/http-proxy/control/tests` and `services/http-proxy/tests`.*
 
 ---
 
@@ -389,6 +438,6 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 [HTTP proxy overview](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/index.md) · [OpenResty paths](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/openresty.md) · [High availability](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/high-availability.md)
 
-[Control daemon](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/control-daemon.md) · [Provisioning](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/provisioning.md) · [Route 53 multivalue answers](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-multivalue.html) · [WG Mesh deck](../atlas-wg-mesh/)
+[Control daemon](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/control-daemon.md) · [Provisioning](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/provisioning.md) · [WG Mesh deck](../atlas-wg-mesh/)
 
 *frappe/atlas · all names and addresses are examples*
