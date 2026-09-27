@@ -87,7 +87,7 @@ test-results/
 junit.xml
 nosetests.xml
 
-# Intermediate builds; published pages live in research/, learning/, or plans/
+# Intermediate builds; published pages live in research/, learning/, plans/, or demos/
 _site/
 dist/
 build/

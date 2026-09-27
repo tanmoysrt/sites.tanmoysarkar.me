@@ -7,11 +7,12 @@ import sys
 from pathlib import Path
 
 
-SECTIONS = ("research", "learning", "plans")
+SECTIONS = ("research", "learning", "plans", "demos")
 EMPTY_LABELS = {
     "research": "reports",
     "learning": "guides",
     "plans": "plans",
+    "demos": "demos",
 }
 START = "      <!-- entries:start -->"
 END = "      <!-- entries:end -->"

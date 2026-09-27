@@ -1,10 +1,11 @@
 # sites.tanmoysarkar.me
 
-A minimal archive for LLM-generated reports, guides, plans, and Marp decks.
+A minimal archive for LLM-generated reports, guides, plans, demos, and Marp decks.
 
 ## Add content
 
-- Direct HTML pages: `<section>/<slug>/index.html`, where section is `research`, `learning`, or `plans`.
+- Direct HTML pages: `<section>/<slug>/index.html`, where section is `research`, `learning`, `plans`, or `demos`.
+- Demos: put each static site in `demos/<slug>/`. Use relative asset paths so it works at that URL. The site host cannot run a server for a demo.
 - Generated pages: keep editable source, configuration, and source assets in `raw/<section>/<slug>/`, and built files in `<section>/<slug>/`. Commit both. Put the build command in `raw/<section>/<slug>/README.md` when the repo has no build script for that tool.
 - Marp decks: `raw/<section>/<slug>/slides.md`, with optional files in `assets/`. Install Marp CLI globally with `npm install -g @marp-team/marp-cli`, then run `npm run build:deck -- <section> <slug>`.
 
