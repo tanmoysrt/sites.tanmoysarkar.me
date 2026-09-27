@@ -1,1 +1,0 @@
-import{c as e}from"./chunk-YOWFEKIV-msOZyllO.js";export{e as createInfoServices};
