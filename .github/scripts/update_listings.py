@@ -27,8 +27,6 @@ def page_title(page: Path) -> str:
     title = " ".join(html.unescape(match.group(1)).split())
     if title.endswith(SITE_SUFFIX):
         title = title[: -len(SITE_SUFFIX)]
-    if title.endswith(" - Slidev"):
-        title = title[: -len(" - Slidev")]
     return title
 
 

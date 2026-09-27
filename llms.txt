@@ -10,7 +10,7 @@ Use a lowercase kebab-case slug. Write a self-contained `index.html` at `researc
 
 ## Add a presentation
 
-Choose `research`, `learning`, or `plans` based on the deck's purpose. Use Slidev. Put editable source at `decks/<section>/<slug>/slides.md`, then run `npm ci` and `npm run build:deck -- <section> <slug>`. This builds the public files at `<section>/<slug>/`. Set a meaningful Slidev `title`, `titleTemplate: '%s'`, `colorSchema: light`, and `routerMode: hash` in the deck frontmatter.
+Choose `research`, `learning`, or `plans` based on the deck's purpose. Use Marp. Keep editable Markdown at `raw/<section>/<slug>/slides.md` and local files at `raw/<section>/<slug>/assets/`. Before building, check `marp --version`. If Marp CLI is missing, ask the user to install it globally with `npm install -g @marp-team/marp-cli`; do not install it for them. Run `npm run build:deck -- <section> <slug>` to create `<section>/<slug>/index.html` and copy its assets. Set `marp: true` and a meaningful `title` in the frontmatter. Keep slides light and minimal. Show each slide immediately; for a flow that benefits from step-by-step explanation, use consecutive slides and add `<!-- _transition: fade 250ms -->` to the slide before a flow step. Commit raw and built files together.
 
 ## Publishing: GitHub CLI is required
 

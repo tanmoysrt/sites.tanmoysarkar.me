@@ -1,11 +1,11 @@
 # sites.tanmoysarkar.me
 
-A minimal archive for LLM-generated reports, guides, and plans. Any section can contain Slidev decks.
+A minimal archive for LLM-generated reports, guides, plans, and Marp decks.
 
 ## Add content
 
 - Static pages: `<section>/<slug>/index.html`, where section is `research`, `learning`, or `plans`.
-- Slidev decks: `decks/<section>/<slug>/slides.md`. Run `npm ci` and `npm run build:deck -- <section> <slug>`.
+- Marp decks: `raw/<section>/<slug>/slides.md`, with optional files in `assets/`. Install Marp CLI globally with `npm install -g @marp-team/marp-cli`, then run `npm run build:deck -- <section> <slug>`.
 
 Use lowercase kebab-case slugs. See the [publishing skill](skills/publish-site-artifact/SKILL.md) for content guidance.
 

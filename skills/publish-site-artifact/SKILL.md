@@ -1,6 +1,6 @@
 ---
 name: publish-site-artifact
-description: Create or publish a report, guide, plan, or Slidev presentation for sites.tanmoysarkar.me. Use for artifacts intended for this archive, not for unrelated websites or slide decks.
+description: Create or publish a report, guide, plan, or Marp presentation for sites.tanmoysarkar.me. Use for artifacts intended for this archive, not for unrelated websites or slide decks.
 ---
 
 # Publish a site artifact
@@ -16,11 +16,15 @@ This archive lives in `tanmoysrt/sites.tanmoysarkar.me` on `main`. See [llms.txt
 
 ## Presentations
 
-Use Slidev for presentations and place each deck in `research`, `learning`, or `plans` based on its purpose. Keep editable source in `decks/<section>/<slug>/slides.md`. Set `title`, `titleTemplate: '%s'`, `colorSchema: light`, and `routerMode: hash` in the first frontmatter block. Build with `npm ci` and `npm run build:deck -- <section> <slug>`; commit the source and `<section>/<slug>/` output together.
+Use Marp for presentations and place each deck in `research`, `learning`, or `plans` based on its purpose. Keep editable Markdown at `raw/<section>/<slug>/slides.md` and local assets under `raw/<section>/<slug>/assets/`. Set `marp: true` and a meaningful `title` in the frontmatter. Check `marp --version` first. If Marp CLI is missing, ask the user to install it globally with `npm install -g @marp-team/marp-cli`. Build with `npm run build:deck -- <section> <slug>`; commit the raw source and `<section>/<slug>/` output together.
 
-Use the light, quiet style of the main site: system sans text, restrained color, generous contrast, and little ornament. Give each slide one clear point. Prefer a diagram, example, or small code excerpt over dense prose. Reveal a process or diagram one meaningful step at a time with Slidev's `v-click` or `v-clicks`. Use motion only to clarify sequence or cause and effect; avoid decorative transitions and automatic animation. Make the final state understandable when someone lands on or exports the slide.
+Keep decks as easy to scan as the user's Frappe Build Talk: a white canvas, dark sans text, thin lines, plenty of empty space, and only a little color to mark the current state. Use one idea per slide and short labels or fragments instead of paragraphs. Show the actual code, table, or product screen when that explains the point faster than prose. A slide should make sense at a glance and need little effort to read.
 
-Slidev references: [building and hosting](https://sli.dev/guide/hosting) and [click animations](https://sli.dev/guide/animations).
+For concepts and flows, favor simple tldraw or Excalidraw-like diagrams: plain boxes, arrows, handwritten-feeling lines, and direct labels. Keep them deliberately rough and useful, without glossy icons, gradients, shadows, or decorative illustrations. Use color sparingly to highlight a change or important path.
+
+Show each slide's content immediately. When a flow genuinely needs stages, reuse the same diagram across consecutive slides and add one meaningful step at a time. If motion clarifies that sequence, put `<!-- _transition: fade 250ms -->` on the slide before the next step. Keep other transitions off. Make every step understandable on its own.
+
+Marp references: [CLI](https://github.com/marp-team/marp-cli) and [slide transitions](https://github.com/marp-team/marp-cli/blob/main/docs/bespoke-transitions/README.md).
 
 ## Publish
 
