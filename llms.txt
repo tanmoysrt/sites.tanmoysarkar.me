@@ -12,11 +12,15 @@ Use a lowercase kebab-case slug. Write a self-contained `index.html` at `researc
 
 If a tool generates the published HTML or assets, keep the editable source files, configuration, and source assets in `raw/<section>/<slug>/`. Put generated files in `<section>/<slug>/`. Record the build command in `raw/<section>/<slug>/README.md` unless the repository already provides a build script. Commit source and output together. A direct HTML page does not need a duplicate raw copy. The Pages workflow does not deploy `raw/`.
 
-Draw and render diagrams directly with Excalidraw when custom placement or a hand-drawn look helps. For ordinary static diagrams, consider D2. Keep diagrams focused on the requested topic and label the data or action they show. Use Remotion to render local motion graphics assets when motion helps explain a change or sequence; keep presentations in Marp. Use Three.js only when the subject needs a 3D view; otherwise keep visuals in 2D.
+Use Rough.js for custom diagrams with a hand-drawn look; D2 is an option for ordinary static diagrams. Keep diagrams focused on the requested topic and label the data or action they show.
 
 ## Add a presentation
 
-Prefer a slideshow for learning material unless the user asks for another format. Choose `research`, `learning`, or `plans` based on the deck's purpose. Use Marp. Keep editable Markdown at `raw/<section>/<slug>/slides.md` and local files at `raw/<section>/<slug>/assets/`. Before building, check `marp --version`. If Marp CLI is missing, ask the user to install it globally with `npm install -g @marp-team/marp-cli`; do not install it for them. Run `npm run build:deck -- <section> <slug>` to create `<section>/<slug>/index.html` and copy its assets. Set `marp: true` and a meaningful `title` in the frontmatter. Keep slides light and minimal. Start with the plain case, then add one relevant layer at a time. Show concrete data and field layouts where useful, highlight every change, and keep the scope to the requested topic. For a multistep flow, prefer one animated slide over several near-identical slides; honor reduced-motion preferences. Commit raw and built files together.
+Prefer a slideshow for learning material unless the user asks for another format. Choose `research`, `learning`, or `plans` based on the deck's purpose. Use Marp. Set `marp: true` and a meaningful `title` in the frontmatter. Keep editable Markdown at `raw/<section>/<slug>/slides.md` and local assets at `raw/<section>/<slug>/assets/`.
+
+Before building, check `marp --version`. If Marp CLI is missing, ask the user to install it globally with `npm install -g @marp-team/marp-cli`; do not install it for them. Run `npm run build:deck -- <section> <slug>` to create `<section>/<slug>/index.html` and copy its assets. Commit raw and built files together.
+
+Keep slides light and minimal. Start with the plain case, then add one relevant layer at a time. Show concrete data and field layouts where useful, highlight every change, and keep the scope to the requested topic. For a multistep flow, reuse the same diagram across a few slides and change one step at a time. Use Marp transitions only when they clarify the flow; honor reduced-motion preferences.
 
 ## Publishing: GitHub CLI is required
 
