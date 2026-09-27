@@ -9,7 +9,7 @@ This archive lives in `tanmoysrt/sites.tanmoysarkar.me` on `main`. See [llms.txt
 
 ## Shape the artifact
 
-- If the request leaves the topic, intended audience, or desired depth unclear, ask a few concise questions before choosing the format. Use answers already given; do not repeat questions.
+- Infer whether the user wants a written page or a slideshow from the request. If both fit and the choice is still unclear, ask: "Would you prefer a written page or a Marp slideshow?" Use answers already given; do not repeat questions. Ask about audience or depth only when needed to make the artifact useful.
 - Choose `research/<slug>/index.html` for reports, `learning/<slug>/index.html` for guides, and `plans/<slug>/index.html` for project plans. Use lowercase kebab-case slugs.
 - Make each document a self-contained static page with readable HTML, inline CSS, and any local assets in its folder. Keep the site minimal and light. Do not copy an existing page's wording or design wholesale.
 - Check factual claims against sources when the topic needs it. Keep links to the sources visible on the artifact.
