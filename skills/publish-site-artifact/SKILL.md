@@ -1,11 +1,13 @@
 ---
 name: publish-site-artifact
-description: Create or publish a report, guide, plan, or Marp presentation for sites.tanmoysarkar.me. Use for artifacts intended for this archive, not for unrelated websites or slide decks.
+description: Create or publish ideas, research documents, guides, plans, Marp slides, and other artifacts for sites.tanmoysarkar.me. Use for any content intended for this archive instead of artifact-design, not for unrelated sites.
 ---
 
 # Publish a site artifact
 
 This archive lives in `tanmoysrt/sites.tanmoysarkar.me` on `main`. See [llms.txt](https://sites.tanmoysarkar.me/llms.txt) for paths and the required GitHub CLI publishing commands. In a checkout, read the local `llms.txt`.
+
+Use this skill to turn any idea into a research document, guide, plan, slide deck, demo, or other artifact for this archive. For this site, use this skill instead of artifact-design.
 
 ## Shape the artifact
 
@@ -14,6 +16,7 @@ This archive lives in `tanmoysrt/sites.tanmoysarkar.me` on `main`. See [llms.txt
 - Choose `research/<slug>/index.html` for reports, `learning/<slug>/index.html` for guides, `plans/<slug>/index.html` for project plans, and `demos/<slug>/index.html` for small static sites or interactive examples. Use lowercase kebab-case slugs. Use relative paths for demo assets.
 - For direct HTML pages, write readable, self-contained HTML with inline CSS and any local assets in the page's folder. Keep the site minimal and light. Do not copy an existing page's wording or design wholesale.
 - When a tool generates the page, keep its editable source, configuration, and source assets in `raw/<section>/<slug>/`; put the built site in `<section>/<slug>/`. Record the build command in `raw/<section>/<slug>/README.md` unless a repository script already does so. Commit source and output together. Direct HTML pages need no duplicate raw copy.
+- Use Remotion to render local motion graphics assets when motion helps explain a change or sequence; keep presentations in Marp. Use Three.js only when the subject needs a 3D view; otherwise keep visuals in 2D.
 - Check factual claims against sources when the topic needs it. Keep links to the sources visible on the artifact.
 
 ## Explain for the reader
@@ -28,7 +31,7 @@ Write like a clear engineering note. Start with the concrete situation and why t
 
 Use short paragraphs, direct headings, and specific examples. Show the relevant lines of code or configuration, a real UI state, or a measured before/after result when that makes the idea easier to verify. Give numbers units and measurement conditions. Distinguish what exists, what was tested, what is proposed, and what remains uncertain; include meaningful tradeoffs and failed approaches. Edit repetitions and rough phrasing rather than imitating the source posts verbatim.
 
-Use diagrams to answer one question at a time. D2 is a useful option for ordinary static diagrams. Draw simple labeled components and directional arrows; show ownership or network boundaries when they matter. Label the data or action on important arrows, and use before/after diagrams for a redesign. Place each diagram next to its explanation and give it useful alternative text. Use a restrained hand-drawn look with plain lines and little color. Treat private reference posts as style examples; do not copy their text, screenshots, or infrastructure details into public artifacts.
+Use diagrams to answer one question at a time. Draw and render diagrams directly with Excalidraw when you need custom placement or a hand-drawn look; D2 is a useful option for ordinary static diagrams. Draw simple labeled components and directional arrows; show ownership or network boundaries when they matter. Label the data or action on important arrows, and use before/after diagrams for a redesign. Place each diagram next to its explanation and give it useful alternative text. Use plain lines and little color. Treat private reference posts as style examples; do not copy their text, screenshots, or infrastructure details into public artifacts.
 
 For a guide, give actionable steps and expected results. For research, compare options using evidence and state a conclusion. For a plan, show sequence, dependencies, and how success will be checked.
 
@@ -42,7 +45,7 @@ Build explanations from the plain case, then add one relevant layer at a time. S
 
 Keep the title at the same top position on every content slide. Center question and section slides vertically, with or without a short subtitle. Use the same type scale and spacing within each slide type throughout a deck.
 
-For concepts and flows, favor simple tldraw or Excalidraw-like diagrams; D2 is also a good choice for an ordinary static diagram. Use plain boxes, arrows, handwritten-feeling lines, and direct labels. Keep them deliberately rough and useful, without glossy icons, gradients, shadows, or decorative illustrations. Give each actor or operation a consistent color; use a stronger accent only for the path or state under discussion. Put short annotations next to the relevant part of the diagram.
+For concepts and flows, favor simple diagrams drawn and rendered directly with Excalidraw; D2 is also a good choice for an ordinary static diagram. Use plain boxes, arrows, handwritten-feeling lines, and direct labels. Keep them deliberately rough and useful, without glossy icons, gradients, shadows, or decorative illustrations. Give each actor or operation a consistent color; use a stronger accent only for the path or state under discussion. Put short annotations next to the relevant part of the diagram.
 
 Choose the pace that makes the idea easiest to follow. Keep a slide static when it reads at a glance. For a process with several states, prefer one animated slide that keeps the diagram in place and reveals or highlights each change over several near-identical slides. A brief transition or moving arrow can help show direction. Let the complete state remain visible when it helps the explanation. Avoid decorative motion and honor reduced-motion preferences.
 
