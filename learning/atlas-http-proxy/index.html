@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas HTTP proxy: HA and static routing</title>
+<meta name="description" content="How the Atlas regional HTTP proxy keeps routes consistent across up to five nodes, and how auto-proxy names route to a VM with no stored route. Explained through failure and request scenarios.">
+<style>
+  :root {
+    --ink: #1d1d1f;
+    --muted: #5f6368;
+    --line: #d9d9de;
+    --soft: #f6f6f8;
+    --accent: #2f6fdf;
+    --warn: #b3541e;
+    --ok: #2e7d4f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #fff;
+    color: var(--ink);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.4rem; margin: 64px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.08rem; margin: 36px 0 4px; }
+  p { margin: 10px 0; }
+  .lede { color: var(--muted); font-size: 1.08rem; }
+  a { color: var(--accent); }
+  code { font: 0.88em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93rem; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); }
+  .table-wrap { overflow-x: auto; }
+  figure { margin: 20px 0 24px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 0.88rem; margin-top: 6px; }
+  .toc { background: var(--soft); border-radius: 8px; padding: 14px 20px; margin: 28px 0; font-size: 0.95rem; }
+  .toc ol { margin: 6px 0; padding-left: 20px; }
+  .scenario { border-left: 3px solid var(--line); padding: 2px 0 2px 16px; margin: 24px 0; }
+  .scenario.bad { border-left-color: var(--warn); }
+  .scenario.good { border-left-color: var(--ok); }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .note { background: #fff8ef; border: 1px solid #f0dcc2; border-radius: 8px; padding: 12px 16px; margin: 18px 0; }
+  details { margin: 12px 0; }
+  summary { cursor: pointer; color: var(--muted); font-size: 0.93rem; }
+  ol.steps li, ul li { margin: 4px 0; }
+  .sources li { font-size: 0.93rem; }
+  svg text { font-family: "Comic Neue", "Segoe Print", "Bradley Hand", -apple-system, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Atlas HTTP proxy: HA and static routing</h1>
+<p class="lede">A region has one public entry point for web traffic: a cluster of 1 to 5 proxy nodes. This guide explains how those nodes agree on routes, what happens when nodes fail, and how an "auto-proxy" hostname reaches a VM with no stored route at all. Each idea is shown as a scenario.</p>
+
+<nav class="toc" aria-label="Contents">
+<strong>Contents</strong>
+<ol>
+  <li><a href="#jobs">Two jobs, two programs</a></li>
+  <li><a href="#state">The state every node keeps</a></li>
+  <li><a href="#ha">HA scenarios</a></li>
+  <li><a href="#static">Static routing scenarios</a></li>
+  <li><a href="#limits">Limits to remember</a></li>
+  <li><a href="#sources">Sources</a></li>
+</ol>
+</nav>
+
+<h2 id="jobs">1. Two jobs, two programs</h2>
+
+<p>Every proxy node runs two programs. They have different jobs and fail independently.</p>
+
+<div class="table-wrap"><table>
+<tr><th>Program</th><th>Job</th><th>Needs the cluster?</th></tr>
+<tr><td><strong>OpenResty</strong></td><td>Accepts public HTTP and HTTPS. Reads routes from shared memory and forwards each request to a VM's mesh address.</td><td>No. It serves from its local copy.</td></tr>
+<tr><td><strong>Control daemon</strong></td><td>Accepts route changes from Central and Atlas. Elects a leader, replicates changes and writes them into OpenResty.</td><td>Yes, for writes.</td></tr>
+</table></div>
+
+<p>This split is the main HA property. <strong>Reading routes never depends on the cluster.</strong> A node that loses every peer still serves every route it already has. Only new route changes stop.</p>
+
+<figure>
+<svg viewBox="0 0 720 300" role="img" aria-labelledby="fig1t">
+  <title id="fig1t">Central or Atlas sends route changes to a control daemon. Each daemon writes its local OpenResty. Public clients reach any OpenResty through DNS, and OpenResty sends traffic to the VM mesh address.</title>
+  <defs>
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="1.6"/></filter>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1d1d1f"/></marker>
+    <marker id="arrb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f6fdf"/></marker>
+  </defs>
+  <g filter="url(#rough)" fill="none" stroke="#1d1d1f" stroke-width="1.6" stroke-linecap="round">
+    <rect x="20" y="30" width="140" height="50" rx="8"/>
+    <rect x="20" y="210" width="140" height="50" rx="8"/>
+    <rect x="230" y="20" width="250" height="260" rx="12" stroke-dasharray="6 5" stroke="#8a8a90"/>
+    <rect x="260" y="50" width="190" height="46" rx="8"/>
+    <rect x="260" y="200" width="190" height="46" rx="8" stroke="#2f6fdf"/>
+    <rect x="560" y="200" width="140" height="50" rx="8"/>
+    <path d="M160,55 L255,70" marker-end="url(#arr)"/>
+    <path d="M355,96 L355,195" marker-end="url(#arr)"/>
+    <path d="M160,235 L255,225" stroke="#2f6fdf" marker-end="url(#arrb)"/>
+    <path d="M450,223 L555,225" stroke="#2f6fdf" marker-end="url(#arrb)"/>
+    <path d="M450,60 C520,40 520,110 450,88" stroke="#8a8a90" stroke-dasharray="4 4"/>
+  </g>
+  <g font-size="15" fill="#1d1d1f" text-anchor="middle">
+    <text x="90" y="60">Central / Atlas</text>
+    <text x="90" y="240">Public client</text>
+    <text x="355" y="78">control daemon</text>
+    <text x="355" y="228" fill="#2f6fdf">OpenResty</text>
+    <text x="630" y="230">Guest VM</text>
+    <text x="355" y="272" font-size="13" fill="#5f6368">one proxy node (x 1 to 5)</text>
+    <text x="205" y="48" font-size="12" fill="#5f6368">route change</text>
+    <text x="205" y="258" font-size="12" fill="#2f6fdf">HTTPS via DNS</text>
+    <text x="400" y="150" font-size="12" fill="#5f6368">writes local maps</text>
+    <text x="505" y="212" font-size="12" fill="#2f6fdf">mesh address</text>
+    <text x="545" y="80" font-size="12" fill="#5f6368">peers</text>
+  </g>
+</svg>
+<figcaption>Writes (black) go through the daemon and the cluster. Traffic (blue) only reads the local maps.</figcaption>
+</figure>
+
+<p>OpenResty sends each request to the VM's <strong>mesh address</strong>, such as <code>fdaa:1:0:2::b</code>. This address names the VM, not the host it runs on. WG Mesh finds the current host. So a VM migration never requires a route change on the proxy.</p>
+
+<h2 id="state">2. The state every node keeps</h2>
+
+<p>Each daemon keeps one file, <code>/var/lib/nginx/cluster-state.json</code>. It writes the file to a temporary path, calls <code>fsync</code>, then renames it into place. A crash leaves the old file or the new file, never half of one.</p>
+
+<div class="table-wrap"><table>
+<tr><th>Field</th><th>Meaning</th></tr>
+<tr><td><code>sites</code>, <code>domains</code></td><td>The complete route maps.</td></tr>
+<tr><td><code>generation</code></td><td>A counter. It goes up by 1 for each route change.</td></tr>
+<tr><td><code>operation_id</code></td><td>A UUID for the last change. It tells apart two nodes that have the same generation but different contents.</td></tr>
+<tr><td><code>term</code>, <code>voted_for</code></td><td>The election round and this node's vote in it.</td></tr>
+<tr><td><code>mutation_term</code></td><td>The term in which the last change was made. Elections compare it before the generation.</td></tr>
+</table></div>
+
+<p>There is no log of changes. When a node falls behind, it gets a full copy of the leader's state, called a <strong>snapshot</strong>. The maps are small, so a full copy is cheap and much simpler than log replay.</p>
+
+<p>The timers are fixed in <code>cluster.py</code>:</p>
+<div class="table-wrap"><table>
+<tr><th>Timer</th><th>Value</th></tr>
+<tr><td>Leader heartbeat</td><td>every 100 ms</td></tr>
+<tr><td>Election timeout (random per node)</td><td>300 to 450 ms</td></tr>
+<tr><td>One peer request</td><td>200 ms</td></tr>
+<tr><td>A follower forwarding a write to the leader</td><td>1500 ms (enough to repair one stale peer)</td></tr>
+</table></div>
+
+<h2 id="ha">3. HA scenarios</h2>
+
+<div class="scenario good">
+<span class="tag">Scenario 1</span>
+<h3>A route change arrives at a follower</h3>
+<p>Central sends <code>PATCH /v1/sites/erp</code> to any node through the regional control name. DNS picked a follower.</p>
+
+<figure>
+<svg viewBox="0 0 720 330" role="img" aria-labelledby="fig2t">
+  <title id="fig2t">Sequence: the client sends a change to a follower, the follower forwards to the leader, the leader applies it and sends it to all peers in parallel, peers acknowledge, and success returns to the client.</title>
+  <g filter="url(#rough)" fill="none" stroke="#1d1d1f" stroke-width="1.5" stroke-linecap="round">
+    <path d="M80,50 L80,320" stroke="#c4c4c9" stroke-dasharray="4 5"/>
+    <path d="M260,50 L260,320" stroke="#c4c4c9" stroke-dasharray="4 5"/>
+    <path d="M440,50 L440,320" stroke="#c4c4c9" stroke-dasharray="4 5"/>
+    <path d="M620,50 L620,320" stroke="#c4c4c9" stroke-dasharray="4 5"/>
+    <path d="M80,80 L255,80" marker-end="url(#arr)"/>
+    <path d="M260,115 L435,115" marker-end="url(#arr)"/>
+    <rect x="395" y="135" width="90" height="42" rx="6" stroke="#2f6fdf"/>
+    <path d="M440,195 L615,195" marker-end="url(#arr)"/>
+    <path d="M440,205 L265,205" marker-end="url(#arr)"/>
+    <path d="M615,240 L445,240" stroke="#2e7d4f" marker-end="url(#arr)"/>
+    <path d="M265,248 L435,248" stroke="#2e7d4f" marker-end="url(#arr)" transform="translate(0,6)"/>
+    <path d="M435,280 L265,280" marker-end="url(#arr)"/>
+    <path d="M255,305 L85,305" marker-end="url(#arr)"/>
+  </g>
+  <g font-size="14" fill="#1d1d1f" text-anchor="middle">
+    <text x="80" y="36">Central</text>
+    <text x="260" y="36">Follower B</text>
+    <text x="440" y="36">Leader A</text>
+    <text x="620" y="36">Peers C, D, E</text>
+    <text x="168" y="72" font-size="12">PATCH /v1/sites/erp</text>
+    <text x="350" y="107" font-size="12">forward (1.5 s)</text>
+    <text x="440" y="153" font-size="11" fill="#2f6fdf">apply locally</text>
+    <text x="440" y="169" font-size="11" fill="#2f6fdf">generation g+1</text>
+    <text x="530" y="188" font-size="12">replicate</text>
+    <text x="350" y="198" font-size="12">replicate</text>
+    <text x="530" y="233" font-size="12" fill="#2e7d4f">ack</text>
+    <text x="350" y="247" font-size="12" fill="#2e7d4f">ack</text>
+    <text x="350" y="273" font-size="12">enough acks</text>
+    <text x="168" y="298" font-size="12">200 + generation</text>
+  </g>
+</svg>
+<figcaption>The leader sends the change to all peers at the same time and answers when enough of them confirm.</figcaption>
+</figure>
+
+<ol class="steps">
+  <li>Follower B does not change anything. It forwards the change to leader A.</li>
+  <li>A takes its write lock, so changes are applied one at a time. It applies the change to its own OpenResty, assigns generation <code>g+1</code> and a new <code>operation_id</code>, and saves the file.</li>
+  <li>A sends <code>{base_generation: g, generation: g+1, change}</code> to every peer in parallel.</li>
+  <li>A peer applies the change only if its own generation is <code>g</code>. The change then goes into its OpenResty too.</li>
+  <li>A counts acknowledgements, including itself. When there are enough, B returns <code>200</code> and the header <code>X-Atlas-Proxy-Generation: g+1</code>.</li>
+</ol>
+
+<p>How many acknowledgements are "enough" depends on the cluster size:</p>
+<div class="table-wrap"><table>
+<tr><th>Nodes</th><th>Acks needed (includes leader)</th><th>Nodes that can be down and writes still work</th></tr>
+<tr><td>1</td><td>1</td><td>0</td></tr>
+<tr><td>2</td><td>2</td><td>0</td></tr>
+<tr><td>3</td><td>3</td><td>0</td></tr>
+<tr><td>4</td><td>3</td><td>1</td></tr>
+<tr><td>5</td><td>3</td><td>2</td></tr>
+</table></div>
+<p>Clusters of 3 or fewer need <em>every</em> node. That is stricter than a majority: a small cluster chooses "every node has the route" over "writes survive one failure".</p>
+</div>
+
+<div class="scenario good">
+<span class="tag">Scenario 2</span>
+<h3>A peer missed an earlier change</h3>
+<p>Peer D was restarting while change <code>g</code> was made. Now D is at <code>g-1</code> and the leader sends change <code>g+1</code> with <code>base_generation: g</code>.</p>
+<ol class="steps">
+  <li>D sees that the base does not match its own generation. It returns <code>409 generation mismatch</code>.</li>
+  <li>The leader sends D the snapshot from before the new change (generation <code>g</code>).</li>
+  <li>The leader sends change <code>g+1</code> again. D now matches and acknowledges.</li>
+</ol>
+<p>This repair takes up to three peer calls. That is why a forwarded write has a 1500 ms budget and not 200 ms.</p>
+<p>A peer that does not answer at all is not repaired during the write. The next heartbeat repairs it: each heartbeat carries the leader's <code>generation</code> and <code>operation_id</code>. A follower whose values differ downloads the leader's snapshot.</p>
+</div>
+
+<div class="scenario bad">
+<span class="tag">Scenario 3</span>
+<h3>The leader crashes</h3>
+<p>Leader A's VM stops. B, C, D and E stop getting heartbeats.</p>
+<ol class="steps">
+  <li><strong>Traffic:</strong> no change. Every OpenResty keeps serving its maps. Route 53 stops returning A's address once A's health check fails.</li>
+  <li><strong>Writes:</strong> during the gap, a follower still tries to forward to A. The connection fails and the client gets <code>503 leader unavailable</code>.</li>
+  <li>After a random 300 to 450 ms, the first follower whose timer runs out, say C, starts an election. It moves to the next term, votes for itself and asks the others for votes.</li>
+  <li>A voter gives at most one vote per term. It votes only if C's <code>(mutation_term, generation)</code> is at least as new as its own. So a node that is missing changes cannot become leader and lose routes.</li>
+  <li>C gets 3 of 5 votes and becomes leader. It starts heartbeats. Writes work again.</li>
+</ol>
+<p>The write gap is about one election timeout plus one vote round trip, usually well under a second. The random timeout makes it unlikely that two nodes start an election at the same moment and split the vote.</p>
+</div>
+
+<div class="scenario bad">
+<span class="tag">Scenario 4</span>
+<h3>One node is down in a 3-node cluster</h3>
+<p>Node C is down. A is leader, B is healthy.</p>
+<ul>
+  <li>Elections still work: A plus B is a majority of 3.</li>
+  <li>Writes do not: 3 acknowledgements are needed and only 2 are possible.</li>
+</ul>
+<p>A write now goes like this. A applies it, B applies it, and A returns <code>503</code> with <code>"required": 3, "acknowledged": 2, "retryable": true</code>. <strong>The change is not rolled back.</strong> A and B keep it and serve it.</p>
+<p>When C comes back, it loads its old file, asks its peers for their status, and downloads the newest snapshot. The change that "failed" is now on all three nodes.</p>
+<div class="note"><strong>Rule:</strong> a <code>503</code> from a write means "the outcome is unknown", not "nothing happened". Send the same change again. Every route change is a set, update or delete of a whole value, so repeating it gives the same result.</div>
+<p>With 2 nodes, losing one is worse: 2 votes are needed for a leader, so the survivor never becomes leader. Its <code>/readyz</code> returns <code>503</code>. Its <code>/healthz</code> stays healthy, so it keeps serving traffic.</p>
+</div>
+
+<div class="scenario bad">
+<span class="tag">Scenario 5</span>
+<h3>The network splits the leader away</h3>
+<p>A 5-node cluster splits into {A, B} and {C, D, E}. A was leader.</p>
+
+<figure>
+<svg viewBox="0 0 720 230" role="img" aria-labelledby="fig3t">
+  <title id="fig3t">A network split: A and B on one side are a minority. A steps down because fewer than three nodes accept its heartbeats. C, D and E elect C as the new leader.</title>
+  <g filter="url(#rough)" fill="none" stroke="#1d1d1f" stroke-width="1.5" stroke-linecap="round">
+    <rect x="30" y="40" width="250" height="150" rx="12" stroke="#b3541e" stroke-dasharray="6 5"/>
+    <rect x="420" y="40" width="270" height="150" rx="12" stroke="#2e7d4f" stroke-dasharray="6 5"/>
+    <path d="M350,20 L345,80 L355,140 L348,210" stroke="#8a8a90" stroke-width="2.4"/>
+    <circle cx="100" cy="110" r="30"/>
+    <circle cx="210" cy="110" r="30"/>
+    <circle cx="480" cy="110" r="30" stroke="#2e7d4f" stroke-width="2.4"/>
+    <circle cx="555" cy="110" r="30"/>
+    <circle cx="630" cy="110" r="30"/>
+  </g>
+  <g font-size="16" fill="#1d1d1f" text-anchor="middle">
+    <text x="100" y="116">A</text>
+    <text x="210" y="116">B</text>
+    <text x="480" y="116" fill="#2e7d4f">C</text>
+    <text x="555" y="116">D</text>
+    <text x="630" y="116">E</text>
+    <text x="155" y="30" font-size="13" fill="#b3541e">2 of 5: cannot write, cannot elect</text>
+    <text x="555" y="30" font-size="13" fill="#2e7d4f">3 of 5: elects C, writes work</text>
+    <text x="155" y="175" font-size="12" fill="#5f6368">A: 2 heartbeat acks &lt; 3, steps down</text>
+    <text x="555" y="175" font-size="12" fill="#5f6368">new term, new leader</text>
+  </g>
+</svg>
+<figcaption>Only the side with a majority can have a leader.</figcaption>
+</figure>
+
+<ol class="steps">
+  <li>A keeps sending heartbeats. Only B answers: 2 of 5 is less than a majority. A steps down after its next heartbeat round. A leader that cannot reach a majority does not keep acting as leader.</li>
+  <li>C, D and E elect C in a new term. Writes to that side succeed with 3 acknowledgements.</li>
+  <li>A and B keep trying elections and keep failing, because 2 votes is not enough. Each attempt raises their term. Both keep serving traffic from their maps, but those maps no longer get new changes.</li>
+</ol>
+
+<p><strong>A write that raced the split.</strong> Suppose A accepted a write just before it stepped down. A and B applied it, and the client got <code>503</code>. That change now exists only on the minority side. What happens to it depends on the other side:</p>
+<ul>
+  <li><strong>C's side made newer changes.</strong> Their <code>mutation_term</code> is higher, so they win any later election. When the network heals, heartbeats show A and B a different <code>operation_id</code>. They download C's snapshot and the raced write is gone.</li>
+  <li><strong>C's side made no changes.</strong> A's raced write can be the newest state. It can win the next election, and then it spreads to every node.</li>
+</ul>
+<p>Either way the client saw <code>503</code>, and the rule from Scenario 4 applies: repeat the change.</p>
+<p><strong>When the network heals</strong>, A and B have a higher term from their failed elections. C sees that higher term in a heartbeat reply and steps down. The cluster runs one more election, which causes one more short write gap. Traffic is not affected.</p>
+</div>
+
+<div class="scenario good">
+<span class="tag">Scenario 6</span>
+<h3>A new node joins</h3>
+<p>Atlas adds proxy node 4 to a 3-node region.</p>
+<ol class="steps">
+  <li>Atlas creates the VM, installs the package and writes the configuration with all peers. Atlas does <em>not</em> send routes to the new node.</li>
+  <li>The daemon starts. It has no file yet, so it creates one from OpenResty's current (empty) maps.</li>
+  <li>It asks all peers for status, picks the one with the highest generation and downloads that snapshot.</li>
+  <li><code>/readyz</code> returns <code>503</code> until the node has synchronized and knows who the leader is. Atlas waits for <code>200</code> before it publishes the node in DNS. So public traffic never reaches a node with empty maps.</li>
+</ol>
+<p>A node that restarts after a crash takes the same path, but it starts from its saved file. That lets OpenResty serve routes before any peer answers.</p>
+</div>
+
+<div class="scenario good">
+<span class="tag">Scenario 7</span>
+<h3>The cluster password is rotated</h3>
+<p>Peers authenticate with the header <code>X-Atlas-Cluster-Password</code>. During a rotation, some nodes have the new password and some still have the old one.</p>
+<p>Each node accepts the current password and, until a set expiry time, the previous one. When a peer call gets <code>401</code>, it retries once with the previous password. Heartbeats and replication keep working while the new configuration reaches every node.</p>
+<p>If a follower forwards a write and the leader rejects its password, the client gets <code>502 cluster authentication failed</code>. This is kept separate from <code>503</code> because repeating the write will not fix it.</p>
+</div>
+
+<div class="scenario bad">
+<span class="tag">Scenario 8</span>
+<h3>Every node fails its health check</h3>
+<p>Route 53 multivalue answers normally leave out unhealthy nodes. If every node is unhealthy, Route 53 returns all of them. Clients still try the proxies, and any node whose OpenResty works still serves them.</p>
+</div>
+
+<h2 id="static">4. Static routing scenarios</h2>
+
+<p>A normal site route is a stored entry: <code>erp → fdaa:1:0:2::b</code>. Someone has to write it, and the cluster has to replicate it. For some traffic that is too slow or unnecessary, for example a preview URL for a VM that was just created.</p>
+
+<p><strong>Auto-proxy</strong> puts the route inside the hostname. OpenResty computes the VM's mesh address from the name. It needs no map entry, no daemon and no cluster.</p>
+
+<h3>The encoding</h3>
+<p>A mesh address has three parts after the fixed <code>fdaa</code>:</p>
+
+<figure>
+<svg viewBox="0 0 720 200" role="img" aria-labelledby="fig4t">
+  <title id="fig4t">The mesh address layout is fdaa, 16 region bits, 32 tenant bits and 64 VM bits. The hostname label encodes only the VM and tenant: value equals VM shifted left 32 plus tenant, written in base 36.</title>
+  <g filter="url(#rough)" fill="none" stroke="#1d1d1f" stroke-width="1.5" stroke-linecap="round">
+    <rect x="20" y="30" width="110" height="46" rx="4"/>
+    <rect x="130" y="30" width="110" height="46" rx="4" stroke="#5f6368"/>
+    <rect x="240" y="30" width="180" height="46" rx="4" stroke="#2e7d4f"/>
+    <rect x="420" y="30" width="280" height="46" rx="4" stroke="#2f6fdf"/>
+    <rect x="240" y="130" width="460" height="46" rx="4" stroke-dasharray="5 4"/>
+    <path d="M330,80 L420,125" stroke="#2e7d4f" marker-end="url(#arr)"/>
+    <path d="M560,80 L470,125" stroke="#2f6fdf" marker-end="url(#arr)"/>
+  </g>
+  <g font-size="14" text-anchor="middle" fill="#1d1d1f">
+    <text x="75" y="58">fdaa</text>
+    <text x="185" y="58" fill="#5f6368">region 16</text>
+    <text x="330" y="58" fill="#2e7d4f">tenant 32</text>
+    <text x="560" y="58" fill="#2f6fdf">VM number 64</text>
+    <text x="470" y="158">label = base36( (vm &lt;&lt; 32) | tenant )</text>
+    <text x="130" y="158" font-size="12" fill="#5f6368">region comes from</text>
+    <text x="130" y="174" font-size="12" fill="#5f6368">the proxy config</text>
+    <text x="75" y="18" font-size="12" fill="#5f6368">mesh address</text>
+  </g>
+</svg>
+<figcaption>The label carries 96 bits: tenant and VM. The proxy knows its own region, so the label does not carry it.</figcaption>
+</figure>
+
+<p>The VM number is the numeric suffix of the Atlas ID, so <code>VM-00011</code> is 11. For tenant 2 and VM 11:</p>
+<pre><code>(11 &lt;&lt; 32) | 2  = 47244640258
+base 36          = lpc8lqa
+hostname         = site-lpc8lqa.&lt;regional zone&gt;
+mesh address     = fdaa:1:0:2::b   (region 1)</code></pre>
+
+<p>Atlas configures two host prefixes (<code>AUTO_PROXY_HOST_PREFIXES</code>):</p>
+<div class="table-wrap"><table>
+<tr><th>Prefix</th><th>Matches</th><th>Example</th></tr>
+<tr><td><code>site-</code></td><td>exactly <code>site-</code> before the label</td><td><code>site-lpc8lqa</code></td></tr>
+<tr><td><code>*-vm-</code></td><td>any non-empty text, then <code>-vm-</code>, before the label</td><td><code>erp-vm-lpc8lqa</code>, <code>staging-vm-lpc8lqa</code></td></tr>
+</table></div>
+<p>The wildcard form lets a name carry a human-readable part. The proxy ignores that part.</p>
+
+<div class="scenario good">
+<span class="tag">Scenario 9</span>
+<h3>A request for <code>erp-vm-lpc8lqa.&lt;zone&gt;</code></h3>
+<ol class="steps">
+  <li>OpenResty lowercases the host, removes any port and removes the regional zone. The result is <code>erp-vm-lpc8lqa</code>.</li>
+  <li>Control names (<code>proxy</code>, <code>proxy-NNN</code>) are checked first. This is not one.</li>
+  <li><code>auto_proxy.lua</code> splits the name with <code>^(.-)([0-9a-z]+)$</code>. The prefix is <code>erp-vm-</code> and the label is <code>lpc8lqa</code>.</li>
+  <li>The label has no leading zero, and the prefix matches <code>*-vm-</code>.</li>
+  <li>The label is decoded into six 16-bit parts. Lua numbers cannot hold 96 bits exactly, so the code keeps the value as parts and carries between them.</li>
+  <li>The parts become <code>fdaa:1:0:2:0:0:0:b</code>. OpenResty sends HTTP to <code>[fdaa:1:0:2::b]:80</code>. HTTPS ends at the proxy with the regional wildcard certificate.</li>
+</ol>
+<p>The site map is never read. If the name had not decoded, the router would look it up in the site map next.</p>
+</div>
+
+<div class="scenario good">
+<span class="tag">Scenario 10</span>
+<h3>The VM moves to another host</h3>
+<p>Nothing changes on the proxy. The name encodes tenant and VM, not a host. The mesh address stays the same, and WG Mesh delivers the packet to the new host. This is the same reason stored routes survive migration.</p>
+</div>
+
+<div class="scenario bad">
+<span class="tag">Scenario 11</span>
+<h3>Someone tries to store a route named <code>site-docs</code></h3>
+<p>The daemon rejects it with <code>409 site-docs is reserved for auto proxy traffic</code>.</p>
+<p>Without this check, a stored entry and a computed address could both claim one name. OpenResty checks auto-proxy first, so the stored route would never be used. The daemon prevents the conflict at write time instead.</p>
+<p>The daemon's check for <code>*-vm-</code> is broader than OpenResty's. It rejects any key that contains <code>-vm-</code> after the first character, even if the rest is not a valid label. It can reserve too many names but never too few.</p>
+</div>
+
+<div class="scenario bad">
+<span class="tag">Scenario 12</span>
+<h3>Names that do not route</h3>
+<div class="table-wrap"><table>
+<tr><th>Name</th><th>Why</th><th>Result</th></tr>
+<tr><td><code>app-lpc8lqa</code></td><td>Prefix is not configured</td><td>Normal site lookup; 404 if absent</td></tr>
+<tr><td><code>site-0lpc8lqa</code></td><td>Leading zero: not the canonical spelling</td><td>Site lookup; the name is reserved, so 404</td></tr>
+<tr><td><code>-vm-lpc8lqa</code></td><td>Wildcard needs text before <code>-vm-</code></td><td>Site lookup</td></tr>
+<tr><td>20-digit label</td><td>More than 96 bits</td><td>Site lookup</td></tr>
+<tr><td><code>site-lpc8lqa.customer.com</code></td><td>Not inside the regional zone</td><td>Custom-domain path; auto-proxy never applies</td></tr>
+</table></div>
+</div>
+
+<div class="scenario bad">
+<span class="tag">Scenario 13</span>
+<h3>A valid name for a VM that does not exist</h3>
+<p><code>site-docs</code> is valid base 36. It decodes to some tenant and VM number. The proxy does not check Atlas records, so it tries that address and the connection fails.</p>
+<p>This is by design. The name is a formula, not a permission. Access still depends on the tenant and guest firewalls, and WG Mesh delivers only to a VM that exists. An auto-proxy name reaches exactly what the mesh address would reach from the proxy, and nothing more.</p>
+</div>
+
+<div class="scenario">
+<span class="tag">Scenario 14</span>
+<h3>Turning static routing off</h3>
+<p>Atlas writes <code>[auto_proxy]</code> into <code>/etc/atlas/proxy-control.toml</code> with <code>address_prefix</code> (for example <code>fdaa:1</code>) and <code>host_prefixes</code>. The apply step writes both to <code>/var/lib/nginx/auto-proxy</code>, and OpenResty reads that file at startup (<code>init_by_lua_block</code>).</p>
+<p>Leave out the section and the file holds no address prefix. Then <code>get_virtual_machine_address</code> returns nothing for every name, and all traffic uses the site map.</p>
+</div>
+
+<h2 id="limits">5. Limits to remember</h2>
+<ul>
+  <li><strong>A 503 on a write has an unknown outcome.</strong> The change can be on some nodes, on all nodes later, or dropped after a split. Always repeat the same change.</li>
+  <li><strong>Clusters of 2 or 3 nodes accept no writes with one node down.</strong> Use 4 or 5 nodes when writes must survive a node failure.</li>
+  <li><strong>A healed minority causes one extra election.</strong> Failed elections raise its term. There is no pre-vote step to prevent this. Writes pause briefly; traffic does not.</li>
+  <li><strong>Full snapshots, not a log.</strong> Repair copies the whole map. This is fine for route maps of this size. It would not be fine for large state.</li>
+  <li><strong>Auto-proxy is HTTP to port 80 only.</strong> TLS ends at the proxy. Custom domains, which pass TLS through to the VM, never use it.</li>
+  <li><strong>Auto-proxy does not grant access.</strong> It only computes an address.</li>
+</ul>
+
+<h2 id="sources">6. Sources</h2>
+<p>All code is in the public <a href="https://github.com/frappe/atlas">frappe/atlas</a> repository, <code>develop</code> branch.</p>
+<ul class="sources">
+  <li><a href="https://github.com/frappe/atlas/blob/develop/services/http-proxy/control/proxy_control/cluster.py">cluster.py</a>: elections, heartbeats, replication, snapshot repair, timers.</li>
+  <li><a href="https://github.com/frappe/atlas/blob/develop/services/http-proxy/control/proxy_control/mappings.py">mappings.py</a>: reserved names, including auto-proxy prefixes.</li>
+  <li><a href="https://github.com/frappe/atlas/blob/develop/services/http-proxy/nginx/lua/http/auto_proxy.lua">auto_proxy.lua</a>: label decoding and prefix matching.</li>
+  <li><a href="https://github.com/frappe/atlas/blob/develop/services/http-proxy/nginx/lua/http/router.lua">router.lua</a>: the order of checks for HTTPS requests.</li>
+  <li><a href="https://github.com/frappe/atlas/blob/develop/atlas/service/core/proxy/configuration.py">configuration.py</a>: the prefixes and address prefix Atlas sends to each node.</li>
+  <li><a href="https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/high-availability.md">High availability</a> and <a href="https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/openresty.md">OpenResty data plane</a>: the handbook pages.</li>
+</ul>
+
+</main>
+</body>
+</html>
