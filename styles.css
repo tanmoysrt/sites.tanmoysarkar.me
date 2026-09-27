@@ -1,46 +1,53 @@
-:root {
-  color-scheme: light;
-  --background: #f7f8fa;
-  --text: #353b43;
-  --strong: #14181e;
-  --muted: #555c66;
-  --accent: #3564b8;
-}
+:root { color-scheme: light; }
 
 * { box-sizing: border-box; }
 
-html { background: var(--background); }
+html { background: #fff; }
 
 body {
-  max-width: 688px;
+  max-width: 700px;
   margin: 0 auto;
   padding: 64px 24px 80px;
-  color: var(--text);
-  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color: #1b1b1b;
+  font: 17px/1.55 Georgia, "Times New Roman", serif;
+  overflow-wrap: break-word;
 }
 
 a { color: inherit; text-underline-offset: 0.15em; }
-a:hover { color: var(--accent); }
-a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 
-header { font: 15px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
-header a { color: var(--strong); text-decoration: none; }
+header { font-size: 23px; line-height: 1.3; }
+header a { text-decoration: none; }
 
-main { margin-top: 52px; }
-h1 { margin: 0 0 12px; color: var(--strong); font-size: 20px; font-weight: 600; line-height: 1.4; }
+main { margin-top: 24px; }
+h1 { margin: 0 0 14px; font-size: 21px; font-weight: normal; line-height: 1.35; }
+h1.tagline { font-size: 17px; font-style: italic; }
 p { margin: 0; }
-main > p { color: var(--muted); }
 
 nav,
-.entries { margin-top: 32px; }
+.entries {
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: 1px solid #aaa;
+}
 
-ul { padding-left: 20px; }
-li + li { margin-top: 8px; }
-.empty { color: var(--muted); }
+ul { padding-left: 22px; }
+li + li { margin-top: 6px; }
+.empty { color: #555; }
 
-footer { margin-top: 52px; color: var(--muted); font-size: 14px; }
+footer { margin-top: 42px; font-size: 15px; }
+
+.section-page main { margin-top: 0; }
+.section-page h1 { margin-bottom: 8px; }
+.section-page main > p { color: #555; font-style: italic; }
+.section-page .entries {
+  margin-top: 24px;
+  padding: 22px 0 0 22px;
+  border-top: 1px solid #aaa;
+}
+.section-page .entries li + li { margin-top: 14px; }
 
 @media (max-width: 520px) {
-  body { padding: 36px 20px 56px; }
-  main { margin-top: 38px; }
+  body { padding: 36px 20px 56px; font-size: 16px; }
 }
