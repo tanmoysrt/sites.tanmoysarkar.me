@@ -4,9 +4,13 @@ A minimal dumpyard for LLM-generated static sites. Repository: `tanmoysrt/sites.
 
 Read `skills/publish-site-artifact/SKILL.md` before creating a report, guide, plan, or presentation.
 
-## Add a static page
+## Add a direct HTML page
 
 Use a lowercase kebab-case slug. Write a self-contained `index.html` at `research/<slug>/`, `learning/<slug>/`, or `plans/<slug>/`. Keep assets in the page's folder. Give the page a meaningful HTML `<title>`.
+
+## Source for generated pages
+
+If a tool generates the published HTML or assets, keep the editable source files, configuration, and source assets in `raw/<section>/<slug>/`. Put generated files in `<section>/<slug>/`. Record the build command in `raw/<section>/<slug>/README.md` unless the repository already provides a build script. Commit source and output together. A direct HTML page does not need a duplicate raw copy. The Pages workflow does not deploy `raw/`.
 
 ## Add a presentation
 
@@ -16,7 +20,7 @@ Choose `research`, `learning`, or `plans` based on the deck's purpose. Use Marp.
 
 Check `gh auth status` first. Do not put tokens in files or use raw HTTP requests to publish.
 
-For a **new single-page artifact**, run this from the repository root after replacing the path:
+For a **new direct HTML page**, run this from the repository root after replacing the path:
 
 ```sh
 PAGE_PATH='research/<slug>/index.html'
@@ -27,6 +31,6 @@ gh api "repos/tanmoysrt/sites.tanmoysarkar.me/contents/$PAGE_PATH" \
 
 To update an existing page, first get its SHA with `gh api "repos/tanmoysrt/sites.tanmoysarkar.me/contents/$PAGE_PATH" --jq .sha`, then add `-f sha="<the-sha>"` to the PUT command.
 
-For a presentation or other multi-file artifact, use `gh repo clone tanmoysrt/sites.tanmoysarkar.me`, add both source and built files in that clone, then commit and push. The Pages workflow regenerates section listings and deploys the site after the push.
+For any generated or multi-file artifact, use `gh repo clone tanmoysrt/sites.tanmoysarkar.me`, add both source and built files in that clone, then commit and push. The Pages workflow regenerates section listings and deploys the site after the push.
 
 Only publish when the person requesting the artifact asks for publication. Verify the public URL before reporting success. Never commit secrets.

@@ -11,7 +11,8 @@ This archive lives in `tanmoysrt/sites.tanmoysarkar.me` on `main`. See [llms.txt
 
 - Infer whether the user wants an artifact or a slideshow from the request. If both fit and the choice is still unclear, ask: "Would you like an artifact or a slideshow?" Use answers already given; do not repeat questions. Ask about audience or depth only when needed to make the result useful.
 - Choose `research/<slug>/index.html` for reports, `learning/<slug>/index.html` for guides, and `plans/<slug>/index.html` for project plans. Use lowercase kebab-case slugs.
-- Make each document a self-contained static page with readable HTML, inline CSS, and any local assets in its folder. Keep the site minimal and light. Do not copy an existing page's wording or design wholesale.
+- For direct HTML pages, write readable, self-contained HTML with inline CSS and any local assets in the page's folder. Keep the site minimal and light. Do not copy an existing page's wording or design wholesale.
+- When a tool generates the page, keep its editable source, configuration, and source assets in `raw/<section>/<slug>/`; put the built site in `<section>/<slug>/`. Record the build command in `raw/<section>/<slug>/README.md` unless a repository script already does so. Commit source and output together. Direct HTML pages need no duplicate raw copy.
 - Check factual claims against sources when the topic needs it. Keep links to the sources visible on the artifact.
 
 ## Written reports, guides, and plans
@@ -38,4 +39,4 @@ Marp references: [CLI](https://github.com/marp-team/marp-cli) and [slide transit
 
 ## Publish
 
-Run `gh auth status` before publication. For a new single HTML page, use the `gh api` PUT command in `llms.txt`; include the existing file SHA when updating. For a deck or other multi-file artifact, use `gh repo clone tanmoysrt/sites.tanmoysarkar.me`, then commit and push the source and generated files. Do not use raw token-based HTTP publishing. Publish only when the user has asked for it. Confirm the public URL works before reporting success.
+Run `gh auth status` before publication. For a new direct HTML page, use the `gh api` PUT command in `llms.txt`; include the existing file SHA when updating. For a generated or multi-file artifact, use `gh repo clone tanmoysrt/sites.tanmoysarkar.me`, then commit and push the source and generated files. Do not use raw token-based HTTP publishing. Publish only when the user has asked for it. Confirm the public URL works before reporting success.
