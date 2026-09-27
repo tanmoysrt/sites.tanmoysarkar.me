@@ -1,4 +1,66 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.envrc
+*.pem
+*.p12
+*.pfx
+
+# Dependencies and virtual environments
 node_modules/
+bower_components/
+.pnpm-store/
+.venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Local caches and test output
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Intermediate builds; published pages live in research/, learning/, or plans/
+_site/
+dist/
+build/
+out/
+target/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.astro/
+.angular/
+.vercel/
+.netlify/
+
+# Logs, temporary files, and editor state
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+.tmp/
+tmp/
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db
+Desktop.ini
