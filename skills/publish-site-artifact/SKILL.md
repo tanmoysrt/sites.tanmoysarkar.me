@@ -14,6 +14,16 @@ This archive lives in `tanmoysrt/sites.tanmoysarkar.me` on `main`. See [llms.txt
 - Make each document a self-contained static page with readable HTML, inline CSS, and any local assets in its folder. Keep the site minimal and light. Do not copy an existing page's wording or design wholesale.
 - Check factual claims against sources when the topic needs it. Keep links to the sources visible on the artifact.
 
+## Written reports, guides, and plans
+
+Write like a clear engineering note. Start with the concrete situation and why the reader should care. Explain in causal order: the constraint, the idea or change, how it works, evidence, limits, and what happens next. Use only the sections the subject needs. Define a component's job before describing its internals, then trace one realistic request, action, or piece of data through the system.
+
+Use short paragraphs, direct headings, and specific examples. Show the relevant lines of code or configuration, a real UI state, or a measured before/after result when that makes the idea easier to verify. Give numbers units and measurement conditions. Distinguish what exists, what was tested, what is proposed, and what remains uncertain; include meaningful tradeoffs and failed approaches. Edit repetitions and rough phrasing rather than imitating the source posts verbatim.
+
+Use diagrams to answer one question at a time. Draw simple labeled components and directional arrows; show ownership or network boundaries when they matter. Label the data or action on important arrows, and use before/after diagrams for a redesign. Place each diagram next to its explanation and give it useful alternative text. Use a restrained hand-drawn look with plain lines and little color. Treat private reference posts as style examples; do not copy their text, screenshots, or infrastructure details into public artifacts.
+
+For a guide, give actionable steps and expected results. For research, compare options using evidence and state a conclusion. For a plan, show sequence, dependencies, and how success will be checked.
+
 ## Presentations
 
 Use Marp for presentations and place each deck in `research`, `learning`, or `plans` based on its purpose. Keep editable Markdown at `raw/<section>/<slug>/slides.md` and local assets under `raw/<section>/<slug>/assets/`. Set `marp: true` and a meaningful `title` in the frontmatter. Check `marp --version` first. If Marp CLI is missing, ask the user to install it globally with `npm install -g @marp-team/marp-cli`. Build with `npm run build:deck -- <section> <slug>`; commit the raw source and `<section>/<slug>/` output together.
