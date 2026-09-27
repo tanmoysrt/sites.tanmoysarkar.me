@@ -546,6 +546,23 @@ function health(stage) {
   d.save(`health-${stage}`, alts[stage - 1])
 }
 
+function happyEyeballs() {
+  const d = new Diagram(1160, 330, { panel: true })
+  const syn = (address) => [cell('net', 'TCP SYN', `${CLIENT} → ${address}:443`)]
+  d.box(20, 140, 200, 80, 'browser')
+  d.note(120, 252, 'cached answer:\n.11 · .12 · .13', { size: 14 })
+  d.box(560, 30, 260, 70, `proxy-002 · down\n${NODE}`, { dashed: true, muted: true })
+  d.box(560, 230, 260, 70, 'proxy-001\n203.0.113.11', { kind: 'proxy' })
+  flow(d, [
+    { stage: 1, pts: [[222, 160], [558, 68]], n: 1, text: 'try .12', lx: 360, ly: 88, dashed: true, drop: true, frame: syn(NODE) },
+    { stage: 1, pts: [[222, 200], [558, 262]], n: 2, text: 'no reply in 250 ms: try .11', lx: 400, ly: 298, frame: syn('203.0.113.11') },
+  ], 1)
+  d.note(990, 65, 'no reply', { anchor: 'middle' })
+  d.note(990, 265, 'connects · TLS · HTTP', { anchor: 'middle' })
+  d.note(990, 312, 'no help if a node accepts TCP, then fails', { size: 14 })
+  d.save('happy-eyeballs', 'The browser has a cached answer with .11, .12, and .13. It sends a TCP SYN to proxy-002 at 203.0.113.12, which is down. After 250 ms with no reply, it sends a TCP SYN to proxy-001 at 203.0.113.11 and connects. This does not help when a node accepts TCP and then fails.')
+}
+
 overview()
 node()
 siteKey()
@@ -553,3 +570,4 @@ autoProxy()
 customDomain()
 for (const stage of [1, 2, 3]) { request(stage); write(stage); partial(stage) }
 for (const stage of [1, 2, 3, 4]) health(stage)
+happyEyeballs()

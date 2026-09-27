@@ -343,6 +343,14 @@ curl -X PATCH \
 
 ---
 
+# Happy Eyeballs: try the next address
+
+![w:1120 The browser has a cached answer with .11, .12, and .13. It sends a TCP SYN to proxy-002 at 203.0.113.12, which is down. After 250 ms with no reply, it sends a TCP SYN to proxy-001 at 203.0.113.11 and connects. This does not help when a node accepts TCP and then fails.](assets/happy-eyeballs.svg)
+
+*Happy Eyeballs (RFC 8305): start the next address when one stalls*
+
+---
+
 # The node comes back
 
 ![w:1120 proxy-002 answers 204 on 2 checks again. Route 53 puts 203.0.113.12 back in the answer.](assets/health-4.svg)
@@ -484,6 +492,6 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 [HTTP proxy overview](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/index.md) · [OpenResty paths](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/openresty.md) · [High availability](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/high-availability.md)
 
-[Control daemon](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/control-daemon.md) · [Provisioning](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/provisioning.md) · [Route 53 multivalue answers](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-multivalue.html) · [WG Mesh deck](../atlas-wg-mesh/)
+[Control daemon](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/control-daemon.md) · [Provisioning](https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/provisioning.md) · [Route 53 multivalue answers](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-multivalue.html) · [RFC 8305](https://www.rfc-editor.org/rfc/rfc8305) · [WG Mesh deck](../atlas-wg-mesh/)
 
 *frappe/atlas · all names and addresses are examples*
