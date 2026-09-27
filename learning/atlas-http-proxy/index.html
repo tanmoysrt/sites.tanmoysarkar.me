@@ -3,157 +3,172 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A clear guide to how the Atlas HTTP proxy serves requests, shares route changes, and routes auto-proxy names.">
+  <meta name="description" content="Follow one Atlas web request and one route change to understand proxy routing, node failures, and auto-proxy names.">
   <title>How the Atlas HTTP proxy works</title>
   <style>
     :root {
       color-scheme: light;
-      --ink: #202631;
-      --muted: #526070;
-      --line: #d8dfe5;
+      --ink: #202833;
+      --muted: #4e5b68;
+      --line: #d9e0e4;
+      --accent: #176784;
+      --accent-soft: #eaf4f6;
       --paper: #fff;
-      --soft: #f4f7f8;
-      --accent: #176987;
-      --accent-soft: #e6f2f5;
-      --warning: #704c16;
-      --warning-soft: #fcf5e8;
+      --soft: #f5f7f8;
+      --warm: #fcf5e9;
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    a { color: var(--accent); text-underline-offset: .18em; }
+    a { color: var(--accent); text-underline-offset: .2em; }
     a:hover { text-decoration-thickness: 2px; }
-    a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
-    .page { width: min(100% - 40px, 860px); margin: auto; }
+    a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    .page { width: min(100% - 40px, 820px); margin: auto; }
     header { padding: 64px 0 36px; border-bottom: 1px solid var(--line); }
-    .eyebrow { margin: 0 0 16px; color: var(--accent); font-size: 14px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+    .eyebrow { margin: 0 0 17px; color: var(--accent); font-size: 14px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
     h1, h2, h3 { line-height: 1.2; letter-spacing: -.025em; }
     h1 { max-width: 720px; margin: 0; font-size: clamp(38px, 6vw, 62px); }
-    .lede { max-width: 680px; margin: 22px 0 0; color: var(--muted); font-size: 21px; line-height: 1.55; }
-    .meta { margin: 22px 0 0; color: var(--muted); font-size: 14px; }
-    main { padding: 12px 0 76px; }
+    .lede { max-width: 680px; margin: 22px 0 0; color: var(--muted); font-size: 21px; line-height: 1.5; }
+    .contents { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 23px 0 3px; font-size: 15px; }
+    .contents a { color: var(--muted); }
     section { padding: 48px 0; border-bottom: 1px solid var(--line); }
     section:last-child { border-bottom: 0; }
     h2 { margin: 0 0 16px; font-size: clamp(27px, 4vw, 34px); }
-    h3 { margin: 32px 0 9px; font-size: 21px; }
+    h3 { margin: 32px 0 10px; font-size: 21px; }
     p { max-width: 690px; margin: 12px 0; }
-    .section-intro { color: var(--muted); font-size: 19px; }
-    .contents { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 24px 0 6px; font-size: 15px; }
-    .contents a { color: var(--muted); }
-    .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; padding-top: 32px; }
-    .summary p { margin: 5px 0 0; color: var(--muted); font-size: 16px; line-height: 1.5; }
-    .summary strong { display: block; font-size: 17px; }
-    figure { margin: 26px 0; }
-    .flow { display: flex; align-items: stretch; gap: 8px; padding: 22px; border-radius: 12px; background: var(--soft); }
-    .flow-step { display: flex; flex: 1; flex-direction: column; justify-content: center; min-width: 0; padding: 14px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
-    .flow-step strong { font-size: 16px; line-height: 1.3; }
-    .flow-step small { margin-top: 5px; color: var(--muted); font-size: 14px; line-height: 1.35; }
-    .flow-arrow { align-self: center; flex: none; color: var(--accent); font-size: 23px; font-weight: 700; }
-    figcaption { margin-top: 9px; color: var(--muted); font-size: 14px; }
-    .example { padding: 18px 22px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
-    .example p { margin: 0; }
+    .intro { color: var(--muted); font-size: 19px; }
     code { padding: .12em .3em; border-radius: 3px; background: var(--soft); font: .88em/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
-    .example code { background: #fff; }
-    ol, ul { padding-left: 1.35em; }
-    li { padding-left: .25em; margin: 9px 0; }
+    .takeaway { margin: 26px 0; padding: 16px 20px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+    .takeaway p { margin: 0; }
+    .caution { margin: 25px 0; padding: 16px 20px; border-left: 3px solid #8a5b18; background: var(--warm); }
+    .caution p { margin: 0; }
+    .terms { display: grid; grid-template-columns: 130px 1fr; gap: 12px 20px; margin: 24px 0; }
+    .terms dt { font-weight: 700; }
+    .terms dd { margin: 0; color: var(--muted); }
+    figure { margin: 29px 0; }
+    .diagram { padding: 20px 22px; border-radius: 10px; background: var(--soft); }
+    .diagram-label { margin: 0 0 12px; color: var(--accent); font-size: 14px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+    .path { display: flex; align-items: center; gap: 10px; }
+    .path-node { display: flex; flex: 1; flex-direction: column; justify-content: center; min-width: 0; min-height: 78px; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+    .path-node strong { font-size: 16px; line-height: 1.3; }
+    .path-node small { margin-top: 4px; color: var(--muted); font-size: 14px; line-height: 1.35; }
+    .arrow { flex: none; color: var(--accent); font-size: 22px; font-weight: 700; }
+    figcaption { margin-top: 8px; color: var(--muted); font-size: 14px; }
+    ol.steps { padding-left: 1.5em; }
+    .steps li { padding-left: .35em; margin: 14px 0; }
+    .steps li::marker { color: var(--accent); font-weight: 700; }
+    .steps strong { color: var(--ink); }
     .table-scroll { overflow-x: auto; margin: 22px 0; }
     table { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.5; }
-    th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     th { background: var(--soft); font-weight: 700; }
-    th:first-child, td:first-child { padding-left: 15px; }
-    .note { margin: 25px 0; padding: 16px 20px; border-left: 3px solid var(--warning); background: var(--warning-soft); }
-    .note p { margin: 0; }
-    .mapping { display: grid; grid-template-columns: max-content 1fr; gap: 7px 18px; margin: 24px 0; padding: 20px 22px; border-radius: 10px; background: var(--soft); }
-    .mapping dt { color: var(--muted); }
-    .mapping dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
-    .sources { font-size: 15px; }
-    .sources li { margin: 7px 0; }
-    footer { padding: 24px 0 50px; color: var(--muted); font-size: 14px; }
+    .equation { display: grid; grid-template-columns: 135px 1fr; gap: 7px 16px; margin: 25px 0; padding: 19px 22px; border-radius: 9px; background: var(--soft); }
+    .equation dt { color: var(--muted); }
+    .equation dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .sources { padding-left: 1.35em; font-size: 15px; }
+    .sources li { margin: 8px 0; }
+    footer { padding: 24px 0 48px; color: var(--muted); font-size: 14px; }
     @media (max-width: 680px) {
       header { padding-top: 42px; }
-      .summary { grid-template-columns: 1fr; gap: 18px; }
-      .flow { flex-direction: column; padding: 16px; }
-      .flow-arrow { transform: rotate(90deg); line-height: 1; }
-      .mapping { grid-template-columns: 1fr; gap: 2px; }
-      .mapping dd { margin-bottom: 12px; }
-      section { padding: 40px 0; }
       .lede { font-size: 18px; }
+      section { padding: 40px 0; }
+      .terms, .equation { grid-template-columns: 1fr; gap: 2px; }
+      .terms dd, .equation dd { margin-bottom: 12px; }
+      .path { flex-direction: column; align-items: stretch; gap: 3px; }
+      .path-node { min-height: 0; }
+      .arrow { align-self: center; transform: rotate(90deg); line-height: 1; }
     }
     @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-    @media print { body { font-size: 11pt; } .page { width: 100%; } header, section { padding: 20px 0; } a { color: inherit; } .flow, .example, .note { break-inside: avoid; } }
+    @media print { body { font-size: 11pt; } .page { width: 100%; } header, section { padding: 18px 0; } .diagram, .takeaway, .caution { break-inside: avoid; } }
   </style>
 </head>
 <body>
   <div class="page">
     <header>
       <p class="eyebrow">Atlas · Engineering guide</p>
-      <h1>How the HTTP proxy gets a request to a VM</h1>
-      <p class="lede">A proxy node handles each web request with its own route map. A separate control service keeps those maps in sync. This guide shows both paths and what happens when a node fails.</p>
-      <p class="meta">A 6-minute overview · Based on the Atlas HTTP proxy design</p>
+      <h1>How the Atlas HTTP proxy works</h1>
+      <p class="lede">A site name must lead to the right virtual machine (VM). Follow one request and one route change to see how Atlas handles VM moves and proxy failures.</p>
     </header>
 
     <nav class="contents" aria-label="On this page">
-      <a href="#picture">The big picture</a>
-      <a href="#request">A web request</a>
-      <a href="#change">A route change</a>
-      <a href="#failure">When something fails</a>
-      <a href="#auto">Auto-proxy names</a>
+      <a href="#problem">The problem</a>
+      <a href="#request">One request</a>
+      <a href="#change">One route change</a>
+      <a href="#failure">Failures</a>
+      <a href="#auto">Auto-proxy</a>
       <a href="#sources">Sources</a>
     </nav>
 
     <main>
-      <section id="picture" aria-labelledby="picture-title">
-        <h2 id="picture-title">The big picture</h2>
-        <p>Each region has 1 to 5 proxy nodes. Each node runs OpenResty for web traffic and a control daemon for route changes.</p>
-        <div class="summary">
-          <div><strong>OpenResty serves traffic</strong><p>It reads the local route map and sends the request to a VM.</p></div>
-          <div><strong>The daemon changes routes</strong><p>It validates a change, shares it with peers, and updates OpenResty.</p></div>
-          <div><strong>WG Mesh finds the VM</strong><p>The proxy uses a stable VM address. The VM can move between hosts.</p></div>
-        </div>
-        <p class="note"><strong>Key idea:</strong> A web request does not wait for the control cluster. A node can still serve its known routes when route changes stop.</p>
+      <section id="problem" aria-labelledby="problem-title">
+        <h2 id="problem-title">What problem does the proxy solve?</h2>
+        <p>A browser knows a name such as <code>erp.par-1.example.com</code>. It does not know which tenant VM serves that site or which host runs the VM.</p>
+        <p>Atlas puts 1 to 5 proxy nodes in each region. Domain Name System (DNS) sends the browser to a node. That node looks up the site and sends the request to the VM's stable private address.</p>
+        <dl class="terms">
+          <dt>DNS</dt><dd>Chooses a proxy node. It does not choose the tenant VM.</dd>
+          <dt>Route map</dt><dd>Connects a site name to a VM mesh address. Each proxy node keeps a local copy.</dd>
+          <dt>WG Mesh</dt><dd>The private network that delivers traffic to the VM's current host.</dd>
+        </dl>
+        <div class="takeaway"><p><strong>The useful separation:</strong> A route names the VM, while WG Mesh finds its host. A VM move does not require a proxy route change.</p></div>
       </section>
 
       <section id="request" aria-labelledby="request-title">
-        <h2 id="request-title">Follow one web request</h2>
-        <p class="section-intro">A client opens a site in the regional wildcard domain.</p>
-        <figure aria-label="A client reaches a proxy through DNS. OpenResty reads its local route map. WG Mesh delivers the request to the site VM.">
-          <div class="flow">
-            <div class="flow-step"><strong>Client</strong><small>Opens the site</small></div>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-step"><strong>DNS</strong><small>Returns a proxy node</small></div>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-step"><strong>OpenResty</strong><small>Reads its local map</small></div>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-step"><strong>WG Mesh</strong><small>Finds the VM's host</small></div>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-step"><strong>Site VM</strong><small>Handles the request</small></div>
+        <h2 id="request-title">What happens to one web request?</h2>
+        <p class="intro">Assume the site route maps <code>erp</code> to <code>fdaa:1:0:2::b</code>.</p>
+        <figure aria-label="The browser reaches a regional proxy through DNS. OpenResty finds the erp route in its local map. WG Mesh delivers the request to the VM at its current host.">
+          <div class="diagram">
+            <p class="diagram-label">Live request · no cluster call</p>
+            <div class="path">
+              <div class="path-node"><strong>Browser</strong><small>erp.par-1.example.com</small></div>
+              <span class="arrow" aria-hidden="true">→</span>
+              <div class="path-node"><strong>Proxy node</strong><small>OpenResty reads “erp”</small></div>
+              <span class="arrow" aria-hidden="true">→</span>
+              <div class="path-node"><strong>WG Mesh</strong><small>fdaa:1:0:2::b</small></div>
+              <span class="arrow" aria-hidden="true">→</span>
+              <div class="path-node"><strong>Site VM</strong><small>On its current host</small></div>
+            </div>
           </div>
-          <figcaption>Request path. The control daemon is not called for each request.</figcaption>
+          <figcaption>DNS picks the proxy. The proxy picks the VM. WG Mesh finds the host.</figcaption>
         </figure>
-        <div class="example"><p>For example, <code>erp.par-1.example.com</code> uses the <code>erp</code> site route. That route points to a VM mesh address, such as <code>fdaa:1:0:2::b</code>.</p></div>
-        <p>The mesh address belongs to the VM, not its host. If the VM moves, WG Mesh finds its new host. The proxy route stays the same.</p>
+        <ol class="steps">
+          <li><strong>DNS returns a proxy node.</strong> The browser connects to that node with the site name.</li>
+          <li><strong>OpenResty reads its local map.</strong> The <code>erp</code> entry gives it the VM mesh address.</li>
+          <li><strong>OpenResty forwards the request.</strong> For site HTTPS, it ends TLS and sends HTTP to port <code>80</code> on the VM.</li>
+          <li><strong>WG Mesh delivers the packet.</strong> It knows which host currently runs the VM.</li>
+        </ol>
+        <p>OpenResty does not ask another proxy node or the control daemon for each request. This is why an isolated node can still serve routes it already knows.</p>
       </section>
 
       <section id="change" aria-labelledby="change-title">
-        <h2 id="change-title">How a route change reaches every node</h2>
-        <p class="section-intro">Central changes site and custom-domain routes. Atlas changes the routes it owns.</p>
-        <figure aria-label="Central or Atlas sends a route change to any control daemon. A follower forwards it to the leader. The leader applies the change and sends it to peer daemons, which update their local maps.">
-          <div class="flow">
-            <div class="flow-step"><strong>Central or Atlas</strong><small>Sends a route change</small></div>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-step"><strong>Any daemon</strong><small>Forwards to leader if needed</small></div>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-step"><strong>Leader</strong><small>Applies and sends the change</small></div>
-            <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="flow-step"><strong>Peer daemons</strong><small>Update their local maps</small></div>
+        <h2 id="change-title">Where did the route map come from?</h2>
+        <p>Each proxy node also runs a control daemon, a background service that changes its local map. Central sends site and custom-domain changes. Atlas sends the changes it owns.</p>
+        <p>The daemons elect one leader. That leader orders route changes and copies them to the other nodes.</p>
+        <p class="intro">Suppose Central changes <code>erp</code> to point to a new VM in a 5-node region.</p>
+        <figure aria-label="Central sends a route change to any control daemon. A follower forwards it to the leader. The leader changes its local map and sends the change to peers. Peers acknowledge after they update their local maps.">
+          <div class="diagram">
+            <p class="diagram-label">Route change · cluster coordination</p>
+            <div class="path">
+              <div class="path-node"><strong>Central</strong><small>Change erp route</small></div>
+              <span class="arrow" aria-hidden="true">→</span>
+              <div class="path-node"><strong>Any daemon</strong><small>Forward if follower</small></div>
+              <span class="arrow" aria-hidden="true">→</span>
+              <div class="path-node"><strong>Leader</strong><small>Apply, then send to peers</small></div>
+              <span class="arrow" aria-hidden="true">→</span>
+              <div class="path-node"><strong>Peer daemons</strong><small>Update local maps</small></div>
+            </div>
           </div>
-          <figcaption>Change path. The leader reports success after enough nodes acknowledge the change.</figcaption>
+          <figcaption>Each daemon writes its own OpenResty map. The web request path then reads that local map.</figcaption>
         </figure>
-        <p>Every node saves its route map and a generation number. A node that misses a change can get a full copy of a newer map from a peer.</p>
-        <h3>How many nodes must confirm?</h3>
-        <p>For 1 to 3 nodes, every node must acknowledge a route change. A 4 or 5 node cluster needs 3 acknowledgements, including the leader.</p>
+        <ol class="steps">
+          <li><strong>A follower forwards the change.</strong> Clients can contact any ready node; only the leader orders writes.</li>
+          <li><strong>The leader applies the change locally.</strong> It advances the generation number, updates OpenResty, and saves the new map.</li>
+          <li><strong>The leader sends the change to its peers.</strong> A peer updates its own map and acknowledges.</li>
+          <li><strong>The leader answers after enough acknowledgements.</strong> In a 5-node region, it needs 3, including itself. The other 2 can catch up later.</li>
+        </ol>
+        <p>The generation number increases after each change. Nodes compare it with the last operation ID to find differences. A node that missed a change can install a full, newer copy of the map.</p>
+        <h3>“Enough” depends on the region size</h3>
         <div class="table-scroll"><table>
-          <thead><tr><th scope="col">Nodes in region</th><th scope="col">Acknowledgements needed</th><th scope="col">Nodes that may be unavailable</th></tr></thead>
+          <thead><tr><th scope="col">Proxy nodes</th><th scope="col">Acknowledgements for a successful write</th><th scope="col">Node failures tolerated for writes</th></tr></thead>
           <tbody>
             <tr><td>1</td><td>1</td><td>0</td></tr>
             <tr><td>2</td><td>2</td><td>0</td></tr>
@@ -162,44 +177,50 @@
             <tr><td>5</td><td>3</td><td>2</td></tr>
           </tbody>
         </table></div>
+        <p>A 3-node region can elect a leader with 2 votes, but it still needs all 3 nodes to confirm a route change. Election and write confirmation have different rules.</p>
       </section>
 
       <section id="failure" aria-labelledby="failure-title">
-        <h2 id="failure-title">What happens when something fails?</h2>
+        <h2 id="failure-title">What changes when a node fails?</h2>
+        <p>Two operations have different needs. Serving a known route reads one node's local map. Changing a route needs the leader and enough acknowledgements.</p>
         <div class="table-scroll"><table>
-          <thead><tr><th scope="col">Situation</th><th scope="col">Web requests</th><th scope="col">Route changes</th></tr></thead>
+          <thead><tr><th scope="col">Situation</th><th scope="col">Existing web traffic</th><th scope="col">New route changes</th></tr></thead>
           <tbody>
-            <tr><td>A proxy node stops</td><td>Healthy nodes continue to serve their local routes. DNS normally removes the failed node.</td><td>The remaining nodes elect a leader if they have enough votes.</td></tr>
-            <tr><td>A node loses its peers</td><td>It can serve routes already in its local map.</td><td>It cannot confirm a new change without the required acknowledgements.</td></tr>
-            <tr><td>A node comes back</td><td>It loads its saved map, then gets a newer copy if one exists.</td><td>It can acknowledge new changes after it catches up.</td></tr>
+            <tr><td>A node stops</td><td>Other healthy nodes keep serving. DNS normally stops returning the failed node.</td><td>They elect a new leader if needed. Writes succeed only if enough nodes remain.</td></tr>
+            <tr><td>A node cannot reach peers</td><td>Its OpenResty still serves routes in its local map.</td><td>It cannot confirm a write by itself in a multi-node region.</td></tr>
+            <tr><td>A node returns</td><td>It loads its saved map and checks peers for a newer snapshot.</td><td>It can rejoin route changes after it catches up.</td></tr>
           </tbody>
         </table></div>
-        <div class="note"><p><strong>If a route change returns <code>503</code>:</strong> Its outcome is uncertain. Some nodes may already have the change. Send the same change again. Atlas route changes are safe to repeat.</p></div>
-        <p>A new node must synchronize and know the leader before Atlas publishes it in DNS. This prevents a node with an empty map from receiving public traffic.</p>
+        <h3>Why a failed write can still change a route</h3>
+        <p>In a 3-node region, suppose one node is down. The leader and the second node can apply a change, but the required third acknowledgement never arrives. The client gets <code>503</code>.</p>
+        <p>The two live nodes do not roll back their maps. The returning node can later copy the newer snapshot. A failed response therefore does not prove that the route stayed the same.</p>
+        <div class="caution"><p><strong>For a route-change <code>503</code>, send the same change again.</strong> Atlas route changes are safe to repeat. A retry can succeed after the missing nodes return.</p></div>
+        <p>Atlas waits for a new node to synchronize and know the leader before it publishes that node in DNS. Later, DNS health checks test whether it can serve traffic, even during a write outage.</p>
       </section>
 
       <section id="auto" aria-labelledby="auto-title">
-        <h2 id="auto-title">A route without a saved map entry</h2>
-        <p class="section-intro">An auto-proxy hostname encodes a VM identity. OpenResty calculates the VM's mesh address from that name.</p>
-        <p>This is useful when a VM needs a URL before anyone writes a site route. For an example region, tenant <code>2</code> and VM <code>11</code> produce this result:</p>
-        <dl class="mapping">
-          <dt>Hostname</dt><dd><code>site-lpc8lqa.example.com</code></dd>
-          <dt>Encoded label</dt><dd><code>lpc8lqa</code></dd>
-          <dt>VM mesh address</dt><dd><code>fdaa:1:0:2::b</code></dd>
+        <h2 id="auto-title">How can a URL work with no saved route?</h2>
+        <p>An auto-proxy name is useful when a new VM needs a URL before anyone saves a site route. Its hostname carries the tenant and VM numbers. OpenResty calculates the VM address directly, with no cluster write.</p>
+        <p>For example, take tenant <code>2</code> and VM <code>11</code> in region <code>1</code>. VM <code>11</code> is the numeric part of an Atlas ID such as <code>VM-00011</code>. Atlas combines the tenant and VM numbers, then writes the result with digits and letters in base 36:</p>
+        <dl class="equation">
+          <dt>Numbers</dt><dd><code>(11 &lt;&lt; 32) | 2 = 47244640258</code></dd>
+          <dt>Base-36 label</dt><dd><code>lpc8lqa</code></dd>
+          <dt>Example URL</dt><dd><code>site-lpc8lqa.par-1.example.com</code></dd>
+          <dt>Decoded address</dt><dd><code>fdaa:1:0:2::b</code></dd>
         </dl>
-        <p>OpenResty checks the configured auto-proxy prefix and decodes the label. It then sends HTTP to port <code>80</code> on that VM. HTTPS ends at the proxy.</p>
-        <p>The name identifies a destination. It does not create a VM or grant access. The tenant and guest firewall rules still apply.</p>
-        <div class="note"><p><strong>Scope:</strong> Auto-proxy names work inside the regional wildcard domain. Custom-domain HTTPS takes a different path: the proxy passes TLS to the VM.</p></div>
+        <p>For this example, <code>site-</code> is a configured auto-proxy prefix. The proxy checks that prefix and decodes <code>lpc8lqa</code>. Its region configuration supplies <code>fdaa:1</code>. It then sends HTTP to port <code>80</code> on the calculated VM address.</p>
+        <p>The name carries VM identity, not host location. If the VM moves, WG Mesh still finds it. The name does not create a VM or grant access through tenant or guest firewalls.</p>
+        <div class="takeaway"><p><strong>Know the boundary:</strong> Auto-proxy works in the regional wildcard domain. Custom-domain HTTPS takes another path: the proxy passes TLS to the VM, which owns that certificate.</p></div>
       </section>
 
       <section id="sources" aria-labelledby="sources-title">
-        <h2 id="sources-title">Read the details</h2>
-        <p>This guide summarizes the current Atlas design. These pages give the full rules and implementation:</p>
+        <h2 id="sources-title">Where are the full rules?</h2>
+        <p>This guide explains the paths. The Atlas handbook defines the exact behavior:</p>
         <ul class="sources">
-          <li><a href="https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/index.md">HTTP proxy overview</a></li>
+          <li><a href="https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/index.md">HTTP proxy overview and ownership</a></li>
           <li><a href="https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/high-availability.md">Leader election, acknowledgements, and recovery</a></li>
-          <li><a href="https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/openresty.md">Request paths and auto-proxy names</a></li>
-          <li><a href="https://github.com/frappe/atlas/blob/develop/services/http-proxy/SPEC.md">Component contract</a></li>
+          <li><a href="https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/openresty.md">Request paths and auto-proxy encoding</a></li>
+          <li><a href="https://github.com/frappe/atlas/blob/develop/docs/networking/http-proxy/provisioning.md">Node readiness and DNS publication</a></li>
         </ul>
       </section>
     </main>
