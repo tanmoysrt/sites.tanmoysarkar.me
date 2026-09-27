@@ -31,9 +31,11 @@ Use Marp for presentations and place each deck in `research`, `learning`, or `pl
 
 Keep decks easy to scan: a white canvas, dark sans text, thin lines, plenty of empty space, and only a little color to mark the current state. Use one idea per slide and short labels or fragments instead of paragraphs. Show actual code, tables, or product screens when they explain the point faster than prose. A slide should make sense at a glance and need little effort to read. Use a brief question or section title as an occasional pause.
 
+Keep the title at the same top position on every content slide. Center question and section slides vertically, with or without a short subtitle. Use the same type scale and spacing within each slide type throughout a deck.
+
 For concepts and flows, favor simple tldraw or Excalidraw-like diagrams: plain boxes, arrows, handwritten-feeling lines, and direct labels. Keep them deliberately rough and useful, without glossy icons, gradients, shadows, or decorative illustrations. Give each actor or operation a consistent color; use a stronger accent only for the path or state under discussion. Put short annotations next to the relevant part of the diagram.
 
-Show each slide's content immediately. When a flow genuinely needs stages, reuse the same diagram across consecutive slides. Keep actors and nodes in the same positions; change or highlight only the operation, branch, or result being explained. Use only the steps the audience needs to compare, and end with the complete state. If motion clarifies the sequence, put `<!-- _transition: fade 250ms -->` on the slide before the next step. Keep other transitions off.
+Choose the pace that makes the idea easiest to follow. Keep a slide static when it reads at a glance. For a process, keep the diagram in place and reveal the few steps or paths the audience needs; a brief transition or moving arrow can help show direction. Let the complete state remain visible when it helps the explanation. Avoid decorative motion and honor reduced-motion preferences.
 
 Marp references: [CLI](https://github.com/marp-team/marp-cli) and [slide transitions](https://github.com/marp-team/marp-cli/blob/main/docs/bespoke-transitions/README.md).
 

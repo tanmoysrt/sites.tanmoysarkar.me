@@ -11,9 +11,11 @@ style: |
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 28px;
     padding: 52px 60px 44px;
+    display: flex;
+    flex-direction: column;
     justify-content: flex-start;
   }
-  h1 { font-size: 44px; font-weight: 650; color: #111111; margin: 0 0 22px; letter-spacing: -0.01em; }
+  h1 { font-size: 44px; font-weight: 650; color: #111111; line-height: 1.12; margin: 0 0 22px; padding: 0; border: 0; letter-spacing: -0.01em; }
   p, li { line-height: 1.45; }
   li { margin: 6px 0; }
   strong { color: #111111; font-weight: 650; }
@@ -29,7 +31,8 @@ style: |
   section.lead { justify-content: center; text-align: center; }
   section.lead h1 { font-size: 64px; margin: 8px 0 4px; }
   section.pause { justify-content: center; }
-  section.pause h1 { font-size: 52px; font-weight: 600; }
+  section.pause h1 { font-size: 52px; font-weight: 600; margin: 0; }
+  section.pause p { color: #6c757d; margin: 12px 0 0; }
 ---
 
 <!-- _class: lead -->
@@ -358,6 +361,26 @@ snapshots/<name>          a named manifest
 ![w:1120 After the commit the checkpoint checks X, finds it missing and uploads it again from its local copy.](assets/gc-2.svg)
 
 *GC also skips objects younger than 24 h, and stops if it cannot read every root.*
+
+---
+
+<!-- _transition: fade 350ms -->
+
+# Upgrades without downtime
+
+![w:1120 The old daemon exits and the kernel holds guest I/O.](assets/restart-1.svg)
+
+*The kernel keeps the device while the daemon restarts.*
+
+---
+
+<!-- _transition: fade 350ms -->
+
+# Upgrades without downtime
+
+![w:1120 The new daemon opens local chunks and takes over the device while I/O waits.](assets/restart-2.svg)
+
+*The new daemon opens the same local files and takes over the device.*
 
 ---
 

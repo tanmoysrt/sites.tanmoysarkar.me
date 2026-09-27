@@ -26,7 +26,7 @@ const seedOf = (s) => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt
 const textWidth = (s, size) => s.length * size * 0.55
 
 class Diagram {
-  constructor(w, h) { this.w = w; this.h = h; this.parts = [] }
+  constructor(w, h) { this.w = w; this.h = h; this.parts = []; this.hasMotion = false }
 
   rough(drawable, dash) {
     const attr = dash ? ` stroke-dasharray="${dash}"` : ''
@@ -92,7 +92,7 @@ class Diagram {
   }
 
   // state: normal, active (the step under discussion), muted (done or skipped), hidden
-  arrow(pts, { text = '', n = null, state = 'normal', both = false, dashed = false, lx, ly, anchor = 'middle', size = 18 } = {}) {
+  arrow(pts, { text = '', n = null, state = 'normal', both = false, dashed = false, motion = false, lx, ly, anchor = 'middle', size = 18 } = {}) {
     if (state === 'hidden') return
     const color = state === 'active' ? ACCENT : state === 'muted' ? MUTED : INK
     const width = state === 'active' ? 2.6 : 1.6
@@ -100,6 +100,7 @@ class Diagram {
     this.rough(gen.linearPath(pts, this.opts(key, { stroke: color, strokeWidth: width, roughness: 0.9 })), dashed ? '7 6' : '')
     this.head(pts[pts.length - 2], pts[pts.length - 1], color, width, key + 'h')
     if (both) this.head(pts[1], pts[0], color, width, key + 't')
+    if (motion && state === 'active') this.flow(pts)
     if (!text && n === null) return
     if (lx === undefined) {
       let best = 0
@@ -110,6 +111,15 @@ class Diagram {
     }
     const textColor = state === 'muted' ? MUTED_TEXT : state === 'active' ? ACCENT : INK
     this.step(lx, ly, n, text, { color: textColor, badge: color === MUTED ? MUTED_TEXT : color, anchor, size })
+  }
+
+  flow(pts) {
+    this.hasMotion = true
+    const path = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ')
+    this.parts.push(`<circle class="flow-dot" r="5" fill="${ACCENT}" aria-hidden="true">` +
+      `<animateMotion path="${path}" dur="2.4s" repeatCount="indefinite"/>` +
+      `<animate attributeName="opacity" values="0;0.8;0.8;0" keyTimes="0;0.1;0.9;1" dur="2.4s" repeatCount="indefinite"/>` +
+      '</circle>')
   }
 
   // A numbered badge followed by a label, on a white background.
@@ -137,8 +147,9 @@ class Diagram {
   }
 
   save(name, alt) {
+    const motionStyle = this.hasMotion ? '<style>@media (prefers-reduced-motion: reduce) {.flow-dot {display: none}}</style>' : ''
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.w} ${this.h}" width="${this.w}" height="${this.h}" font-family="${FONT}" role="img" aria-label="${esc(alt)}">` +
-      `<rect width="100%" height="100%" fill="#ffffff"/>${this.parts.join('')}</svg>`
+      `${motionStyle}<rect width="100%" height="100%" fill="#ffffff"/>${this.parts.join('')}</svg>`
     writeFileSync(`${OUT}/${name}.svg`, svg)
   }
 }
@@ -206,7 +217,7 @@ function manifests(stage) {
   d.box(330, 40, 190, 70, 'manifest 42', { kind: 's3' })
   d.box(610, 40, 190, 70, 'manifest 41', { kind: 's3' })
   d.box(890, 40, 190, 70, 'manifest 40', { kind: 's3' })
-  d.arrow([[240, 75], [330, 75]], { state: commit, text: stage === 1 ? 'PUT head = commit' : '', lx: 285, ly: 20 })
+  d.arrow([[240, 75], [330, 75]], { state: commit, motion: stage === 1, text: stage === 1 ? 'PUT head = commit' : '', lx: 285, ly: 20 })
   d.arrow([[520, 75], [610, 75]], { dashed: true, text: 'parent', lx: 565, ly: 50, size: 16 })
   d.arrow([[800, 75], [890, 75]], { dashed: true, text: 'parent', lx: 845, ly: 50, size: 16 })
   d.note(425, 140, 'lists every chunk\n32 bytes each', { color: '#868e96' })
@@ -239,7 +250,7 @@ function read(stage) {
     const n = i + 1
     d.box(700, y, 320, 62, text, { kind, dashed: kind === 'plain', active: n === hit, size: 19 })
     const state = n === hit ? 'active' : n < hit ? 'muted' : 'hidden'
-    d.arrow([[490, 235], [600, cy], [700, cy]], { n, state, lx: 640, ly: cy })
+    d.arrow([[490, 235], [600, cy], [700, cy]], { n, state, motion: stage === 3 && n === hit, lx: 640, ly: cy })
     if (n < hit) d.cross(680, cy)
   })
   d.arrow([[1020, 411], [1070, 411], [1070, 321], [1020, 321]], { state: stage === 3 ? 'active' : 'hidden', text: 'save', lx: 1105, ly: 366 })
@@ -315,7 +326,7 @@ function checkpoint(stage) {
   d.arrow([[470, 200], [230, 112]], { n: 2, text: 'PUT chunks, 16 at a time', state: st(2), lx: 290, ly: 142 })
   d.arrow([[540, 200], [460, 112]], { n: 2, text: 'PUT manifest', state: st(2), lx: 505, ly: 166 })
   d.arrow([[620, 200], [700, 112]], { n: 3, text: 'still ours?', state: st(3), lx: 680, ly: 166 })
-  d.arrow([[690, 200], [940, 112]], { n: 3, text: 'PUT head', state: st(3), lx: 850, ly: 142 })
+  d.arrow([[690, 200], [940, 112]], { n: 3, text: 'PUT head', state: st(3), motion: stage === 3, lx: 850, ly: 142 })
   d.arrow([[430, 250], [130, 250], [130, 112]], { n: 4, text: 'HEAD each chunk, upload missing', state: st(4), dashed: true, lx: 270, ly: 250 })
   d.arrow([[700, 408], [770, 408]], { n: 4, text: 'move', state: st(4), lx: 735, ly: 362 })
   d.save(stage === 'all' ? 'checkpoint-all' : `checkpoint-${stage}`, [
@@ -392,19 +403,25 @@ function gc(stage) {
     : 'After the commit the checkpoint checks X, finds it missing and uploads it again from its local copy.')
 }
 
-function restart() {
+function restart(stage) {
   const d = new Diagram(1160, 420)
+  const state = (step) => at(stage, step <= 2 ? 1 : step <= 4 ? 2 : 3)
   d.box(20, 170, 170, 80, 'guest I/O', { kind: 'guest' })
   d.box(280, 160, 220, 100, 'kernel · ublk', { kind: 'guest', bold: true })
   d.box(640, 30, 240, 80, 'old mica', { kind: 'mica' })
   d.box(640, 310, 240, 80, 'new mica', { kind: 'mica' })
   d.box(950, 175, 190, 70, 'local chunk\nfiles', { kind: 'ssd', size: 19 })
-  d.arrow([[640, 70], [390, 70], [390, 160]], { n: 1, text: 'last checkpoint, exit,\nkeep the device', lx: 515, ly: 70 })
-  d.arrow([[190, 210], [280, 210]], { n: 2, text: 'waits', state: 'active', lx: 235, ly: 150 })
-  d.arrow([[880, 350], [1045, 350], [1045, 245]], { n: 3, text: 'open', lx: 965, ly: 350 })
-  d.arrow([[640, 365], [390, 365], [390, 260]], { n: 4, text: 'take over the device', lx: 515, ly: 365 })
-  d.arrow([[500, 225], [600, 225], [700, 310]], { n: 5, text: 'send held I/O again', lx: 610, ly: 195 })
-  d.save('restart', 'The old daemon checkpoints and exits but keeps the device. The kernel holds guest I/O. The new daemon opens the local chunk files, takes over the device, and gets the held I/O.')
+  d.arrow([[640, 70], [390, 70], [390, 160]], { n: 1, text: 'last checkpoint, exit,\nkeep the device', state: state(1), lx: 515, ly: 70 })
+  d.arrow([[190, 210], [280, 210]], { n: 2, text: 'waits', state: state(2), lx: 235, ly: 150 })
+  d.arrow([[880, 350], [1045, 350], [1045, 245]], { n: 3, text: 'open', state: state(3), lx: 965, ly: 350 })
+  d.arrow([[640, 365], [390, 365], [390, 260]], { n: 4, text: 'take over the device', state: state(4), lx: 515, ly: 365 })
+  d.arrow([[500, 225], [600, 225], [700, 310]], { n: 5, text: 'send held I/O again', state: state(5), motion: stage === 3, lx: 610, ly: 195 })
+  const alt = [
+    'The old daemon exits and the kernel holds guest I/O.',
+    'The new daemon opens local chunks and takes over the device while I/O waits.',
+    'The kernel sends held I/O to the new daemon.',
+  ][stage - 1]
+  d.save(stage === 3 ? 'restart' : `restart-${stage}`, alt)
 }
 
 idea()
@@ -419,5 +436,5 @@ checkpoint(1); checkpoint(2); checkpoint(3); checkpoint(4); checkpoint('all')
 move(1); move(2); move(3); move('all')
 fence(1); fence(2)
 gc(1); gc(2)
-restart()
+restart(1); restart(2); restart(3)
 console.log('ok')
