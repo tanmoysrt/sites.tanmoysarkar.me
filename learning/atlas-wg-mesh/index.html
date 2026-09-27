@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WG Mesh Field Guide</title>
+<meta name="description" content="How Atlas VMs find and reach each other across hosts with eBPF, WireGuard, and NDP, and how the mesh carries gateway traffic.">
+<style>
+:root {
+  --bg: #ffffff;
+  --soft: #f6f7f8;
+  --ink: #1b1f24;
+  --muted: #5c6570;
+  --line: #d9dde2;
+  --mesh: #0f766e;
+  --mesh-tint: #e6f3f1;
+  --wg: #6d28d9;
+  --wg-tint: #f1ebfc;
+  --under: #92400e;
+  --under-tint: #f8efe6;
+  --gw: #b4235a;
+  --gw-tint: #fbe9f0;
+  --ok: #1e7a3c;
+  --bad: #b42318;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); padding-inline: 16px; }
+main { max-width: 760px; margin: 0 auto; padding-block: 48px 96px; }
+.wide { width: min(1080px, calc(100vw - 32px)); margin-left: 50%; transform: translateX(-50%); }
+h1, h2, h3 { line-height: 1.2; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: 2.25rem; margin: 8px 0 12px; }
+h2 { font-size: 1.5rem; margin: 64px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+h3 { font-size: 1.1rem; margin: 32px 0 8px; }
+p { margin: 0 0 14px; }
+a { color: var(--mesh); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--mesh); outline-offset: 2px; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+p code, li code, td code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow-x: auto; font: 13px/1.55 var(--mono); margin: 0 0 16px; }
+.eyebrow { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.lede { font-size: 1.12rem; color: #333a42; }
+.meta { font-size: 0.85rem; color: var(--muted); }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 24px 0 0; padding: 0; list-style: none; font-size: 0.9rem; }
+.table-wrap { overflow-x: auto; margin: 0 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--muted); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+ol.rules { padding-left: 1.4em; }
+ol.rules li { margin-bottom: 6px; }
+.note { border-left: 3px solid var(--line); padding: 2px 0 2px 14px; color: #333a42; margin: 0 0 16px; }
+figure { margin: 20px 0 24px; }
+figure svg { width: 100%; height: auto; display: block; }
+figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
+.svg-wrap { overflow-x: auto; }
+.svg-wrap svg { min-width: 620px; }
+
+/* Address decoder */
+.decoder { border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin: 16px 0 24px; }
+.decoder label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 6px; }
+.decoder input { width: 100%; font: 15px var(--mono); padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
+.chip { font: 12.5px var(--mono); border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.chip:hover { border-color: var(--muted); }
+.bits { display: flex; gap: 3px; min-width: 0; }
+.seg { min-width: 0; border-top: 3px solid; padding: 6px 4px 0; font-size: 0.78rem; overflow-wrap: anywhere; }
+.seg b { display: block; font: 500 13px var(--mono); color: var(--ink); }
+.seg span { color: var(--muted); }
+.seg.c-pre { border-color: #8a939c; }
+.seg.c-a { border-color: var(--mesh); }
+.seg.c-b { border-color: var(--wg); }
+.seg.c-c { border-color: var(--under); }
+.seg.c-d { border-color: var(--gw); }
+.decode-note { margin: 14px 0 0; font-size: 0.93rem; }
+.decode-note .mono { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+
+/* Host anatomy */
+.hooks { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 16px 0; }
+.hook { border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 0.9rem; }
+.hook b { display: block; font-size: 0.95rem; }
+.hook .mono { color: var(--muted); font-size: 0.8rem; }
+.hook p { margin: 6px 0 0; }
+
+/* Tracer */
+.tracer { border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-block: 20px 28px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tab { font: 500 0.88rem var(--sans); border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.blurb { color: var(--muted); font-size: 0.92rem; margin: 6px 0 14px; }
+.topo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+@media (max-width: 860px) { .topo { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.host { border: 1px dashed #b8bfc7; border-radius: 8px; padding: 10px; min-width: 0; }
+.host.dim { opacity: 0.45; }
+.host h4 { margin: 0; font-size: 0.88rem; }
+.host .hm { font: 11.5px var(--mono); color: var(--muted); margin-bottom: 8px; overflow-wrap: anywhere; }
+.nodes { display: flex; flex-direction: column; gap: 5px; }
+.node { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 0.8rem; background: var(--bg); transition: border-color .15s, background .15s; min-width: 0; }
+.node small { display: block; font: 11px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.node.hk { background: var(--soft); }
+.node.dim { opacity: 0.35; }
+.node.seen { border-color: #9aa3ad; }
+.node.active { border: 2px solid var(--mesh); background: var(--mesh-tint); padding: 4px 7px; }
+.empty { font-size: 0.8rem; color: var(--muted); }
+.step { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
+@media (max-width: 760px) { .step { grid-template-columns: 1fr; } }
+.where { font-size: 0.8rem; color: var(--muted); }
+.step h3 { margin: 4px 0 8px; }
+.step p { font-size: 0.95rem; }
+.checks { list-style: none; padding: 0; margin: 0 0 12px; font-size: 0.88rem; }
+.checks li { padding-left: 22px; position: relative; margin-bottom: 4px; }
+.checks li::before { position: absolute; left: 0; font-weight: 700; }
+.checks li.y::before { content: "✓"; color: var(--ok); }
+.checks li.n::before { content: "✗"; color: var(--bad); }
+.maps { display: flex; flex-wrap: wrap; gap: 6px; }
+.map { font: 12px var(--mono); border: 1px solid var(--line); border-radius: 5px; padding: 3px 7px; background: var(--bg); }
+.map i { font-style: normal; font-family: var(--sans); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 5px; color: var(--muted); }
+.map.write i { color: var(--mesh); }
+.map.delete i, .map.stale i { color: var(--bad); }
+.pkt-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+.pk { border: 1.5px solid; border-radius: 6px; padding: 6px 8px 8px; margin-top: 6px; }
+.pkt > .pk { margin-top: 0; }
+.pk-h { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; font-size: 0.8rem; }
+.pk-t { font-weight: 600; }
+.pk-d { font-family: var(--mono); font-size: 0.76rem; overflow-wrap: anywhere; }
+.k-ipv4, .k-ndp { border-color: var(--under); background: var(--under-tint); }
+.k-wg { border-color: var(--wg); border-style: dashed; background: #fbf9fe; }
+.k-tunnel, .k-nothere { border-color: var(--wg); background: var(--wg-tint); }
+.k-mesh { border-color: var(--mesh); background: var(--mesh-tint); }
+.k-public, .k-gwhdr { border-color: var(--gw); background: var(--gw-tint); }
+.k-payload { border-color: #aab2ba; background: #fff; }
+.verdict { display: inline-block; margin-top: 12px; font-size: 0.82rem; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid; }
+.verdict.deliver { color: var(--ok); border-color: var(--ok); }
+.verdict.drop { color: var(--bad); border-color: var(--bad); }
+.verdict.lost { color: var(--under); border-color: var(--under); }
+.controls { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.btn { font: 500 0.88rem var(--sans); border: 1px solid var(--ink); background: var(--bg); color: var(--ink); padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+.btn:disabled { opacity: 0.35; cursor: default; }
+.dots { display: flex; gap: 5px; }
+.dot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); font-size: 0.7rem; cursor: pointer; color: var(--muted); padding: 0; }
+.dot[aria-current="step"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.78rem; color: var(--muted); margin-top: 14px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1.5px solid; }
+.lg-under::before { border-color: var(--under) !important; background: var(--under-tint); }
+.lg-wg::before { border-color: var(--wg) !important; background: var(--wg-tint); }
+.lg-mesh::before { border-color: var(--mesh) !important; background: var(--mesh-tint); }
+.lg-gw::before { border-color: var(--gw) !important; background: var(--gw-tint); }
+
+details { border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+summary { cursor: pointer; font-weight: 500; }
+details p { margin: 8px 0 0; }
+footer { margin-top: 64px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 0.85rem; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 480px) { h1 { font-size: 1.8rem; } }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <div class="eyebrow">Learning · Atlas networking</div>
+  <h1>WG Mesh: how a VM packet finds its host</h1>
+  <p class="lede">Every Atlas VM has a private IPv6 address that stays the same when the VM moves to another host. WG Mesh is the set of small eBPF programs that decides, for each packet, which host it goes to. It keeps no central map of VM locations.</p>
+  <p class="meta">Source: <a href="https://github.com/frappe/atlas/tree/develop/services/wg-mesh">services/wg-mesh</a> and <a href="https://github.com/frappe/atlas/tree/develop/docs/networking">docs/networking</a> in frappe/atlas. Checked on 27 September 2026. All addresses on this page are examples.</p>
+  <ul class="toc">
+    <li><a href="#problem">The problem</a></li>
+    <li><a href="#layers">Three layers</a></li>
+    <li><a href="#addresses">Addresses</a></li>
+    <li><a href="#host">Hooks and maps</a></li>
+    <li><a href="#rules">VM hook rules</a></li>
+    <li><a href="#tracer">Trace a packet</a></li>
+    <li><a href="#discovery">Discovery and moves</a></li>
+    <li><a href="#gateways">Gateway traffic</a></li>
+    <li><a href="#ownership">Who owns what</a></li>
+    <li><a href="#operate">Commands</a></li>
+    <li><a href="#numbers">Numbers</a></li>
+    <li><a href="#check">Check yourself</a></li>
+  </ul>
+</header>
+
+<h2 id="problem">The problem it solves</h2>
+<p>Atlas picks a host when it creates a VM. Other hosts must then find that VM before they can send it a packet. The VM address names the VM, not the host. After a migration the address stays and the host changes.</p>
+<p>A central controller could push every VM location to every host. Then every move needs an update on every host, and one missed update sends traffic to the wrong place.</p>
+<p>WG Mesh asks the network instead. When a host does not know where a VM is, it sends a Neighbor Discovery Protocol (NDP) question on the private host network: "who has this address?" The host that runs the VM answers. The sender stores the answer and sends later packets through WireGuard.</p>
+<p class="note">Atlas still assigns addresses and sends each host its WireGuard peers and the list of privileged VMs. It does not send a VM-to-host map. WG Mesh is not a daemon: it is eBPF programs plus a CLI that loads them and writes their maps.</p>
+
+<h2 id="layers">Three layers</h2>
+<p>Each layer rides on the one below. A VM never sees the host tunnel or the provider network.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Layer</th><th>Addresses</th><th>Job</th></tr></thead>
+  <tbody>
+    <tr><td>1. Host network (underlay)</td><td>Provider private IPv4</td><td>Carries packets between hosts. Also carries NDP lookups.</td></tr>
+    <tr><td>2. WireGuard</td><td><code>fdab::/16</code>, one per host</td><td>Encrypts all VM traffic between hosts. Every host has a tunnel to every other host in the region.</td></tr>
+    <tr><td>3. WG Mesh</td><td><code>fdaa::/16</code>, one per VM</td><td>eBPF decides where each VM packet goes, and drops what policy forbids.</td></tr>
+  </tbody>
+</table></div>
+
+<figure class="svg-wrap">
+<svg viewBox="0 0 760 320" role="img" aria-label="Two hosts. VM A on host 1 sends to VM B on host 2. The VM hook wraps the packet for wg0, WireGuard encrypts it over the provider private network, host 2 decrypts and the WireGuard hook unwraps it for VM B.">
+  <g font-family="-apple-system, Segoe UI, Roboto, Arial, sans-serif" font-size="13" fill="#1b1f24">
+    <rect x="20" y="16" width="250" height="290" rx="10" fill="none" stroke="#b8bfc7" stroke-dasharray="5 4"/>
+    <rect x="490" y="16" width="250" height="290" rx="10" fill="none" stroke="#b8bfc7" stroke-dasharray="5 4"/>
+    <text x="34" y="38" font-weight="600">Host 1</text>
+    <text x="504" y="38" font-weight="600">Host 2</text>
+
+    <rect x="55" y="62" width="180" height="44" rx="6" fill="#e6f3f1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="145" y="81" text-anchor="middle" font-weight="600">VM A</text>
+    <text x="145" y="98" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11">fdaa:1:0:2::3</text>
+    <rect x="525" y="62" width="180" height="44" rx="6" fill="#e6f3f1" stroke="#0f766e" stroke-width="1.5"/>
+    <text x="615" y="81" text-anchor="middle" font-weight="600">VM B</text>
+    <text x="615" y="98" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11">fdaa:1:0:2::7</text>
+
+    <rect x="55" y="152" width="180" height="44" rx="6" fill="#f1ebfc" stroke="#6d28d9" stroke-width="1.5"/>
+    <text x="145" y="171" text-anchor="middle" font-weight="600">wg0</text>
+    <text x="145" y="188" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11">fdab::1</text>
+    <rect x="525" y="152" width="180" height="44" rx="6" fill="#f1ebfc" stroke="#6d28d9" stroke-width="1.5"/>
+    <text x="615" y="171" text-anchor="middle" font-weight="600">wg0</text>
+    <text x="615" y="188" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11">fdab::2</text>
+
+    <rect x="55" y="242" width="180" height="44" rx="6" fill="#f8efe6" stroke="#92400e" stroke-width="1.5"/>
+    <text x="145" y="261" text-anchor="middle" font-weight="600">Private uplink</text>
+    <text x="145" y="278" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11">10.0.0.1</text>
+    <rect x="525" y="242" width="180" height="44" rx="6" fill="#f8efe6" stroke="#92400e" stroke-width="1.5"/>
+    <text x="615" y="261" text-anchor="middle" font-weight="600">Private uplink</text>
+    <text x="615" y="278" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11">10.0.0.2</text>
+
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5c6570"/></marker>
+    </defs>
+    <line x1="145" y1="108" x2="145" y2="148" stroke="#5c6570" stroke-width="1.5" marker-end="url(#ar)"/>
+    <text x="154" y="132" font-size="11.5" fill="#5c6570">VM hook wraps</text>
+    <line x1="145" y1="198" x2="145" y2="238" stroke="#5c6570" stroke-width="1.5" marker-end="url(#ar)"/>
+    <text x="154" y="222" font-size="11.5" fill="#5c6570">WireGuard encrypts</text>
+    <line x1="615" y1="238" x2="615" y2="200" stroke="#5c6570" stroke-width="1.5" marker-end="url(#ar)"/>
+    <text x="624" y="222" font-size="11.5" fill="#5c6570">decrypts</text>
+    <line x1="615" y1="148" x2="615" y2="110" stroke="#5c6570" stroke-width="1.5" marker-end="url(#ar)"/>
+    <text x="624" y="132" font-size="11.5" fill="#5c6570">WG hook unwraps</text>
+
+    <line x1="238" y1="84" x2="520" y2="84" stroke="#0f766e" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+    <text x="380" y="74" text-anchor="middle" fill="#0f766e" font-weight="600">Layer 3: what the VMs see</text>
+    <line x1="238" y1="174" x2="520" y2="174" stroke="#6d28d9" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+    <text x="380" y="164" text-anchor="middle" fill="#6d28d9" font-weight="600">Layer 2: encrypted tunnel</text>
+    <line x1="238" y1="264" x2="520" y2="264" stroke="#92400e" stroke-width="2" marker-end="url(#ar)"/>
+    <text x="380" y="254" text-anchor="middle" fill="#92400e" font-weight="600">Layer 1: bytes on the wire</text>
+    <text x="380" y="284" text-anchor="middle" font-size="11.5" fill="#5c6570">UDP between host IPv4 addresses</text>
+  </g>
+</svg>
+<figcaption>Only the bottom line is a real wire. The two dashed lines are views of the same packet at different depths.</figcaption>
+</figure>
+
+<h2 id="addresses">Read an address</h2>
+<p>The address carries the facts the data path needs. The eBPF code reads the tenant field directly for isolation, so it needs no lookup to know who owns a packet.</p>
+<pre>fdaa | region 16 bits | tenant 32 bits | VM ID 64 bits     one per VM
+fdab | host WireGuard address                              one per host</pre>
+<p>A privileged VM is a tenant-0 VM that Atlas lists during host sync, such as the HTTP proxy or the IPv6 router. It may talk to every tenant.</p>
+
+<div class="decoder">
+  <label for="addr">Type an IPv6 address</label>
+  <input id="addr" type="text" value="fdaa:1:0:2::3" spellcheck="false" autocomplete="off">
+  <div class="chips" id="examples"></div>
+  <div class="bits" id="bits"></div>
+  <p class="decode-note" id="decode-note"></p>
+</div>
+
+<h2 id="host">What runs on each host</h2>
+<p>All hooks are <code>tc</code> (Linux traffic control) eBPF programs. They come from one BPF object and share one set of maps pinned at <code>/sys/fs/bpf/atlas-wg-mesh</code>.</p>
+<div class="hooks">
+  <div class="hook"><b>VM hook</b><span class="mono">ingress on each VM interface · bpf/vm.h</span><p>Checks every packet a VM sends. Then lets Linux deliver it, tunnels it, sends it to a gateway, starts a lookup, or drops it.</p></div>
+  <div class="hook"><b>WireGuard hook</b><span class="mono">ingress on wg0 · bpf/wireguard.h</span><p>Runs after decryption. Removes the tunnel header and delivers, answers <code>NOT_HERE</code>, or handles a <code>NOT_HERE</code>.</p></div>
+  <div class="hook"><b>Uplink hook</b><span class="mono">ingress and egress on the private uplink · bpf/uplink.h</span><p>Learns which host answered a lookup. In unicast mode it wraps NDP in IPv4 for each peer.</p></div>
+  <div class="hook"><b>Public hook</b><span class="mono">ingress on the public interface · bpf/uplink.h</span><p>Answers NDP for public prefixes that a local VM owns. Forwards traffic for a prefix that moved away.</p></div>
+</div>
+
+<h3>The maps</h3>
+<p>The maps are the only state. The CLI writes most of them. The hooks write the learned and rate-limit maps.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Map</th><th>Type</th><th>Key → value</th><th>Entries</th><th>Written by</th></tr></thead>
+  <tbody>
+    <tr><td><code>local_vms</code></td><td>hash</td><td>VM address → local interface</td><td class="num">4,096</td><td><code>vm sync</code></td></tr>
+    <tr><td><code>remote_vms</code></td><td>LRU hash</td><td>VM address → host <code>fdab</code> address</td><td class="num">262,144</td><td>uplink hook (learned)</td></tr>
+    <tr><td><code>peer_list</code></td><td>array</td><td>index → peer IPv4, MAC, <code>fdab</code></td><td class="num">256</td><td><code>peers sync</code></td></tr>
+    <tr><td><code>privileged_vms</code></td><td>hash</td><td>tenant-0 address → flag</td><td class="num">4,096</td><td><code>privileged-vm replace</code></td></tr>
+    <tr><td><code>discovery_limits</code></td><td>LRU hash</td><td>interface → next token time</td><td class="num">4,096</td><td>VM hook</td></tr>
+    <tr><td><code>gateways</code></td><td>hash</td><td>interface of a local gateway VM</td><td class="num">4,096</td><td><code>vm sync --gateway</code></td></tr>
+    <tr><td><code>gateway_routes</code></td><td>LPM trie</td><td>(VM, destination prefix) → gateway address</td><td class="num">8,192</td><td><code>vm sync --route</code></td></tr>
+    <tr><td><code>owned_prefixes</code></td><td>LPM trie</td><td>public prefix → owner interface</td><td class="num">256</td><td><code>vm sync --prefix</code></td></tr>
+    <tr><td><code>moved_prefixes</code></td><td>LPM trie</td><td>public prefix → (new VM, expiry)</td><td class="num">256</td><td><code>vm sync</code> on the old host</td></tr>
+    <tr><td><code>announcement_limits</code></td><td>LRU hash</td><td>public address → next advertisement time</td><td class="num">4,096</td><td>WireGuard hook</td></tr>
+    <tr><td><code>config</code>, <code>build_hash</code></td><td>array</td><td>host interfaces, addresses, MACs; object hash</td><td class="num">1</td><td><code>configure</code></td></tr>
+  </tbody>
+</table></div>
+<p>A <code>remote_vms</code> entry stays until LRU eviction or a valid <code>NOT_HERE</code> removes it. There is no timer.</p>
+
+<h2 id="rules">The VM hook, in order</h2>
+<p>This order matters. For example, gateway routing happens before the source check for non-mesh destinations, and local delivery happens after the tenant check.</p>
+<ol class="rules">
+  <li>Drop a packet to the host range <code>fdab::/16</code>.</li>
+  <li>For a destination outside the mesh, check that the VM owns its source, then send it to the gateway that its route names. With no route, leave it to normal host routing.</li>
+  <li>Drop a packet whose source address the VM does not own. Only a gateway interface may send a non-mesh source.</li>
+  <li>Drop a packet to another tenant, unless one side is privileged.</li>
+  <li>Drop a non-mesh source to a local VM that has no gateway route back to that source.</li>
+  <li>Let Linux deliver a packet for a VM on this host.</li>
+  <li>Tunnel a packet for a known remote VM through WireGuard.</li>
+  <li>For an unknown destination, replace the packet with an NDP lookup. Each interface may start 10 lookups a second, with a burst of 50.</li>
+</ol>
+
+<h2 id="tracer">Trace a packet</h2>
+<p>Pick a case and step through it. The top shows where the packet is. The right side shows the packet itself, outer header first. Each colour is one layer.</p>
+
+<div class="tracer wide" id="tracer" tabindex="-1">
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <p class="blurb" id="blurb"></p>
+  <div class="topo" id="topo"></div>
+  <div class="step" id="step" aria-live="polite"></div>
+  <div class="controls">
+    <button class="btn" id="prev" type="button">← Back</button>
+    <button class="btn" id="next" type="button">Next →</button>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="legend">
+    <span class="lg-under">host network, NDP</span>
+    <span class="lg-wg">WireGuard, host tunnel</span>
+    <span class="lg-mesh">mesh address</span>
+    <span class="lg-gw">public address, gateway</span>
+  </div>
+</div>
+
+<h2 id="discovery">Discovery and moves</h2>
+<h3>How a lookup works</h3>
+<p>The VM hook replaces the first packet to an unknown VM with a Neighbor Solicitation and sends it out of the private uplink. That packet's data is lost. The transport resends it.</p>
+<p>On the host that runs the VM, <code>vm sync</code> added a proxy NDP entry (<code>ip -6 neigh replace proxy</code>) on the uplink. Linux answers for the VM with the host's uplink MAC.</p>
+<p>The asking host's uplink hook reads the answer. It matches the frame's source MAC in <code>peer_list</code> and stores that peer's <code>fdab</code> address in <code>remote_vms</code>.</p>
+<p class="note"><code>configure</code> sets <code>proxy_delay</code> to 0 on the uplink. By default Linux waits up to 0.8 seconds before a proxy answer, and the mesh would drop packets for that time.</p>
+
+<h3>Multicast or unicast NDP</h3>
+<p>On a network that carries multicast, NDP works as normal. Some provider networks drop multicast. For them, <code>peers sync --unicast</code> attaches the uplink egress hook.</p>
+<p>That hook wraps each solicitation (for a remote VM) and each advertisement (for a local VM) in an IPv4 header with protocol 41 and sends one copy to every peer. The receiving uplink hook accepts a wrapped packet only from a peer IPv4 address, learns from it, and removes the IPv4 header. The mode changes only discovery, not throughput.</p>
+
+<h3>When a VM moves</h3>
+<p>The new host runs <code>vm sync</code>, which sends an unsolicited Neighbor Advertisement. Every peer that hears it updates <code>remote_vms</code> at once.</p>
+<p><code>NOT_HERE</code> repairs a missed advertisement. The old host replies with IPv6 next header 253 and the VM address. The sender deletes the entry only if the reply came from the host that the entry names, then starts a new lookup. A host cannot erase an entry that points to a different host.</p>
+<p>Next header 253 is an IPv6 value reserved for experiments. The format is Atlas-specific, not an Internet standard.</p>
+
+<h2 id="gateways">Gateway traffic</h2>
+<p>Some traffic has one end outside the mesh, such as a public IPv6 client. A gateway VM carries it. The mesh transports the packets and enforces two rules. The gateway's own software does address translation and firewalling.</p>
+<p>A gateway VM needs two flags from Atlas:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Flag</th><th>Effect in WG Mesh</th></tr></thead>
+  <tbody>
+    <tr><td>Privileged</td><td>The address is in <code>privileged_vms</code>, so it passes the tenant check with every tenant. Tenant 0 only.</td></tr>
+    <tr><td>Network gateway</td><td>The interface is in <code>gateways</code>, so it may send packets with a non-mesh source, and hosts can deliver gateway tunnels to it.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Gateway routes</h3>
+<p>A gateway route belongs to one VM. It says: for this destination prefix, send to this gateway. Example: <code>2000::/3 via fdaa:1::56</code> sends public IPv6 to the IPv6 router. <code>vm sync --route 2000::/3=fdaa:1::56</code> writes it.</p>
+<p>The <code>gateway_routes</code> key is the VM address followed by the destination. One longest-prefix trie therefore holds a separate table per VM. A route to <code>2000::/3</code> is stored with prefix length 128 + 3 = 131.</p>
+<p>The same route also guards the way in. A packet with a non-mesh source reaches a VM only when that VM has a gateway route covering the source. So a public address that maps to a valid VM still gets nothing until Atlas attaches it and adds the route.</p>
+
+<h3>The gateway tunnel</h3>
+<p>A reply to a public client has a public destination. The receiving host could run several gateways and cannot tell which one to use. So the sending host uses IPv6 next header 254 and puts the 16-byte gateway address before the client packet.</p>
+<p>It fits the tunnel MTU: 1380 (VM MTU) + 40 (outer header) + 16 (gateway address) = 1436, and <code>wg0</code> carries 1440.</p>
+
+<h3>Public prefixes that move</h3>
+<p>The provider router sends a public prefix to one host and asks for each address with NDP. The public hook answers for addresses in <code>owned_prefixes</code>. The provider caches that host's MAC and does not ask again.</p>
+<p>When the gateway moves, the old host keeps the prefix in <code>moved_prefixes</code> for 5 minutes and forwards its traffic through the mesh. The new host sees that forwarded packet and sends an unsolicited advertisement with the override flag. The provider then updates its cache. The first packet can be lost.</p>
+<p>The <a href="#tracer">tracer</a> has both paths: <em>Public IPv6 via router</em> and <em>Router moved</em>. The IPv6 router maps public addresses to mesh addresses with bit arithmetic, so it needs no table. It changes the destination on the way in and the source on the way out, and the tenant VM sees the real client address.</p>
+
+<h2 id="ownership">Who owns what</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Part</th><th>Owns</th><th>Does not own</th></tr></thead>
+  <tbody>
+    <tr><td>Atlas app</td><td>VM addresses, the host peer list and keys, privileged VMs, gateway routes in each VM network request</td><td>Where a VM runs, per packet</td></tr>
+    <tr><td>Metal</td><td>WireGuard peers on the host, the VM namespace and links, calling <code>atlas-wg-mesh</code></td><td>Packet decisions</td></tr>
+    <tr><td>WG Mesh</td><td>Per-packet decisions: deliver, tunnel, look up, send to gateway, drop; learned locations</td><td>Keys, peer selection, NAT, DNS, DHCP, guest firewalls, links between regions</td></tr>
+    <tr><td>Gateway VM software</td><td>Address translation, forwarding, firewall policy</td><td>Mesh delivery and the return-route check</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="operate">Commands</h2>
+<p>The <code>atlas-wg-mesh</code> binary embeds the BPF object, so the host needs no Clang or bpftool. Run it as root. Metal calls it; these are for inspection and manual work.</p>
+<pre># Load or upgrade the hooks. Loads new programs before it replaces any hook.
+atlas-wg-mesh configure --uplink eno1.1680 --wireguard wg0
+
+# Write the peer map. Add --unicast when the network drops multicast.
+atlas-wg-mesh peers sync /var/lib/metal/wireguard-peers.json
+
+# Register one VM. Replaces all its prefixes and routes.
+atlas-wg-mesh vm sync --interface vh-100001 --address fdaa:1:10:20::5 --mtu 1380
+
+# A gateway VM with a public prefix and a route
+atlas-wg-mesh vm sync --interface vh-100002 --address fdaa:1:0:0::1 --mtu 1380 \
+  --gateway --prefix 2001:db8:100::/64 --route 2000::/3=fdaa:1:0:0::2
+
+# Look
+atlas-wg-mesh status
+atlas-wg-mesh inspect fdaa:1:10:20::5
+atlas-wg-mesh vm list --json</pre>
+<p><code>inspect</code> reports local state, a learned remote host, or an unknown location. Unknown is normal until a local VM sends to that address.</p>
+<p>For a private traffic fault, check in this order: Metal's WireGuard peers, the VM namespace, then <code>local_vms</code> and <code>remote_vms</code>. WG Mesh cannot repair a wrong Atlas address or a missing Metal link.</p>
+
+<h2 id="numbers">Numbers from one test</h2>
+<p>Two Scaleway bare-metal hosts, 1 GbE private network, Firecracker guests with 2 vCPU. TCP with <code>iperf3</code> for 10 seconds, single stream, median of 3 runs.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Path</th><th class="num">Throughput</th><th class="num">Avg ping</th></tr></thead>
+  <tbody>
+    <tr><td>Raw private network</td><td class="num">939 Mbit/s</td><td class="num">0.28 ms</td></tr>
+    <tr><td>Host-to-host WireGuard</td><td class="num">886 Mbit/s</td><td class="num">0.76 ms</td></tr>
+    <tr><td>VM to VM, two hosts</td><td class="num">847 Mbit/s</td><td class="num">1.75 ms</td></tr>
+    <tr><td>VM to VM, one host</td><td class="num">14.3 Gbit/s</td><td class="num">0.92 ms</td></tr>
+  </tbody>
+</table></div>
+<p>The mesh delivers 96% of WireGuard throughput. The cost is the 40-byte tunnel header and the smaller VM MTU. A new VM was reachable about 5 ms after <code>vm sync</code>, and a moved VM within one 10 ms ping. Full results: <a href="https://github.com/frappe/atlas/blob/develop/docs/networking/wg-mesh/benchmarks.md">benchmarks.md</a>.</p>
+
+<h2 id="check">Check yourself</h2>
+<details><summary>The first packet to a new VM disappears. Is that a bug?</summary><p>No. The VM hook turned it into an NDP lookup. The retry uses the location that the uplink hook learned.</p></details>
+<details><summary>Host 5 sends NOT_HERE for a VM that host 1 has stored at host 2. What happens?</summary><p>Host 1 drops it. Only the host that <code>remote_vms</code> names can clear the entry.</p></details>
+<details><summary>Two VMs of different tenants are on the same host. Can they reach each other?</summary><p>No. The VM hook checks the tenant before it hands local traffic to Linux.</p></details>
+<details><summary>Why does a reply to a public client use next header 254 and not 41?</summary><p>The inner destination is public. The receiving host needs the gateway address to pick the right gateway VM.</p></details>
+<details><summary>A public address maps to a valid VM, but the VM gets no traffic. What does WG Mesh check first?</summary><p>The VM's gateway return route, such as <code>2000::/3</code> via the router. Without it the WireGuard hook drops packets with a non-mesh source.</p></details>
+<details><summary>Why does <code>configure</code> set <code>proxy_delay</code> to 0?</summary><p>Linux otherwise delays a proxy NDP answer by up to 0.8 seconds, and lookups would stall.</p></details>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li>The first packet to a new or moved VM can be lost. Clients retry.</li>
+  <li>NDP trusts the private host network. It does not authenticate hosts by itself.</li>
+  <li>The mesh covers one region. It does not connect regions.</li>
+  <li><code>NOT_HERE</code> (253) and the gateway tunnel (254) are Atlas formats, not standards.</li>
+</ul>
+
+<footer>
+  <p>Sources in <a href="https://github.com/frappe/atlas">frappe/atlas</a>:
+  <a href="https://github.com/frappe/atlas/blob/develop/docs/networking/index.md">networking overview</a>,
+  <a href="https://github.com/frappe/atlas/blob/develop/docs/networking/wg-mesh/index.md">WG Mesh design</a>,
+  <a href="https://github.com/frappe/atlas/blob/develop/docs/networking/wg-mesh/gateways.md">gateway VMs</a>,
+  <a href="https://github.com/frappe/atlas/blob/develop/docs/networking/wg-mesh/operations.md">operations</a>,
+  <a href="https://github.com/frappe/atlas/blob/develop/services/wg-mesh/bpf/vm.h">vm.h</a>,
+  <a href="https://github.com/frappe/atlas/blob/develop/services/wg-mesh/bpf/wireguard.h">wireguard.h</a>,
+  <a href="https://github.com/frappe/atlas/blob/develop/services/wg-mesh/bpf/uplink.h">uplink.h</a>,
+  <a href="https://github.com/frappe/atlas/blob/develop/services/wg-mesh/bpf/maps.h">maps.h</a>,
+  <a href="https://github.com/frappe/atlas/blob/develop/docs/networking/ipv6-router.md">IPv6 router</a>.</p>
+</footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // Address decoder
+  const BLOCK = 0x20010db8000100020003n << 48n;
+  const BLOCK_TEXT = "2001:db8:1:2:3::/80";
+
+  function parseIPv6(text) {
+    const s = text.trim().toLowerCase().replace(/\/\d+$/, "");
+    if (!/^[0-9a-f:]+$/.test(s)) return null;
+    const halves = s.split("::");
+    if (halves.length > 2) return null;
+    const left = halves[0] ? halves[0].split(":") : [];
+    const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+    if ([...left, ...right].some(g => !/^[0-9a-f]{1,4}$/.test(g))) return null;
+    let groups;
+    if (halves.length === 2) {
+      const fill = 8 - left.length - right.length;
+      if (fill < 1) return null;
+      groups = [...left, ...Array(fill).fill("0"), ...right];
+    } else {
+      if (left.length !== 8) return null;
+      groups = left;
+    }
+    return groups.reduce((value, g) => (value << 16n) | BigInt(parseInt(g, 16)), 0n);
+  }
+
+  function formatIPv6(value) {
+    const g = [];
+    for (let i = 7; i >= 0; i--) g.push(Number((value >> BigInt(i * 16)) & 0xffffn));
+    let bestStart = -1, bestLength = 0;
+    for (let i = 0; i < 8;) {
+      if (g[i] !== 0) { i++; continue; }
+      let j = i;
+      while (j < 8 && g[j] === 0) j++;
+      if (j - i >= 2 && j - i > bestLength) { bestStart = i; bestLength = j - i; }
+      i = j;
+    }
+    const hex = g.map(x => x.toString(16));
+    if (bestStart < 0) return hex.join(":");
+    return hex.slice(0, bestStart).join(":") + "::" + hex.slice(bestStart + bestLength).join(":");
+  }
+
+  const hex = v => "0x" + v.toString(16);
+  const mesh = (region, tenant, vm) => (0xfdaan << 112n) | (region << 96n) | (tenant << 64n) | vm;
+
+  function describe(value) {
+    const prefix = value >> 112n;
+    if (prefix === 0xfdaan) {
+      const region = (value >> 96n) & 0xffffn;
+      const tenant = (value >> 64n) & 0xffffffffn;
+      const vm = value & 0xffffffffffffffffn;
+      let note = `A VM mesh address: VM ${vm} of tenant ${hex(tenant)} in region ${region}. It stays the same when the VM moves.`;
+      if (tenant === 0n) note += " Tenant 0 holds Atlas service VMs. It can reach other tenants only if Atlas lists it in privileged_vms.";
+      if (tenant < (1n << 24n) && vm < (1n << 20n)) {
+        note += ` With the IPv6 router block <span class="mono">${BLOCK_TEXT}</span> its public address is <span class="mono">${formatIPv6(BLOCK | (tenant << 20n) | vm)}</span>.`;
+      }
+      return { segments: [[16, "prefix", "fdaa", "c-pre"], [16, "region", String(region), "c-a"], [32, "tenant", hex(tenant), "c-b"], [64, "VM ID", String(vm), "c-c"]], note };
+    }
+    if (prefix === 0xfdabn) {
+      return { segments: [[16, "prefix", "fdab", "c-pre"], [112, "host", formatIPv6(value), "c-b"]],
+        note: "A host WireGuard address. The VM hook drops any VM packet sent to fdab::/16, so guests never reach host tunnels." };
+    }
+    if ((value >> 48n) === (BLOCK >> 48n)) {
+      const suffix = value & ((1n << 48n) - 1n);
+      const reserved = suffix >> 44n;
+      const tenant = (suffix >> 20n) & 0xffffffn;
+      const vm = suffix & 0xfffffn;
+      const note = reserved !== 0n
+        ? "Inside the example router block, but a reserved bit is set. The IPv6 router drops it."
+        : `Inside the example router block. The router maps it to mesh address <span class="mono">${formatIPv6(mesh(1n, tenant, vm))}</span>. WG Mesh delivers it only if that VM has a gateway route back to the client.`;
+      return { segments: [[80, "block", BLOCK_TEXT.replace("::/80", ""), "c-pre"], [4, "0", String(reserved), "c-d"], [24, "tenant", hex(tenant), "c-b"], [20, "VM", String(vm), "c-c"]], note };
+    }
+    const top = Number(prefix);
+    const hostOnly = (top & 0xffc0) === 0xfe80 || (top >> 8) === 0xff;
+    return { segments: [[128, "address", formatIPv6(value), "c-d"]],
+      note: hostOnly
+        ? "Link-local or multicast. It stays with the host. No gateway carries it."
+        : "Outside the mesh. A VM reaches it through normal host routing, or through a gateway VM if it has a matching gateway route." };
+  }
+
+  const input = document.getElementById("addr");
+  const bits = document.getElementById("bits");
+  const decodeNote = document.getElementById("decode-note");
+  const examples = ["fdaa:1:0:2::3", "fdaa:1:0:abcd::5", "fdaa:1::56", "fdab::2", "2001:db8:1:2:3:a:bcd0:5", "2001:db8:ffff::10"];
+  const chipBox = document.getElementById("examples");
+  examples.forEach(e => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = e;
+    b.addEventListener("click", () => { input.value = e; decode(); });
+    chipBox.appendChild(b);
+  });
+
+  function decode() {
+    const value = parseIPv6(input.value);
+    if (value === null) {
+      bits.innerHTML = "";
+      decodeNote.textContent = "Not a valid IPv6 address. Try one of the examples.";
+      return;
+    }
+    const d = describe(value);
+    bits.innerHTML = d.segments.map(([width, label, text, cls]) =>
+      `<div class="seg ${cls}" style="flex:${Math.max(width, 14)} 1 0"><b>${text}</b><span>${label} · ${width} bits</span></div>`).join("");
+    decodeNote.innerHTML = d.note;
+  }
+  input.addEventListener("input", decode);
+  decode();
+
+  // Packet tracer
+  const P = ["payload", "TCP payload", "application data"];
+  const A = "fdaa:1:0:2::3", B = "fdaa:1:0:2::7", V = "fdaa:1:0:abcd::5", R = "fdaa:1::56";
+  const CLIENT = "2001:db8:ffff::10", PUB = "2001:db8:1:2:3:a:bcd0:5";
+
+  const HOOKS = { vmhook: "VM hook", wg: "WireGuard hook", uplink: "Uplink hook", public: "Public hook" };
+  const HOSTS = [
+    { id: "h1", name: "Host 1", meta: "fdab::1 · 10.0.0.1", vms: [["h1.A", "VM A", A + " · tenant 2"], ["h1.V", "VM V", V + " · tenant abcd"]], hooks: ["vmhook", "wg", "uplink"] },
+    { id: "h2", name: "Host 2", meta: "fdab::2 · 10.0.0.2", vms: [["h2.B", "VM B", B + " · tenant 2"], ["h2.R", "IPv6 router", R + " · gateway"]], hooks: ["vmhook", "wg", "uplink", "public"] },
+    { id: "h3", name: "Host 3", meta: "fdab::3 · 10.0.0.3", vms: [["h3.B", "VM B", B + " · moved here"], ["h3.R", "IPv6 router", R + " · moved here"]], hooks: ["vmhook", "wg", "uplink", "public"] },
+    { id: "o", name: "Outside the mesh", meta: "public IPv6", vms: [["o.client", "Client", CLIENT], ["o.provider", "Provider router", "public link"]], hooks: [] }
+  ];
+  const LABELS = {};
+  HOSTS.forEach(h => {
+    h.vms.forEach(([id, label]) => { LABELS[id] = (h.id === "o" ? "" : h.name + " · ") + label; });
+    h.hooks.forEach(k => { LABELS[h.id + "." + k] = h.name + " · " + HOOKS[k]; });
+  });
+
+  const SCENARIOS = {
+    known: {
+      title: "Known location",
+      blurb: "Host 1 already learned where VM B runs. This is the normal fast path between hosts.",
+      vms: ["h1.A", "h2.B"],
+      steps: [
+        { at: "h1.A", head: "VM A sends to VM B", body: "A TCP segment leaves VM A. The guest knows only mesh addresses. It does not know which host runs VM B.",
+          packet: [["mesh", "IPv6", A + " → " + B], P] },
+        { at: "h1.vmhook", head: "VM hook checks, then wraps", body: "The hook runs on ingress of VM A's interface. Every check passes, and remote_vms knows VM B, so the hook adds an outer IPv6 header to host 2's WireGuard address. Next header 41 means IPv6 inside IPv6.",
+          checks: [[1, "Destination is not in fdab::/16"], [1, "Source belongs to this interface in local_vms"], [1, "Same tenant: 2 and 2"], [1, "VM B is not on this host"], [1, "remote_vms has VM B at fdab::2"]],
+          maps: [["read", "local_vms", "A → this interface"], ["read", "remote_vms", "B → fdab::2"]],
+          packet: [["tunnel", "IPv6 · next header 41", "fdab::1 → fdab::2"], ["mesh", "IPv6", A + " → " + B], P] },
+        { at: "h1.wg", head: "WireGuard encrypts", body: "Linux routes fdab::2 to wg0. WireGuard encrypts the whole tunnel packet and sends it as UDP over the private network. Metal applied the WireGuard peers from host sync.",
+          packet: [["ipv4", "IPv4 · UDP", "10.0.0.1 → 10.0.0.2"], ["wg", "WireGuard", "encrypted"], ["tunnel", "IPv6 · next header 41", "fdab::1 → fdab::2"], ["mesh", "IPv6", A + " → " + B], P] },
+        { at: "h2.wg", head: "WireGuard hook unwraps", body: "WireGuard decrypts. The WireGuard hook then checks the tunnel. It trusts the sending host's source check, but it checks the tenant again.",
+          checks: [[1, "Outer source is in fdab::/16, outer destination is this host"], [1, "Next header 41: a plain mesh tunnel"], [1, "Tenants match"], [1, "VM B is in local_vms"]],
+          maps: [["read", "local_vms", "B → vh-…"]],
+          packet: [["mesh", "IPv6", A + " → " + B], P] },
+        { at: "h2.B", head: "Linux delivers to VM B", body: "With the outer header removed, Linux uses the VM host route. VM B sees the packet exactly as VM A sent it.",
+          packet: [["mesh", "IPv6", A + " → " + B], P], verdict: ["deliver", "Delivered"] }
+      ]
+    },
+    first: {
+      title: "First contact",
+      blurb: "Host 1 has never sent to VM B. The first packet becomes a question to the host network.",
+      vms: ["h1.A", "h2.B"],
+      steps: [
+        { at: "h1.A", head: "VM A sends to VM B for the first time", body: "Host 1 has no remote_vms entry for VM B.",
+          packet: [["mesh", "IPv6", A + " → " + B], P] },
+        { at: "h1.vmhook", head: "The first packet becomes a lookup", body: "The hook overwrites the packet with a Neighbor Solicitation and redirects it to the private uplink. The original data is lost. The solicitation goes to the solicited-node multicast address, which ends with the last 3 bytes of the target.",
+          checks: [[1, "Source and tenant checks pass"], [0, "remote_vms has VM B"], [1, "discovery_limits has a token: 10 a second, burst 50"]],
+          maps: [["read", "remote_vms", "miss"], ["write", "discovery_limits", "take a token"]],
+          packet: [["ndp", "Neighbor Solicitation", "who has " + B + "? · to ff02::1:ff00:7"]] },
+        { at: "h2.uplink", head: "Host 2 answers for VM B", body: "vm sync added a proxy NDP entry for VM B on host 2's uplink. Linux answers at once with a Neighbor Advertisement from the uplink MAC, because proxy_delay is 0. In unicast mode the uplink egress hooks wrap both messages in IPv4 and send one copy to each peer.",
+          packet: [["ndp", "Neighbor Advertisement", B + " is at host 2 uplink MAC"]] },
+        { at: "h1.uplink", head: "Uplink hook learns the location", body: "The uplink ingress hook sees an advertisement for a remote VM address. It finds the frame's source MAC in peer_list and stores host 2's WireGuard address.",
+          checks: [[1, "Target is an fdaa address"], [1, "Target is not local"], [1, "Frame source MAC belongs to a peer"]],
+          maps: [["read", "peer_list", "MAC → fdab::2"], ["write", "remote_vms", "B → fdab::2"]],
+          packet: [["ndp", "Neighbor Advertisement", B + " is at host 2 uplink MAC"]] },
+        { at: "h1.A", head: "The retry takes the fast path", body: "TCP resends the lost segment. The VM hook now finds VM B in remote_vms and tunnels it, as in Known location. In the benchmark, a new VM was reachable about 5 ms after vm sync.",
+          packet: [["mesh", "IPv6", A + " → " + B], P], verdict: ["lost", "One packet lost, then delivered"] }
+      ]
+    },
+    moved: {
+      title: "VM moved",
+      blurb: "VM B migrated from host 2 to host 3. Host 1 missed the announcement and still points at host 2.",
+      vms: ["h1.A", "h3.B"],
+      steps: [
+        { at: "h3.B", head: "VM B now runs on host 3", body: "vm sync on host 3 registered VM B and sent an unsolicited Neighbor Advertisement. Most hosts updated at once. Host 1 missed it.",
+          maps: [["stale", "remote_vms", "on host 1: B → fdab::2"]],
+          packet: [["ndp", "Unsolicited Neighbor Advertisement", B + " is at host 3 uplink MAC"]] },
+        { at: "h1.vmhook", head: "Host 1 tunnels to the old host", body: "Nothing looks wrong on host 1. The hook wraps the packet for fdab::2.",
+          maps: [["read", "remote_vms", "B → fdab::2 (stale)"]],
+          packet: [["tunnel", "IPv6 · next header 41", "fdab::1 → fdab::2"], ["mesh", "IPv6", A + " → " + B], P] },
+        { at: "h2.wg", head: "Old host replies NOT_HERE", body: "VM B is not in host 2's local_vms. The hook cuts the packet down to a 56-byte NOT_HERE message and sends it back into wg0. WireGuard encrypts it back to host 1.",
+          checks: [[0, "VM B is in local_vms"]],
+          maps: [["read", "local_vms", "miss"]],
+          packet: [["nothere", "IPv6 · next header 253", "fdab::2 → fdab::1"], ["payload", "Payload, 16 bytes", B]] },
+        { at: "h1.wg", head: "Host 1 forgets and asks again", body: "Host 1 accepts NOT_HERE only from the host that remote_vms stores for this VM, so another host cannot erase a good entry. It deletes the entry and sends a new Neighbor Solicitation.",
+          checks: [[1, "Payload is exactly one address"], [1, "Sender fdab::2 matches remote_vms for VM B"]],
+          maps: [["delete", "remote_vms", "B"]],
+          packet: [["ndp", "Neighbor Solicitation", "who has " + B + "?"]] },
+        { at: "h3.uplink", head: "Host 3 answers", body: "Host 3 has the proxy NDP entry now, so Linux on host 3 answers.",
+          packet: [["ndp", "Neighbor Advertisement", B + " is at host 3 uplink MAC"]] },
+        { at: "h1.uplink", head: "Host 1 learns host 3", body: "The next retry tunnels to fdab::3. The data packet that reached host 2 is lost, and the transport resends it.",
+          maps: [["write", "remote_vms", "B → fdab::3"]],
+          packet: [["ndp", "Neighbor Advertisement", B + " is at host 3 uplink MAC"]], verdict: ["lost", "One packet lost, then delivered"] }
+      ]
+    },
+    blocked: {
+      title: "Other tenant",
+      blurb: "VM A (tenant 2) tries to reach VM V (tenant 0xabcd). Both run on host 1.",
+      vms: ["h1.A", "h1.V"],
+      steps: [
+        { at: "h1.A", head: "VM A sends to another tenant", body: "VM A sends to " + V + ". The tenant field is 0xabcd.",
+          packet: [["mesh", "IPv6", A + " → " + V], P] },
+        { at: "h1.vmhook", head: "Tenant check drops it", body: "The hook compares the 32-bit tenant fields. They differ, and neither address is in privileged_vms. The packet is dropped before Linux can deliver it, even though both VMs share a host.",
+          checks: [[1, "Source belongs to this interface"], [0, "Same tenant: 2 and abcd"], [0, "One side is privileged"]],
+          maps: [["read", "privileged_vms", "miss"]],
+          packet: [["mesh", "IPv6", A + " → " + V], P], verdict: ["drop", "Dropped"] },
+        { at: "h1.vmhook", head: "Other drops from the same hook", body: "The hook also drops a packet to fdab::/16, and a packet with a source the VM does not own. A privileged tenant-0 VM, such as the HTTP proxy, passes the tenant check. The hook checks both sides, so a tenant VM can reply to it.",
+          checks: [[0, "Destination in fdab::/16: dropped"], [0, "Source not owned by this interface: dropped"], [1, "Source or destination privileged: allowed"]],
+          packet: [["mesh", "IPv6", A + " → fdab::2"], P], verdict: ["drop", "Dropped"] }
+      ]
+    },
+    router: {
+      title: "Public IPv6 via router",
+      blurb: "A public client reaches tenant VM V through the IPv6 router, a gateway VM. VM V has the route 2000::/3 via " + R + ".",
+      vms: ["h1.V", "h2.R", "o.client", "o.provider"],
+      steps: [
+        { at: "o.provider", head: "Provider asks who has the public address", body: "The client sends to " + PUB + ". The provider keeps the router's /80 on host 2's public link and asks for each address with NDP. The public hook finds the address in owned_prefixes and answers with host 2's public MAC.",
+          maps: [["read", "owned_prefixes", "2001:db8:1:2:3::/80 → router"]],
+          packet: [["ndp", "Neighbor Advertisement", PUB + " is at host 2 public MAC"]] },
+        { at: "h2.public", head: "Client packet reaches host 2", body: "The public hook passes the packet to Linux, because the prefix did not move away. Metal routes the owned prefix to the router VM.",
+          maps: [["read", "moved_prefixes", "miss"]],
+          packet: [["public", "IPv6", CLIENT + " → " + PUB], P] },
+        { at: "h2.R", head: "Router rewrites the destination", body: "The router's own eBPF program changes the public destination to the mesh address with bit arithmetic. It keeps the client source. It has no table and no connection state.",
+          packet: [["public", "IPv6 · client source kept", CLIENT + " → " + V], P] },
+        { at: "h2.vmhook", head: "Mesh accepts a non-mesh source from a gateway", body: "The source is not an fdaa address. Only an interface in the gateways map may send one. VM V is on host 1, so the hook adds a plain tunnel.",
+          checks: [[1, "Destination is an fdaa address"], [1, "Non-mesh source, and this interface is a gateway"], [1, "remote_vms has VM V at fdab::1"]],
+          maps: [["read", "gateways", "router interface"], ["read", "remote_vms", "V → fdab::1"]],
+          packet: [["tunnel", "IPv6 · next header 41", "fdab::2 → fdab::1"], ["public", "IPv6", CLIENT + " → " + V], P] },
+        { at: "h1.wg", head: "Return-route check", body: "Host 1 checks that VM V would send a reply to this client through a gateway. The gateway_routes key is VM V's address plus the client address. 2000::/3 matches. Without that route the packet is dropped.",
+          checks: [[1, "Source is gateway-carried: not fdab, fe80::/10, or ff00::/8"], [1, "VM V is local"], [1, "gateway_routes: (V, client) matches 2000::/3"]],
+          maps: [["read", "gateway_routes", "(V, " + CLIENT + ") → " + R]],
+          packet: [["public", "IPv6", CLIENT + " → " + V], P] },
+        { at: "h1.V", head: "VM V sees the real client", body: "The guest sees " + CLIENT + " as the source. It replies from its mesh address. Its route sends the reply toward the router.",
+          packet: [["mesh", "IPv6", V + " → " + CLIENT], P] },
+        { at: "h1.vmhook", head: "Reply goes into a gateway tunnel", body: "The destination is outside the mesh. The hook checks that VM V owns its source and finds the gateway in gateway_routes. The router is on host 2. Host 2 could run several gateways, so the hook uses next header 254 and puts the gateway address before the client packet.",
+          checks: [[1, "Destination is gateway-carried"], [1, "VM V owns its source"], [1, "gateway_routes: 2000::/3 → " + R], [1, "Router is remote: remote_vms has it at fdab::2"]],
+          maps: [["read", "gateway_routes", "(V, client) → " + R], ["read", "remote_vms", R + " → fdab::2"]],
+          packet: [["tunnel", "IPv6 · next header 254", "fdab::1 → fdab::2"], ["gwhdr", "Gateway address · 16 bytes", R], ["mesh", "IPv6", V + " → " + CLIENT], P] },
+        { at: "h2.wg", head: "Host 2 hands it to the named gateway", body: "The named gateway is local and is a gateway interface. The hook removes 56 bytes, adds an Ethernet header, and redirects the packet to the router. If the gateway were not here, host 2 would reply NOT_HERE for the gateway address.",
+          checks: [[1, R + " is local and in gateways"], [1, "Inner source is an fdaa address"], [1, "Inner destination is gateway-carried"]],
+          packet: [["mesh", "IPv6", V + " → " + CLIENT], P] },
+        { at: "h2.R", head: "Router restores the public source", body: "The router changes the source " + V + " to " + PUB + " with the same bit mapping and sends the packet out through the host. The client sees the address it called.",
+          packet: [["public", "IPv6", PUB + " → " + CLIENT], P], verdict: ["deliver", "Delivered both ways"] }
+      ]
+    },
+    routerMoved: {
+      title: "Router moved",
+      blurb: "The IPv6 router migrated from host 2 to host 3. The provider router still sends each public address to host 2's MAC.",
+      vms: ["h3.R", "o.client", "o.provider"],
+      steps: [
+        { at: "h3.R", head: "The router now runs on host 3", body: "Host 2 keeps the router's prefix in moved_prefixes for 5 minutes. Host 3 lists the prefix in owned_prefixes. The provider does not ask for the address again.",
+          maps: [["write", "moved_prefixes", "host 2: /80 → " + R + ", 5 min"], ["write", "owned_prefixes", "host 3: /80 → router"]],
+          packet: [["public", "IPv6", CLIENT + " → " + PUB], P] },
+        { at: "h2.public", head: "Old host forwards through the mesh", body: "A client packet still arrives at host 2. The prefix is no longer owned here but is in moved_prefixes, so the public hook tunnels the public packet unchanged to the router's new host.",
+          checks: [[0, "Prefix is in owned_prefixes on host 2"], [1, "Prefix is in moved_prefixes and not expired"], [1, "remote_vms has the router at fdab::3"]],
+          maps: [["read", "moved_prefixes", "/80 → " + R], ["read", "remote_vms", R + " → fdab::3"]],
+          packet: [["tunnel", "IPv6 · next header 41", "fdab::2 → fdab::3"], ["public", "IPv6", CLIENT + " → " + PUB], P] },
+        { at: "h3.wg", head: "New host announces itself", body: "The inner packet has a public source and a destination in a local prefix. Only an old host sends that. Host 3 takes an announcement token, one per address per second, and turns this packet into an unsolicited advertisement with the override flag. This packet is used up. Other packets in that second are delivered.",
+          maps: [["write", "announcement_limits", PUB + " → now + 1 s"]],
+          packet: [["ndp", "Unsolicited Neighbor Advertisement · override", PUB + " is at host 3 public MAC"]] },
+        { at: "o.provider", head: "Provider updates its cache", body: "The override flag replaces the MAC that the provider router holds. It now sends this address to host 3.",
+          packet: [["public", "IPv6", CLIENT + " → " + PUB], P] },
+        { at: "h3.public", head: "Traffic goes direct", body: "Host 3 owns the prefix, so Linux routes it to the router VM. Host 2 stops forwarding when its 5-minute entry expires.",
+          packet: [["public", "IPv6", CLIENT + " → " + PUB], P], verdict: ["lost", "First packet can be lost"] }
+      ]
+    }
+  };
+
+  const tabs = document.getElementById("tabs");
+  const blurb = document.getElementById("blurb");
+  const topo = document.getElementById("topo");
+  const stepBox = document.getElementById("step");
+  const dots = document.getElementById("dots");
+  const prev = document.getElementById("prev");
+  const next = document.getElementById("next");
+  let current = "known";
+  let index = 0;
+
+  try { const saved = localStorage.getItem("wgmesh-scenario"); if (saved && SCENARIOS[saved]) current = saved; } catch (e) {}
+
+  Object.entries(SCENARIOS).forEach(([key, s]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tab"; b.role = "tab"; b.id = "tab-" + key; b.textContent = s.title;
+    b.addEventListener("click", () => { current = key; index = 0; try { localStorage.setItem("wgmesh-scenario", key); } catch (e) {} render(); });
+    tabs.appendChild(b);
+  });
+
+  const escape = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function renderPacket(layers) {
+    let html = "";
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const [kind, title, detail] = layers[i];
+      html = `<div class="pk k-${kind}"><div class="pk-h"><span class="pk-t">${escape(title)}</span><span class="pk-d">${escape(detail)}</span></div>${html}</div>`;
+    }
+    return `<div class="pkt">${html}</div>`;
+  }
+
+  function renderTopology(s) {
+    const used = new Set(s.steps.map(st => st.at));
+    const seen = new Set(s.steps.slice(0, index).map(st => st.at));
+    const active = s.steps[index].at;
+    const cls = id => (id === active ? " active" : seen.has(id) ? " seen" : used.has(id) ? "" : " dim");
+    topo.innerHTML = HOSTS.map(h => {
+      const vms = h.vms.filter(([id]) => s.vms.includes(id));
+      const hooks = h.hooks.map(k => h.id + "." + k);
+      const isUsed = vms.length || hooks.some(id => used.has(id));
+      const vmHtml = vms.map(([id, label, sub]) => `<div class="node${cls(id)}">${label}<small>${sub}</small></div>`).join("");
+      const hookHtml = h.hooks.map(k => `<div class="node hk${cls(h.id + "." + k)}">${HOOKS[k]}</div>`).join("");
+      const body = vmHtml + hookHtml || `<div class="empty">Not used in this trace</div>`;
+      return `<div class="host${isUsed ? "" : " dim"}"><h4>${h.name}</h4><div class="hm">${h.meta}</div><div class="nodes">${body}</div></div>`;
+    }).join("");
+  }
+
+  function renderStep(s) {
+    const st = s.steps[index];
+    const checks = (st.checks || []).map(([ok, t]) => `<li class="${ok ? "y" : "n"}">${escape(t)}</li>`).join("");
+    const maps = (st.maps || []).map(([op, name, note]) => `<span class="map ${op}"><i>${op}</i>${name} · ${escape(note)}</span>`).join("");
+    const verdict = st.verdict ? `<span class="verdict ${st.verdict[0]}">${st.verdict[1]}</span>` : "";
+    stepBox.innerHTML = `
+      <div>
+        <div class="where">Step ${index + 1} of ${s.steps.length} · ${LABELS[st.at]}</div>
+        <h3>${escape(st.head)}</h3>
+        <p>${escape(st.body)}</p>
+        ${checks ? `<ul class="checks">${checks}</ul>` : ""}
+        ${maps ? `<div class="maps">${maps}</div>` : ""}
+        ${verdict}
+      </div>
+      <div>
+        <div class="pkt-label">Packet, outer header first</div>
+        ${renderPacket(st.packet)}
+      </div>`;
+  }
+
+  function render() {
+    const s = SCENARIOS[current];
+    tabs.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.id === "tab-" + current ? "true" : "false"));
+    blurb.textContent = s.blurb;
+    renderTopology(s);
+    renderStep(s);
+    dots.innerHTML = s.steps.map((_, i) => `<button type="button" class="dot" data-i="${i}" aria-label="Step ${i + 1}"${i === index ? ' aria-current="step"' : ""}>${i + 1}</button>`).join("");
+    prev.disabled = index === 0;
+    next.disabled = index === s.steps.length - 1;
+  }
+
+  const go = delta => {
+    const n = index + delta;
+    if (n >= 0 && n < SCENARIOS[current].steps.length) { index = n; render(); }
+  };
+  prev.addEventListener("click", () => go(-1));
+  next.addEventListener("click", () => go(1));
+  dots.addEventListener("click", e => { const b = e.target.closest(".dot"); if (b) { index = Number(b.dataset.i); render(); } });
+  document.getElementById("tracer").addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "ArrowRight") { go(1); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { go(-1); e.preventDefault(); }
+  });
+  render();
+})();
+</script>
+</body>
+</html>
