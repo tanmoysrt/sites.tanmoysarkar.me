@@ -35,7 +35,8 @@ const build = spawnSync('marp', [
   source,
   '--output', resolve(output, 'index.html'),
   '--template', 'bespoke',
-], { cwd: root, stdio: 'inherit' })
+  '--html',
+], { cwd: root, stdio: ['ignore', 'inherit', 'inherit'] })
 
 if (build.status !== 0) process.exit(build.status || 1)
 
