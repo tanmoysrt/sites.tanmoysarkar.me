@@ -42,7 +42,7 @@ def render_entries(root: Path, section: str) -> str:
 
     if not entries:
         label = EMPTY_LABELS[section]
-        entries.append(f'      <li class="empty">Nothing here yet. New {label} will appear here.</li>')
+        entries.append(f'      <li class="empty">No {label} yet.</li>')
     return "\n".join(entries)
 
 
