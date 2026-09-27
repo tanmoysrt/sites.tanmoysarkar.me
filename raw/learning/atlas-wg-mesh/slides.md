@@ -1,7 +1,7 @@
 ---
 marp: true
 title: 'WG Mesh: how an Atlas VM packet finds its host'
-description: How Atlas VMs find and reach each other across hosts with eBPF, WireGuard, and NDP, and how the mesh carries gateway traffic.
+description: How Atlas VMs find and reach each other across hosts with eBPF, WireGuard, and NDP. Normal VMs first, then privileged VMs, gateway VMs, and the IPv6 router.
 theme: default
 paginate: true
 style: |
@@ -10,16 +10,17 @@ style: |
     color: #1e1e1e;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 28px;
-    padding: 50px 60px 44px;
+    padding: 58px 60px 40px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
   }
-  h1 { font-size: 42px; font-weight: 650; color: #111111; line-height: 1.12; margin: 0 0 22px; padding: 0; border: 0; letter-spacing: -0.01em; }
+  header { top: 22px; left: 60px; font-size: 15px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: #e8590c; }
+  h1 { font-size: 40px; font-weight: 650; color: #111111; line-height: 1.12; margin: 0 0 18px; padding: 0; border: 0; letter-spacing: -0.01em; }
   p, li { line-height: 1.45; }
   li { margin: 6px 0; }
   strong { color: #111111; font-weight: 650; }
-  em { font-style: normal; color: #6c757d; font-size: 23px; }
+  em { font-style: normal; color: #6c757d; font-size: 22px; }
   code { background: #f1f3f5; color: #1e1e1e; font-size: 0.85em; border-radius: 4px; }
   pre { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; font-size: 21px; line-height: 1.5; }
   pre code { background: transparent; font-size: 1em; }
@@ -30,11 +31,13 @@ style: |
   section::after { color: #adb5bd; font-size: 16px; }
   section.lead { justify-content: center; text-align: center; }
   section.lead h1 { font-size: 66px; margin: 8px 0 6px; }
+  section.center { justify-content: center; }
+  section.center h1 { text-align: center; }
+  section.center p { text-align: center; }
   section.pause { justify-content: center; }
   section.pause h1 { font-size: 52px; font-weight: 600; margin: 0; }
   section.pause p { color: #6c757d; margin: 12px 0 0; }
   section.small table { font-size: 20px; }
-  .key { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 2px solid; vertical-align: -1px; margin: 0 6px 0 18px; }
 ---
 
 <!-- _class: lead -->
@@ -48,51 +51,40 @@ How an Atlas VM packet finds its host
 
 ---
 
+<!-- _class: center -->
+
+# One address per VM
+
+![w:1120 The address fdaa:1:0:2::3 written in full as fdaa:0001:0000:0002:0000:0000:0000:0003. Braces mark the fdaa prefix, the 16-bit region 1, the 32-bit tenant 2, and the 64-bit VM ID 3. The hooks compare the tenant field.](assets/address.svg)
+
+---
+
 # A VM address names the VM, not the host
 
 - Atlas picks a host when it creates a VM
 - A migration keeps the address and changes the host
 - Every other host must still find the VM before it can send to it
 
----
-
-# Two ways to find a VM
-
-| | Central map | Ask the network |
-|---|---|---|
-| **Who knows** | A controller pushes every location to every host | The host that runs the VM answers |
-| **After a move** | Update every host | The new host announces itself |
-| **A missed update** | Traffic goes to the wrong host | The next packet repairs it |
-
-*WG Mesh asks the network. Atlas never sends a VM-to-host map.*
+*WG Mesh does not keep a central map. A host that does not know asks the network, and the owner answers.*
 
 ---
+
+# Four steps, each built on the last
+
+1. **Normal VMs:** find a host, tunnel, repair after a move, keep tenants apart
+2. **Privileged VMs:** tenant-0 services that may reach every tenant
+3. **Gateway VMs:** carry traffic for addresses outside the mesh
+4. **IPv6 router:** a gateway VM that gives each VM a public IPv6 address
+
+---
+
+<!-- header: '1 · Normal VMs' -->
 
 # Three layers, one packet
 
-![w:1120 Two hosts. VM A on host 1 sends to VM B on host 2. The VM hook wraps the packet for wg0. WireGuard encrypts it over the provider private network. Host 2 decrypts it and the WireGuard hook unwraps it for VM B.](assets/layers.svg)
+![w:1120 Two hosts. VM A on host 1 sends to VM B on host 2. The VM hook adds an outer IPv6 header for host 2, WireGuard encrypts it and sends it as UDP over the provider private network, and host 2 decrypts and unwraps it for VM B. The packet strip shows the headers at each step.](assets/layers.svg)
 
-*Only the bottom line is a real wire. A VM never sees the other two layers.*
-
----
-
-# The address carries the policy
-
-```text
-fdaa : region 16 : tenant 32 : VM ID 64      one per VM
-fdab : host WireGuard address                one per host
-
-fdaa:1:0:2::3   →   region 1 · tenant 2 · VM 3
-```
-
-- The hooks read the tenant bits directly. No lookup.
-- A **privileged** VM is a tenant-0 VM that Atlas lists. It may reach every tenant.
-
----
-
-<!-- _class: pause -->
-
-# What runs on a host?
+*Watch the packet strip. An orange cell is the header that the last step added.*
 
 ---
 
@@ -106,16 +98,14 @@ fdaa:1:0:2::3   →   region 1 · tenant 2 · VM 3
 
 <!-- _class: small -->
 
-# The maps that matter
+# The maps a normal VM uses
 
 | Map | Holds | Written by |
 |---|---|---|
 | `local_vms` | VM address → local interface | `vm sync` |
-| `remote_vms` | VM address → host `fdab` address · LRU, 262,144 | uplink hook, from NDP |
+| `remote_vms` | VM address → host `fdab` address · LRU, 262,144 entries | uplink hook, from NDP |
 | `peer_list` | peer IPv4, MAC, `fdab` address | `peers sync` |
-| `privileged_vms` | tenant-0 addresses that reach every tenant | `privileged-vm replace` |
-| `gateway_routes` | (VM, destination prefix) → gateway | `vm sync --route` |
-| `owned_prefixes` · `moved_prefixes` | public prefix → owner, or new owner for 5 min | `vm sync --prefix` |
+| `discovery_limits` | lookup tokens per VM interface | VM hook |
 
 *No timers. A `remote_vms` entry lives until LRU eviction or a valid `NOT_HERE`.*
 
@@ -124,20 +114,21 @@ fdaa:1:0:2::3   →   region 1 · tenant 2 · VM 3
 # The VM hook, in order
 
 1. Drop anything sent to `fdab::/16`
-2. Destination outside the mesh: send it to the VM's gateway
-3. Drop a source address the VM does not own
-4. Drop another tenant, unless one side is privileged
-5. Same host: let Linux deliver
-6. Known remote host: tunnel through WireGuard
-7. Unknown: turn the packet into an NDP lookup
+2. Drop a source address that the VM does not own
+3. Drop another tenant
+4. Same host: let Linux deliver
+5. Known remote host: tunnel through WireGuard
+6. Unknown host: turn the packet into an NDP lookup
+
+*Privileged and gateway VMs add rules later. This order stays.*
 
 ---
 
-<!-- _class: pause -->
+# Same host: Linux delivers
 
-# Follow one packet
+![w:1120 VM A and VM C of tenant 2 run on host 1. The VM hook checks the packet, sees that VM C is local, and lets Linux deliver it through the host route. No tunnel and no WireGuard.](assets/same-host.svg)
 
-VM A on host 1 sends to VM B on host 2
+*The packet does not change. In a test this path moved 14.3 Gbit/s.*
 
 ---
 
@@ -145,9 +136,9 @@ VM A on host 1 sends to VM B on host 2
 
 # Known host: check and wrap
 
-![w:1120 VM A sends to VM B. The VM hook on host 1 checks the packet, finds VM B at fdab::2 in remote_vms, and adds an outer header for host 2.](assets/known-1.svg)
+![w:1120 VM A sends to VM B. The VM hook on host 1 checks the packet, finds VM B at fdab::2 in remote_vms, and adds an outer IPv6 header for host 2.](assets/known-1.svg)
 
-*Source owned by this interface, same tenant, host known. Next header 41 means IPv6 inside IPv6.*
+*Next header 41 means IPv6 inside IPv6. The outer addresses are the two hosts.*
 
 ---
 
@@ -157,7 +148,7 @@ VM A on host 1 sends to VM B on host 2
 
 ![w:1120 WireGuard on host 1 encrypts the tunnel packet and sends it as UDP over the private network to host 2.](assets/known-2.svg)
 
-*Metal applies the WireGuard peers and keys from host sync.*
+*Metal applies the WireGuard peers and keys. WG Mesh only picks the host.*
 
 ---
 
@@ -166,20 +157,6 @@ VM A on host 1 sends to VM B on host 2
 ![w:1120 Host 2 decrypts the packet. Its WireGuard hook finds VM B in local_vms, removes the outer header, and Linux delivers the packet to VM B.](assets/known-3.svg)
 
 *The receiving host checks the tenant again. VM B sees the packet exactly as VM A sent it.*
-
----
-
-# What is on the wire
-
-![w:1120 A VM packet on the wire, outer layer first: IPv4 and UDP between host addresses, WireGuard encryption, an IPv6 header from fdab::1 to fdab::2 with next header 41, the VM IPv6 packet, and the TCP payload.](assets/envelope.svg)
-
-*VM MTU 1380 + 40-byte tunnel header = 1420, inside the 1440 of `wg0`.*
-
----
-
-<!-- _class: pause -->
-
-# What if host 1 has never seen VM B?
 
 ---
 
@@ -199,32 +176,23 @@ VM A on host 1 sends to VM B on host 2
 
 ![w:1120 Host 2 has a proxy NDP entry for VM B, so Linux answers at once with host 2 uplink MAC.](assets/discovery-2.svg)
 
-*`configure` sets `proxy_delay` to 0. Linux would otherwise wait up to 0.8 s before it answers.*
+*`configure` sets `proxy_delay` to 0. Linux would otherwise wait up to 0.8 s.*
 
 ---
 
 # First contact: remember the answer
 
-![w:1120 The uplink hook on host 1 maps the answering MAC to host 2 through peer_list and stores VM B at fdab::2 in remote_vms. The retry uses WireGuard.](assets/discovery-3.svg)
+![w:1120 The uplink hook on host 1 maps the answering MAC to host 2 through peer_list and stores VM B at fdab::2 in remote_vms. The retry goes through WireGuard.](assets/discovery-3.svg)
 
 *One packet is lost. In a test, a new VM was reachable about 5 ms after `vm sync`.*
 
 ---
 
-# When the network drops multicast
+# No multicast? Send a copy to each peer
 
-- `peers sync --unicast` attaches the uplink **egress** hook
-- It wraps each NDP message in IPv4, protocol 41
-- It sends one copy to each peer
-- The receiver accepts wrapped NDP only from a peer address
+![w:1120 In unicast mode the uplink egress hook on host 1 wraps the neighbor solicitation in IPv4 protocol 41 and sends one copy to each peer. The ingress hook on each peer accepts it only from a peer address and unwraps it.](assets/unicast.svg)
 
-*Only discovery changes. Throughput stays the same.*
-
----
-
-<!-- _class: pause -->
-
-# What if VM B moves?
+*`peers sync --unicast` attaches the egress hook. Only discovery changes, not throughput.*
 
 ---
 
@@ -242,9 +210,9 @@ VM A on host 1 sends to VM B on host 2
 
 # VM moved: host 2 says NOT_HERE
 
-![w:1120 VM B is not in host 2 local_vms, so host 2 replies NOT_HERE. Host 1 checks that the reply came from the stored host and deletes the entry.](assets/moved-2.svg)
+![w:1120 VM B is not in host 2 local_vms, so host 2 replies NOT_HERE with next header 253 and the VM address. Host 1 checks that the reply came from the stored host and deletes the entry.](assets/moved-2.svg)
 
-*`NOT_HERE` is IPv6 next header 253 with a 16-byte VM address. Only the stored host can clear an entry.*
+*Only the host stored in `remote_vms` can clear an entry. Another host cannot erase a good one.*
 
 ---
 
@@ -258,18 +226,46 @@ VM A on host 1 sends to VM B on host 2
 
 # Tenants stay apart
 
-- The hook compares the 32-bit tenant fields of both addresses
-- A different tenant is dropped, even on the same host
-- A privileged tenant-0 VM passes both ways, so replies work
-- Examples: HTTP proxy, Cargo, IPv6 router
+![w:1120 VM A of tenant 2 sends to VM V of tenant abcd on the same host. The VM hook compares the tenant fields, finds that neither side is privileged, and drops the packet.](assets/tenant.svg)
+
+*The orange parts of the addresses are the tenant fields that the hook compares.*
 
 ---
 
+<!-- header: '2 · Privileged VMs' -->
 <!-- _class: pause -->
 
-# Traffic from outside the mesh
+# Privileged VMs
 
-A public client reaches a tenant VM
+Tenant-0 services that serve every tenant
+
+---
+
+# What makes a VM privileged
+
+- It is a **tenant 0** VM, and Atlas lists it in `privileged_vms` during host sync
+- The tenant rule passes when **either side** is privileged
+- So a tenant VM can reply to a privileged VM
+- Examples: HTTP proxy, Cargo, IPv6 router
+
+*Only Atlas can grant privilege, and only to tenant-0 VMs.*
+
+---
+
+# A privileged VM crosses tenants
+
+![w:1120 The HTTP proxy is a privileged tenant-0 VM. It reaches VM A of tenant 2 and VM V of tenant abcd, and VM V can reply to it. VM A cannot reach VM V, because neither of them is privileged.](assets/privileged.svg)
+
+*Rule 3 becomes: drop another tenant, unless one side is privileged.*
+
+---
+
+<!-- header: '3 · Gateway VMs' -->
+<!-- _class: pause -->
+
+# Gateway VMs
+
+Traffic for addresses outside the mesh
 
 ---
 
@@ -277,56 +273,140 @@ A public client reaches a tenant VM
 
 | Flag | Effect in WG Mesh |
 |---|---|
-| **Privileged** | In `privileged_vms`: passes the tenant check |
-| **Network gateway** | In `gateways`: may send a source outside the mesh |
+| **Privileged** | In `privileged_vms`: passes the tenant rule |
+| **Network gateway** | In `gateways`: may send a source outside the mesh, and receives gateway tunnels |
 
-*The gateway's own software does NAT and firewalling. The mesh carries and checks.*
+*The gateway's own software forwards, translates, and filters. The mesh carries packets and checks two rules.*
 
 ---
 
 # A gateway route works both ways
 
 ```text
-VM V:   2000::/3  via  fdaa:1::56      the IPv6 router
+VM V:   2000::/3  via  fdaa:1::56      the gateway VM
 ```
 
-- **Out:** V's packets to public IPv6 go to the router
+- **Out:** V's packets to that prefix go to the gateway
 - **In:** an outside source reaches V only if V has a route back to it
-- Key = V's address + destination: one trie holds a table per VM
+- The key is V's address + the destination, so one trie holds a table per VM
 
-*A public address that maps to a real VM gets nothing until Atlas adds the route.*
+*`vm sync --route 2000::/3=fdaa:1::56` writes it into `gateway_routes`.*
+
+---
+
+# The VM hook, with gateway rules
+
+1. Drop anything sent to `fdab::/16`
+2. **Outside destination: check the source, then send to the gateway route**
+3. Drop a source that the VM does not own. **An outside source only from a gateway.**
+4. Drop another tenant, unless one side is privileged
+5. Same host: let Linux deliver. **An outside source needs a route back.**
+6. Known remote host: tunnel through WireGuard
+7. Unknown host: turn the packet into an NDP lookup
 
 ---
 
 <!-- _transition: fade 250ms -->
 
-# Public IPv6: in through the router
+# Out: the VM hook picks the gateway
 
-![w:1120 A public client sends to a public address. The provider router sends it to host 2, which owns the prefix. Linux routes it to the IPv6 router VM, which changes the destination to the mesh address of VM V and keeps the client source. The VM hook tunnels it to host 1, whose WireGuard hook checks that VM V has a gateway route back to the client.](assets/gateway-1.svg)
+![w:1120 VM V on host 1 sends to an outside address. Its VM hook finds the longest matching gateway route, 2000::/3 via the gateway VM, and sends a tunnel with next header 254 and the gateway address to host 2.](assets/gateway-out-1.svg)
 
-*The router changes only the destination. VM V sees the real client address.*
-
----
-
-# Public IPv6: the reply
-
-![w:1120 VM V replies to the client. The VM hook on host 1 finds the router in gateway_routes and sends a tunnel with next header 254 and the gateway address. Host 2 delivers it to the named gateway, and the router changes the source to the public address.](assets/gateway-2.svg)
-
-*Next header 254 names the gateway, because one host can run several.*
+*Next header 254 puts the gateway address first. The destination is outside the mesh, and one host can run several gateways.*
 
 ---
 
-# The gateway tunnel fits
+# Out: host 2 hands it to the named gateway
+
+![w:1120 Host 2 reads the gateway address from the tunnel, checks that the gateway is local and a gateway interface, and delivers the packet to it. The gateway software forwards it outside.](assets/gateway-out-2.svg)
+
+*If the gateway is not on host 2, host 2 replies `NOT_HERE` for the gateway address.*
+
+---
+
+<!-- _transition: fade 250ms -->
+
+# In: only a gateway may send an outside source
+
+![w:1120 The gateway VM sends a packet with an outside source to VM V. Its VM hook allows the outside source only because the interface is a gateway, and tunnels it to host 1 with next header 41.](assets/gateway-in-1.svg)
+
+*A normal VM that sends a source it does not own is dropped at rule 3.*
+
+---
+
+# In: the route back is the guard
+
+![w:1120 The WireGuard hook on host 1 checks that VM V has a gateway route back to the outside source, 2000::/3 via the gateway, and delivers the packet. Without that route it drops the packet.](assets/gateway-in-2.svg)
+
+*No route back, no delivery. So a VM receives outside traffic only through a gateway that it replies through.*
+
+---
+
+# The gateway tunnel fits the MTU
 
 ```text
-outer IPv6   fdab::1 → fdab::2, next header 254           40 bytes
-gateway      fdaa:1::56                                   16 bytes
-client       fdaa:1:0:abcd::5 → 2001:db8:ffff::10      ≤ 1380 bytes
-                                                       ≤ 1436 bytes
-wg0 MTU                                                  1440 bytes
+outer IPv6   fdab::1 → fdab::2, next header 254          40 bytes
+gateway      fdaa:1::56                                  16 bytes
+VM packet    fdaa:1:0:abcd::5 → 2001:db8:ffff::10     ≤ 1380 bytes
+                                                      ≤ 1436 bytes
+wg0 MTU                                                 1440 bytes
 ```
 
-- The router maps addresses with bit arithmetic: no table, no connection state
+---
+
+<!-- header: '4 · IPv6 router' -->
+<!-- _class: pause -->
+
+# The IPv6 router
+
+A gateway VM for public IPv6
+
+---
+
+# Why a router VM
+
+- Some providers attach a whole IPv6 block to **one host**
+- A VM that moves to another host cannot take the block with it
+- So the block stays on a router VM, and each VM gets a derived `/128`
+- The VM keeps its mesh and public addresses when it moves. WG Mesh finds its new host.
+
+*The router is a privileged, network gateway VM. Everything from part 3 applies.*
+
+---
+
+<!-- _class: center -->
+
+# The address bits carry the mapping
+
+![w:1120 The public address 2001:db8:1:2:3:a:bcd0:5 written in full above the mesh address fdaa:1:0:abcd::5. Braces mark the router block /80, a reserved zero, a 24-bit tenant, and a 20-bit VM in the public address, and the fdaa prefix, region, 32-bit tenant, and 64-bit VM ID in the mesh address. Arrows join the tenant fields and the VM fields.](assets/mapping.svg)
+
+*No table and no connection state. A tenant of 2^24 or more, or a VM of 2^20 or more, gets no public address.*
+
+---
+
+<!-- _transition: fade 250ms -->
+
+# In: the public packet reaches the router
+
+![w:1120 A client sends to the public address 2001:db8:1:2:3:a:bcd0:5. The provider router sends it to host 2, whose public hook answers NDP for the owned prefix, and Linux routes it to the IPv6 router VM.](assets/router-in-1.svg)
+
+*New in this part: the public hook and `owned_prefixes`.*
+
+---
+
+# In: the router changes only the destination
+
+![w:1120 The router changes only the destination to the mesh address of VM V and keeps the client source. From here it is the gateway inbound path: the VM hook tunnels it to host 1, and the WireGuard hook checks the return route before it delivers.](assets/router-in-2.svg)
+
+*Steps 5 and 6 are the gateway inbound path. VM V sees the real client address.*
+
+---
+
+# Out: the reply gets its public source back
+
+![w:1120 VM V replies to the client. The reply takes the gateway outbound path to the router, and the router changes the source from the mesh address to the public address 2001:db8:1:2:3:a:bcd0:5.](assets/router-out.svg)
+
+*Steps 1 to 3 are the gateway outbound path. Step 4 is the router's own translation.*
 
 ---
 
@@ -334,20 +414,21 @@ wg0 MTU                                                  1440 bytes
 
 # The router moved: the old host forwards
 
-![w:1120 The router moved from host 2 to host 3. The provider still sends to host 2, whose public hook finds the prefix in moved_prefixes and tunnels the packet to host 3. Host 3 turns it into an unsolicited neighbor advertisement with the override flag, and the provider learns host 3 MAC.](assets/prefix-1.svg)
+![w:1120 The router moved from host 2 to host 3. The provider still sends to host 2, whose public hook finds the prefix in moved_prefixes and tunnels the packet to host 3. Host 3 turns it into an unsolicited neighbor advertisement with the override flag, and the provider learns host 3 MAC.](assets/router-moved-1.svg)
 
-*The provider caches host 2's MAC and does not ask again. So host 3 tells it.*
+*The provider caches host 2's MAC and does not ask again. So host 3 tells it, once a second at most.*
 
 ---
 
 # The router moved: the provider learns
 
-![w:1120 The provider now sends the public address straight to host 3, and Linux routes it to the router VM.](assets/prefix-2.svg)
+![w:1120 The provider now sends the public address straight to host 3, and Linux routes it to the router VM.](assets/router-moved-2.svg)
 
-*One advertisement per address per second. The old host forwards for 5 minutes.*
+*The old host forwards for 5 minutes. The first packet can be lost.*
 
 ---
 
+<!-- header: '' -->
 <!-- _class: small -->
 
 # Who owns what
@@ -403,7 +484,7 @@ atlas-wg-mesh vm sync --interface vh-100001 \
 
 # Read more
 
-[WG Mesh design](https://github.com/frappe/atlas/blob/develop/docs/networking/wg-mesh/index.md) · [How VMs reach each other](https://github.com/frappe/atlas/blob/develop/docs/networking/index.md) · [Gateway VMs](https://github.com/frappe/atlas/blob/develop/docs/networking/wg-mesh/gateways.md)
+[WG Mesh design](https://github.com/frappe/atlas/blob/develop/docs/networking/wg-mesh/index.md) · [How VMs reach each other](https://github.com/frappe/atlas/blob/develop/docs/networking/index.md) · [Gateway VMs](https://github.com/frappe/atlas/blob/develop/docs/networking/wg-mesh/gateways.md) · [IPv6 router](https://github.com/frappe/atlas/blob/develop/docs/networking/ipv6-router.md)
 
 [vm.h](https://github.com/frappe/atlas/blob/develop/services/wg-mesh/bpf/vm.h) · [wireguard.h](https://github.com/frappe/atlas/blob/develop/services/wg-mesh/bpf/wireguard.h) · [uplink.h](https://github.com/frappe/atlas/blob/develop/services/wg-mesh/bpf/uplink.h) · [maps.h](https://github.com/frappe/atlas/blob/develop/services/wg-mesh/bpf/maps.h)
 
