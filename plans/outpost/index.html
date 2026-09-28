@@ -165,7 +165,7 @@
 <h2 id="terms">3. Terms</h2>
 <dl class="terms">
   <dt>WireGuard</dt><dd>An encrypted network tunnel. It carries whole IP packets over UDP. Linux runs it inside the kernel, so it uses little CPU.</dd>
-  <dt>Agent</dt><dd>The <code>outpost</code> program on a user's machine. It keeps the tunnel up and applies the settings from the dashboard.</dd>
+  <dt>Agent</dt><dd>The <code>outpostd</code> program on a user's machine. It keeps the tunnel up and applies the settings from the dashboard.</dd>
   <dt>Device</dt><dd>One machine with an agent. A user can have more than one device.</dd>
   <dt>Tunnel address</dt><dd>A private IPv6 address that each device gets inside the tunnel. The server uses it to reach the device.</dd>
   <dt>Zone</dt><dd>A base domain, for example <code>box.example.com</code>. Users choose one name under a zone.</dd>
@@ -215,7 +215,7 @@
   <text x="75" y="230" text-anchor="middle" class="small">IPv6 to a</text>
   <text x="75" y="244" text-anchor="middle" class="small">user address</text>
   <rect x="200" y="30" width="250" height="300" rx="8" fill="#fff" stroke="#1d1f23"/>
-  <text x="325" y="55" text-anchor="middle" font-weight="600">outpost-server</text>
+  <text x="325" y="55" text-anchor="middle" font-weight="600">outpost</text>
   <rect x="220" y="75" width="210" height="44" rx="5" fill="#fff" stroke="#d5d8dd"/>
   <text x="325" y="94" text-anchor="middle">Dashboard + API</text>
   <text x="325" y="110" text-anchor="middle" class="small">settings in SQLite</text>
@@ -236,7 +236,7 @@
   <rect x="540" y="30" width="230" height="300" rx="8" fill="#fff" stroke="#1d1f23"/>
   <text x="655" y="55" text-anchor="middle" font-weight="600">User device</text>
   <rect x="560" y="75" width="190" height="104" rx="5" fill="#fff" stroke="#d5d8dd"/>
-  <text x="655" y="96" text-anchor="middle">outpost agent</text>
+  <text x="655" y="96" text-anchor="middle">outpostd agent</text>
   <text x="655" y="114" text-anchor="middle" class="small">applies settings</text>
   <text x="655" y="130" text-anchor="middle" class="small">web listener :7080</text>
   <text x="655" y="146" text-anchor="middle" class="small">direct listener :7443</text>
@@ -388,8 +388,8 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <h3>Stopping outpost on the device</h3>
 <p>Any person with admin rights on the device can stop outpost without the dashboard:</p>
 <ul>
-  <li><code>outpost down</code> removes all addresses, rules and routes that outpost added, and closes the tunnel. Outpost stays down after a reboot, until someone runs <code>outpost up</code>.</li>
-  <li><code>systemctl stop outpost</code> does the same cleanup. But the service starts again at the next boot.</li>
+  <li><code>outpostd down</code> removes all addresses, rules and routes that outpost added, and closes the tunnel. Outpost stays down after a reboot, until someone runs <code>outpostd up</code>.</li>
+  <li><code>systemctl stop outpostd</code> does the same cleanup. But the service starts again at the next boot.</li>
   <li>After a crash, the agent cleans up the old state when it starts again.</li>
 </ul>
 <p>The dashboard then shows the device as <em>Paused on device</em>, not <em>Offline</em>. Changes from the dashboard wait until the device is up again.</p>
@@ -405,7 +405,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li>The dialog in the dashboard changes to "Connected" as soon as the agent enrolls.</li>
 </ol>
 <p>After this, the server pushes the full settings to the agent through a server-sent events stream whenever something changes. The agent compares the settings with the real state of the machine, and it fixes any difference. Every 30 seconds it reports health: can it reach each target, and did each switch apply?</p>
-<p>The agent has six commands: <code>outpost setup &lt;token&gt;</code>, <code>outpost status</code>, <code>outpost logs</code>, <code>outpost down</code>, <code>outpost up</code> and <code>outpost uninstall</code>. None of them change settings; settings come only from the dashboard. When an admin or user revokes a device, the server removes its tunnel peer at once. Its addresses go back to the pool. Its mappings are kept but turned off.</p>
+<p>The agent has six commands: <code>outpostd setup &lt;token&gt;</code>, <code>outpostd status</code>, <code>outpostd logs</code>, <code>outpostd down</code>, <code>outpostd up</code> and <code>outpostd uninstall</code>. None of them change settings; settings come only from the dashboard. When an admin or user revokes a device, the server removes its tunnel peer at once. Its addresses go back to the pool. Its mappings are kept but turned off.</p>
 
 <h2 id="dashboard">11. Dashboard</h2>
 <p>The dashboard is a Vue 3 app with TypeScript and the frappe-ui component library. It is built into the Go server. It runs on the zone's own name, <code>box.example.com</code>, which the certificate already covers.</p>
@@ -451,14 +451,14 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
     <div class="wf-box">
       <h4>Needs attention</h4>
       <div class="wf-row"><span class="wf-dot bad"></span><span><b>api.box.example.com</b>: target <span class="wf-mono">localhost:3000</span> does not respond</span><span class="wf-btn sm" style="margin-left:auto">Open</span></div>
-      <div class="wf-row"><span class="wf-dot pause"></span><span><b>home-server</b>: paused on device (<span class="wf-mono">outpost down</span>) 2 h ago</span><span class="wf-btn sm" style="margin-left:auto">Open</span></div>
+      <div class="wf-row"><span class="wf-dot pause"></span><span><b>home-server</b>: paused on device (<span class="wf-mono">outpostd down</span>) 2 h ago</span><span class="wf-btn sm" style="margin-left:auto">Open</span></div>
       <div class="wf-row"><span class="wf-dot pause"></span><span><b>box.example.com</b> certificate: manual renewal needed, expires in 21 days</span><span class="wf-pill warn" style="margin-left:auto">admin</span></div>
     </div>
   </div>
 </div></div>
 
 <h3>12.2 Devices and the Add device dialog</h3>
-<p>The list shows the state of each device. <em>Paused</em> means that someone ran <code>outpost down</code> on the device. <em>Offline</em> means that the server gets no heartbeat. The dialog shows step 2 of 3: the install command and the token countdown. It changes to "Connected" when the agent enrolls.</p>
+<p>The list shows the state of each device. <em>Paused</em> means that someone ran <code>outpostd down</code> on the device. <em>Offline</em> means that the server gets no heartbeat. The dialog shows step 2 of 3: the install command and the token countdown. It changes to "Connected" when the agent enrolls.</p>
 <div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Devices page with a table of three devices and an open Add device dialog. The dialog shows an install command with a copy button and a token that expires in 14 minutes, and waits for the device to connect.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
@@ -589,7 +589,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <div class="tablewrap"><table>
 <thead><tr><th>#</th><th>Milestone</th><th>Contents</th><th>Done when</th></tr></thead>
 <tbody>
-<tr><td>1</td><td>Core and devices</td><td>Server, database, invites and passwords, Devices page, enroll flow, WireGuard manager, settings push, <code>outpost status</code></td><td>Server and device ping each other on tunnel addresses. Revoke drops the tunnel.</td></tr>
+<tr><td>1</td><td>Core and devices</td><td>Server, database, invites and passwords, Devices page, enroll flow, WireGuard manager, settings push, <code>outpostd status</code></td><td>Server and device ping each other on tunnel addresses. Revoke drops the tunnel.</td></tr>
 <tr><td>2</td><td>Zones and TLS</td><td>Zones page, encrypted credentials, certificate state machine. Manual provider first, then Cloudflare and Route53. Renewal. Dashboard served over TLS.</td><td>A manual wildcard certificate issues on staging, then on production.</td></tr>
 <tr><td>3</td><td>Mappings</td><td>Mappings page. Proxy mode first. Then direct mode with SNI reading, raw forwarding and PROXY headers.</td><td>A visitor reaches a service on the device in both modes.</td></tr>
 <tr><td>4</td><td>IPv6</td><td>Several addresses per device, routes, the outgoing selector (off by default), the inbound firewall (open by default). AAAA records for the zone.</td><td>A probe reaches each assigned address on the device, with the correct destination.</td></tr>
@@ -598,8 +598,8 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 </table></div>
 
 <pre><code>outpost/
-  cmd/outpost/            agent: setup, status, logs, uninstall
-  cmd/outpost-server/     server
+  cmd/outpostd/        device agent: setup, status, logs, down, up, uninstall
+  cmd/outpost/         server: API, dashboard, edge, WireGuard, certificates
   internal/api/        shared types: Enroll, DeviceConfig, DeviceStatus
   internal/server/     http, auth, store, alloc, wgmgr, push, firewall, edge, acme, dnsprov, secrets
   internal/agent/      enroll, reconcile, tunnel, netcfg, edge, health, ctl
@@ -622,7 +622,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li>Probes to each assigned address reach the device, and <code>getsockname()</code> shows the same address. This repeats the test in section 2, but through the tunnel.</li>
   <li>With <em>Outgoing IPv6</em> set to <em>None</em>, the routing table and a plain <code>curl -6 https://api64.ipify.org</code> give the same result as before outpost was installed.</li>
   <li>With one address selected, the same <code>curl</code> returns that address. When the setting goes back to <em>None</em>, the old route comes back in a few seconds.</li>
-  <li>After <code>outpost down</code>, <code>systemctl stop outpost</code>, or a crash and restart, the addresses, rules and routes are the same as before outpost was installed.</li>
+  <li>After <code>outpostd down</code>, <code>systemctl stop outpostd</code>, or a crash and restart, the addresses, rules and routes are the same as before outpost was installed.</li>
 </ul>
 
 <h2 id="limits">15. Limits and risks <span class="tag risk">open</span></h2>
