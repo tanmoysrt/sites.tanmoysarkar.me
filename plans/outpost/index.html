@@ -307,7 +307,7 @@
 <tr><td>User</td><td>email, password hash, role, quotas</td><td>Admin</td></tr>
 <tr><td>Zone</td><td>base domain, DNS provider (Cloudflare, Route53 or manual), credentials, certificate state</td><td>Admin</td></tr>
 <tr><td>Device</td><td>name, owner, WireGuard public key, tunnel address, last seen</td><td>User</td></tr>
-<tr><td>IPv6 reservation</td><td>address (allocated automatically) → owner user. Attached to one device, or unattached. A device can have more than one address. Switch: <em>allow inbound</em> (on by default).</td><td>User: reserve, attach, move, detach, release</td></tr>
+<tr><td>IPv6 address</td><td>address (allocated automatically) → one device. A device can have more than one address. Switch: <em>allow inbound</em> (on by default).</td><td>User: add, move, release</td></tr>
 <tr><td>Device outgoing</td><td>none (default), or one of the device's addresses</td><td>User</td></tr>
 <tr><td>Mapping</td><td>name + zone → device; mode; the fields for that mode</td><td>User</td></tr>
 </tbody>
@@ -416,26 +416,25 @@
 <p class="note">Cloudflare: the <code>box</code> and <code>*.box</code> records must be "DNS only". If Cloudflare proxies them, it decrypts TLS itself, and direct mode stops working. The zone check warns about this.</p>
 
 <h2 id="ipv6">9. IPv6 on the user's machine</h2>
-<h3>Reserve, attach, move</h3>
-<p>An address belongs to a <strong>user</strong>, not to a device. The user first reserves an address, then attaches it to a device. This works like a floating IP at a cloud provider.</p>
+<h3>Add, move, release</h3>
+<p>An address is always on one device. There is no reserved address without a device.</p>
 <ul>
-  <li><strong>Reserve.</strong> The user clicks <em>Reserve new</em>. The server picks the address; the user cannot choose it. The server prefers an address that was never used, then the address that was released first. It does not give out an address that was released in the last 24 hours, unless no other address is free. So old DNS records or allowlist entries of the previous user do not point to the new user at once.</li>
-  <li><strong>Attach.</strong> The user attaches the address to one of their devices. A device can have more than one address.</li>
-  <li><strong>Move.</strong> The user moves the address to another device. DNS records and allowlists that use the address continue to work.</li>
-  <li><strong>Detach or release.</strong> <em>Detach</em> keeps the address reserved for the user. <em>Release</em> gives it back to the pool.</li>
+  <li><strong>Add.</strong> On the device page, the user clicks <em>Add address</em>. The server picks the address; the user cannot choose it. The server prefers an address that was never used, then the address that was released first. It does not give out an address that was released in the last 24 hours, unless no other address is free. So old DNS records or allowlist entries of the previous user do not point to the new user at once. A device can have more than one address.</li>
+  <li><strong>Move.</strong> The user moves the address to another of their devices. DNS records and allowlists that use the address continue to work.</li>
+  <li><strong>Release.</strong> The address goes back to the pool at once, after a plain confirmation.</li>
 </ul>
-<p>The server sends each attached address into the tunnel of its device. The WireGuard peer for a device allows two kinds of address: the device's tunnel address, and each public address attached to it. The server adds one route for each attached address.</p>
+<p>The server sends each address into the tunnel of its device. The WireGuard peer for a device allows two kinds of address: the device's tunnel address, and each public address of the device. The server adds one route for each address.</p>
 <p><strong>Why a move is safe.</strong> For a move, the server changes the allowed addresses of both peers in one step. WireGuard drops a packet from a peer if the source address is not allowed for that peer. So the old device cannot use the address after the move, even when it is offline and still has the address. Its agent removes the address at the next connection. If the address was the old device's outgoing address, that setting goes back to <em>None</em>.</p>
 <h3>On the device</h3>
-<p>For each attached address, the agent does three things:</p>
+<p>For each of its addresses, the agent does three things:</p>
 <ul>
-  <li><strong>It adds every attached address to the device.</strong> The agent adds each address to its tunnel interface. It also adds a rule: traffic <em>from</em> this address uses the tunnel. So a program that binds to the address always sends through the server.
+  <li><strong>It adds every address to the device.</strong> The agent adds each address to its tunnel interface. It also adds a rule: traffic <em>from</em> this address uses the tunnel. So a program that binds to the address always sends through the server.
 <pre><code>ip -6 addr add 2001:db8::105/128 dev outpost0
 ip -6 rule add from 2001:db8::105 lookup outpost
 ip -6 route add default dev outpost0 table outpost</code></pre>
   This does not change other traffic. Linux selects a source address on the interface that sends the packet. So programs that do not bind to an outpost address continue to use the normal network.</li>
   <li><strong>It does not change outgoing traffic, unless the dashboard says so.</strong> Each device has one setting, <em>Outgoing IPv6</em>. The default is <em>None</em>. With <em>None</em>, outpost adds no default route, so it cannot interrupt other traffic. The user can select one of the device's addresses in the dashboard. Then the agent makes the tunnel the default route for all IPv6 traffic, with that address as the source. The tunnel itself connects over IPv4, so it cannot send its own packets into itself. The agent records the old routes and puts them back when the setting goes back to <em>None</em>.</li>
-  <li><strong>It accepts inbound connections.</strong> Inbound traffic to an attached address is allowed by default. The user can turn off <em>allow inbound</em> for one address. Then the server firewall drops new connections from the internet to that address. Replies to the device's own connections still arrive.</li>
+  <li><strong>It accepts inbound connections.</strong> Inbound traffic to an address is allowed by default. The user can turn off <em>allow inbound</em> for one address. Then the server firewall drops new connections from the internet to that address. Replies to the device's own connections still arrive.</li>
 </ul>
 <h3>Stopping outpost on the device</h3>
 <p>Any person with admin rights on the device can stop outpost without the dashboard:</p>
@@ -445,7 +444,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li>After a crash, the agent cleans up the old state when it starts again.</li>
 </ul>
 <p>The dashboard then shows the device as <em>Paused on device</em>, not <em>Offline</em>. Changes from the dashboard wait until the device is up again.</p>
-<p>The block has 16 addresses. The server uses one, so 15 are free for users. Reserved addresses count against the user's quota, also when they are not attached. The Pool page shows admins the addresses that stayed unattached for more than 30 days. Only an admin can release them. The data model allows more address pools later.</p>
+<p>The block has 16 addresses. The server uses one, so 15 are free for users. Addresses count against the owner's quota. The data model allows more address pools later.</p>
 
 <h2 id="devices">10. Adding a device</h2>
 <ol>
@@ -457,7 +456,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li>The dialog in the dashboard changes to "Connected" as soon as the agent enrolls.</li>
 </ol>
 <p>After this, the server pushes the full settings to the agent through a server-sent events stream whenever something changes. The agent compares the settings with the real state of the machine, and it fixes any difference. Every 30 seconds it reports its status: which settings version it applied, and any error. The dashboard shows the device as <em>Offline</em> when no report arrives for 90 seconds. There is no health check for each mapping. If a target is down, visitors get the server's 502 page.</p>
-<p>The agent has six commands: <code>outpostd setup &lt;token&gt;</code>, <code>outpostd status</code>, <code>outpostd logs</code>, <code>outpostd down</code>, <code>outpostd up</code> and <code>outpostd uninstall</code>. None of them change settings; settings come only from the dashboard. When an admin or user revokes a device, the server removes its tunnel peer at once. The revoke dialog asks about each item: keep each address reserved (default) or release it, and remove each mapping or move it to another device.</p>
+<p>The agent has six commands: <code>outpostd setup &lt;token&gt;</code>, <code>outpostd status</code>, <code>outpostd logs</code>, <code>outpostd down</code>, <code>outpostd up</code> and <code>outpostd uninstall</code>. None of them change settings; settings come only from the dashboard. When an admin or user revokes a device, the server removes its tunnel peer at once. It releases the device's addresses and deletes its mappings. To keep a mapping, the user first moves it to another device in the mapping form.</p>
 
 <h2 id="metrics">11. Traffic and device health</h2>
 <p>Users want to see how much traffic goes through each device, each address and each mapping. They also want to see if a device is up. This section explains what the server counts, where it keeps the numbers, and what the dashboard shows.</p>
@@ -505,11 +504,11 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li><strong>Server health (admins).</strong> Certificate expiry, the DNS check, whether <code>wg0</code> is up, free disk, pool use, and the time of the last metrics write.</li>
 </ul>
 
-<h3>Revoke and release prompts</h3>
-<p>A released address or a deleted name can go to another user at once. So the dashboard always asks first, and the safe choice is the default.</p>
+<h3>Revoke and release</h3>
+<p>We keep these actions simple. There is no "keep reserved" choice.</p>
 <ul>
-  <li><strong>Revoke a device.</strong> For each address: <em>Keep reserved</em> (default) or <em>Release to pool</em>. For each mapping: <em>Remove</em> or <em>Move to another device</em>. Then the user types the device name to confirm.</li>
-  <li><strong>Release one address.</strong> <em>Keep reserved, only detach</em> (default) or <em>Release</em>, with a typed confirmation.</li>
+  <li><strong>Revoke a device.</strong> The dialog lists the addresses that the server will release and the mappings that it will delete. The user types the device name to confirm.</li>
+  <li><strong>Release one address.</strong> A plain confirmation.</li>
   <li><strong>Delete a mapping.</strong> A plain confirmation. The name becomes free.</li>
 </ul>
 
@@ -524,26 +523,26 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <div class="tablewrap"><table>
 <thead><tr><th>Page</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td>Home (Devices)</td><td>A card for each device: state, live rate, a 1-hour sparkline, mapping names. An attention strip that shows only when something needs action. Search (⌘K). Top traffic in the last 24 hours. Addresses and mappings that are not on a device. <em>Add device</em>. A setup checklist for a new user.</td></tr>
+<tr><td>Home (Devices)</td><td>A card for each device: state, live rate, a 1-hour sparkline, mapping names. An attention strip that shows only when something needs action. Search (⌘K). Top traffic in the last 24 hours. <em>Add device</em>. A setup checklist for a new user.</td></tr>
 <tr><td>Device: Traffic tab</td><td>A 1 h / 6 h / 24 h switch. A rate chart for the device total, the device status bar, and a small chart for each address and each mapping. Totals for the range.</td></tr>
-<tr><td>Device: Addresses tab</td><td><em>Outgoing IPv6</em> selector (default <em>None</em>). Attach, move, detach and release addresses. An <em>allow inbound</em> switch for each address. Each change shows a state: pending, applied or error.</td></tr>
+<tr><td>Device: Addresses tab</td><td><em>Outgoing IPv6</em> selector (default <em>None</em>). Add, move and release addresses. An <em>allow inbound</em> switch for each address. Each change shows a state: pending, applied or error.</td></tr>
 <tr><td>Device: Mappings tab</td><td>The mappings for this device. A drawer with the form: name and zone, mode switch, proxy fields or direct fields.</td></tr>
 <tr><td>Device: Settings tab</td><td>Rename, install command, revoke.</td></tr>
 <tr><td>Admin: users</td><td>Users, roles, quotas. Invite links.</td></tr>
 <tr><td>Admin: all devices</td><td>One list of all devices: owner, state, ↓ and ↑ totals for 24 hours, this month or all time, and agent version. Filters, sorting and a total row.</td></tr>
 <tr><td>Admin: zones</td><td>DNS provider, credentials, DNS check, certificate steps, the manual TXT flow, <em>Renew now</em>.</td></tr>
-<tr><td>Admin: pool</td><td>The address grid with owners: free, attached, unattached, reserved for the server. Addresses that stayed unattached for a long time. Address pools.</td></tr>
+<tr><td>Admin: pool</td><td>The address grid with owners: free, in use, in cooldown, reserved for the server. Address pools.</td></tr>
 </tbody>
 </table></div>
 
 <h2 id="layouts">13. Proposed screen layouts <span class="tag proposed">proposed</span></h2>
 <p>These wireframes show the layout and the content of the main screens. They do not show the final colours or spacing. The final screens use frappe-ui components: a sidebar, list views, tabs, form controls, drawers, dialogs and badges. All names and addresses are example data.</p>
-<p>The dashboard is <strong>device-first</strong>. Almost every setting belongs to a device: addresses are attached to a device, each mapping sends traffic to a device, and <em>Outgoing IPv6</em> is a device setting. So the sidebar has only <em>Devices</em>, which is also the home page, plus an Admin group. Addresses and mappings are tabs on each device page. The main area has a title row with one main action on the right.</p>
+<p>The dashboard is <strong>device-first</strong>. Almost every setting belongs to a device: addresses belong to a device, each mapping sends traffic to a device, and <em>Outgoing IPv6</em> is a device setting. So the sidebar has only <em>Devices</em>, which is also the home page, plus an Admin group. Addresses and mappings are tabs on each device page. The main area has a title row with one main action on the right.</p>
 
 <h3>13.1 Home: device cards</h3>
-<p>The home page is the device list. Each device is a card with its state, its live rate, a 1-hour sparkline and its mapping names. Paused and offline devices go to the end. A click on a card opens the device page. The <em>List</em> toggle shows the same devices as a compact table.</p>
-<p>The attention strip at the top shows only when something needs action. Here it shows one unattached address. When nothing needs action, the strip is not there. The search box (⌘K) finds hostnames, addresses and device names.</p>
-<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the home page. An attention strip says one address is not attached, with an Attach button. A search box and an Add device button are in the title row. Three device cards: laptop online with a rate sparkline, home-server paused, mac-mini offline. Below: Top traffic in the last 24 hours, and a list of unattached addresses and unassigned mappings.">
+<p>The home page is the device list. Each device is a card with its state, its live rate, a 1-hour sparkline and its mapping names. Paused and offline devices go to the end. A click on a card opens the device page.</p>
+<p>The attention strip at the top shows only when something needs action. Here it shows one device that has been offline for 3 days. When nothing needs action, the strip is not there. The search box (⌘K) finds hostnames, addresses and device names.</p>
+<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the home page. An attention strip says that mac-mini has been offline for 3 days, with an Open button. A search box and an Add device button are in the title row. Three device cards: laptop online with a rate sparkline, home-server paused, mac-mini offline. Below: Top traffic in the last 24 hours.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
     <div class="wf-nav on">Devices</div>
@@ -551,32 +550,25 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
     <div class="wf-user">alice ▾</div>
   </div>
   <div class="wf-main">
-    <div class="wf-head"><div class="wf-title">Devices</div><span style="display:flex;gap:8px;align-items:center"><span class="wf-input" style="min-width:190px">⌕ <span class="wf-muted">Search… ⌘K</span></span><span class="wf-seg"><span class="on">Cards</span><span>List</span></span><span class="wf-btn pri">+ Add device</span></span></div>
-    <div class="wf-attn"><span class="wf-dot pause"></span><span><span class="wf-mono">2001:db8::109</span> is reserved but not attached to a device.</span><span class="wf-btn sm" style="margin-left:auto">Attach…</span><span class="wf-muted">✕</span></div>
+    <div class="wf-head"><div class="wf-title">Devices</div><span style="display:flex;gap:8px;align-items:center"><span class="wf-input" style="min-width:190px">⌕ <span class="wf-muted">Search… ⌘K</span></span><span class="wf-btn pri">+ Add device</span></span></div>
+    <div class="wf-attn"><span class="wf-dot off"></span><span><b>mac-mini</b> has been offline for 3 days.</span><span class="wf-btn sm" style="margin-left:auto">Open</span><span class="wf-muted">✕</span></div>
     <div class="wf-cards3">
       <div class="dev-card"><div class="h"><b>laptop</b><span class="wf-pill ok">online</span></div><div class="wf-mono r">↓ 1.9 MB/s · ↑ 221 KB/s</div><svg class="spark" data-seed="11" data-scale="1" viewBox="0 0 160 34" role="img" aria-label="laptop traffic, last hour"></svg><div class="wf-muted">2 addresses · 3 mappings</div><div class="m">app · api · git</div></div>
       <div class="dev-card"><div class="h"><b>home-server</b><span class="wf-pill warn">paused</span></div><div class="wf-mono r wf-muted">paused on device, 2 h ago</div><svg class="spark" data-seed="5" data-scale="0.4" data-cut="40" viewBox="0 0 160 34" role="img" aria-label="home-server traffic, last hour, zero since the pause"></svg><div class="wf-muted">0 addresses · 2 mappings</div><div class="m">nas · media</div></div>
       <div class="dev-card off"><div class="h"><b>mac-mini</b><span class="wf-pill">offline</span></div><div class="wf-mono r wf-muted">last seen 3 d ago</div><svg class="spark" data-seed="2" data-scale="0" viewBox="0 0 160 34" role="img" aria-label="mac-mini, no traffic"></svg><div class="wf-muted">0 addresses · 0 mappings</div><div class="m wf-muted">no mappings</div></div>
     </div>
-    <div class="wf-2col" style="margin-top:12px">
-      <div class="wf-box">
-        <h4>Top traffic, 24 h</h4>
-        <div class="wf-row"><span style="flex:1"><b>2001:db8::105</b> <span class="wf-muted">laptop</span></span><span class="wf-mono">↓ 27 GB · ↑ 2.7 GB</span></div>
-        <div class="wf-row"><span style="flex:1"><b>app</b>.box… <span class="wf-muted">laptop</span></span><span class="wf-mono">↓ 11 GB · ↑ 3.9 GB</span></div>
-        <div class="wf-row"><span style="flex:1"><b>nas</b>.box… <span class="wf-muted">home-server</span></span><span class="wf-mono">↓ 4.1 GB · ↑ 9.8 GB</span></div>
-      </div>
-      <div class="wf-box">
-        <h4>Not on a device</h4>
-        <div class="wf-row"><span class="wf-mono" style="flex:1">2001:db8::109</span><span class="wf-muted">address</span><span class="wf-btn sm">Attach…</span></div>
-        <div class="wf-row"><span style="flex:1"><b>old</b>.box…</span><span class="wf-muted">mapping, off</span><span class="wf-btn sm">Move…</span></div>
-      </div>
+    <div class="wf-box" style="margin-top:12px">
+      <h4>Top traffic, 24 h</h4>
+      <div class="wf-row"><span style="flex:1"><b>2001:db8::105</b> <span class="wf-muted">laptop</span></span><span class="wf-mono">↓ 27 GB · ↑ 2.7 GB</span></div>
+      <div class="wf-row"><span style="flex:1"><b>app</b>.box.example.com <span class="wf-muted">laptop</span></span><span class="wf-mono">↓ 11 GB · ↑ 3.9 GB</span></div>
+      <div class="wf-row"><span style="flex:1"><b>nas</b>.box.example.com <span class="wf-muted">home-server</span></span><span class="wf-mono">↓ 4.1 GB · ↑ 9.8 GB</span></div>
     </div>
   </div>
 </div></div>
 
 <h3>13.2 Setup checklist for a new user</h3>
 <p>A new user has no devices yet. So the home page shows three steps instead of the cards. Each step ticks itself when the user completes it. The Add device dialog opens from the first step.</p>
-<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the home page for a new user. A checklist with three steps: Add a device, Create a mapping, Reserve an IPv6 address. The Add device dialog is open on the install step, with the install command, a copy button and a 14 minute countdown.">
+<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the home page for a new user. A checklist with three steps: Add a device, Create a mapping, Add an IPv6 address. The Add device dialog is open on the install step, with the install command, a copy button and a 14 minute countdown.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
     <div class="wf-nav on">Devices</div>
@@ -587,7 +579,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
     <div class="wf-box" style="width:70%">
       <div class="wf-row"><span class="chk"></span><span style="flex:1"><b>1. Add a device</b><br><span class="wf-muted">Install the agent on a machine.</span></span><span class="wf-btn sm pri">Add device</span></div>
       <div class="wf-row"><span class="chk"></span><span style="flex:1"><b>2. Create a mapping</b><br><span class="wf-muted">Give a local service a public name.</span></span></div>
-      <div class="wf-row"><span class="chk"></span><span style="flex:1"><b>3. Reserve an IPv6 address</b> <span class="wf-muted">(optional)</span><br><span class="wf-muted">Give the device its own public address.</span></span></div>
+      <div class="wf-row"><span class="chk"></span><span style="flex:1"><b>3. Add an IPv6 address</b> <span class="wf-muted">(optional)</span><br><span class="wf-muted">Give the device its own public address.</span></span></div>
     </div>
   </div>
   <div class="wf-overlay" style="inset:0 0 0 168px"><div class="wf-dialog">
@@ -635,36 +627,31 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 </div></div>
 
 <h3>13.4 Device page: Addresses tab</h3>
-<p>The device header shows the status and traffic. The <em>Outgoing IPv6</em> selector sits at the top of the tab, with <em>None</em> as the default. Each address has an <em>allow inbound</em> switch, which is on by default, and a <em>Move to</em> menu. <em>Attach address</em> opens a picker. The picker lists the user's unattached addresses first. <em>Reserve new</em> gets the next address automatically; the user cannot choose it.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Addresses tab. The header shows online status, agent version and traffic. Tabs: Addresses, Mappings, Settings. An Outgoing IPv6 selector is set to None. Two addresses are listed with allow inbound switches, state pills and Move to menus. An open Attach address picker offers one unattached address and a Reserve new option.">
+<p>The <em>Outgoing IPv6</em> selector sits at the top of the tab, with <em>None</em> as the default. Each address has an <em>allow inbound</em> switch, which is on by default, a <em>Move to</em> menu and a <em>Release</em> button. <em>Add address</em> gets the next free address automatically; the user cannot choose it.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Addresses tab. The header shows online status, agent version and traffic. Tabs: Traffic, Addresses, Mappings, Settings. An Outgoing IPv6 selector is set to None. Two addresses are listed with allow inbound switches, state pills, Move to menus and Release buttons. An Add address button is at the top right.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
     <div class="wf-nav on">Devices</div>
     <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">All devices</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
     <div class="wf-user">alice ▾</div>
   </div>
-  <div class="wf-main" style="min-height:340px">
-    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-muted">0.4.1 · linux · handshake 12 s ago · ↓ 1.2 GB ↑ 310 MB</span></div>
+  <div class="wf-main">
+    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-muted">0.4.1 · linux · handshake 12 s ago</span></div>
     <div class="wf-tabs"><span>Traffic</span><span class="on">Addresses <span class="wf-muted">2</span></span><span>Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
     <div class="wf-head" style="margin:12px 0 10px">
       <span>Outgoing IPv6 <span class="wf-input" style="min-width:150px">None ▾</span> <span class="wf-muted">outpost does not change outgoing traffic</span></span>
-      <span class="wf-btn pri">+ Attach address</span>
+      <span class="wf-btn pri">+ Add address</span>
     </div>
     <div class="wf-box">
-      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::105</span><span>Allow inbound <span class="wf-sw"></span></span><span class="wf-pill ok">applied</span><span style="margin-left:auto"><span class="wf-btn sm">Move to… ▾</span> <span class="wf-btn sm">⋯</span></span></div>
-      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::106</span><span>Allow inbound <span class="wf-sw off"></span></span><span class="wf-pill blue">pending…</span><span style="margin-left:auto"><span class="wf-btn sm">Move to… ▾</span> <span class="wf-btn sm">⋯</span></span></div>
+      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::105</span><span>Allow inbound <span class="wf-sw"></span></span><span class="wf-pill ok">applied</span><span style="margin-left:auto"><span class="wf-btn sm">Move to… ▾</span> <span class="wf-btn sm">Release</span></span></div>
+      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::106</span><span>Allow inbound <span class="wf-sw off"></span></span><span class="wf-pill blue">pending…</span><span style="margin-left:auto"><span class="wf-btn sm">Move to… ▾</span> <span class="wf-btn sm">Release</span></span></div>
     </div>
-    <div class="wf-help" style="margin-top:6px">⋯ holds <em>Detach</em> (the address stays yours) and <em>Release</em> (the address goes back to the pool).</div>
-    <div class="wf-pop" style="right:18px;top:128px">
-      <div class="wf-muted" style="padding:6px 10px 4px">Your unattached addresses</div>
-      <div class="wf-row"><span class="wf-mono">2001:db8::109</span><span class="wf-muted" style="margin-left:auto">3 d</span></div>
-      <div class="wf-row" style="border-top:1px solid var(--line)"><b>+ Reserve new</b><span class="wf-muted" style="margin-left:auto">1 left in quota</span></div>
-    </div>
+    <div class="wf-help" style="margin-top:6px">1 address left in your quota.</div>
   </div>
 </div></div>
 
 <h3>13.5 Device page: Mappings tab and form drawer</h3>
-<p>The tab lists the mappings that send traffic to this device. <em>New mapping</em> opens a drawer on the right, so the list stays visible. The device is already set. The name is one label plus a zone, and the form checks while the user types whether the name is free. The mode switch changes the fields below it. The drawer shows proxy mode; a note lists the fields for direct mode.</p>
+<p>The tab lists the mappings that send traffic to this device. <em>New mapping</em> opens a drawer on the right, so the list stays visible. The device is already set, and the user can change it to move the mapping. The name is one label plus a zone, and the form checks while the user types whether the name is free. The mode switch changes the fields below it. The drawer shows proxy mode; a note lists the fields for direct mode.</p>
 <div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Mappings tab. A table lists three mappings with mode and current traffic rate. A drawer on the right shows the New mapping form: name alice in zone box.example.com, marked available; mode switch set to Proxy; target URL, host override, extra headers and port 80 behaviour; a note lists the direct mode fields.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
@@ -685,6 +672,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
     <div class="wf-drawer">
       <div class="wf-head" style="margin-bottom:10px"><div class="wf-title">New mapping</div><span class="wf-muted">✕</span></div>
       <div class="wf-field"><label>Name</label><span class="wf-input" style="min-width:80px">alice</span> <span class="wf-muted">.</span> <span class="wf-input" style="min-width:120px">box.example.com ▾</span> <span class="wf-pill ok">available</span></div>
+      <div class="wf-field"><label>Device</label><span class="wf-input" style="min-width:140px"><span class="wf-dot"></span>laptop ▾</span></div>
       <div class="wf-field"><label>Mode</label><span class="wf-seg"><span class="on">Proxy</span><span>Direct</span></span></div>
       <div class="wf-field"><label>Target</label><span class="wf-input full wf-mono">http://localhost:8080</span></div>
       <div class="wf-field"><label>Host override <span class="wf-muted" style="font-weight:400">(optional)</span></label><span class="wf-input full wf-mono">myapp.local</span></div>
@@ -699,31 +687,31 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 </div></div>
 
 <h3>13.6 Revoke dialog</h3>
-<p>The dialog lists every address and mapping of the device. Each row has a choice, and the safe choice is set by default. The user must type the device name before the <em>Revoke</em> button works.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Revoke laptop dialog. Two addresses are set to Keep reserved. Three mappings: app is set to move to home-server, api and git are set to Remove. A text field asks the user to type laptop to confirm. The Revoke device button is disabled.">
+<p>The dialog lists what the server will remove: the addresses go back to the pool and the mappings are deleted. The user must type the device name before the <em>Revoke</em> button works. To keep a mapping, the user moves it to another device first.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Revoke laptop dialog. It lists two addresses that will be released and three mappings that will be deleted. A text field asks the user to type laptop to confirm. The Revoke device button is disabled.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
     <div class="wf-nav on">Devices</div>
     <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">All devices</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
     <div class="wf-user">alice ▾</div>
   </div>
-  <div class="wf-main" style="min-height:400px">
+  <div class="wf-main" style="min-height:360px">
     <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop</div></div>
     <div class="wf-tabs"><span>Traffic</span><span>Addresses</span><span>Mappings</span><span class="on">Settings</span></div>
   </div>
-  <div class="wf-overlay"><div class="wf-dialog" style="width:460px">
+  <div class="wf-overlay"><div class="wf-dialog" style="width:430px">
     <div class="wf-head" style="margin-bottom:4px"><div class="wf-title">Revoke laptop</div><span class="wf-muted">✕</span></div>
-    <div class="wf-help" style="margin-bottom:10px">The tunnel closes at once. Choose what happens to each item.</div>
+    <div class="wf-help" style="margin-bottom:10px">The tunnel closes at once. This cannot be undone.</div>
     <div class="wf-box" style="margin-bottom:8px">
-      <h4>Addresses</h4>
-      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::105</span><span class="wf-input" style="min-width:150px;margin-left:auto">Keep reserved ▾</span></div>
-      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::106</span><span class="wf-input" style="min-width:150px;margin-left:auto">Keep reserved ▾</span></div>
+      <h4>Released to the pool</h4>
+      <div class="wf-row"><span class="wf-mono">2001:db8::105</span></div>
+      <div class="wf-row"><span class="wf-mono">2001:db8::106</span></div>
     </div>
     <div class="wf-box" style="margin-bottom:10px">
-      <h4>Mappings</h4>
-      <div class="wf-row"><span style="width:130px"><b>app</b>.box.example.com</span><span class="wf-input" style="min-width:150px;margin-left:auto">Move to home-server ▾</span></div>
-      <div class="wf-row"><span style="width:130px"><b>api</b>.box.example.com</span><span class="wf-input" style="min-width:150px;margin-left:auto">Remove ▾</span></div>
-      <div class="wf-row"><span style="width:130px"><b>git</b>.box.example.com</span><span class="wf-input" style="min-width:150px;margin-left:auto">Remove ▾</span></div>
+      <h4>Deleted</h4>
+      <div class="wf-row"><span><b>app</b>.box.example.com</span></div>
+      <div class="wf-row"><span><b>api</b>.box.example.com</span></div>
+      <div class="wf-row"><span><b>git</b>.box.example.com</span></div>
     </div>
     <div class="wf-field"><label>Type <span class="wf-mono">laptop</span> to confirm</label><span class="wf-input full">&nbsp;</span></div>
     <div style="display:flex;justify-content:flex-end;gap:6px"><span class="wf-btn">Cancel</span><span class="wf-btn" style="background:#b42318;border-color:#b42318;color:#fff;opacity:.45">Revoke device</span></div>
@@ -795,7 +783,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <tr><td>1</td><td>Core and devices</td><td>Server, database, invites and passwords, Devices page, enroll flow, WireGuard manager, settings push, <code>outpostd status</code>. Metrics core: sampler, 6-hour memory, hourly JSON files, device totals, device health.</td><td>Server and device ping each other on tunnel addresses. Revoke drops the tunnel. The Traffic tab shows the device total.</td></tr>
 <tr><td>2</td><td>Zones and TLS</td><td>Zones page, encrypted credentials, certificate state machine. Manual provider first, then Cloudflare and Route53. Renewal. Dashboard served over TLS.</td><td>A manual wildcard certificate issues on staging, then on production.</td></tr>
 <tr><td>3</td><td>Mappings</td><td>The device Mappings tab and form drawer. Proxy mode first. Then direct mode with SNI reading, raw forwarding and PROXY headers.</td><td>A visitor reaches a service on the device in both modes.</td></tr>
-<tr><td>4</td><td>IPv6</td><td>Automatic reservation. Attach, move and detach. Revoke and release prompts. Address counters. The device Addresses tab and the admin Pool page. Routes, the outgoing selector (off by default), the inbound firewall (open by default). AAAA records for the zone.</td><td>A probe reaches each attached address on the device, with the correct destination.</td></tr>
+<tr><td>4</td><td>IPv6</td><td>Automatic allocation. Add, move and release. The revoke dialog. Address counters. The device Addresses tab and the admin Pool page. Routes, the outgoing selector (off by default), the inbound firewall (open by default). AAAA records for the zone.</td><td>A probe reaches each address on the device, with the correct destination.</td></tr>
 <tr><td>5</td><td>Hardening</td><td>WireGuard over WebSocket on port 443 for networks that block UDP. macOS and Windows support. Audit log, quotas, metrics.</td><td>A device on a UDP-blocked network connects.</td></tr>
 </tbody>
 </table></div>
@@ -831,7 +819,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <ul>
   <li>Outside HTTP probes to <code>https://</code> and <code>http://</code> names return 200 from a service on a device.</li>
   <li>After a move from device A to device B, probes reach B in a few seconds. A cannot send from the address, also while A is offline.</li>
-  <li>Probes to each attached address reach the device, and <code>getsockname()</code> shows the same address. This repeats the test in section 2, but through the tunnel.</li>
+  <li>Probes to each address reach the device, and <code>getsockname()</code> shows the same address. This repeats the test in section 2, but through the tunnel.</li>
   <li>With <em>Outgoing IPv6</em> set to <em>None</em>, the routing table and a plain <code>curl -6 https://api64.ipify.org</code> give the same result as before outpost was installed.</li>
   <li>With one address selected, the same <code>curl</code> returns that address. When the setting goes back to <em>None</em>, the old route comes back in a few seconds.</li>
   <li>After <code>outpostd down</code>, <code>systemctl stop outpostd</code>, or a crash and restart, the addresses, rules and routes are the same as before outpost was installed.</li>
@@ -840,7 +828,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <h2 id="limits">16. Limits and risks <span class="tag risk">open</span></h2>
 <ul>
   <li><strong>UDP blocked.</strong> WireGuard uses UDP. Some networks block it. Milestone 5 adds a fallback over WebSocket on port 443.</li>
-  <li><strong>Small pool.</strong> Only 15 addresses are free for users. Reserved but unattached addresses use this small pool. Quotas and the 30-day flag limit this. More pools need a second provider or a larger block.</li>
+  <li><strong>Small pool.</strong> Only 15 addresses are free for users. Quotas limit how many each user gets. More pools need a second provider or a larger block.</li>
   <li><strong>Plain text in proxy mode.</strong> The server can read proxied HTTP. Users who need privacy must use direct mode.</li>
   <li><strong>SNI is needed.</strong> Direct mode needs a client that sends SNI. All modern clients do. We will not publish Encrypted Client Hello (ECH) settings, because ECH hides the SNI.</li>
   <li><strong>Manual zones need a person.</strong> Every renewal needs new TXT values. If nobody adds them, the certificate expires. The dashboard warns 30 days before.</li>
