@@ -529,7 +529,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <tr><td>Device: Settings tab</td><td>Rename, install command, revoke.</td></tr>
 <tr><td>Admin: users</td><td>Users, roles, quotas. Invite links.</td></tr>
 <tr><td>Admin: all devices</td><td>One list of all devices: owner, state, ↓ and ↑ totals for 24 hours, this month or all time, and agent version. Filters, sorting and a total row.</td></tr>
-<tr><td>Admin: zones</td><td>DNS provider, credentials, DNS check, certificate steps, the manual TXT flow, <em>Renew now</em>.</td></tr>
+<tr><td>Admin: zones</td><td>One page for each zone, with no settings dialog: the certificate (<em>Renew now</em>, staging), the current issue with the manual TXT steps, the DNS provider and its credentials (<em>Test</em>, <em>Save</em>), and the DNS check.</td></tr>
 <tr><td>Admin: pool</td><td>The address grid with owners: free, in use, reserved for the server. Address pools.</td></tr>
 </tbody>
 </table></div>
@@ -740,9 +740,9 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div>
 </div></div>
 
-<h3>13.8 Zone with manual DNS</h3>
-<p>This screen guides the admin through a manual issue or renewal. The steps at the top show the current state. The admin copies both TXT values, adds them at their DNS provider, and clicks <em>Check DNS</em>. <em>Proceed</em> becomes active when the check finds both values.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of a zone detail page with manual DNS. A step bar shows ordering done and awaiting DNS as the current step. Two TXT records on the name _acme-challenge.box.example.com each have a copy button; the first is found on public DNS, the second is not found yet. Buttons: Check DNS and Proceed.">
+<h3>13.8 Zone page</h3>
+<p>Everything about a zone is on one page, with no settings dialog. The sections go from top to bottom: the certificate, the current issue (only while an issue or renewal runs), the DNS provider, and the DNS check. This example uses manual DNS. The admin copies both TXT values, adds them at their DNS provider, and clicks <em>Check DNS</em>. <em>Proceed</em> becomes active when the check finds both values.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the zone page for box.example.com on one page. Certificate section: expires in 21 days, Renew now button and a staging switch. Current issue section: a step bar at Awaiting DNS, two TXT records with copy buttons, one found and one not found yet, Check DNS and a disabled Proceed button. DNS provider section: provider set to Manual, with Test and Save buttons. DNS check section: the A records are correct and the AAAA record is not set.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
     <div class="wf-nav">Devices</div>
@@ -750,15 +750,35 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
     <div class="wf-user">admin ▾</div>
   </div>
   <div class="wf-main">
-    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Zones /</span> box.example.com <span class="wf-pill">manual DNS</span> <span class="wf-pill warn">expires in 21 days</span></div><span class="wf-btn">Settings</span></div>
-    <div class="wf-steps"><div class="wf-step done">Ordering</div><div class="wf-step cur">Awaiting DNS</div><div class="wf-step">Validating</div><div class="wf-step">Finalizing</div><div class="wf-step">Issued</div></div>
-    <div class="wf-box">
-      <h4>Add these two TXT records at your DNS provider</h4>
-      <div class="wf-row"><span style="width:250px"><span class="wf-muted">Name</span><br><span class="wf-mono">_acme-challenge.box.example.com</span></span><span style="flex:1"><span class="wf-muted">Value 1</span><br><span class="wf-mono">m3F9x…Qk2</span> <span class="wf-btn sm">Copy</span></span><span class="wf-pill ok">found</span></div>
-      <div class="wf-row"><span style="width:250px"><span class="wf-muted">Name</span><br><span class="wf-mono">_acme-challenge.box.example.com</span></span><span style="flex:1"><span class="wf-muted">Value 2</span><br><span class="wf-mono">Z8pLr…7aW</span> <span class="wf-btn sm">Copy</span></span><span class="wf-pill warn">not found yet</span></div>
+    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Zones /</span> box.example.com</div></div>
+    <div class="wf-box" style="margin-bottom:10px">
+      <h4>Certificate</h4>
+      <div class="wf-row"><span style="flex:1"><span class="wf-mono">*.box.example.com, box.example.com</span><br><span class="wf-muted">Let's Encrypt · expires 19 Oct 2026</span></span><span class="wf-pill warn">expires in 21 days</span></div>
+      <div class="wf-row"><span>Staging <span class="wf-sw off"></span></span><span class="wf-btn sm" style="margin-left:auto">Renew now</span></div>
     </div>
-    <div class="wf-help" style="margin:6px 0 12px">Both values use the same name. Keep both. Checked on the zone's name servers, 1.1.1.1 and 8.8.8.8. The order stays open for about 7 days.</div>
-    <div style="display:flex;gap:8px;align-items:center"><span class="wf-btn">Check DNS</span><span class="wf-btn pri" style="opacity:.4">Proceed</span><span class="wf-muted">Proceed is active when both values are found.</span></div>
+    <div class="wf-box" style="margin-bottom:10px">
+      <h4>Current issue: renewal</h4>
+      <div style="padding:8px 12px 0"><div class="wf-steps" style="margin:0 0 8px"><div class="wf-step done">Ordering</div><div class="wf-step cur">Awaiting DNS</div><div class="wf-step">Validating</div><div class="wf-step">Finalizing</div><div class="wf-step">Issued</div></div></div>
+      <div class="wf-row"><span style="width:230px"><span class="wf-muted">TXT name</span><br><span class="wf-mono">_acme-challenge.box.example.com</span></span><span style="flex:1"><span class="wf-muted">Value 1</span><br><span class="wf-mono">m3F9x…Qk2</span> <span class="wf-btn sm">Copy</span></span><span class="wf-pill ok">found</span></div>
+      <div class="wf-row"><span style="width:230px"><span class="wf-muted">TXT name</span><br><span class="wf-mono">_acme-challenge.box.example.com</span></span><span style="flex:1"><span class="wf-muted">Value 2</span><br><span class="wf-mono">Z8pLr…7aW</span> <span class="wf-btn sm">Copy</span></span><span class="wf-pill warn">not found yet</span></div>
+      <div class="wf-row"><span class="wf-help" style="margin:0;flex:1">Both values use the same name. Keep both. The order stays open for about 7 days.</span><span class="wf-btn sm">Check DNS</span><span class="wf-btn sm pri" style="opacity:.4">Proceed</span></div>
+    </div>
+    <div class="wf-2col">
+      <div class="wf-box">
+        <h4>DNS provider</h4>
+        <div style="padding:8px 12px">
+          <div class="wf-field"><label>Provider</label><span class="wf-input" style="min-width:150px">Manual ▾</span><div class="wf-help">Cloudflare and Route53 show their API fields here and renew without help.</div></div>
+          <div class="wf-field" style="margin:0"><label>DNS zone</label><span class="wf-input wf-mono" style="min-width:150px">example.com</span> <span class="wf-muted">auto</span></div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px"><span class="wf-btn sm">Test</span><span class="wf-btn sm pri">Save</span></div>
+        </div>
+      </div>
+      <div class="wf-box">
+        <h4>DNS check</h4>
+        <div class="wf-row"><span class="wf-mono" style="flex:1">A box</span><span class="wf-mono">192.0.2.10</span><span class="wf-pill ok">ok</span></div>
+        <div class="wf-row"><span class="wf-mono" style="flex:1">A *.box</span><span class="wf-mono">192.0.2.10</span><span class="wf-pill ok">ok</span></div>
+        <div class="wf-row"><span class="wf-mono" style="flex:1">AAAA *.box</span><span class="wf-muted">not set</span><span class="wf-pill warn">missing</span></div>
+      </div>
+    </div>
   </div>
 </div></div>
 
