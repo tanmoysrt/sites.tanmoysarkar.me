@@ -120,6 +120,32 @@
   .wf-tabs span.on { border-bottom: 2px solid #1d1f23; font-weight: 600; color: var(--ink); margin-bottom: -1px; }
   .wf-pop { position: absolute; width: 250px; background: #fff; border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
   .wf-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 318px; background: #fff; border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.08); padding: 14px 16px; }
+  /* Traffic charts (wireframe). Series colours validated for CVD and contrast on #ffffff. */
+  .viz { --s-down: #2a78d6; --s-up: #eb6834; --grid: #e1e0d9; --axis: #c3c2b7; --ink-2: #52514e; --ink-3: #898781;
+    --st-on: #0ca30c; --st-pause: #fab219; --st-off: #d5d8dd; }
+  .wf-main { --s-down: #2a78d6; --s-up: #eb6834; --grid: #e1e0d9; --st-on: #0ca30c; --st-pause: #fab219; --st-off: #d5d8dd; }
+  .viz-legend { display: inline-flex; gap: 14px; color: #52514e; font-size: 11.5px; }
+  .viz-legend .k { display: inline-block; width: 14px; height: 0; border-top: 2px solid; border-radius: 2px; margin-right: 5px; vertical-align: 3px; }
+  .k-down { border-color: var(--s-down) !important; } .k-up { border-color: var(--s-up) !important; }
+  .viz-legend .sq { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .sq-on { background: var(--st-on); } .sq-pause { background: var(--st-pause); } .sq-off { background: var(--st-off); }
+  .viz-plot { position: relative; }
+  .viz-plot svg { width: 100%; height: auto; display: block; touch-action: none; }
+  .viz-plot svg text { font-size: 10.5px; fill: #898781; font-variant-numeric: tabular-nums; }
+  .viz-tip { position: absolute; top: 4px; pointer-events: none; background: #fff; border: 1px solid rgba(11,11,11,.12);
+    border-radius: 6px; padding: 5px 8px; font-size: 11.5px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,.08); white-space: nowrap; color: #0b0b0b; }
+  .viz-tip .k { display: inline-block; width: 10px; border-top: 2px solid; margin-right: 5px; vertical-align: 3px; }
+  .viz-status { display: grid; grid-template-columns: repeat(96, 1fr); gap: 1px; height: 14px; }
+  .viz-status span { border-radius: 1px; background: var(--st-on); }
+  .viz-status span.p { background: var(--st-pause); } .viz-status span.o { background: var(--st-off); }
+  .viz-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
+  .viz-card { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px 4px; }
+  .viz-card .h { display: flex; justify-content: space-between; gap: 8px; }
+  .viz-card .t { color: #52514e; font-size: 11.5px; }
+  .viz-card svg { width: 100%; height: auto; display: block; margin-top: 4px; }
+  .viz-table { margin-top: 12px; font-size: 12px; }
+  .viz-table summary { cursor: pointer; color: var(--accent); }
+  .viz-table table { font-size: 12px; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -141,6 +167,7 @@
   <li><a href="#tls">Certificates</a></li>
   <li><a href="#ipv6">IPv6 on the user's machine</a></li>
   <li><a href="#devices">Adding a device</a></li>
+  <li><a href="#metrics">Traffic and device health</a></li>
   <li><a href="#dashboard">Dashboard</a></li>
   <li><a href="#layouts">Proposed screen layouts</a></li>
   <li><a href="#milestones">Build order</a></li>
@@ -421,9 +448,63 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li>The dialog in the dashboard changes to "Connected" as soon as the agent enrolls.</li>
 </ol>
 <p>After this, the server pushes the full settings to the agent through a server-sent events stream whenever something changes. The agent compares the settings with the real state of the machine, and it fixes any difference. Every 30 seconds it reports its status: which settings version it applied, and any error. The dashboard shows the device as <em>Offline</em> when no report arrives for 90 seconds. There is no health check for each mapping. If a target is down, visitors get the server's 502 page.</p>
-<p>The agent has six commands: <code>outpostd setup &lt;token&gt;</code>, <code>outpostd status</code>, <code>outpostd logs</code>, <code>outpostd down</code>, <code>outpostd up</code> and <code>outpostd uninstall</code>. None of them change settings; settings come only from the dashboard. When an admin or user revokes a device, the server removes its tunnel peer at once. Its addresses become unattached, but they stay reserved for the user. The revoke dialog asks where to move the device's mappings: to another device, or to the <em>Unassigned</em> group, turned off.</p>
+<p>The agent has six commands: <code>outpostd setup &lt;token&gt;</code>, <code>outpostd status</code>, <code>outpostd logs</code>, <code>outpostd down</code>, <code>outpostd up</code> and <code>outpostd uninstall</code>. None of them change settings; settings come only from the dashboard. When an admin or user revokes a device, the server removes its tunnel peer at once. The revoke dialog asks about each item: keep each address reserved (default) or release it, and remove each mapping or move it to another device.</p>
 
-<h2 id="dashboard">11. Dashboard</h2>
+<h2 id="metrics">11. Traffic and device health</h2>
+<p>Users want to see how much traffic goes through each device, each address and each mapping. They also want to see if a device is up. This section explains what the server counts, where it keeps the numbers, and what the dashboard shows.</p>
+
+<h3>What the server counts</h3>
+<p>All counting happens on the server. The agent counts nothing, so it stays small. The direction is always from the device's side: <strong>↓ to device</strong> and <strong>↑ from device</strong>.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Series</th><th>Source</th><th>Values</th></tr></thead>
+<tbody>
+<tr><td>Device total</td><td>The byte counters that WireGuard keeps for each peer (read with <code>wgctrl</code>)</td><td>↓ bytes, ↑ bytes</td></tr>
+<tr><td>IPv6 address</td><td>Kernel <code>nftables</code> counters, one for each address and direction</td><td>↓ bytes, ↑ bytes</td></tr>
+<tr><td>Mapping, proxy mode</td><td>A counter around each connection in the server edge</td><td>↓ bytes, ↑ bytes, requests, 2xx, 3xx, 4xx, 5xx</td></tr>
+<tr><td>Mapping, direct mode</td><td>The copy loop in the server edge. It adds to the counter while it copies, so long connections show a live rate.</td><td>↓ bytes, ↑ bytes</td></tr>
+</tbody>
+</table></div>
+<p>Every 10 seconds, the server reads all counters. It uses the difference from the last reading to calculate the live rate, and it sends that rate to open dashboards. It does not store the 10-second values. Every minute, it stores one point for each series.</p>
+
+<h3>Where the numbers go</h3>
+<ul>
+  <li><strong>Memory: the last 6 hours only.</strong> Each series has a ring buffer of 360 one-minute points. For 200 series this is about 1.5–2 MB.</li>
+  <li><strong>Disk: one JSON line each minute.</strong> The line holds all series, so the server does one small append each minute. A new file starts every hour.
+<pre><code>/var/lib/outpost/metrics/2026-09-28T14.jsonl
+{"t":1790604000,"s":{"dev:3":[1048576,20480],"addr:7":[5120,900],"map:12":[830000,4100,52,50,0,1,1]}}</code></pre></li>
+  <li><strong>Retention: 24 hours by default.</strong> To remove old data, the server deletes whole hourly files. Nothing needs compaction. 200 series use about 9 MB of disk each day.</li>
+  <li><strong>Reads.</strong> Charts for 1 hour and 6 hours come from memory. A 24-hour chart also reads the older hourly files, only when a user opens it. The server shows it in 5-minute steps and caches the result for 60 seconds.</li>
+  <li><strong>Restart.</strong> The server rebuilds the 6 hours in memory from the latest hourly files. If a crash cut the last line, the server skips that line.</li>
+  <li><strong>SQLite</strong> gets only the totals for each month and for all time, once a minute.</li>
+</ul>
+<p class="note">We compared three stores for the one-minute points. SQLite works, but deleting old rows every day leaves empty space that needs a vacuum. A single JSON log with no memory copy must be read and parsed for every chart. Memory for recent data plus hourly JSON files for older data gives fast charts, very few writes and easy deletion.</p>
+
+<h3>Memory limits</h3>
+<ul>
+  <li><strong><code>outpost</code> (server):</strong> less than 60 MB with 20 devices and 200 series.</li>
+  <li><strong><code>outpostd</code> (agent):</strong> less than 20 MB on Linux with kernel WireGuard, and less than 40 MB with the built-in WireGuard on macOS and Windows.</li>
+  <li>Both services set <code>GOMEMLIMIT</code>. A CI test runs 100 connections, records the memory use and fails when a service is over its limit.</li>
+</ul>
+
+<h3>Device health</h3>
+<p>The dashboard shows health for devices only. It does not check each mapping.</p>
+<ul>
+  <li><strong>State.</strong> <em>Online</em>, <em>Paused</em> (someone ran <code>outpostd down</code>) or <em>Offline</em> (no status report for 90 seconds).</li>
+  <li><strong>Details.</strong> Time since the last WireGuard handshake, the agent version, and whether the agent applied the latest settings. If it could not apply them, the dashboard shows the error.</li>
+  <li><strong>History.</strong> A 24-hour status bar for each device. The server stores the state with the traffic points.</li>
+  <li><strong>Mappings.</strong> A mapping has no health state. If its target is down, visitors get the 502 page. The status-code counts of proxy mappings then show the errors.</li>
+  <li><strong>Server health (admins).</strong> Certificate expiry, the DNS check, whether <code>wg0</code> is up, free disk, pool use, and the time of the last metrics write.</li>
+</ul>
+
+<h3>Revoke and release prompts</h3>
+<p>A released address or a deleted name can go to another user at once. So the dashboard always asks first, and the safe choice is the default.</p>
+<ul>
+  <li><strong>Revoke a device.</strong> For each address: <em>Keep reserved</em> (default) or <em>Release to pool</em>. For each mapping: <em>Remove</em> or <em>Move to another device</em>. Then the user types the device name to confirm.</li>
+  <li><strong>Release one address.</strong> <em>Keep reserved, only detach</em> (default) or <em>Release</em>, with a typed confirmation.</li>
+  <li><strong>Delete a mapping.</strong> A plain confirmation. The name becomes free.</li>
+</ul>
+
+<h2 id="dashboard">12. Dashboard</h2>
 <p>The dashboard is a Vue 3 app with TypeScript and the frappe-ui component library. It is built into the Go server. It runs on the zone's own name, <code>box.example.com</code>, which the certificate already covers.</p>
 <ul>
   <li><strong>Data.</strong> <code>@tanstack/vue-query</code> loads and caches data. One server-sent events stream tells the page when data changes, for example when a device goes online.</li>
@@ -436,6 +517,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <tbody>
 <tr><td>Overview</td><td>Counts of devices, addresses and mappings. A hostname search. A list of items that need attention. <em>My addresses</em>: where each address is attached.</td></tr>
 <tr><td>Devices</td><td>The device list with status and last seen. An <em>Unassigned</em> group for mappings without a device. <em>Add device</em>.</td></tr>
+<tr><td>Device: Traffic tab</td><td>A 1 h / 6 h / 24 h switch. A rate chart for the device total, the device status bar, and a small chart for each address and each mapping. Totals for the range.</td></tr>
 <tr><td>Device: Addresses tab</td><td><em>Outgoing IPv6</em> selector (default <em>None</em>). Attach, move, detach and release addresses. An <em>allow inbound</em> switch for each address. Each change shows a state: pending, applied or error.</td></tr>
 <tr><td>Device: Mappings tab</td><td>The mappings for this device. A drawer with the form: name and zone, mode switch, proxy fields or direct fields.</td></tr>
 <tr><td>Device: Settings tab</td><td>Rename, install command, revoke.</td></tr>
@@ -445,11 +527,11 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 </tbody>
 </table></div>
 
-<h2 id="layouts">12. Proposed screen layouts <span class="tag proposed">proposed</span></h2>
+<h2 id="layouts">13. Proposed screen layouts <span class="tag proposed">proposed</span></h2>
 <p>These wireframes show the layout and the content of the main screens. They do not show the final colours or spacing. The final screens use frappe-ui components: a sidebar, list views, tabs, form controls, drawers, dialogs and badges. All names and addresses are example data.</p>
 <p>The dashboard is <strong>device-first</strong>. Almost every setting belongs to a device: addresses are attached to a device, each mapping sends traffic to a device, and <em>Outgoing IPv6</em> is a device setting. So the sidebar has only <em>Overview</em> and <em>Devices</em>, plus an Admin group. Addresses and mappings are tabs on each device page. The main area has a title row with one main action on the right.</p>
 
-<h3>12.1 Overview</h3>
+<h3>13.1 Overview</h3>
 <p>The first screen after sign-in. It answers two questions: does any device need my attention, and where is each of my names and addresses? The search box finds a hostname and opens the device that owns it.</p>
 <div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Overview page. Three cards show devices online, IPv6 addresses reserved and the number of mappings. A search box finds a hostname. A Needs attention list shows an offline device, a paused device and a certificate renewal. A My addresses list shows where each reserved address is attached; one is unattached.">
   <div class="wf-side">
@@ -482,7 +564,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div>
 </div></div>
 
-<h3>12.2 Devices and the Add device dialog</h3>
+<h3>13.2 Devices and the Add device dialog</h3>
 <p>The list shows the state of each device. <em>Paused</em> means that someone ran <code>outpostd down</code> on the device. <em>Offline</em> means that the server gets no heartbeat. The <em>Unassigned</em> group at the bottom holds mappings that have no device, for example after a revoke. The dialog shows step 2 of 3: the install command and the token countdown. It changes to "Connected" when the agent enrolls.</p>
 <div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Devices page with a table of three devices, an Unassigned group with one disabled mapping, and an open Add device dialog. The dialog shows an install command with a copy button and a token that expires in 14 minutes, and waits for the device to connect.">
   <div class="wf-side">
@@ -512,7 +594,41 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div></div>
 </div></div>
 
-<h3>12.3 Device page: Addresses tab</h3>
+<h3>13.3 Device page: Traffic tab</h3>
+<p>The Traffic tab opens first. The large chart shows the device total as two lines: ↓ to device and ↑ from device. Move the pointer over the chart to read one point. The status bar below shows the device state over the last 24 hours. Smaller charts follow, one for each address and each mapping. The data in this wireframe is invented.</p>
+<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the laptop device page on the Traffic tab, with a 24 hour rate chart, a status bar and small charts for each address and mapping.">
+  <div class="wf-side">
+    <div class="wf-brand">outpost</div>
+    <div class="wf-nav">Overview</div><div class="wf-nav on">Devices</div>
+    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
+    <div class="wf-user">alice ▾</div>
+  </div>
+  <div class="wf-main">
+    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-muted wf-mono" id="nowRate">↓ 1.4 MB/s · ↑ 210 KB/s now</span></div>
+    <div class="wf-tabs"><span class="on">Traffic</span><span>Addresses <span class="wf-muted">2</span></span><span>Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
+    <div class="wf-head" style="margin:12px 0 8px">
+      <span class="wf-seg"><span>1 h</span><span>6 h</span><span class="on">24 h</span></span>
+      <span class="wf-muted">Last 24 h: <b style="color:var(--ink)" id="totDown">↓ 3.4 GB</b> · <b style="color:var(--ink)" id="totUp">↑ 620 MB</b></span>
+    </div>
+    <div class="wf-box viz" style="padding:10px 12px 6px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <b>Device total, rate</b>
+        <span class="viz-legend"><span><i class="k k-down"></i>↓ to device</span><span><i class="k k-up"></i>↑ from device</span></span>
+      </div>
+      <div class="viz-plot"><svg id="vizMain" viewBox="0 0 540 190" role="img" aria-label="Line chart of the laptop's traffic rate over 24 hours. Download peaks near 2 MB per second in the afternoon. Upload stays below 0.5 MB per second."></svg><div class="viz-tip" id="vizTip" hidden></div></div>
+    </div>
+    <div style="margin:12px 0 4px;display:flex;justify-content:space-between;align-items:center">
+      <b>Device status, 24 h</b>
+      <span class="viz-legend"><span><i class="sq sq-on"></i>Online</span><span><i class="sq sq-pause"></i>Paused</span><span><i class="sq sq-off"></i>Offline</span></span>
+    </div>
+    <div class="viz-status" id="vizStatus" role="img" aria-label="Status bar for 24 hours: online most of the time, paused for about one hour in the morning, and offline for 30 minutes at night."></div>
+    <div class="wf-muted" style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px"><span>24 h ago</span><span>now</span></div>
+    <div class="viz-grid" id="vizSmall"></div>
+    <details class="viz-table"><summary>Show the device total as a table</summary><div class="tablewrap"><table id="vizTable"><thead><tr><th>Hour</th><th>↓ to device</th><th>↑ from device</th></tr></thead><tbody></tbody></table></div></details>
+  </div>
+</div></div>
+
+<h3>13.4 Device page: Addresses tab</h3>
 <p>The device header shows the status and traffic. The <em>Outgoing IPv6</em> selector sits at the top of the tab, with <em>None</em> as the default. Each address has an <em>allow inbound</em> switch, which is on by default, and a <em>Move to</em> menu. <em>Attach address</em> opens a picker. The picker lists the user's unattached addresses first. <em>Reserve new</em> gets the next address automatically; the user cannot choose it.</p>
 <div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Addresses tab. The header shows online status, agent version and traffic. Tabs: Addresses, Mappings, Settings. An Outgoing IPv6 selector is set to None. Two addresses are listed with allow inbound switches, state pills and Move to menus. An open Attach address picker offers one unattached address and a Reserve new option.">
   <div class="wf-side">
@@ -523,7 +639,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div>
   <div class="wf-main" style="min-height:340px">
     <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-muted">0.4.1 · linux · handshake 12 s ago · ↓ 1.2 GB ↑ 310 MB</span></div>
-    <div class="wf-tabs"><span class="on">Addresses <span class="wf-muted">2</span></span><span>Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
+    <div class="wf-tabs"><span>Traffic</span><span class="on">Addresses <span class="wf-muted">2</span></span><span>Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
     <div class="wf-head" style="margin:12px 0 10px">
       <span>Outgoing IPv6 <span class="wf-input" style="min-width:150px">None ▾</span> <span class="wf-muted">outpost does not change outgoing traffic</span></span>
       <span class="wf-btn pri">+ Attach address</span>
@@ -541,7 +657,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div>
 </div></div>
 
-<h3>12.4 Device page: Mappings tab and form drawer</h3>
+<h3>13.5 Device page: Mappings tab and form drawer</h3>
 <p>The tab lists the mappings that send traffic to this device. <em>New mapping</em> opens a drawer on the right, so the list stays visible. The device is already set. The name is one label plus a zone, and the form checks while the user types whether the name is free. The mode switch changes the fields below it. The drawer shows proxy mode; a note lists the fields for direct mode.</p>
 <div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Mappings tab. A table lists three mappings with mode and current traffic rate. A drawer on the right shows the New mapping form: name alice in zone box.example.com, marked available; mode switch set to Proxy; target URL, host override, extra headers and port 80 behaviour; a note lists the direct mode fields.">
   <div class="wf-side">
@@ -552,7 +668,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div>
   <div class="wf-main" style="min-height:440px">
     <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-btn pri">+ New mapping</span></div>
-    <div class="wf-tabs"><span>Addresses <span class="wf-muted">2</span></span><span class="on">Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
+    <div class="wf-tabs"><span>Traffic</span><span>Addresses <span class="wf-muted">2</span></span><span class="on">Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
     <div class="wf-box" style="margin-top:12px;width:48%"><table>
       <thead><tr><th>Host</th><th>Mode</th><th>↓ / ↑</th></tr></thead>
       <tbody>
@@ -576,7 +692,39 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div>
 </div></div>
 
-<h3>12.5 Zone with manual DNS</h3>
+<h3>13.6 Revoke dialog</h3>
+<p>The dialog lists every address and mapping of the device. Each row has a choice, and the safe choice is set by default. The user must type the device name before the <em>Revoke</em> button works.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Revoke laptop dialog. Two addresses are set to Keep reserved. Three mappings: app is set to move to home-server, api and git are set to Remove. A text field asks the user to type laptop to confirm. The Revoke device button is disabled.">
+  <div class="wf-side">
+    <div class="wf-brand">outpost</div>
+    <div class="wf-nav">Overview</div><div class="wf-nav on">Devices</div>
+    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
+    <div class="wf-user">alice ▾</div>
+  </div>
+  <div class="wf-main" style="min-height:400px">
+    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop</div></div>
+    <div class="wf-tabs"><span>Traffic</span><span>Addresses</span><span>Mappings</span><span class="on">Settings</span></div>
+  </div>
+  <div class="wf-overlay"><div class="wf-dialog" style="width:460px">
+    <div class="wf-head" style="margin-bottom:4px"><div class="wf-title">Revoke laptop</div><span class="wf-muted">✕</span></div>
+    <div class="wf-help" style="margin-bottom:10px">The tunnel closes at once. Choose what happens to each item.</div>
+    <div class="wf-box" style="margin-bottom:8px">
+      <h4>Addresses</h4>
+      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::105</span><span class="wf-input" style="min-width:150px;margin-left:auto">Keep reserved ▾</span></div>
+      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::106</span><span class="wf-input" style="min-width:150px;margin-left:auto">Keep reserved ▾</span></div>
+    </div>
+    <div class="wf-box" style="margin-bottom:10px">
+      <h4>Mappings</h4>
+      <div class="wf-row"><span style="width:130px"><b>app</b>.box.example.com</span><span class="wf-input" style="min-width:150px;margin-left:auto">Move to home-server ▾</span></div>
+      <div class="wf-row"><span style="width:130px"><b>api</b>.box.example.com</span><span class="wf-input" style="min-width:150px;margin-left:auto">Remove ▾</span></div>
+      <div class="wf-row"><span style="width:130px"><b>git</b>.box.example.com</span><span class="wf-input" style="min-width:150px;margin-left:auto">Remove ▾</span></div>
+    </div>
+    <div class="wf-field"><label>Type <span class="wf-mono">laptop</span> to confirm</label><span class="wf-input full">&nbsp;</span></div>
+    <div style="display:flex;justify-content:flex-end;gap:6px"><span class="wf-btn">Cancel</span><span class="wf-btn" style="background:#b42318;border-color:#b42318;color:#fff;opacity:.45">Revoke device</span></div>
+  </div></div>
+</div></div>
+
+<h3>13.7 Zone with manual DNS</h3>
 <p>This screen guides the admin through a manual issue or renewal. The steps at the top show the current state. The admin copies both TXT values, adds them at their DNS provider, and clicks <em>Check DNS</em>. <em>Proceed</em> becomes active when the check finds both values.</p>
 <div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of a zone detail page with manual DNS. A step bar shows ordering done and awaiting DNS as the current step. Two TXT records on the name _acme-challenge.box.example.com each have a copy button; the first is found on public DNS, the second is not found yet. Buttons: Check DNS and Proceed.">
   <div class="wf-side">
@@ -598,7 +746,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div>
 </div></div>
 
-<h3>12.6 On a phone</h3>
+<h3>13.8 On a phone</h3>
 <p>Below the medium breakpoint, the sidebar becomes a drawer behind a menu button. Tables become stacked rows. The main action stays at the top.</p>
 <div class="wfwrap"><div class="wf-phone" role="img" aria-label="Wireframe of the Devices page on a phone. A top bar has a menu button, the title and an add button. Devices show as stacked rows with name, status and counts.">
   <div class="bar"><span>☰</span><span>Devices</span><span class="wf-btn sm pri">+ Add</span></div>
@@ -609,15 +757,15 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   </div>
 </div></div>
 
-<h2 id="milestones">13. Build order <span class="tag proposed">proposed</span></h2>
+<h2 id="milestones">14. Build order <span class="tag proposed">proposed</span></h2>
 <p>Each milestone depends on the one before it. Each has one check that shows it is done.</p>
 <div class="tablewrap"><table>
 <thead><tr><th>#</th><th>Milestone</th><th>Contents</th><th>Done when</th></tr></thead>
 <tbody>
-<tr><td>1</td><td>Core and devices</td><td>Server, database, invites and passwords, Devices page, enroll flow, WireGuard manager, settings push, <code>outpostd status</code></td><td>Server and device ping each other on tunnel addresses. Revoke drops the tunnel.</td></tr>
+<tr><td>1</td><td>Core and devices</td><td>Server, database, invites and passwords, Devices page, enroll flow, WireGuard manager, settings push, <code>outpostd status</code>. Metrics core: sampler, 6-hour memory, hourly JSON files, device totals, device health.</td><td>Server and device ping each other on tunnel addresses. Revoke drops the tunnel. The Traffic tab shows the device total.</td></tr>
 <tr><td>2</td><td>Zones and TLS</td><td>Zones page, encrypted credentials, certificate state machine. Manual provider first, then Cloudflare and Route53. Renewal. Dashboard served over TLS.</td><td>A manual wildcard certificate issues on staging, then on production.</td></tr>
 <tr><td>3</td><td>Mappings</td><td>The device Mappings tab and form drawer. Proxy mode first. Then direct mode with SNI reading, raw forwarding and PROXY headers.</td><td>A visitor reaches a service on the device in both modes.</td></tr>
-<tr><td>4</td><td>IPv6</td><td>Automatic reservation. Attach, move and detach. The device Addresses tab and the admin Pool page. Routes, the outgoing selector (off by default), the inbound firewall (open by default). AAAA records for the zone.</td><td>A probe reaches each attached address on the device, with the correct destination.</td></tr>
+<tr><td>4</td><td>IPv6</td><td>Automatic reservation. Attach, move and detach. Revoke and release prompts. Address counters. The device Addresses tab and the admin Pool page. Routes, the outgoing selector (off by default), the inbound firewall (open by default). AAAA records for the zone.</td><td>A probe reaches each attached address on the device, with the correct destination.</td></tr>
 <tr><td>5</td><td>Hardening</td><td>WireGuard over WebSocket on port 443 for networks that block UDP. macOS and Windows support. Audit log, quotas, metrics.</td><td>A device on a UDP-blocked network connects.</td></tr>
 </tbody>
 </table></div>
@@ -631,13 +779,21 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   web/                 Vue dashboard, built into the server binary
   deploy/              systemd unit, nftables template, install.sh</code></pre>
 
-<h2 id="verify">14. How we check success</h2>
+<h2 id="verify">15. How we check success</h2>
 <h3>Unit tests</h3>
 <ul>
   <li>The certificate state machine against Pebble, a local ACME test server, with a fake DNS provider and a fake <em>Proceed</em> click. This includes two TXT values on one name and a restart in the middle of an order.</li>
   <li>SNI reading on real TLS handshakes from Go, curl and Chrome, including handshakes split over several TCP packets. The bytes that the server sends on must be identical to the bytes it read.</li>
   <li>PROXY v1 and v2 headers, including the custom fields.</li>
   <li>The address allocator never gives one address twice. It prefers never-used addresses and skips recently released ones. A move changes both peers in one step. Names are unique in a zone. Enroll tokens work once and expire.</li>
+</ul>
+<h3>Traffic and health tests</h3>
+<ul>
+  <li>Send a 100 MB file through a proxy mapping, a direct mapping and an address. Each series shows about 100 MB, in the correct direction.</li>
+  <li>Keep a direct connection open for 5 minutes. The chart shows a live rate for the full time.</li>
+  <li>Restart the server. The chart history is still there, with a gap of about one minute at most. A 24-hour chart shows data older than 6 hours from disk.</li>
+  <li><code>outpostd down</code> shows <em>Paused</em>. <code>kill -9</code> on the agent shows <em>Offline</em> after 90 seconds.</li>
+  <li>Memory stays below the limits under a 100-connection load test.</li>
 </ul>
 <h3>Integration tests</h3>
 <p>Two Linux network namespaces, one for the server and one for a device, with a real WireGuard link between them. Create a mapping through the API. Check that the agent applies it, and that <code>curl --resolve</code> gets the service's reply. Switch the mapping to direct mode. Check that <code>openssl s_client</code> shows the device's certificate, not the wildcard. With PROXY protocol on, check that nginx logs the real client address.</p>
@@ -651,7 +807,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li>After <code>outpostd down</code>, <code>systemctl stop outpostd</code>, or a crash and restart, the addresses, rules and routes are the same as before outpost was installed.</li>
 </ul>
 
-<h2 id="limits">15. Limits and risks <span class="tag risk">open</span></h2>
+<h2 id="limits">16. Limits and risks <span class="tag risk">open</span></h2>
 <ul>
   <li><strong>UDP blocked.</strong> WireGuard uses UDP. Some networks block it. Milestone 5 adds a fallback over WebSocket on port 443.</li>
   <li><strong>Small pool.</strong> Only 15 addresses are free for users. Reserved but unattached addresses use this small pool. Quotas and the 30-day flag limit this. More pools need a second provider or a larger block.</li>
@@ -675,5 +831,115 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 </ul>
 
 </main>
+<script>
+(function () {
+  // Invented example data for the wireframe: 24 h at 5-minute steps.
+  var N = 288, STEP = 300, NOW = Date.UTC(2026, 8, 28, 14, 0) / 1000;
+  var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  function series(base, amp, peakAt, noise) {
+    var out = [];
+    for (var i = 0; i < N; i++) {
+      var hour = ((NOW - (N - 1 - i) * STEP) / 3600) % 24;
+      var day = Math.max(0, Math.cos((hour - peakAt) / 24 * 2 * Math.PI));
+      out.push(Math.max(0, base + amp * day * day + noise * (rnd() - 0.5) * (0.4 + day)));
+    }
+    return out;
+  }
+  var down = series(120e3, 1.6e6, 15, 700e3), up = series(40e3, 260e3, 15, 160e3);
+  // Paused ~1 h in the morning, offline 30 min at night: rates go to 0 there.
+  var paused = [144, 156], offline = [40, 46];
+  for (var i = 0; i < N; i++) if ((i >= paused[0] && i < paused[1]) || (i >= offline[0] && i < offline[1])) { down[i] = 0; up[i] = 0; }
+
+  function fmtRate(v) { return v >= 1e6 ? (v / 1e6).toFixed(1) + ' MB/s' : Math.round(v / 1e3) + ' KB/s'; }
+  function fmtBytes(v) { return v >= 1e9 ? (v / 1e9).toFixed(1) + ' GB' : v >= 1e6 ? Math.round(v / 1e6) + ' MB' : Math.round(v / 1e3) + ' KB'; }
+  function fmtTime(t) { var d = new Date(t * 1000); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  function path(vals, x, y) { return vals.map(function (v, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(''); }
+  var css = getComputedStyle(document.querySelector('.wf-main'));
+  var C_DOWN = css.getPropertyValue('--s-down').trim() || '#2a78d6', C_UP = css.getPropertyValue('--s-up').trim() || '#eb6834';
+
+  // Main chart
+  var svg = document.getElementById('vizMain'); if (!svg) return;
+  var W = 540, H = 190, L = 44, R = 70, T = 10, B = 22;
+  var max = Math.max.apply(null, down.concat(up)), yMax = Math.ceil(max / 1e6) * 1e6;
+  var x = function (i) { return L + i / (N - 1) * (W - L - R); }, y = function (v) { return T + (1 - v / yMax) * (H - T - B); };
+  for (var t = 0; t <= yMax; t += 1e6) {
+    el('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: t ? '#e1e0d9' : '#c3c2b7', 'stroke-width': 1 }, svg);
+    el('text', { x: L - 6, y: y(t) + 3.5, 'text-anchor': 'end' }, svg).textContent = t ? (t / 1e6) + ' MB/s' : '0';
+  }
+  [0, 72, 144, 216, 287].forEach(function (i) {
+    el('text', { x: x(i), y: H - 6, 'text-anchor': i === 0 ? 'start' : i === 287 ? 'end' : 'middle' }, svg).textContent = i === 287 ? 'now' : fmtTime(Math.floor((NOW - (N - 1 - i) * STEP) / 3600) * 3600);
+  });
+  el('path', { d: path(down, x, y), fill: 'none', stroke: C_DOWN, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+  el('path', { d: path(up, x, y), fill: 'none', stroke: C_UP, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+  // Direct end labels (text in ink, identity from the line beside it)
+  var ld = el('text', { x: W - R + 6, y: y(down[N - 1]) + 3.5 }, svg); ld.textContent = '↓ ' + fmtRate(down[N - 1]); ld.style.fill = '#52514e';
+  var lu = el('text', { x: W - R + 6, y: Math.max(y(up[N - 1]) + 3.5, y(down[N - 1]) + 16) }, svg); lu.textContent = '↑ ' + fmtRate(up[N - 1]); lu.style.fill = '#52514e';
+  // Hover layer
+  var cross = el('line', { y1: T, y2: H - B, stroke: '#898781', 'stroke-width': 1, visibility: 'hidden' }, svg);
+  var dd = el('circle', { r: 4, fill: C_DOWN, stroke: '#fff', 'stroke-width': 2, visibility: 'hidden' }, svg);
+  var du = el('circle', { r: 4, fill: C_UP, stroke: '#fff', 'stroke-width': 2, visibility: 'hidden' }, svg);
+  var hit = el('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent' }, svg);
+  var tip = document.getElementById('vizTip');
+  function show(ev) {
+    var r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * W;
+    var i = Math.max(0, Math.min(N - 1, Math.round((px - L) / (W - L - R) * (N - 1))));
+    var cx = x(i);
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx);
+    dd.setAttribute('cx', cx); dd.setAttribute('cy', y(down[i])); du.setAttribute('cx', cx); du.setAttribute('cy', y(up[i]));
+    [cross, dd, du].forEach(function (e) { e.setAttribute('visibility', 'visible'); });
+    tip.innerHTML = '<b>' + fmtTime(NOW - (N - 1 - i) * STEP) + '</b><br><i class="k" style="border-color:' + C_DOWN + '"></i>↓ ' + fmtRate(down[i]) +
+      '<br><i class="k" style="border-color:' + C_UP + '"></i>↑ ' + fmtRate(up[i]);
+    tip.hidden = false;
+    var left = cx / W * r.width; tip.style.left = (left > r.width * 0.6 ? left - tip.offsetWidth - 10 : left + 10) + 'px';
+  }
+  function hide() { tip.hidden = true; [cross, dd, du].forEach(function (e) { e.setAttribute('visibility', 'hidden'); }); }
+  hit.addEventListener('pointermove', show); hit.addEventListener('pointerdown', show); hit.addEventListener('pointerleave', hide);
+
+  // Status bar: 96 cells of 15 minutes
+  var sb = document.getElementById('vizStatus');
+  for (var c = 0; c < 96; c++) {
+    var s = document.createElement('span'), i0 = c * 3;
+    if (i0 >= paused[0] && i0 < paused[1]) s.className = 'p'; else if (i0 >= offline[0] && i0 < offline[1]) s.className = 'o';
+    s.title = fmtTime(NOW - (N - 1 - i0) * STEP) + ' · ' + (s.className === 'p' ? 'Paused' : s.className === 'o' ? 'Offline' : 'Online');
+    sb.appendChild(s);
+  }
+
+  // Small multiples: one card per address and mapping, each with its own scale
+  var cards = [
+    { name: '2001:db8::105', kind: 'address', share: 0.62, upShare: 0.3 },
+    { name: '2001:db8::106', kind: 'address', share: 0.05, upShare: 0.1 },
+    { name: 'app.box.example.com', kind: 'proxy · 4,210 requests · 12 5xx', share: 0.25, upShare: 0.45 },
+    { name: 'git.box.example.com', kind: 'direct', share: 0.08, upShare: 0.15 }
+  ];
+  var grid = document.getElementById('vizSmall');
+  cards.forEach(function (cd) {
+    var d2 = down.map(function (v) { return v * cd.share * (0.7 + 0.6 * rnd()); }), u2 = up.map(function (v) { return v * cd.upShare * (0.7 + 0.6 * rnd()); });
+    var tot = function (a) { return a.reduce(function (s, v) { return s + v * STEP; }, 0); };
+    var box = document.createElement('div'); box.className = 'viz-card';
+    box.innerHTML = '<div class="h"><b class="wf-mono">' + cd.name + '</b></div><div class="t">' + cd.kind + '</div><div class="t">↓ ' + fmtBytes(tot(d2)) + ' · ↑ ' + fmtBytes(tot(u2)) + ' · peak ↓ ' + fmtRate(Math.max.apply(null, d2)) + '</div>';
+    var s2 = el('svg', { viewBox: '0 0 240 46', role: 'img', 'aria-label': 'Traffic of ' + cd.name + ' over 24 hours' });
+    var m2 = Math.max.apply(null, d2.concat(u2)) || 1;
+    var x2 = function (i) { return 1 + i / (N - 1) * 238; }, y2 = function (v) { return 44 - v / m2 * 40; };
+    el('line', { x1: 1, x2: 239, y1: 44, y2: 44, stroke: '#c3c2b7', 'stroke-width': 1 }, s2);
+    el('path', { d: path(d2, x2, y2), fill: 'none', stroke: C_DOWN, 'stroke-width': 1.5, 'stroke-linejoin': 'round' }, s2);
+    el('path', { d: path(u2, x2, y2), fill: 'none', stroke: C_UP, 'stroke-width': 1.5, 'stroke-linejoin': 'round' }, s2);
+    box.appendChild(s2); grid.appendChild(box);
+  });
+
+  var T24 = function (a) { return a.reduce(function (s, v) { return s + v * STEP; }, 0); };
+  document.getElementById('totDown').textContent = '↓ ' + fmtBytes(T24(down)); document.getElementById('totUp').textContent = '↑ ' + fmtBytes(T24(up));
+  document.getElementById('nowRate').textContent = '↓ ' + fmtRate(down[N - 1]) + ' · ↑ ' + fmtRate(up[N - 1]) + ' now';
+  // Table view: hourly totals of the device series
+  var tb = document.querySelector('#vizTable tbody');
+  for (var h = 0; h < 24; h++) {
+    var a = 0, b = 0; for (var j = h * 12; j < h * 12 + 12; j++) { a += down[j] * STEP; b += up[j] * STEP; }
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + fmtTime(NOW - (N - 1 - h * 12) * STEP) + '</td><td>' + fmtBytes(a) + '</td><td>' + fmtBytes(b) + '</td>';
+    tb.appendChild(tr);
+  }
+})();
+</script>
 </body>
 </html>
