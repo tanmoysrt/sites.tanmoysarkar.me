@@ -155,6 +155,9 @@
   .dev-card .m { font-size: 11.5px; margin-top: 2px; }
   .dev-card svg.spark { width: 100%; height: auto; display: block; margin: 4px 0; }
   .chk { width: 14px; height: 14px; border: 1.5px solid #b6bac1; border-radius: 4px; flex: none; align-self: flex-start; margin-top: 2px; }
+  .shot { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .shots-phone { display: flex; gap: 16px; flex-wrap: wrap; }
+  .shots-phone img { width: 260px; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 16px; }
 </style>
 </head>
 <body>
@@ -503,11 +506,11 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li><strong>Server health (admins).</strong> Certificate expiry, the DNS check, whether <code>wg0</code> is up, free disk, pool use, and the time of the last metrics write.</li>
 </ul>
 
-<h3>Revoke and release</h3>
+<h3>Delete and release</h3>
 <p>We keep these actions simple. There is no "keep reserved" choice.</p>
 <ul>
-  <li><strong>Revoke a device.</strong> The dialog lists the addresses that the server will release and the mappings that it will delete. The user types the device name to confirm.</li>
-  <li><strong>Release one address.</strong> A plain confirmation.</li>
+  <li><strong>Delete a device.</strong> Admins only. The dialog says that the server releases its addresses and deletes its mappings. The admin types the device name to confirm. A user can disable their device instead.</li>
+  <li><strong>Release one address.</strong> A plain confirmation. If it was the default outgoing address, outgoing IPv6 goes back to the device's own route.</li>
   <li><strong>Delete a mapping.</strong> A plain confirmation. The name becomes free.</li>
 </ul>
 
@@ -516,293 +519,68 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <ul>
   <li><strong>Data.</strong> <code>@tanstack/vue-query</code> loads and caches data. One server-sent events stream tells the page when data changes, for example when a device goes online.</li>
   <li><strong>Types.</strong> <code>tygo</code> makes TypeScript types from the Go API types, so the front end and the back end stay the same.</li>
-  <li><strong>Access.</strong> The server enforces all rules. A user sees only their own devices, addresses and mappings. Only admins see the full address grid with owners.</li>
+  <li><strong>Access.</strong> The server enforces all rules. A user sees only their own devices, addresses and mappings. Only admins see all devices and their addresses.</li>
   <li><strong>Security.</strong> User services run on sibling names under the same domain, so SameSite rules do not isolate the dashboard from them. The session cookie uses the <code>__Host-</code> prefix, so no sibling name can set or replace it. The CSRF token is stored on the server with the session. There is a strict content security policy, and the dashboard cannot be framed.</li>
 </ul>
 <div class="tablewrap"><table>
 <thead><tr><th>Page</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td>Home (Devices)</td><td>A card for each device: state, live rate, a 1-hour sparkline, mapping names. An attention strip that shows only when something needs action. Search (⌘K). Top traffic in the last 24 hours. <em>Add device</em>. A setup checklist for a new user.</td></tr>
-<tr><td>Device: Traffic tab</td><td>A 1 h / 6 h / 24 h switch. A rate chart for the device total, the device status bar, and a small chart for each address and each mapping. Totals for the range.</td></tr>
-<tr><td>Device: Addresses tab</td><td><em>Outgoing IPv6</em> selector (default <em>None</em>). Add and release addresses. An <em>allow inbound</em> switch for each address. Each change shows a state: pending, applied or error.</td></tr>
-<tr><td>Device: Mappings tab</td><td>The mappings for this device. A drawer with the form: name and zone, mode switch, proxy fields or direct fields.</td></tr>
-<tr><td>Device: Settings tab</td><td>Rename, install command, revoke.</td></tr>
-<tr><td>Admin: users</td><td>Users, roles, quotas. Invite links.</td></tr>
-<tr><td>Admin: all devices</td><td>One list of all devices: owner, state, ↓ and ↑ totals for 24 hours, this month or all time, and agent version. Filters, sorting and a total row.</td></tr>
-<tr><td>Admin: zones</td><td>One page for each zone, with no settings dialog: the certificate (<em>Renew now</em>, staging), the current issue with the manual TXT steps, the DNS provider and its credentials (<em>Test</em>, <em>Save</em>), and the DNS check.</td></tr>
-<tr><td>Admin: pool</td><td>The address grid with owners: free, in use, reserved for the server. Address pools.</td></tr>
+<tr><td>Home (Devices)</td><td>A card for each device: name, state (Online or Offline), a 12-hour sparkline and the 12-hour ↓ and ↑ totals. A dashed card adds a device. An alert shows the next setup step for a new user. A strip shows only real problems. Search (⌘K). Top traffic in the last 24 hours.</td></tr>
+<tr><td>Device page</td><td>The name, the state and a ⋯ menu are in the top bar. The menu has <em>Disable</em> or <em>Enable</em>. Admins also get <em>Rename</em>, <em>Get command</em> and <em>Delete device</em>. There is no Settings tab.</td></tr>
+<tr><td>Device: Traffic tab</td><td>A 1 h / 6 h / 24 h switch. A rate chart for the device total, a 24-hour status strip, and a small chart for each address and each mapping. Totals for the range.</td></tr>
+<tr><td>Device: Addresses tab</td><td>A list: address, status (Applied, Applying or Error), default, ↓ and ↑. A click on an address copies it. The ⋯ menu has <em>Set as default</em> or <em>Remove default</em>, and <em>Release</em>. <em>Add address</em> asks for a confirmation. Each address allows traffic in both directions.</td></tr>
+<tr><td>Device: Mappings tab</td><td>A list: name, target, ↓ and ↑. A click on a name copies it. The ⋯ menu has <em>Edit</em> and <em>Delete</em>. The form is a dialog: name and zone, <em>Tunnelling mode</em> (TLS termination at edge, or TLS passthrough), target, headers and a <em>Redirect HTTP to HTTPS</em> switch. To stop a mapping, delete it.</td></tr>
+<tr><td>Account</td><td>Name and email with <em>Change password</em> on the same line. The signed-in browsers, each with <em>Sign out</em> in its ⋯ menu.</td></tr>
+<tr><td>Admin: users</td><td>A list of users (role, IPv6 and mapping quotas) with <em>Edit</em>, <em>Disable</em> and <em>Delete</em> in the ⋯ menu. Open invites, with <em>Copy link</em> and <em>Delete</em>. There is no device limit.</td></tr>
+<tr><td>Admin: all devices</td><td>One list of all devices: owner, state, ↓ and ↑ totals for 24 hours, this month or all time, and agent version. Search, owner, state and sort filters, and a total row.</td></tr>
+<tr><td>Admin: zones</td><td>A list of zones. The zone page shows the certificate end date, an alert when a renewal needs action, and a list of DNS records. <em>DNS provider</em> and the renewal steps open in dialogs.</td></tr>
+<tr><td>Admin: activity</td><td>Who changed what, and when.</td></tr>
 </tbody>
 </table></div>
 
-<h2 id="layouts">13. Proposed screen layouts <span class="tag proposed">proposed</span></h2>
-<p>These wireframes show the layout and the content of the main screens. They do not show the final colours or spacing. The final screens use frappe-ui components: a sidebar, list views, tabs, form controls, drawers, dialogs and badges. All names and addresses are example data.</p>
-<p>The dashboard is <strong>device-first</strong>. Almost every setting belongs to a device: addresses belong to a device, each mapping sends traffic to a device, and <em>Outgoing IPv6</em> is a device setting. So the sidebar has only <em>Devices</em>, which is also the home page, plus an Admin group. Addresses and mappings are tabs on each device page. The main area has a title row with one main action on the right.</p>
+<h2 id="layouts">13. Screen layouts <span class="tag tested">built</span></h2>
+<p>These screenshots show the dashboard as it is built. They use the demo data, so all names and addresses are example data. The dashboard uses frappe-ui 1.0 components: a sidebar, lists, tabs, dialogs, badges and form controls.</p>
+<p>The dashboard is <strong>device-first</strong>. Addresses and mappings are tabs on each device page. Only admins get the sidebar. Other users get a top bar with the logo and a user menu. An action on a list row is in the row's ⋯ menu.</p>
 
-<h3>13.1 Home: device cards</h3>
-<p>The home page is the device list. Each device is a card with its state, its live rate, a 1-hour sparkline and its mapping names. Paused and offline devices go to the end. A click on a card opens the device page.</p>
-<p>The attention strip at the top shows only when something needs action. Here it shows one device that has been offline for 3 days. When nothing needs action, the strip is not there. The search box (⌘K) finds hostnames, addresses and device names.</p>
-<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the home page. An attention strip says that mac-mini has been offline for 3 days, with an Open button. A search box and an Add device button are in the title row. Three device cards: laptop online with a rate sparkline, home-server paused, mac-mini offline. Below: Top traffic in the last 24 hours.">
-  <div class="wf-side">
-    <div class="wf-brand">outpost</div>
-    <div class="wf-nav on">Devices</div>
-    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">All devices</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
-    <div class="wf-user">alice ▾</div>
-  </div>
-  <div class="wf-main">
-    <div class="wf-head"><div class="wf-title">Devices</div><span style="display:flex;gap:8px;align-items:center"><span class="wf-input" style="min-width:190px">⌕ <span class="wf-muted">Search… ⌘K</span></span><span class="wf-btn pri">+ Add device</span></span></div>
-    <div class="wf-attn"><span class="wf-dot off"></span><span><b>mac-mini</b> has been offline for 3 days.</span><span class="wf-btn sm" style="margin-left:auto">Open</span><span class="wf-muted">✕</span></div>
-    <div class="wf-cards3">
-      <div class="dev-card"><div class="h"><b>laptop</b><span class="wf-pill ok">online</span></div><div class="wf-mono r">↓ 1.9 MB/s · ↑ 221 KB/s</div><svg class="spark" data-seed="11" data-scale="1" viewBox="0 0 160 34" role="img" aria-label="laptop traffic, last hour"></svg><div class="wf-muted">2 addresses · 3 mappings</div><div class="m">app · api · git</div></div>
-      <div class="dev-card"><div class="h"><b>home-server</b><span class="wf-pill warn">paused</span></div><div class="wf-mono r wf-muted">paused on device, 2 h ago</div><svg class="spark" data-seed="5" data-scale="0.4" data-cut="40" viewBox="0 0 160 34" role="img" aria-label="home-server traffic, last hour, zero since the pause"></svg><div class="wf-muted">0 addresses · 2 mappings</div><div class="m">nas · media</div></div>
-      <div class="dev-card off"><div class="h"><b>mac-mini</b><span class="wf-pill">offline</span></div><div class="wf-mono r wf-muted">last seen 3 d ago</div><svg class="spark" data-seed="2" data-scale="0" viewBox="0 0 160 34" role="img" aria-label="mac-mini, no traffic"></svg><div class="wf-muted">0 addresses · 0 mappings</div><div class="m wf-muted">no mappings</div></div>
-    </div>
-    <div class="wf-box" style="margin-top:12px">
-      <h4>Top traffic, 24 h</h4>
-      <div class="wf-row"><span style="flex:1"><b>2001:db8::105</b> <span class="wf-muted">laptop</span></span><span class="wf-mono">↓ 27 GB · ↑ 2.7 GB</span></div>
-      <div class="wf-row"><span style="flex:1"><b>app</b>.box.example.com <span class="wf-muted">laptop</span></span><span class="wf-mono">↓ 11 GB · ↑ 3.9 GB</span></div>
-      <div class="wf-row"><span style="flex:1"><b>nas</b>.box.example.com <span class="wf-muted">home-server</span></span><span class="wf-mono">↓ 4.1 GB · ↑ 9.8 GB</span></div>
-    </div>
-  </div>
-</div></div>
+<h3>13.1 Home</h3>
+<figure><img class="shot" src="img/home.png" alt="The home page. Two device cards with a sparkline and 12-hour totals, a dashed Add device card, and the top traffic list." loading="lazy" width="1800" height="1140"><figcaption>Figure 4. Home: one card for each device, then the top traffic in the last 24 hours.</figcaption></figure>
 
-<h3>13.2 Setup checklist for a new user</h3>
-<p>A new user has no devices yet. So the home page shows three steps instead of the cards. Each step ticks itself when the user completes it. The Add device dialog opens from the first step.</p>
-<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the home page for a new user. A checklist with three steps: Add a device, Create a mapping, Add an IPv6 address. The Add device dialog is open on the install step, with the install command, a copy button and a 14 minute countdown.">
-  <div class="wf-side">
-    <div class="wf-brand">outpost</div>
-    <div class="wf-nav on">Devices</div>
-    <div class="wf-user">bob ▾</div>
-  </div>
-  <div class="wf-main" style="min-height:320px">
-    <div class="wf-head"><div class="wf-title">Get started</div></div>
-    <div class="wf-box" style="width:70%">
-      <div class="wf-row"><span class="chk"></span><span style="flex:1"><b>1. Add a device</b><br><span class="wf-muted">Install the agent on a machine.</span></span><span class="wf-btn sm pri">Add device</span></div>
-      <div class="wf-row"><span class="chk"></span><span style="flex:1"><b>2. Create a mapping</b><br><span class="wf-muted">Give a local service a public name.</span></span></div>
-      <div class="wf-row"><span class="chk"></span><span style="flex:1"><b>3. Add an IPv6 address</b> <span class="wf-muted">(optional)</span><br><span class="wf-muted">Give the device its own public address.</span></span></div>
-    </div>
-  </div>
-  <div class="wf-overlay" style="inset:0 0 0 168px"><div class="wf-dialog">
-    <div class="wf-head" style="margin-bottom:6px"><div class="wf-title">Add device</div><span class="wf-muted">✕</span></div>
-    <div class="wf-steps"><div class="wf-step done">Name</div><div class="wf-step cur">Install</div><div class="wf-step">Connected</div></div>
-    <div class="wf-field"><label>Run this on <b>work-vm</b> as root</label>
-      <div class="wf-code"><span>curl -fsSL https://box.example.com/install.sh | sudo sh -s -- 7QK2-MX9P-…</span><span class="wf-btn sm">Copy</span></div>
-      <div class="wf-help">The token works once. It expires in <b>14:32</b>.</div></div>
-    <div class="wf-row" style="padding:8px 0 0;border:0"><span class="wf-dot off"></span><span class="wf-muted">Waiting for the device to connect…</span><span class="wf-btn sm" style="margin-left:auto">Cancel</span></div>
-  </div></div>
-</div></div>
+<h3>13.2 Device page: Traffic tab</h3>
+<figure><img class="shot" src="img/traffic.png" alt="The Traffic tab. A range switch, a large rate chart, a 24-hour status strip and small charts for each address and mapping." loading="lazy" width="1800" height="1140"><figcaption>Figure 5. Traffic: the device total, the status strip, and one chart for each address and mapping.</figcaption></figure>
 
-<h3>13.3 Device page: Traffic tab</h3>
-<p>The Traffic tab opens first. The large chart shows the device total as two lines: ↓ to device and ↑ from device. Move the pointer over the chart to read one point. The status bar below shows the device state over the last 24 hours. Smaller charts follow, one for each address and each mapping. The data in this wireframe is invented.</p>
-<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the laptop device page on the Traffic tab, with a 24 hour rate chart, a status bar and small charts for each address and mapping.">
-  <div class="wf-side">
-    <div class="wf-brand">outpost</div>
-    <div class="wf-nav on">Devices</div>
-    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">All devices</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
-    <div class="wf-user">alice ▾</div>
-  </div>
-  <div class="wf-main">
-    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-muted wf-mono" id="nowRate">↓ 1.4 MB/s · ↑ 210 KB/s now</span></div>
-    <div class="wf-tabs"><span class="on">Traffic</span><span>Addresses <span class="wf-muted">2</span></span><span>Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
-    <div class="wf-head" style="margin:12px 0 8px">
-      <span class="wf-seg"><span>1 h</span><span>6 h</span><span class="on">24 h</span></span>
-      <span class="wf-muted">Last 24 h: <b style="color:var(--ink)" id="totDown">↓ 3.4 GB</b> · <b style="color:var(--ink)" id="totUp">↑ 620 MB</b></span>
-    </div>
-    <div class="wf-box viz" style="padding:10px 12px 6px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <b>Device total, rate</b>
-        <span class="viz-legend"><span><i class="k k-down"></i>↓ to device</span><span><i class="k k-up"></i>↑ from device</span></span>
-      </div>
-      <div class="viz-plot"><svg id="vizMain" viewBox="0 0 540 190" role="img" aria-label="Line chart of the laptop's traffic rate over 24 hours. Download peaks near 2 MB per second in the afternoon. Upload stays below 0.5 MB per second."></svg><div class="viz-tip" id="vizTip" hidden></div></div>
-    </div>
-    <div style="margin:12px 0 4px;display:flex;justify-content:space-between;align-items:center">
-      <b>Device status, 24 h</b>
-      <span class="viz-legend"><span><i class="sq sq-on"></i>Online</span><span><i class="sq sq-pause"></i>Paused</span><span><i class="sq sq-off"></i>Offline</span></span>
-    </div>
-    <div class="viz-status" id="vizStatus" role="img" aria-label="Status bar for 24 hours: online most of the time, paused for about one hour in the morning, and offline for 30 minutes at night."></div>
-    <div class="wf-muted" style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px"><span>24 h ago</span><span>now</span></div>
-    <div class="viz-grid" id="vizSmall"></div>
-    <details class="viz-table"><summary>Show the device total as a table</summary><div class="tablewrap"><table id="vizTable"><thead><tr><th>Hour</th><th>↓ to device</th><th>↑ from device</th></tr></thead><tbody></tbody></table></div></details>
-  </div>
-</div></div>
+<h3>13.3 Device page: Addresses tab</h3>
+<figure><img class="shot" src="img/addresses.png" alt="The Addresses tab. A list of two IPv6 addresses with status, default, rates and a row menu." loading="lazy" width="1800" height="1140"><figcaption>Figure 6. Addresses: a click on an address copies it. The ⋯ menu sets or removes the default, or releases the address.</figcaption></figure>
 
-<h3>13.4 Device page: Addresses tab</h3>
-<p>The <em>Outgoing IPv6</em> selector sits at the top of the tab, with <em>None</em> as the default. Each address has an <em>allow inbound</em> switch, which is on by default, and a <em>Release</em> button. <em>Add address</em> gets the next free address automatically; the user cannot choose it.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Addresses tab. The header shows online status, agent version and traffic. Tabs: Traffic, Addresses, Mappings, Settings. An Outgoing IPv6 selector is set to None. Two addresses are listed with allow inbound switches, state pills and Release buttons. An Add address button is at the top right.">
-  <div class="wf-side">
-    <div class="wf-brand">outpost</div>
-    <div class="wf-nav on">Devices</div>
-    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">All devices</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
-    <div class="wf-user">alice ▾</div>
-  </div>
-  <div class="wf-main">
-    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-muted">0.4.1 · linux · handshake 12 s ago</span></div>
-    <div class="wf-tabs"><span>Traffic</span><span class="on">Addresses <span class="wf-muted">2</span></span><span>Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
-    <div class="wf-head" style="margin:12px 0 10px">
-      <span>Outgoing IPv6 <span class="wf-input" style="min-width:150px">None ▾</span> <span class="wf-muted">outpost does not change outgoing traffic</span></span>
-      <span class="wf-btn pri">+ Add address</span>
-    </div>
-    <div class="wf-box">
-      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::105</span><span>Allow inbound <span class="wf-sw"></span></span><span class="wf-pill ok">applied</span><span style="margin-left:auto"><span class="wf-btn sm">Release</span></span></div>
-      <div class="wf-row"><span class="wf-mono" style="width:130px">2001:db8::106</span><span>Allow inbound <span class="wf-sw off"></span></span><span class="wf-pill blue">pending…</span><span style="margin-left:auto"><span class="wf-btn sm">Release</span></span></div>
-    </div>
-    <div class="wf-help" style="margin-top:6px">1 address left in your quota.</div>
-  </div>
-</div></div>
+<h3>13.4 Device page: Mappings tab</h3>
+<figure><img class="shot" src="img/mappings.png" alt="The Add mapping dialog over the Mappings tab, with name, zone, tunnelling mode, target, host header and a redirect switch." loading="lazy" width="1800" height="1140"><figcaption>Figure 7. The mapping form is a dialog. The tunnelling mode is TLS termination at edge or TLS passthrough.</figcaption></figure>
 
-<h3>13.5 Device page: Mappings tab and form drawer</h3>
-<p>The tab lists the mappings that send traffic to this device. <em>New mapping</em> opens a drawer on the right, so the list stays visible. The device is already set and does not change. The name is one label plus a zone. The server checks the name only on save; if another mapping uses it, the field shows an error. The mode switch changes the fields below it. The drawer shows proxy mode; a note lists the fields for direct mode.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Mappings tab. A table lists three mappings with mode and current traffic rate. A drawer on the right shows the New mapping form: name alice in zone box.example.com; mode switch set to Proxy; target URL, host override, extra headers and port 80 behaviour; a note lists the direct mode fields.">
-  <div class="wf-side">
-    <div class="wf-brand">outpost</div>
-    <div class="wf-nav on">Devices</div>
-    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">All devices</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
-    <div class="wf-user">alice ▾</div>
-  </div>
-  <div class="wf-main" style="min-height:440px">
-    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-btn pri">+ New mapping</span></div>
-    <div class="wf-tabs"><span>Traffic</span><span>Addresses <span class="wf-muted">2</span></span><span class="on">Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
-    <div class="wf-box" style="margin-top:12px;width:48%"><table>
-      <thead><tr><th>Host</th><th>Mode</th><th>↓ / ↑</th></tr></thead>
-      <tbody>
-      <tr><td><b>app</b>.box…</td><td><span class="wf-pill">proxy</span></td><td class="wf-mono">1.2 / 0.1 MB/s</td></tr>
-      <tr><td><b>api</b>.box…</td><td><span class="wf-pill">proxy</span></td><td class="wf-mono">40 / 12 KB/s</td></tr>
-      <tr><td><b>git</b>.box…</td><td><span class="wf-pill blue">direct</span></td><td class="wf-mono">0 / 0</td></tr>
-      </tbody></table></div>
-    <div class="wf-drawer">
-      <div class="wf-head" style="margin-bottom:10px"><div class="wf-title">New mapping</div><span class="wf-muted">✕</span></div>
-      <div class="wf-field"><label>Name</label><span class="wf-input" style="min-width:80px">alice</span> <span class="wf-muted">.</span> <span class="wf-input" style="min-width:120px">box.example.com ▾</span></div>
-      <div class="wf-field"><label>Mode</label><span class="wf-seg"><span class="on">Proxy</span><span>Direct</span></span></div>
-      <div class="wf-field"><label>Target</label><span class="wf-input full wf-mono">http://localhost:8080</span></div>
-      <div class="wf-field"><label>Host override <span class="wf-muted" style="font-weight:400">(optional)</span></label><span class="wf-input full wf-mono">myapp.local</span></div>
-      <div class="wf-field"><label>Extra headers</label>
-        <div style="display:flex;gap:6px;margin-bottom:4px"><span class="wf-input wf-mono" style="min-width:0;flex:1">X-Env</span><span class="wf-input wf-mono" style="min-width:0;flex:1">staging</span><span class="wf-muted">✕</span></div>
-        <span class="wf-btn sm">+ Add header</span></div>
-      <div class="wf-field"><label>Port 80</label><span class="wf-seg"><span class="on">Serve</span><span>Redirect to HTTPS</span></span></div>
-      <div class="wf-help" style="border-top:1px dashed var(--line);padding-top:8px">In <b>Direct</b> mode these fields show instead: TLS target (the service needs its own certificate), optional HTTP target, PROXY protocol Off / v1 / v2.</div>
-      <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:10px"><span class="wf-btn">Cancel</span><span class="wf-btn pri">Create</span></div>
-    </div>
-  </div>
-</div></div>
+<h3>13.5 Admin: All devices</h3>
+<figure><img class="shot" src="img/all-devices.png" alt="The All devices list with range, search and filters, and a total row." loading="lazy" width="1800" height="1140"><figcaption>Figure 8. All devices: one list with filters and a total row. A row opens the device page.</figcaption></figure>
 
-<h3>13.6 Revoke dialog</h3>
-<p>The dialog lists what the server will remove: the addresses go back to the pool and the mappings are deleted. The user must type the device name before the <em>Revoke</em> button works.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Revoke laptop dialog. It lists two addresses that will be released and three mappings that will be deleted. A text field asks the user to type laptop to confirm. The Revoke device button is disabled.">
-  <div class="wf-side">
-    <div class="wf-brand">outpost</div>
-    <div class="wf-nav on">Devices</div>
-    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">All devices</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
-    <div class="wf-user">alice ▾</div>
-  </div>
-  <div class="wf-main" style="min-height:360px">
-    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop</div></div>
-    <div class="wf-tabs"><span>Traffic</span><span>Addresses</span><span>Mappings</span><span class="on">Settings</span></div>
-  </div>
-  <div class="wf-overlay"><div class="wf-dialog" style="width:430px">
-    <div class="wf-head" style="margin-bottom:4px"><div class="wf-title">Revoke laptop</div><span class="wf-muted">✕</span></div>
-    <div class="wf-help" style="margin-bottom:10px">The tunnel closes at once. This cannot be undone.</div>
-    <div class="wf-box" style="margin-bottom:8px">
-      <h4>Released to the pool</h4>
-      <div class="wf-row"><span class="wf-mono">2001:db8::105</span></div>
-      <div class="wf-row"><span class="wf-mono">2001:db8::106</span></div>
-    </div>
-    <div class="wf-box" style="margin-bottom:10px">
-      <h4>Deleted</h4>
-      <div class="wf-row"><span><b>app</b>.box.example.com</span></div>
-      <div class="wf-row"><span><b>api</b>.box.example.com</span></div>
-      <div class="wf-row"><span><b>git</b>.box.example.com</span></div>
-    </div>
-    <div class="wf-field"><label>Type <span class="wf-mono">laptop</span> to confirm</label><span class="wf-input full">&nbsp;</span></div>
-    <div style="display:flex;justify-content:flex-end;gap:6px"><span class="wf-btn">Cancel</span><span class="wf-btn" style="background:#b42318;border-color:#b42318;color:#fff;opacity:.45">Revoke device</span></div>
-  </div></div>
-</div></div>
+<h3>13.6 Admin: Users</h3>
+<figure><img class="shot" src="img/users.png" alt="The Users list with roles, quotas and row menus, and the open invites." loading="lazy" width="1800" height="1140"><figcaption>Figure 9. Users and invites. Edit, Disable and Delete are in the row menu.</figcaption></figure>
 
-<h3>13.7 Admin: All devices</h3>
-<p>Admins see every device in one list. The range switch sets the ↓ and ↑ columns: the last 24 hours, this month or all time. The filters are in one row above the list. Every column can be sorted; the default is by traffic. A total row stays at the bottom. A click on a row opens the device page. The list is small on purpose; we add columns later only when we need them.</p>
-<div class="wfwrap"><div class="wf" role="group" aria-label="Wireframe of the admin All devices page. A range switch is set to 24 hours. Filters for owner, state and a search box. A table of four devices with owner, state with time since the last handshake, download total, upload total and agent version, and a total row.">
-  <div class="wf-side">
-    <div class="wf-brand">outpost</div>
-    <div class="wf-nav">Devices</div>
-    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav on">All devices</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
-    <div class="wf-user">admin ▾</div>
-  </div>
-  <div class="wf-main">
-    <div class="wf-head"><div class="wf-title">All devices <span class="wf-crumb">· 4</span></div><span class="wf-seg"><span class="on">24 h</span><span>This month</span><span>All time</span></span></div>
-    <div style="display:flex;gap:8px;margin-bottom:10px"><span class="wf-input" style="min-width:130px">Owner: all ▾</span><span class="wf-input" style="min-width:120px">State: all ▾</span><span class="wf-input" style="min-width:180px">⌕ <span class="wf-muted">Search devices</span></span></div>
-    <div class="wf-box"><table>
-      <thead><tr><th>Device</th><th>Owner</th><th>State</th><th style="text-align:right">↓ to device ▾</th><th style="text-align:right">↑ from device</th><th>Agent</th></tr></thead>
-      <tbody>
-      <tr><td><b>laptop</b></td><td>alice</td><td><span class="wf-dot"></span>Online <span class="wf-muted">· 12 s</span></td><td class="wf-mono" style="text-align:right">44.0 GB</td><td class="wf-mono" style="text-align:right">8.8 GB</td><td class="wf-mono">0.4.1</td></tr>
-      <tr><td><b>home-server</b></td><td>bob</td><td><span class="wf-dot pause"></span>Paused <span class="wf-muted">· 2 h</span></td><td class="wf-mono" style="text-align:right">12.1 GB</td><td class="wf-mono" style="text-align:right">30.5 GB</td><td class="wf-mono">0.4.1</td></tr>
-      <tr><td><b>work-vm</b></td><td>alice</td><td><span class="wf-dot"></span>Online <span class="wf-muted">· 8 s</span></td><td class="wf-mono" style="text-align:right">3.1 GB</td><td class="wf-mono" style="text-align:right">0.4 GB</td><td class="wf-mono">0.4.0</td></tr>
-      <tr><td><b>mac-mini</b></td><td>bob</td><td><span class="wf-dot off"></span>Offline <span class="wf-muted">· 3 d</span></td><td class="wf-mono" style="text-align:right">0</td><td class="wf-mono" style="text-align:right">0</td><td class="wf-mono">0.4.0</td></tr>
-      <tr style="background:#fafafa"><td><b>Total</b></td><td></td><td></td><td class="wf-mono" style="text-align:right"><b>59.2 GB</b></td><td class="wf-mono" style="text-align:right"><b>39.7 GB</b></td><td></td></tr>
-      </tbody></table></div>
-  </div>
-</div></div>
+<h3>13.7 Zone page</h3>
+<figure><img class="shot" src="img/zone.png" alt="The zone page. An alert says the renewal waits for DNS records. The certificate end date, and a list of DNS records." loading="lazy" width="1800" height="1140"><figcaption>Figure 10. The zone page shows only what needs attention, the certificate end date and the DNS records.</figcaption></figure>
+<figure><img class="shot" src="img/zone-renewal.png" alt="The renewal dialog with the step, the two TXT records, Check DNS and Proceed." loading="lazy" width="1800" height="1140"><figcaption>Figure 11. The renewal dialog. For manual DNS it shows the two TXT records. Proceed is available when both are found.</figcaption></figure>
 
-<h3>13.8 Zone page</h3>
-<p>Everything about a zone is on one page, with no settings dialog. The sections go from top to bottom: the certificate, the current issue (only while an issue or renewal runs), the DNS provider, and the DNS check. This example uses manual DNS. The admin copies both TXT values, adds them at their DNS provider, and clicks <em>Check DNS</em>. <em>Proceed</em> becomes active when the check finds both values.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the zone page for box.example.com on one page. Certificate section: expires in 21 days, Renew now button and a staging switch. Current issue section: a step bar at Awaiting DNS, two TXT records with copy buttons, one found and one not found yet, Check DNS and a disabled Proceed button. DNS provider section: provider set to Manual, with Test and Save buttons. DNS check section: the A records are correct and the AAAA record is not set.">
-  <div class="wf-side">
-    <div class="wf-brand">outpost</div>
-    <div class="wf-nav">Devices</div>
-    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">All devices</div><div class="wf-nav on">Zones</div><div class="wf-nav">Pool</div>
-    <div class="wf-user">admin ▾</div>
-  </div>
-  <div class="wf-main">
-    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Zones /</span> box.example.com</div></div>
-    <div class="wf-box" style="margin-bottom:10px">
-      <h4>Certificate</h4>
-      <div class="wf-row"><span style="flex:1"><span class="wf-mono">*.box.example.com, box.example.com</span><br><span class="wf-muted">Let's Encrypt · expires 19 Oct 2026</span></span><span class="wf-pill warn">expires in 21 days</span></div>
-      <div class="wf-row"><span>Staging <span class="wf-sw off"></span></span><span class="wf-btn sm" style="margin-left:auto">Renew now</span></div>
-    </div>
-    <div class="wf-box" style="margin-bottom:10px">
-      <h4>Current issue: renewal</h4>
-      <div style="padding:8px 12px 0"><div class="wf-steps" style="margin:0 0 8px"><div class="wf-step done">Ordering</div><div class="wf-step cur">Awaiting DNS</div><div class="wf-step">Validating</div><div class="wf-step">Finalizing</div><div class="wf-step">Issued</div></div></div>
-      <div class="wf-row"><span style="width:230px"><span class="wf-muted">TXT name</span><br><span class="wf-mono">_acme-challenge.box.example.com</span></span><span style="flex:1"><span class="wf-muted">Value 1</span><br><span class="wf-mono">m3F9x…Qk2</span> <span class="wf-btn sm">Copy</span></span><span class="wf-pill ok">found</span></div>
-      <div class="wf-row"><span style="width:230px"><span class="wf-muted">TXT name</span><br><span class="wf-mono">_acme-challenge.box.example.com</span></span><span style="flex:1"><span class="wf-muted">Value 2</span><br><span class="wf-mono">Z8pLr…7aW</span> <span class="wf-btn sm">Copy</span></span><span class="wf-pill warn">not found yet</span></div>
-      <div class="wf-row"><span class="wf-help" style="margin:0;flex:1">Both values use the same name. Keep both. The order stays open for about 7 days.</span><span class="wf-btn sm">Check DNS</span><span class="wf-btn sm pri" style="opacity:.4">Proceed</span></div>
-    </div>
-    <div class="wf-2col">
-      <div class="wf-box">
-        <h4>DNS provider</h4>
-        <div style="padding:8px 12px">
-          <div class="wf-field"><label>Provider</label><span class="wf-input" style="min-width:150px">Manual ▾</span><div class="wf-help">Cloudflare and Route53 show their API fields here and renew without help.</div></div>
-          <div class="wf-field" style="margin:0"><label>DNS zone</label><span class="wf-input wf-mono" style="min-width:150px">example.com</span> <span class="wf-muted">auto</span></div>
-          <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px"><span class="wf-btn sm">Test</span><span class="wf-btn sm pri">Save</span></div>
-        </div>
-      </div>
-      <div class="wf-box">
-        <h4>DNS check</h4>
-        <div class="wf-row"><span class="wf-mono" style="flex:1">A box</span><span class="wf-mono">192.0.2.10</span><span class="wf-pill ok">ok</span></div>
-        <div class="wf-row"><span class="wf-mono" style="flex:1">A *.box</span><span class="wf-mono">192.0.2.10</span><span class="wf-pill ok">ok</span></div>
-        <div class="wf-row"><span class="wf-mono" style="flex:1">AAAA *.box</span><span class="wf-muted">not set</span><span class="wf-pill warn">missing</span></div>
-      </div>
-    </div>
-  </div>
-</div></div>
+<h3>13.8 On a phone</h3>
+<div class="shots-phone">
+<img src="img/phone-home.png" alt="The home page on a phone, with device cards in one column." loading="lazy" width="780" height="1560">
+<img src="img/phone-addresses.png" alt="The Addresses tab on a phone: address, status, default and the row menu." loading="lazy" width="780" height="1560">
+</div>
+<p class="note">On a phone, the cards are in one column, and the lists show fewer columns. The rates move to the Traffic tab.</p>
 
-<h3>13.9 On a phone</h3>
-<p>Below the medium breakpoint, the sidebar becomes a drawer behind a menu button. The device cards stack in one column. The main action stays at the top.</p>
-<div class="wfwrap"><div class="wf-phone" role="img" aria-label="Wireframe of the home page on a phone. A top bar has a menu button, the title and an add button. Device cards stack in one column with name, state, rate and counts.">
-  <div class="bar"><span>☰</span><span>Devices</span><span class="wf-btn sm pri">+ Add</span></div>
-  <div class="body">
-    <div class="dev-card" style="margin-bottom:8px"><div class="h"><b>laptop</b><span class="wf-pill ok">online</span></div><div class="wf-mono r">↓ 1.9 MB/s · ↑ 221 KB/s</div><div class="wf-muted">2 addresses · 3 mappings</div></div>
-    <div class="dev-card" style="margin-bottom:8px"><div class="h"><b>home-server</b><span class="wf-pill warn">paused</span></div><div class="wf-muted">0 addresses · 2 mappings</div></div>
-    <div class="dev-card off"><div class="h"><b>mac-mini</b><span class="wf-pill">offline</span></div><div class="wf-muted">last seen 3 d ago</div></div>
-  </div>
-</div></div>
-
-<h2 id="milestones">14. Build order <span class="tag proposed">proposed</span></h2>
-<p>Each milestone depends on the one before it. Each has one check that shows it is done.</p>
+<h2 id="milestones">14. Build order <span class="tag proposed">in progress</span></h2>
+<p>Each milestone depends on the one before it. The last column shows the status on 28 September 2026.</p>
 <div class="tablewrap"><table>
-<thead><tr><th>#</th><th>Milestone</th><th>Contents</th><th>Done when</th></tr></thead>
+<thead><tr><th>#</th><th>Milestone</th><th>Contents</th><th>Status</th></tr></thead>
 <tbody>
-<tr><td>1</td><td>Core and devices</td><td>Server, database, invites and passwords, Devices page, enroll flow, WireGuard manager, settings push, <code>outpostd status</code>. Metrics core: sampler, 6-hour memory, hourly JSON files, device totals, device health.</td><td>Server and device ping each other on tunnel addresses. Revoke drops the tunnel. The Traffic tab shows the device total.</td></tr>
-<tr><td>2</td><td>Zones and TLS</td><td>Zones page, encrypted credentials, certificate state machine. Manual provider first, then Cloudflare and Route53. Renewal. Dashboard served over TLS.</td><td>A manual wildcard certificate issues on staging, then on production.</td></tr>
-<tr><td>3</td><td>Mappings</td><td>The device Mappings tab and form drawer. Proxy mode first. Then direct mode with SNI reading, raw forwarding and PROXY headers.</td><td>A visitor reaches a service on the device in both modes.</td></tr>
-<tr><td>4</td><td>IPv6</td><td>Automatic allocation. Add and release. The revoke dialog. Address counters. The device Addresses tab and the admin Pool page. Routes, the outgoing selector (off by default), the inbound firewall (open by default). AAAA records for the zone.</td><td>A probe reaches each address on the device, with the correct destination.</td></tr>
-<tr><td>5</td><td>Hardening</td><td>WireGuard over WebSocket on port 443 for networks that block UDP. macOS and Windows support. Audit log, quotas, metrics.</td><td>A device on a UDP-blocked network connects.</td></tr>
+<tr><td>1</td><td>Core and devices</td><td>Server, database, invites and passwords, device cards, enrollment, WireGuard manager, settings push, <code>outpostd status</code>. Metrics: sampler, memory buffer, hourly files, device totals and health.</td><td>Built. Checked in isolated network namespaces.</td></tr>
+<tr><td>2</td><td>Zones and TLS</td><td>Zone page, encrypted credentials, certificate state machine. Manual, Cloudflare and Route53 providers. Renewal. Dashboard over TLS.</td><td>Built. Checked against Pebble. Let's Encrypt staging and production are not done yet.</td></tr>
+<tr><td>3</td><td>Mappings</td><td>Mappings tab and form. TLS termination at edge and TLS passthrough, SNI reading, PROXY headers, byte counters.</td><td>Built. Checked through a real WireGuard tunnel.</td></tr>
+<tr><td>4</td><td>IPv6</td><td>Automatic allocation, add and release, the default outgoing address, counters and cleanup. The Addresses tab.</td><td>Built. The public test on the server is not done yet.</td></tr>
+<tr><td>5</td><td>Hardening</td><td>Activity log, quotas, metrics and retention are built. WireGuard over WebSocket, macOS and Windows support, and long load checks are not done yet.</td><td>In progress.</td></tr>
 </tbody>
 </table></div>
 
