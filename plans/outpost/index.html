@@ -419,7 +419,7 @@
 <h3>Add and release</h3>
 <p>An address is always on one device, and it stays on that device. There is no reserved address without a device, and no move between devices. To use an address on another device, release it and add a new one there.</p>
 <ul>
-  <li><strong>Add.</strong> On the device page, the user clicks <em>Add address</em>. The server picks the address; the user cannot choose it. The server prefers an address that was never used, then the address that was released first. It does not give out an address that was released in the last 24 hours, unless no other address is free. So old DNS records or allowlist entries of the previous user do not point to the new user at once. A device can have more than one address.</li>
+  <li><strong>Add.</strong> On the device page, the user clicks <em>Add address</em>. The server picks the address; the user cannot choose it. The server gives the lowest free address. There is no promise to get the same address again: after a release, the address can go to any user at once. A device can have more than one address.</li>
   <li><strong>Release.</strong> The address goes back to the pool at once, after a plain confirmation.</li>
 </ul>
 <p>The server sends each address into the tunnel of its device. The WireGuard peer for a device allows two kinds of address: the device's tunnel address, and each public address of the device. The server adds one route for each address.</p>
@@ -530,7 +530,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <tr><td>Admin: users</td><td>Users, roles, quotas. Invite links.</td></tr>
 <tr><td>Admin: all devices</td><td>One list of all devices: owner, state, ↓ and ↑ totals for 24 hours, this month or all time, and agent version. Filters, sorting and a total row.</td></tr>
 <tr><td>Admin: zones</td><td>DNS provider, credentials, DNS check, certificate steps, the manual TXT flow, <em>Renew now</em>.</td></tr>
-<tr><td>Admin: pool</td><td>The address grid with owners: free, in use, in cooldown, reserved for the server. Address pools.</td></tr>
+<tr><td>Admin: pool</td><td>The address grid with owners: free, in use, reserved for the server. Address pools.</td></tr>
 </tbody>
 </table></div>
 
@@ -650,8 +650,8 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 </div></div>
 
 <h3>13.5 Device page: Mappings tab and form drawer</h3>
-<p>The tab lists the mappings that send traffic to this device. <em>New mapping</em> opens a drawer on the right, so the list stays visible. The device is already set and does not change. The name is one label plus a zone, and the form checks while the user types whether the name is free. The mode switch changes the fields below it. The drawer shows proxy mode; a note lists the fields for direct mode.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Mappings tab. A table lists three mappings with mode and current traffic rate. A drawer on the right shows the New mapping form: name alice in zone box.example.com, marked available; mode switch set to Proxy; target URL, host override, extra headers and port 80 behaviour; a note lists the direct mode fields.">
+<p>The tab lists the mappings that send traffic to this device. <em>New mapping</em> opens a drawer on the right, so the list stays visible. The device is already set and does not change. The name is one label plus a zone. The server checks the name only on save; if another mapping uses it, the field shows an error. The mode switch changes the fields below it. The drawer shows proxy mode; a note lists the fields for direct mode.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Mappings tab. A table lists three mappings with mode and current traffic rate. A drawer on the right shows the New mapping form: name alice in zone box.example.com; mode switch set to Proxy; target URL, host override, extra headers and port 80 behaviour; a note lists the direct mode fields.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
     <div class="wf-nav on">Devices</div>
@@ -670,7 +670,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
       </tbody></table></div>
     <div class="wf-drawer">
       <div class="wf-head" style="margin-bottom:10px"><div class="wf-title">New mapping</div><span class="wf-muted">✕</span></div>
-      <div class="wf-field"><label>Name</label><span class="wf-input" style="min-width:80px">alice</span> <span class="wf-muted">.</span> <span class="wf-input" style="min-width:120px">box.example.com ▾</span> <span class="wf-pill ok">available</span></div>
+      <div class="wf-field"><label>Name</label><span class="wf-input" style="min-width:80px">alice</span> <span class="wf-muted">.</span> <span class="wf-input" style="min-width:120px">box.example.com ▾</span></div>
       <div class="wf-field"><label>Mode</label><span class="wf-seg"><span class="on">Proxy</span><span>Direct</span></span></div>
       <div class="wf-field"><label>Target</label><span class="wf-input full wf-mono">http://localhost:8080</span></div>
       <div class="wf-field"><label>Host override <span class="wf-muted" style="font-weight:400">(optional)</span></label><span class="wf-input full wf-mono">myapp.local</span></div>
@@ -801,7 +801,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li>The certificate state machine against Pebble, a local ACME test server, with a fake DNS provider and a fake <em>Proceed</em> click. This includes two TXT values on one name and a restart in the middle of an order.</li>
   <li>SNI reading on real TLS handshakes from Go, curl and Chrome, including handshakes split over several TCP packets. The bytes that the server sends on must be identical to the bytes it read.</li>
   <li>PROXY v1 and v2 headers, including the custom fields.</li>
-  <li>The address allocator never gives one address twice. It prefers never-used addresses and skips recently released ones. Release removes the address from the peer at once. Names are unique in a zone. Enroll tokens work once and expire.</li>
+  <li>The address allocator never gives one address twice. It gives the lowest free address, and a released address is free again at once. Release removes the address from the peer at once. Names are unique in a zone. Enroll tokens work once and expire.</li>
 </ul>
 <h3>Traffic and health tests</h3>
 <ul>
