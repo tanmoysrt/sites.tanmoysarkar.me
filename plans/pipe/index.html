@@ -44,6 +44,76 @@
   svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #1d1f23; }
   svg .small { font-size: 11px; fill: #5d636d; }
   svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+  /* Wireframes */
+  .wfwrap { overflow-x: auto; margin: 16px 0 6px; }
+  .wf { min-width: 740px; display: grid; grid-template-columns: 168px 1fr; border: 1px solid var(--line);
+    border-radius: 8px; overflow: hidden; font-size: 12.5px; line-height: 1.4; background: #fff; position: relative; }
+  .wf * { max-width: none; }
+  .wf-side { background: #f7f7f8; border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .wf-brand { font-weight: 700; padding: 2px 8px 12px; }
+  .wf-sec { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 10px 8px 4px; }
+  .wf-nav { padding: 5px 8px; border-radius: 5px; color: #3b3f45; }
+  .wf-nav.on { background: #fff; box-shadow: 0 0 0 1px var(--line); font-weight: 600; color: var(--ink); }
+  .wf-user { margin-top: auto; padding: 10px 8px 2px; border-top: 1px solid var(--line); color: var(--muted); }
+  .wf-main { padding: 14px 18px 18px; min-height: 300px; }
+  .wf-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .wf-title { font-size: 15px; font-weight: 650; }
+  .wf-crumb { color: var(--muted); font-weight: 400; }
+  .wf-btn { display: inline-block; padding: 4px 10px; border-radius: 5px; border: 1px solid var(--line); background: #fff; white-space: nowrap; }
+  .wf-btn.pri { background: #1d1f23; color: #fff; border-color: #1d1f23; }
+  .wf-btn.sm { padding: 2px 7px; font-size: 11px; }
+  .wf-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .wf-card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+  .wf-card .n { font-size: 20px; font-weight: 650; }
+  .wf-card .l { color: var(--muted); }
+  .wf-box { border: 1px solid var(--line); border-radius: 6px; }
+  .wf-box h4 { margin: 0; padding: 8px 12px; font-size: 12.5px; border-bottom: 1px solid var(--line); }
+  .wf-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid #eceef1; }
+  .wf-row:last-child { border-bottom: 0; }
+  .wf table { margin: 0; font-size: 12.5px; }
+  .wf th, .wf td { padding: 6px 10px; }
+  .wf th { background: #fafafa; font-weight: 600; color: #3b3f45; }
+  .wf-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #1f7a4d; margin-right: 5px; vertical-align: 0; }
+  .wf-dot.off { background: #b6bac1; } .wf-dot.bad { background: #c2410c; } .wf-dot.pause { background: #9a5b00; }
+  .wf-pill { display: inline-block; padding: 0 7px; border-radius: 9px; background: #f1f2f4; color: #3b3f45; font-size: 11px; border: 1px solid #e3e5e8; }
+  .wf-pill.ok { color: #1f7a4d; background: #eef7f2; border-color: #cfe7da; }
+  .wf-pill.warn { color: #9a5b00; background: #fdf6ea; border-color: #f0dfbf; }
+  .wf-pill.blue { color: #2459c7; background: #eef3fc; border-color: #d3e0f7; }
+  .wf-mono { font-family: var(--mono); font-size: 11.5px; }
+  .wf-muted { color: var(--muted); }
+  .wf-sw { display: inline-block; width: 26px; height: 15px; border-radius: 8px; background: #1d1f23; position: relative; vertical-align: -3px; }
+  .wf-sw::after { content: ""; position: absolute; top: 2px; left: 13px; width: 11px; height: 11px; border-radius: 50%; background: #fff; }
+  .wf-sw.off { background: #cfd2d7; } .wf-sw.off::after { left: 2px; }
+  .wf-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin: 4px 0 8px; }
+  .wf-cell { border: 1px solid var(--line); border-radius: 5px; padding: 6px 0; text-align: center; font-family: var(--mono); font-size: 11.5px; }
+  .wf-cell.mine { border: 2px solid #1d1f23; font-weight: 700; }
+  .wf-cell.taken { background: #eceef1; color: #7a8089; }
+  .wf-cell.res { background: repeating-linear-gradient(45deg, #fff, #fff 4px, #eceef1 4px, #eceef1 8px); color: #7a8089; }
+  .wf-legend { display: flex; gap: 14px; color: var(--muted); font-size: 11.5px; margin-bottom: 12px; }
+  .wf-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 1px solid var(--line); border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .wf-legend .l-mine::before { border: 2px solid #1d1f23; } .wf-legend .l-taken::before { background: #eceef1; }
+  .wf-legend .l-res::before { background: repeating-linear-gradient(45deg, #fff, #fff 2px, #d5d8dd 2px, #d5d8dd 4px); }
+  .wf-field { margin-bottom: 10px; }
+  .wf-field label { display: block; font-weight: 600; margin-bottom: 3px; }
+  .wf-input { border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; background: #fff; display: inline-flex; align-items: center; gap: 6px; min-width: 220px; }
+  .wf-input.full { display: flex; }
+  .wf-help { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .wf-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .wf-seg span { padding: 4px 14px; } .wf-seg span.on { background: #1d1f23; color: #fff; }
+  .wf-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .wf-code { font-family: var(--mono); font-size: 11.5px; background: #f4f5f7; border: 1px solid var(--line); border-radius: 5px; padding: 7px 9px; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .wf-overlay { position: absolute; inset: 0 0 0 168px; background: rgba(29,31,35,.28); display: flex; align-items: center; justify-content: center; }
+  .wf-dialog { background: #fff; border-radius: 8px; width: 430px; padding: 14px 16px; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
+  .wf-steps { display: flex; gap: 0; margin: 4px 0 14px; }
+  .wf-step { flex: 1; text-align: center; font-size: 11.5px; color: var(--muted); position: relative; padding-top: 18px; }
+  .wf-step::before { content: ""; position: absolute; top: 4px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%; border: 2px solid #b6bac1; background: #fff; z-index: 1; }
+  .wf-step::after { content: ""; position: absolute; top: 9px; left: -50%; width: 100%; height: 2px; background: #d5d8dd; }
+  .wf-step:first-child::after { display: none; }
+  .wf-step.done::before { background: #1d1f23; border-color: #1d1f23; } .wf-step.done { color: var(--ink); }
+  .wf-step.cur::before { border-color: #2459c7; background: #2459c7; } .wf-step.cur { color: #2459c7; font-weight: 600; }
+  .wf-phone { width: 250px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; font-size: 12px; line-height: 1.4; }
+  .wf-phone .bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 650; }
+  .wf-phone .body { padding: 10px 12px; }
 </style>
 </head>
 <body>
@@ -66,6 +136,7 @@
   <li><a href="#ipv6">IPv6 on the user's machine</a></li>
   <li><a href="#devices">Adding a device</a></li>
   <li><a href="#dashboard">Dashboard</a></li>
+  <li><a href="#layouts">Proposed screen layouts</a></li>
   <li><a href="#milestones">Build order</a></li>
   <li><a href="#verify">How we check success</a></li>
   <li><a href="#limits">Limits and risks</a></li>
@@ -357,7 +428,163 @@ ip -6 route add default dev pipe0 table pipe</code></pre>
 </tbody>
 </table></div>
 
-<h2 id="milestones">12. Build order <span class="tag proposed">proposed</span></h2>
+<h2 id="layouts">12. Proposed screen layouts <span class="tag proposed">proposed</span></h2>
+<p>These wireframes show the layout and the content of the main screens. They do not show the final colours or spacing. The final screens use frappe-ui components: a sidebar, list views, form controls, dialogs and badges. All names and addresses are example data.</p>
+<p>All screens use the same frame. A sidebar on the left holds the navigation. Admin pages show only for admins. The main area has a title row with one main action on the right.</p>
+
+<h3>12.1 Overview</h3>
+<p>The first screen after sign-in. It answers one question: does anything need my attention?</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Overview page. Three cards show devices online, IPv6 addresses in use and healthy mappings. Below is a list of items that need attention.">
+  <div class="wf-side">
+    <div class="wf-brand">pipe</div>
+    <div class="wf-nav on">Overview</div><div class="wf-nav">Devices</div><div class="wf-nav">IPv6</div><div class="wf-nav">Mappings</div>
+    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
+    <div class="wf-user">alice ▾</div>
+  </div>
+  <div class="wf-main">
+    <div class="wf-head"><div class="wf-title">Overview</div><span class="wf-btn pri">+ Add device</span></div>
+    <div class="wf-cards">
+      <div class="wf-card"><div class="n">2 / 3</div><div class="l">devices online</div></div>
+      <div class="wf-card"><div class="n">3 / 4</div><div class="l">IPv6 addresses (quota)</div></div>
+      <div class="wf-card"><div class="n">4 / 5</div><div class="l">mappings healthy</div></div>
+    </div>
+    <div class="wf-box">
+      <h4>Needs attention</h4>
+      <div class="wf-row"><span class="wf-dot bad"></span><span><b>api.box.example.com</b>: target <span class="wf-mono">localhost:3000</span> does not respond</span><span class="wf-btn sm" style="margin-left:auto">Open</span></div>
+      <div class="wf-row"><span class="wf-dot pause"></span><span><b>home-server</b>: paused on device (<span class="wf-mono">pipe down</span>) 2 h ago</span><span class="wf-btn sm" style="margin-left:auto">Open</span></div>
+      <div class="wf-row"><span class="wf-dot pause"></span><span><b>box.example.com</b> certificate: manual renewal needed, expires in 21 days</span><span class="wf-pill warn" style="margin-left:auto">admin</span></div>
+    </div>
+  </div>
+</div></div>
+
+<h3>12.2 Devices and the Add device dialog</h3>
+<p>The list shows the state of each device. <em>Paused</em> means that someone ran <code>pipe down</code> on the device. <em>Offline</em> means that the server gets no heartbeat. The dialog shows step 2 of 3: the install command and the token countdown. It changes to "Connected" when the agent enrolls.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Devices page with a table of three devices and an open Add device dialog. The dialog shows an install command with a copy button and a token that expires in 14 minutes, and waits for the device to connect.">
+  <div class="wf-side">
+    <div class="wf-brand">pipe</div>
+    <div class="wf-nav">Overview</div><div class="wf-nav on">Devices</div><div class="wf-nav">IPv6</div><div class="wf-nav">Mappings</div>
+    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
+    <div class="wf-user">alice ▾</div>
+  </div>
+  <div class="wf-main" style="min-height:330px">
+    <div class="wf-head"><div class="wf-title">Devices</div><span class="wf-btn pri">+ Add device</span></div>
+    <div class="wf-box"><table>
+      <thead><tr><th>Name</th><th>Status</th><th>IPv6</th><th>Mappings</th><th>Agent</th><th>Last seen</th></tr></thead>
+      <tbody>
+      <tr><td><b>laptop</b></td><td><span class="wf-dot"></span>Online</td><td>2</td><td>3</td><td class="wf-mono">0.4.1 · linux</td><td>now</td></tr>
+      <tr><td><b>home-server</b></td><td><span class="wf-dot pause"></span>Paused</td><td>1</td><td>2</td><td class="wf-mono">0.4.1 · linux</td><td>2 h ago</td></tr>
+      <tr><td><b>mac-mini</b></td><td><span class="wf-dot off"></span>Offline</td><td>0</td><td>0</td><td class="wf-mono">0.4.0 · macos</td><td>3 d ago</td></tr>
+      </tbody></table></div>
+  </div>
+  <div class="wf-overlay"><div class="wf-dialog">
+    <div class="wf-head" style="margin-bottom:6px"><div class="wf-title">Add device</div><span class="wf-muted">✕</span></div>
+    <div class="wf-steps"><div class="wf-step done">Name</div><div class="wf-step cur">Install</div><div class="wf-step">Connected</div></div>
+    <div class="wf-field"><label>Run this on <b>work-vm</b> as root</label>
+      <div class="wf-code"><span>curl -fsSL https://box.example.com/install.sh | sudo sh -s -- 7QK2-MX9P-…</span><span class="wf-btn sm">Copy</span></div>
+      <div class="wf-help">The token works once. It expires in <b>14:32</b>.</div></div>
+    <div class="wf-row" style="padding:8px 0 0;border:0"><span class="wf-dot off"></span><span class="wf-muted">Waiting for the device to connect…</span><span class="wf-btn sm" style="margin-left:auto">Cancel</span></div>
+  </div></div>
+</div></div>
+
+<h3>12.3 IPv6</h3>
+<p>The grid at the top shows the whole block. The user sees which addresses are theirs, but not who owns the other addresses. Below the grid, addresses are grouped by device. Each device has one <em>Outgoing IPv6</em> selector, with <em>None</em> as the default. Each address has an <em>allow inbound</em> switch, which is on by default.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the IPv6 page. A grid of 16 addresses marks free, mine, taken and reserved addresses. Below, the device laptop has two addresses with allow inbound switches and an Outgoing IPv6 selector set to None. The device home-server has one address, with Outgoing IPv6 set to that address.">
+  <div class="wf-side">
+    <div class="wf-brand">pipe</div>
+    <div class="wf-nav">Overview</div><div class="wf-nav">Devices</div><div class="wf-nav on">IPv6</div><div class="wf-nav">Mappings</div>
+    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
+    <div class="wf-user">alice ▾</div>
+  </div>
+  <div class="wf-main">
+    <div class="wf-head"><div class="wf-title">IPv6 <span class="wf-crumb">· 2001:db8::100/124 · 3 of 4 used</span></div><span class="wf-btn pri">+ Assign address</span></div>
+    <div class="wf-grid">
+      <div class="wf-cell">:100</div><div class="wf-cell res">:101</div><div class="wf-cell">:102</div><div class="wf-cell taken">:103</div>
+      <div class="wf-cell taken">:104</div><div class="wf-cell mine">:105</div><div class="wf-cell mine">:106</div><div class="wf-cell">:107</div>
+      <div class="wf-cell">:108</div><div class="wf-cell mine">:109</div><div class="wf-cell">:10a</div><div class="wf-cell taken">:10b</div>
+      <div class="wf-cell">:10c</div><div class="wf-cell">:10d</div><div class="wf-cell">:10e</div><div class="wf-cell">:10f</div>
+    </div>
+    <div class="wf-legend"><span>free</span><span class="l-mine">mine</span><span class="l-taken">taken</span><span class="l-res">reserved (server)</span></div>
+    <div class="wf-box" style="margin-bottom:10px">
+      <h4 style="display:flex;justify-content:space-between;align-items:center"><span><span class="wf-dot"></span>laptop</span><span style="font-weight:400">Outgoing IPv6 <span class="wf-input" style="min-width:150px">None ▾</span></span></h4>
+      <div class="wf-row"><span class="wf-mono" style="width:150px">2001:db8::105</span><span>Allow inbound <span class="wf-sw"></span></span><span class="wf-pill ok">applied</span><span class="wf-btn sm" style="margin-left:auto">Release</span></div>
+      <div class="wf-row"><span class="wf-mono" style="width:150px">2001:db8::106</span><span>Allow inbound <span class="wf-sw off"></span></span><span class="wf-pill blue">pending…</span><span class="wf-btn sm" style="margin-left:auto">Release</span></div>
+    </div>
+    <div class="wf-box">
+      <h4 style="display:flex;justify-content:space-between;align-items:center"><span><span class="wf-dot pause"></span>home-server <span class="wf-muted" style="font-weight:400">· paused, changes wait</span></span><span style="font-weight:400">Outgoing IPv6 <span class="wf-input" style="min-width:150px">2001:db8::109 ▾</span></span></h4>
+      <div class="wf-row"><span class="wf-mono" style="width:150px">2001:db8::109</span><span>Allow inbound <span class="wf-sw"></span></span><span class="wf-pill">outgoing</span><span class="wf-btn sm" style="margin-left:auto">Release</span></div>
+    </div>
+    <div class="wf-help" style="margin-top:8px">With an outgoing address selected, all IPv6 traffic from that device goes through the server.</div>
+  </div>
+</div></div>
+
+<h3>12.4 Mapping form</h3>
+<p>The name is one label plus a zone. The form checks while the user types whether the name is free. The mode switch changes the fields below it. The left side shows proxy mode. The right side shows the fields for direct mode.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the New mapping form. Fields: name alice in zone box.example.com, marked available; device laptop; mode switch set to Proxy. Proxy fields: target URL, host override, extra headers and port 80 behaviour. A second panel shows direct mode fields: TLS target, HTTP target and PROXY protocol.">
+  <div class="wf-side">
+    <div class="wf-brand">pipe</div>
+    <div class="wf-nav">Overview</div><div class="wf-nav">Devices</div><div class="wf-nav">IPv6</div><div class="wf-nav on">Mappings</div>
+    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav">Zones</div><div class="wf-nav">Pool</div>
+    <div class="wf-user">alice ▾</div>
+  </div>
+  <div class="wf-main">
+    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Mappings /</span> New mapping</div><span><span class="wf-btn">Cancel</span> <span class="wf-btn pri">Create</span></span></div>
+    <div class="wf-field"><label>Name</label><span class="wf-input">alice</span> <span class="wf-muted">.</span> <span class="wf-input" style="min-width:150px">box.example.com ▾</span> <span class="wf-pill ok">available</span></div>
+    <div class="wf-field"><label>Device</label><span class="wf-input"><span class="wf-dot"></span>laptop ▾</span></div>
+    <div class="wf-field"><label>Mode</label><span class="wf-seg"><span class="on">Proxy</span><span>Direct</span></span>
+      <div class="wf-help">Proxy: the server decrypts TLS and can change headers. Direct: the server forwards encrypted bytes.</div></div>
+    <div class="wf-2col">
+      <div class="wf-box" style="padding:10px 12px">
+        <div class="wf-field"><label>Target</label><span class="wf-input full wf-mono">http://localhost:8080</span></div>
+        <div class="wf-field"><label>Host override <span class="wf-muted" style="font-weight:400">(optional)</span></label><span class="wf-input full wf-mono">myapp.local</span></div>
+        <div class="wf-field"><label>Extra headers</label>
+          <div style="display:flex;gap:6px;margin-bottom:4px"><span class="wf-input wf-mono" style="min-width:0;flex:1">X-Env</span><span class="wf-input wf-mono" style="min-width:0;flex:1">staging</span><span class="wf-muted">✕</span></div>
+          <span class="wf-btn sm">+ Add header</span></div>
+        <div class="wf-field" style="margin:0"><label>Port 80</label><span class="wf-seg"><span class="on">Serve</span><span>Redirect to HTTPS</span></span></div>
+      </div>
+      <div class="wf-box" style="padding:10px 12px;border-style:dashed">
+        <div class="wf-muted" style="margin-bottom:8px">When the mode is <b>Direct</b>, these fields show instead:</div>
+        <div class="wf-field"><label>TLS target</label><span class="wf-input full wf-mono">localhost:8443</span><div class="wf-help">The service must have its own certificate.</div></div>
+        <div class="wf-field"><label>HTTP target <span class="wf-muted" style="font-weight:400">(optional)</span></label><span class="wf-input full wf-mono">localhost:8080</span><div class="wf-help">Empty: port 80 redirects to HTTPS.</div></div>
+        <div class="wf-field" style="margin:0"><label>PROXY protocol</label><span class="wf-seg"><span class="on">Off</span><span>v1</span><span>v2</span></span><div class="wf-help">Turn on only if the service accepts it.</div></div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<h3>12.5 Zone with manual DNS</h3>
+<p>This screen guides the admin through a manual issue or renewal. The steps at the top show the current state. The admin copies both TXT values, adds them at their DNS provider, and clicks <em>Check DNS</em>. <em>Proceed</em> becomes active when the check finds both values.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of a zone detail page with manual DNS. A step bar shows ordering done and awaiting DNS as the current step. Two TXT records on the name _acme-challenge.box.example.com each have a copy button; the first is found on public DNS, the second is not found yet. Buttons: Check DNS and Proceed.">
+  <div class="wf-side">
+    <div class="wf-brand">pipe</div>
+    <div class="wf-nav">Overview</div><div class="wf-nav">Devices</div><div class="wf-nav">IPv6</div><div class="wf-nav">Mappings</div>
+    <div class="wf-sec">Admin</div><div class="wf-nav">Users</div><div class="wf-nav on">Zones</div><div class="wf-nav">Pool</div>
+    <div class="wf-user">admin ▾</div>
+  </div>
+  <div class="wf-main">
+    <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Zones /</span> box.example.com <span class="wf-pill">manual DNS</span> <span class="wf-pill warn">expires in 21 days</span></div><span class="wf-btn">Settings</span></div>
+    <div class="wf-steps"><div class="wf-step done">Ordering</div><div class="wf-step cur">Awaiting DNS</div><div class="wf-step">Validating</div><div class="wf-step">Finalizing</div><div class="wf-step">Issued</div></div>
+    <div class="wf-box">
+      <h4>Add these two TXT records at your DNS provider</h4>
+      <div class="wf-row"><span style="width:250px"><span class="wf-muted">Name</span><br><span class="wf-mono">_acme-challenge.box.example.com</span></span><span style="flex:1"><span class="wf-muted">Value 1</span><br><span class="wf-mono">m3F9x…Qk2</span> <span class="wf-btn sm">Copy</span></span><span class="wf-pill ok">found</span></div>
+      <div class="wf-row"><span style="width:250px"><span class="wf-muted">Name</span><br><span class="wf-mono">_acme-challenge.box.example.com</span></span><span style="flex:1"><span class="wf-muted">Value 2</span><br><span class="wf-mono">Z8pLr…7aW</span> <span class="wf-btn sm">Copy</span></span><span class="wf-pill warn">not found yet</span></div>
+    </div>
+    <div class="wf-help" style="margin:6px 0 12px">Both values use the same name. Keep both. Checked on the zone's name servers, 1.1.1.1 and 8.8.8.8. The order stays open for about 7 days.</div>
+    <div style="display:flex;gap:8px;align-items:center"><span class="wf-btn">Check DNS</span><span class="wf-btn pri" style="opacity:.4">Proceed</span><span class="wf-muted">Proceed is active when both values are found.</span></div>
+  </div>
+</div></div>
+
+<h3>12.6 On a phone</h3>
+<p>Below the medium breakpoint, the sidebar becomes a drawer behind a menu button. Tables become stacked rows. The main action stays at the top.</p>
+<div class="wfwrap"><div class="wf-phone" role="img" aria-label="Wireframe of the Devices page on a phone. A top bar has a menu button, the title and an add button. Devices show as stacked rows with name, status and counts.">
+  <div class="bar"><span>☰</span><span>Devices</span><span class="wf-btn sm pri">+ Add</span></div>
+  <div class="body">
+    <div class="wf-row" style="padding:8px 0;display:block"><b>laptop</b> <span class="wf-pill ok" style="float:right">online</span><br><span class="wf-muted">2 IPv6 · 3 mappings · now</span></div>
+    <div class="wf-row" style="padding:8px 0;display:block"><b>home-server</b> <span class="wf-pill warn" style="float:right">paused</span><br><span class="wf-muted">1 IPv6 · 2 mappings · 2 h ago</span></div>
+    <div class="wf-row" style="padding:8px 0;display:block"><b>mac-mini</b> <span class="wf-pill" style="float:right">offline</span><br><span class="wf-muted">0 IPv6 · 0 mappings · 3 d ago</span></div>
+  </div>
+</div></div>
+
+<h2 id="milestones">13. Build order <span class="tag proposed">proposed</span></h2>
 <p>Each milestone depends on the one before it. Each has one check that shows it is done.</p>
 <div class="tablewrap"><table>
 <thead><tr><th>#</th><th>Milestone</th><th>Contents</th><th>Done when</th></tr></thead>
@@ -379,7 +606,7 @@ ip -6 route add default dev pipe0 table pipe</code></pre>
   web/                 Vue dashboard, built into the server binary
   deploy/              systemd unit, nftables template, install.sh</code></pre>
 
-<h2 id="verify">13. How we check success</h2>
+<h2 id="verify">14. How we check success</h2>
 <h3>Unit tests</h3>
 <ul>
   <li>The certificate state machine against Pebble, a local ACME test server, with a fake DNS provider and a fake <em>Proceed</em> click. This includes two TXT values on one name and a restart in the middle of an order.</li>
@@ -398,7 +625,7 @@ ip -6 route add default dev pipe0 table pipe</code></pre>
   <li>After <code>pipe down</code>, <code>systemctl stop pipe</code>, or a crash and restart, the addresses, rules and routes are the same as before pipe was installed.</li>
 </ul>
 
-<h2 id="limits">14. Limits and risks <span class="tag risk">open</span></h2>
+<h2 id="limits">15. Limits and risks <span class="tag risk">open</span></h2>
 <ul>
   <li><strong>UDP blocked.</strong> WireGuard uses UDP. Some networks block it. Milestone 5 adds a fallback over WebSocket on port 443.</li>
   <li><strong>Small pool.</strong> Only 15 addresses are free for users. More pools need a second provider or a larger block.</li>
