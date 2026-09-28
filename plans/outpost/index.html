@@ -420,7 +420,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   <li>The agent sends the token and the public key to the server. The server returns a long-term device credential and the tunnel settings. The token is now used and no longer works.</li>
   <li>The dialog in the dashboard changes to "Connected" as soon as the agent enrolls.</li>
 </ol>
-<p>After this, the server pushes the full settings to the agent through a server-sent events stream whenever something changes. The agent compares the settings with the real state of the machine, and it fixes any difference. Every 30 seconds it reports health: can it reach each target, and did each switch apply?</p>
+<p>After this, the server pushes the full settings to the agent through a server-sent events stream whenever something changes. The agent compares the settings with the real state of the machine, and it fixes any difference. Every 30 seconds it reports its status: which settings version it applied, and any error. The dashboard shows the device as <em>Offline</em> when no report arrives for 90 seconds. There is no health check for each mapping. If a target is down, visitors get the server's 502 page.</p>
 <p>The agent has six commands: <code>outpostd setup &lt;token&gt;</code>, <code>outpostd status</code>, <code>outpostd logs</code>, <code>outpostd down</code>, <code>outpostd up</code> and <code>outpostd uninstall</code>. None of them change settings; settings come only from the dashboard. When an admin or user revokes a device, the server removes its tunnel peer at once. Its addresses become unattached, but they stay reserved for the user. The revoke dialog asks where to move the device's mappings: to another device, or to the <em>Unassigned</em> group, turned off.</p>
 
 <h2 id="dashboard">11. Dashboard</h2>
@@ -437,7 +437,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <tr><td>Overview</td><td>Counts of devices, addresses and mappings. A hostname search. A list of items that need attention. <em>My addresses</em>: where each address is attached.</td></tr>
 <tr><td>Devices</td><td>The device list with status and last seen. An <em>Unassigned</em> group for mappings without a device. <em>Add device</em>.</td></tr>
 <tr><td>Device: Addresses tab</td><td><em>Outgoing IPv6</em> selector (default <em>None</em>). Attach, move, detach and release addresses. An <em>allow inbound</em> switch for each address. Each change shows a state: pending, applied or error.</td></tr>
-<tr><td>Device: Mappings tab</td><td>The mappings for this device. A drawer with the form: name and zone, mode switch, proxy fields or direct fields. Health history and a <em>Test</em> button.</td></tr>
+<tr><td>Device: Mappings tab</td><td>The mappings for this device. A drawer with the form: name and zone, mode switch, proxy fields or direct fields.</td></tr>
 <tr><td>Device: Settings tab</td><td>Rename, install command, revoke.</td></tr>
 <tr><td>Admin: users</td><td>Users, roles, quotas. Invite links.</td></tr>
 <tr><td>Admin: zones</td><td>DNS provider, credentials, DNS check, certificate steps, the manual TXT flow, <em>Renew now</em>.</td></tr>
@@ -450,8 +450,8 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 <p>The dashboard is <strong>device-first</strong>. Almost every setting belongs to a device: addresses are attached to a device, each mapping sends traffic to a device, and <em>Outgoing IPv6</em> is a device setting. So the sidebar has only <em>Overview</em> and <em>Devices</em>, plus an Admin group. Addresses and mappings are tabs on each device page. The main area has a title row with one main action on the right.</p>
 
 <h3>12.1 Overview</h3>
-<p>The first screen after sign-in. It answers two questions: does anything need my attention, and where is each of my names and addresses? The search box finds a hostname and opens the device that owns it.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Overview page. Three cards show devices online, IPv6 addresses reserved and healthy mappings. A search box finds a hostname. A Needs attention list shows a failing target, a paused device and a certificate renewal. A My addresses list shows where each reserved address is attached; one is unattached.">
+<p>The first screen after sign-in. It answers two questions: does any device need my attention, and where is each of my names and addresses? The search box finds a hostname and opens the device that owns it.</p>
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the Overview page. Three cards show devices online, IPv6 addresses reserved and the number of mappings. A search box finds a hostname. A Needs attention list shows an offline device, a paused device and a certificate renewal. A My addresses list shows where each reserved address is attached; one is unattached.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
     <div class="wf-nav on">Overview</div><div class="wf-nav">Devices</div>
@@ -463,12 +463,12 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
     <div class="wf-cards">
       <div class="wf-card"><div class="n">2 / 3</div><div class="l">devices online</div></div>
       <div class="wf-card"><div class="n">3 / 4</div><div class="l">IPv6 reserved (quota)</div></div>
-      <div class="wf-card"><div class="n">4 / 5</div><div class="l">mappings healthy</div></div>
+      <div class="wf-card"><div class="n">5</div><div class="l">mappings</div></div>
     </div>
     <div class="wf-2col">
       <div class="wf-box">
         <h4>Needs attention</h4>
-        <div class="wf-row"><span class="wf-dot bad"></span><span><b>api.box.example.com</b> on laptop: target does not respond</span></div>
+        <div class="wf-row"><span class="wf-dot off"></span><span><b>mac-mini</b>: offline for 3 days</span></div>
         <div class="wf-row"><span class="wf-dot pause"></span><span><b>home-server</b>: paused on device, 2 h ago</span></div>
         <div class="wf-row"><span class="wf-dot pause"></span><span><b>box.example.com</b>: manual renewal, 21 days left</span></div>
       </div>
@@ -543,7 +543,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
 
 <h3>12.4 Device page: Mappings tab and form drawer</h3>
 <p>The tab lists the mappings that send traffic to this device. <em>New mapping</em> opens a drawer on the right, so the list stays visible. The device is already set. The name is one label plus a zone, and the form checks while the user types whether the name is free. The mode switch changes the fields below it. The drawer shows proxy mode; a note lists the fields for direct mode.</p>
-<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Mappings tab. A table lists three mappings with mode, target and health. A drawer on the right shows the New mapping form: name alice in zone box.example.com, marked available; mode switch set to Proxy; target URL, host override, extra headers and port 80 behaviour; a note lists the direct mode fields.">
+<div class="wfwrap"><div class="wf" role="img" aria-label="Wireframe of the laptop device page on the Mappings tab. A table lists three mappings with mode and current traffic rate. A drawer on the right shows the New mapping form: name alice in zone box.example.com, marked available; mode switch set to Proxy; target URL, host override, extra headers and port 80 behaviour; a note lists the direct mode fields.">
   <div class="wf-side">
     <div class="wf-brand">outpost</div>
     <div class="wf-nav">Overview</div><div class="wf-nav on">Devices</div>
@@ -554,11 +554,11 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
     <div class="wf-head"><div class="wf-title"><span class="wf-crumb">Devices /</span> laptop <span class="wf-pill ok">online</span></div><span class="wf-btn pri">+ New mapping</span></div>
     <div class="wf-tabs"><span>Addresses <span class="wf-muted">2</span></span><span class="on">Mappings <span class="wf-muted">3</span></span><span>Settings</span></div>
     <div class="wf-box" style="margin-top:12px;width:48%"><table>
-      <thead><tr><th>Host</th><th>Mode</th><th>Health</th></tr></thead>
+      <thead><tr><th>Host</th><th>Mode</th><th>↓ / ↑</th></tr></thead>
       <tbody>
-      <tr><td><b>app</b>.box…</td><td><span class="wf-pill">proxy</span></td><td><span class="wf-dot"></span></td></tr>
-      <tr><td><b>api</b>.box…</td><td><span class="wf-pill">proxy</span></td><td><span class="wf-dot bad"></span></td></tr>
-      <tr><td><b>git</b>.box…</td><td><span class="wf-pill blue">direct</span></td><td><span class="wf-dot"></span></td></tr>
+      <tr><td><b>app</b>.box…</td><td><span class="wf-pill">proxy</span></td><td class="wf-mono">1.2 / 0.1 MB/s</td></tr>
+      <tr><td><b>api</b>.box…</td><td><span class="wf-pill">proxy</span></td><td class="wf-mono">40 / 12 KB/s</td></tr>
+      <tr><td><b>git</b>.box…</td><td><span class="wf-pill blue">direct</span></td><td class="wf-mono">0 / 0</td></tr>
       </tbody></table></div>
     <div class="wf-drawer">
       <div class="wf-head" style="margin-bottom:10px"><div class="wf-title">New mapping</div><span class="wf-muted">✕</span></div>
@@ -627,7 +627,7 @@ ip -6 route add default dev outpost0 table outpost</code></pre>
   cmd/outpost/         server: API, dashboard, edge, WireGuard, certificates
   internal/api/        shared types: Enroll, DeviceConfig, DeviceStatus
   internal/server/     http, auth, store, alloc, wgmgr, push, firewall, edge, acme, dnsprov, secrets
-  internal/agent/      enroll, reconcile, tunnel, netcfg, edge, health, ctl
+  internal/agent/      enroll, reconcile, tunnel, netcfg, edge, status, ctl
   web/                 Vue dashboard, built into the server binary
   deploy/              systemd unit, nftables template, install.sh</code></pre>
 
