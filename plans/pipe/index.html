@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pipe: plan for a self-hosted IPv6 and subdomain tunnel</title>
+<meta name="description" content="Plan for pipe: a self-hosted service that gives each user public IPv6 addresses and subdomains, delivered to their machines through WireGuard and managed from one dashboard.">
+<style>
+  :root {
+    --ink: #1d1f23; --muted: #5d636d; --line: #d5d8dd; --soft: #f4f5f7;
+    --accent: #2459c7; --ok: #1f7a4d; --warn: #9a5b00;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.35rem; margin: 56px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p, li { max-width: 70ch; }
+  .lede { color: var(--muted); font-size: 1.08rem; margin: 0 0 24px; }
+  .meta { font-size: 0.9rem; color: var(--muted); }
+  code, pre { font-family: var(--mono); font-size: 0.88em; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--soft); padding: 12px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 20px; font-size: 0.93rem; }
+  .tablewrap { overflow-x: auto; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--soft); }
+  figure { margin: 20px 0 28px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { font-size: 0.88rem; color: var(--muted); margin-top: 6px; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 7px; border-radius: 10px;
+    border: 1px solid currentColor; vertical-align: 1px; }
+  .tested { color: var(--ok); } .proposed { color: var(--accent); } .risk { color: var(--warn); }
+  .note { border-left: 3px solid var(--line); padding: 4px 0 4px 14px; color: var(--muted); }
+  nav.toc { background: var(--soft); border-radius: 6px; padding: 12px 18px; font-size: 0.93rem; }
+  nav.toc ol { margin: 4px 0; padding-left: 20px; }
+  a { color: var(--accent); }
+  dl.terms dt { font-weight: 600; margin-top: 8px; }
+  dl.terms dd { margin: 0 0 0 0; color: var(--ink); }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #1d1f23; }
+  svg .small { font-size: 11px; fill: #5d636d; }
+  svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>pipe: a self-hosted IPv6 and subdomain tunnel</h1>
+<p class="lede">A plan for one small server that gives each user public IPv6 addresses and public subdomains. The addresses and subdomains reach the user's own machine through an encrypted tunnel. One dashboard manages all of it.</p>
+<p class="meta">Status: plan. The network behaviour in section 2 was tested on the real server. All other parts are proposed and are not built yet. Addresses and domain names on this page are example values.</p>
+
+<nav class="toc" aria-label="Contents">
+<ol>
+  <li><a href="#problem">The problem</a></li>
+  <li><a href="#tested">What we tested</a></li>
+  <li><a href="#terms">Terms</a></li>
+  <li><a href="#decisions">Main decisions</a></li>
+  <li><a href="#architecture">How the parts fit</a></li>
+  <li><a href="#request">One request, from start to end</a></li>
+  <li><a href="#modes">Proxy mode and direct mode</a></li>
+  <li><a href="#tls">Certificates</a></li>
+  <li><a href="#ipv6">IPv6 on the user's machine</a></li>
+  <li><a href="#devices">Adding a device</a></li>
+  <li><a href="#dashboard">Dashboard</a></li>
+  <li><a href="#milestones">Build order</a></li>
+  <li><a href="#verify">How we check success</a></li>
+  <li><a href="#limits">Limits and risks</a></li>
+</ol>
+</nav>
+
+<h2 id="problem">1. The problem</h2>
+<p>A laptop or a home server usually has no public address. Other people on the internet cannot connect to it. Tools such as ngrok solve part of this problem, but they only forward web traffic, and they run on someone else's servers.</p>
+<p>We have one cloud server. The provider gives it a small block of 16 public IPv6 addresses and routes all 16 to the server. We also control a domain, and every name under <code>*.box.example.com</code> points to the server.</p>
+<p>The goal is to share these resources with a small group of invited users:</p>
+<ul>
+  <li><strong>Subdomains.</strong> A user maps <code>alice.box.example.com</code> to a web service on their own machine, for example <code>http://localhost:8080</code>.</li>
+  <li><strong>IPv6 addresses.</strong> A user takes one address from the block. The address then appears on their own machine. Programs on that machine can receive connections on it and send traffic from it.</li>
+</ul>
+
+<h2 id="tested">2. What we tested <span class="tag tested">tested</span></h2>
+<p>The IPv6 feature depends on one fact: the provider must route the whole block to the server, and it must keep each packet's destination address. We tested this before we made the plan.</p>
+<ul>
+  <li><strong>Outbound.</strong> We sent traffic from each of the 16 addresses. An outside service reported the correct source address for all 16.</li>
+  <li><strong>Inbound, ping.</strong> Probes in 16 different networks sent pings to the 16 addresses. All pings got a reply. A packet capture on the server showed each packet with its own destination address.</li>
+  <li><strong>Inbound, without per-address setup.</strong> We removed the extra addresses and added one local route for the whole block. Pings still arrived with the correct destination. The server received no neighbour discovery requests. This shows that the block is routed to the server, not shared on a local network.</li>
+  <li><strong>Inbound, TCP.</strong> A test server on port 8080 read the destination address of each connection with <code>getsockname()</code>. Sixteen outside probes connected, one to each address. All 16 returned HTTP 200, and each connection showed the correct destination address.</li>
+</ul>
+<p>Result: the server can see which of the 16 addresses a client used. So it can forward traffic for each address to a different user.</p>
+
+<h2 id="terms">3. Terms</h2>
+<dl class="terms">
+  <dt>WireGuard</dt><dd>An encrypted network tunnel. It carries whole IP packets over UDP. Linux runs it inside the kernel, so it uses little CPU.</dd>
+  <dt>Agent</dt><dd>The <code>pipe</code> program on a user's machine. It keeps the tunnel up and applies the settings from the dashboard.</dd>
+  <dt>Device</dt><dd>One machine with an agent. A user can have more than one device.</dd>
+  <dt>Tunnel address</dt><dd>A private IPv6 address that each device gets inside the tunnel. The server uses it to reach the device.</dd>
+  <dt>Zone</dt><dd>A base domain, for example <code>box.example.com</code>. Users choose one name under a zone.</dd>
+  <dt>Mapping</dt><dd>A rule that connects one hostname to one service on one device.</dd>
+  <dt>SNI</dt><dd>Server Name Indication. The hostname that a browser sends in plain text at the start of a TLS connection.</dd>
+  <dt>PROXY protocol</dt><dd>A short header in front of a forwarded TCP connection. It tells the receiver the real address of the client.</dd>
+  <dt>DNS-01</dt><dd>A way to prove to a certificate authority that you control a domain. You publish a TXT record under <code>_acme-challenge</code>.</dd>
+</dl>
+
+<h2 id="decisions">4. Main decisions</h2>
+<div class="tablewrap"><table>
+<thead><tr><th>Question</th><th>Decision</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td>Transport</td><td>WireGuard, one tunnel per device</td><td>The IPv6 feature must carry whole IP packets. WireGuard does this natively. Its overhead is about 60 bytes per packet, and the server runs it in the kernel.</td></tr>
+<tr><td>Where settings live</td><td>Only in the dashboard</td><td>One source of truth. The agent has no local settings and no commands that change settings.</td></tr>
+<tr><td>TLS</td><td>A wildcard certificate on the server, from DNS-01</td><td>One certificate covers all user names in a zone. The server can apply headers and redirects.</td></tr>
+<tr><td>End-to-end encryption</td><td>Optional, with direct mode for each mapping</td><td>Some users need the server to see only encrypted bytes.</td></tr>
+<tr><td>Server and dashboard</td><td>One Go program with SQLite. The Vue dashboard is built into it.</td><td>Easy to deploy: one file and one service.</td></tr>
+<tr><td>Sign-in</td><td>An admin sends an invite link. The user sets a password.</td><td>No external services are necessary.</td></tr>
+</tbody>
+</table></div>
+
+<h3>Transport options that we compared</h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Option</th><th>Overhead per packet</th><th>Carries IP packets</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>WireGuard</td><td>60 bytes (IPv4 outside), 80 bytes (IPv6 outside)</td><td>Yes</td><td><strong>Chosen.</strong> Lowest server CPU.</td></tr>
+<tr><td>QUIC with datagrams (MASQUE, RFC 9484)</td><td>About 45–60 bytes</td><td>Yes, but complex</td><td>Good on networks that block UDP. It uses more server CPU. It is the best choice if we must replace WireGuard.</td></tr>
+<tr><td>Streams over TCP (yamux, smux)</td><td>Small</td><td>Badly: TCP inside TCP stalls when packets are lost</td><td>Good for web traffic only.</td></tr>
+<tr><td>6in4, GRE</td><td>20–40 bytes</td><td>Yes</td><td>No encryption. Does not pass NAT. Not good for laptops.</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="architecture">5. How the parts fit</h2>
+<p>There are three parts. The <strong>dashboard</strong> stores the settings. The <strong>server</strong> receives traffic from the internet. The <strong>agent</strong> on each device receives traffic from the server through the tunnel.</p>
+
+<figure>
+<svg viewBox="0 0 780 360" role="img" aria-labelledby="archTitle archDesc">
+  <title id="archTitle">pipe architecture</title>
+  <desc id="archDesc">Internet traffic on ports 443 and 80, and traffic to user IPv6 addresses, arrives at the pipe server. The server sends it through a WireGuard tunnel to the agent on the user's device. The agent forwards web traffic to a local service. The dashboard in the server pushes settings to the agent, and the agent reports status back.</desc>
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1d1f23"/></marker>
+  <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2459c7"/></marker></defs>
+  <rect x="10" y="30" width="130" height="300" rx="8" fill="#f4f5f7" stroke="#d5d8dd"/>
+  <text x="75" y="55" text-anchor="middle" font-weight="600">Internet</text>
+  <text x="75" y="120" text-anchor="middle" class="small">HTTPS :443</text>
+  <text x="75" y="175" text-anchor="middle" class="small">HTTP :80</text>
+  <text x="75" y="230" text-anchor="middle" class="small">IPv6 to a</text>
+  <text x="75" y="244" text-anchor="middle" class="small">user address</text>
+  <rect x="200" y="30" width="250" height="300" rx="8" fill="#fff" stroke="#1d1f23"/>
+  <text x="325" y="55" text-anchor="middle" font-weight="600">pipe-server</text>
+  <rect x="220" y="75" width="210" height="44" rx="5" fill="#fff" stroke="#d5d8dd"/>
+  <text x="325" y="94" text-anchor="middle">Dashboard + API</text>
+  <text x="325" y="110" text-anchor="middle" class="small">settings in SQLite</text>
+  <rect x="220" y="135" width="210" height="60" rx="5" fill="#fff" stroke="#d5d8dd"/>
+  <text x="325" y="156" text-anchor="middle">Edge :443 / :80</text>
+  <text x="325" y="172" text-anchor="middle" class="small">read hostname, pick device</text>
+  <text x="325" y="186" text-anchor="middle" class="small">wildcard certificate</text>
+  <rect x="220" y="210" width="165" height="44" rx="5" fill="#fff" stroke="#d5d8dd"/>
+  <text x="302" y="229" text-anchor="middle">Route per address</text>
+  <text x="302" y="245" text-anchor="middle" class="small">address → device</text>
+  <rect x="220" y="270" width="210" height="44" rx="5" fill="#fff" stroke="#1d1f23"/>
+  <text x="325" y="297" text-anchor="middle">wg0 (WireGuard, kernel)</text>
+  <line x1="140" y1="115" x2="218" y2="160" stroke="#1d1f23" marker-end="url(#ah)"/>
+  <line x1="140" y1="172" x2="218" y2="170" stroke="#1d1f23" marker-end="url(#ah)"/>
+  <line x1="140" y1="236" x2="218" y2="232" stroke="#1d1f23" marker-end="url(#ah)"/>
+  <line x1="408" y1="195" x2="408" y2="268" stroke="#1d1f23" marker-end="url(#ah)"/>
+  <line x1="302" y1="254" x2="302" y2="268" stroke="#1d1f23" marker-end="url(#ah)"/>
+  <rect x="540" y="30" width="230" height="300" rx="8" fill="#fff" stroke="#1d1f23"/>
+  <text x="655" y="55" text-anchor="middle" font-weight="600">User device</text>
+  <rect x="560" y="75" width="190" height="104" rx="5" fill="#fff" stroke="#d5d8dd"/>
+  <text x="655" y="96" text-anchor="middle">pipe agent</text>
+  <text x="655" y="114" text-anchor="middle" class="small">applies settings</text>
+  <text x="655" y="130" text-anchor="middle" class="small">web listener :7080</text>
+  <text x="655" y="146" text-anchor="middle" class="small">direct listener :7443</text>
+  <text x="655" y="162" text-anchor="middle" class="small">mounts IPv6 addresses</text>
+  <rect x="560" y="195" width="140" height="44" rx="5" fill="#fff" stroke="#d5d8dd"/>
+  <text x="630" y="214" text-anchor="middle">Local service</text>
+  <text x="630" y="230" text-anchor="middle" class="small mono">localhost:8080</text>
+  <rect x="560" y="270" width="190" height="44" rx="5" fill="#fff" stroke="#1d1f23"/>
+  <text x="655" y="297" text-anchor="middle">pipe0 (WireGuard)</text>
+  <line x1="430" y1="292" x2="558" y2="292" stroke="#1d1f23" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="494" y="284" text-anchor="middle" class="small">encrypted UDP</text>
+  <line x1="728" y1="270" x2="728" y2="181" stroke="#1d1f23" marker-end="url(#ah)"/>
+  <line x1="630" y1="179" x2="630" y2="193" stroke="#1d1f23" marker-end="url(#ah)"/>
+  <path d="M430 92 C 490 92, 500 100, 558 100" fill="none" stroke="#2459c7" stroke-dasharray="5 4" marker-end="url(#ahb)"/>
+  <text x="494" y="84" text-anchor="middle" class="small" style="fill:#2459c7">settings (push)</text>
+  <path d="M558 150 C 500 150, 490 115, 432 112" fill="none" stroke="#2459c7" stroke-dasharray="5 4" marker-end="url(#ahb)"/>
+  <text x="494" y="140" text-anchor="middle" class="small" style="fill:#2459c7">status</text>
+</svg>
+<figcaption>Figure 1. The server receives all public traffic. Every path to a device goes through that device's WireGuard tunnel. Blue lines show settings and status.</figcaption>
+</figure>
+
+<h3>Who owns which data</h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Data</th><th>Fields</th><th>Managed by</th></tr></thead>
+<tbody>
+<tr><td>User</td><td>email, password hash, role, quotas</td><td>Admin</td></tr>
+<tr><td>Zone</td><td>base domain, DNS provider (Cloudflare, Route53 or manual), credentials, certificate state</td><td>Admin</td></tr>
+<tr><td>Device</td><td>name, owner, WireGuard public key, tunnel address, last seen</td><td>User</td></tr>
+<tr><td>IPv6 assignment</td><td>address → device; switches for <em>mount</em>, <em>default outgoing</em> and <em>allow inbound</em></td><td>User</td></tr>
+<tr><td>Mapping</td><td>name + zone → device; mode; the fields for that mode</td><td>User</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="request">6. One request, from start to end</h2>
+<p>Alice maps <code>alice.box.example.com</code> to <code>http://localhost:8080</code> on her laptop. The mapping uses proxy mode, which is the default. A visitor opens <code>https://alice.box.example.com/</code>.</p>
+<ol>
+  <li>DNS returns the server address, because <code>*.box.example.com</code> points to the server.</li>
+  <li>The browser connects to the server on port 443. It sends the name <code>alice.box.example.com</code> as SNI.</li>
+  <li>The server reads the SNI and finds Alice's mapping. The mapping says: device "laptop", proxy mode.</li>
+  <li>The server completes TLS with the wildcard certificate for <code>*.box.example.com</code>.</li>
+  <li>The server opens a connection to the laptop's tunnel address on port 7080. This connection goes through WireGuard, so it is encrypted on the network.</li>
+  <li>The server sends a PROXY v2 header first. The header holds the visitor's address and the mapping ID. Then it sends the HTTP request with <code>X-Forwarded-For</code> and <code>X-Forwarded-Proto: https</code>.</li>
+  <li>The agent reads the mapping ID. It applies the host override and extra headers from the mapping. Then it sends the request to <code>localhost:8080</code>.</li>
+  <li>The response goes back along the same path.</li>
+</ol>
+<p>If the laptop is offline, the server shows a "device offline" page with status 502. If the name has no mapping, the server shows a 404 page.</p>
+
+<h2 id="modes">7. Proxy mode and direct mode</h2>
+<p>Each mapping has a mode. In both modes, the server first reads the hostname. On port 443 it reads the SNI. On port 80 it reads the <code>Host</code> header. The server keeps the bytes that it read and sends them on unchanged. The mode then decides the next step.</p>
+
+<figure>
+<svg viewBox="0 0 780 250" role="img" aria-labelledby="modeTitle modeDesc">
+  <title id="modeTitle">Proxy mode compared with direct mode</title>
+  <desc id="modeDesc">In proxy mode the server decrypts TLS with the wildcard certificate and sends plain HTTP through the tunnel to the agent, which forwards it to the local service. In direct mode the server sends the encrypted bytes through the tunnel unchanged, and the local service decrypts them with its own certificate.</desc>
+  <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1d1f23"/></marker></defs>
+  <text x="10" y="24" font-weight="600">Proxy mode (default)</text>
+  <rect x="10" y="40" width="120" height="50" rx="5" fill="#f4f5f7" stroke="#d5d8dd"/><text x="70" y="70" text-anchor="middle">Visitor</text>
+  <rect x="230" y="40" width="170" height="50" rx="5" fill="#fff" stroke="#1d1f23"/><text x="315" y="62" text-anchor="middle">Server</text><text x="315" y="78" text-anchor="middle" class="small">decrypts TLS (wildcard)</text>
+  <rect x="470" y="40" width="130" height="50" rx="5" fill="#fff" stroke="#1d1f23"/><text x="535" y="62" text-anchor="middle">Agent</text><text x="535" y="78" text-anchor="middle" class="small">headers, host</text>
+  <rect x="660" y="40" width="110" height="50" rx="5" fill="#fff" stroke="#d5d8dd"/><text x="715" y="70" text-anchor="middle">Service</text>
+  <line x1="130" y1="65" x2="228" y2="65" stroke="#1d1f23" marker-end="url(#ah2)"/><text x="180" y="57" text-anchor="middle" class="small">TLS</text>
+  <line x1="400" y1="65" x2="468" y2="65" stroke="#1d1f23" marker-end="url(#ah2)"/><text x="434" y="57" text-anchor="middle" class="small">HTTP in wg</text>
+  <line x1="600" y1="65" x2="658" y2="65" stroke="#1d1f23" marker-end="url(#ah2)"/><text x="629" y="57" text-anchor="middle" class="small">HTTP</text>
+  <text x="10" y="150" font-weight="600">Direct mode</text>
+  <rect x="10" y="166" width="120" height="50" rx="5" fill="#f4f5f7" stroke="#d5d8dd"/><text x="70" y="196" text-anchor="middle">Visitor</text>
+  <rect x="230" y="166" width="170" height="50" rx="5" fill="#fff" stroke="#1d1f23"/><text x="315" y="188" text-anchor="middle">Server</text><text x="315" y="204" text-anchor="middle" class="small">reads SNI only</text>
+  <rect x="470" y="166" width="130" height="50" rx="5" fill="#fff" stroke="#1d1f23"/><text x="535" y="188" text-anchor="middle">Agent</text><text x="535" y="204" text-anchor="middle" class="small">optional PROXY hdr</text>
+  <rect x="660" y="166" width="110" height="50" rx="5" fill="#fff" stroke="#2459c7" stroke-width="2"/><text x="715" y="188" text-anchor="middle">Service</text><text x="715" y="204" text-anchor="middle" class="small">own certificate</text>
+  <line x1="130" y1="191" x2="228" y2="191" stroke="#2459c7" stroke-width="2" marker-end="url(#ah2)"/><text x="180" y="183" text-anchor="middle" class="small">TLS</text>
+  <line x1="400" y1="191" x2="468" y2="191" stroke="#2459c7" stroke-width="2" marker-end="url(#ah2)"/><text x="434" y="183" text-anchor="middle" class="small">TLS in wg</text>
+  <line x1="600" y1="191" x2="658" y2="191" stroke="#2459c7" stroke-width="2" marker-end="url(#ah2)"/><text x="629" y="183" text-anchor="middle" class="small">TLS</text>
+  <text x="390" y="240" text-anchor="middle" class="small">Blue: the bytes stay encrypted from the visitor to the service.</text>
+</svg>
+<figcaption>Figure 2. In proxy mode the server can see the HTTP request. In direct mode it sees only the hostname.</figcaption>
+</figure>
+
+<div class="tablewrap"><table>
+<thead><tr><th></th><th>Proxy (default)</th><th>Direct</th></tr></thead>
+<tbody>
+<tr><td>Port 443</td><td>The server decrypts TLS and forwards HTTP to the agent.</td><td>The server forwards the raw TCP stream. The service decrypts TLS itself.</td></tr>
+<tr><td>Port 80</td><td>Serve the site, or redirect to HTTPS. The user chooses.</td><td>Raw forward to an optional HTTP target. If there is no target, redirect to HTTPS.</td></tr>
+<tr><td>Visitor address</td><td><code>X-Forwarded-For</code> header</td><td>PROXY protocol v1 or v2, if the user turns it on. Otherwise none.</td></tr>
+<tr><td>Host override, extra headers</td><td>Yes</td><td>No</td></tr>
+<tr><td>Protocols</td><td>HTTP/1.1, HTTP/2, WebSocket</td><td>Any TLS protocol that sends SNI, for example gRPC over TLS</td></tr>
+<tr><td>Server sees plain text</td><td>Yes</td><td>No</td></tr>
+</tbody>
+</table></div>
+
+<p><strong>The hop from server to agent</strong> is the same in both modes. The server always sends a PROXY v2 header first. The header holds the visitor's address and two custom fields: the mapping ID and the original port. The agent accepts this header only on the tunnel interface. In direct mode, the agent then removes the header. It sends a new PROXY header to the service only when the user turns that option on.</p>
+<p><strong>Certificates in direct mode</strong> are the user's job. The private key of the wildcard certificate never leaves the server. The service can get its own certificate with ACME. TLS-ALPN-01 works because the server forwards the TLS handshake unchanged. HTTP-01 works when the mapping has an HTTP target.</p>
+
+<h2 id="tls">8. Certificates</h2>
+<p>Each zone gets one certificate for <code>*.box.example.com</code> and <code>box.example.com</code>. A wildcard certificate needs DNS-01. The certificate authority asks for a TXT record at <code>_acme-challenge.box.example.com</code>. The certificate has two names, so it needs <strong>two TXT values on the same name</strong>.</p>
+<p>Each zone uses one of three DNS providers:</p>
+<ul>
+  <li><strong>Cloudflare</strong> or <strong>Route53</strong>. The server writes and removes the TXT records through the provider's API. Issue and renewal are automatic.</li>
+  <li><strong>Manual.</strong> The dashboard shows the two TXT values. The admin adds them at their DNS provider. Then the admin clicks <em>Check DNS</em> and <em>Proceed</em>.</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 780 150" role="img" aria-labelledby="certTitle certDesc">
+  <title id="certTitle">Certificate issue steps</title>
+  <desc id="certDesc">The steps are: ordering, awaiting DNS, validating, finalizing, issued. In manual mode, the step awaiting DNS waits until the admin clicks Proceed. Any step can go to an error state, and the admin can try again from there.</desc>
+  <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1d1f23"/></marker></defs>
+  <g>
+    <rect x="10" y="30" width="118" height="44" rx="22" fill="#fff" stroke="#1d1f23"/><text x="69" y="57" text-anchor="middle">ordering</text>
+    <rect x="165" y="30" width="138" height="44" rx="22" fill="#fff" stroke="#2459c7" stroke-width="2"/><text x="234" y="57" text-anchor="middle">awaiting DNS</text>
+    <rect x="340" y="30" width="118" height="44" rx="22" fill="#fff" stroke="#1d1f23"/><text x="399" y="57" text-anchor="middle">validating</text>
+    <rect x="495" y="30" width="118" height="44" rx="22" fill="#fff" stroke="#1d1f23"/><text x="554" y="57" text-anchor="middle">finalizing</text>
+    <rect x="650" y="30" width="118" height="44" rx="22" fill="#f4f5f7" stroke="#1f7a4d" stroke-width="2"/><text x="709" y="57" text-anchor="middle">issued</text>
+    <line x1="128" y1="52" x2="163" y2="52" stroke="#1d1f23" marker-end="url(#ah3)"/>
+    <line x1="303" y1="52" x2="338" y2="52" stroke="#1d1f23" marker-end="url(#ah3)"/>
+    <line x1="458" y1="52" x2="493" y2="52" stroke="#1d1f23" marker-end="url(#ah3)"/>
+    <line x1="613" y1="52" x2="648" y2="52" stroke="#1d1f23" marker-end="url(#ah3)"/>
+    <text x="234" y="96" text-anchor="middle" class="small" style="fill:#2459c7">manual: wait for "Proceed"</text>
+    <text x="234" y="110" text-anchor="middle" class="small" style="fill:#2459c7">automatic: write TXT by API</text>
+    <text x="399" y="96" text-anchor="middle" class="small">check TXT on public DNS</text>
+    <text x="554" y="96" text-anchor="middle" class="small">new key, send CSR</text>
+    <text x="390" y="140" text-anchor="middle" class="small">Any step can fail. The dashboard shows the error, and the admin can try again.</text>
+  </g>
+</svg>
+<figcaption>Figure 3. The server saves the state after each step, so a restart does not lose a pending order.</figcaption>
+</figure>
+
+<ul>
+  <li><strong>Libraries.</strong> <code>mholt/acmez</code> for ACME, <code>libdns/cloudflare</code> and <code>libdns/route53</code> for DNS. One low-level state machine covers the automatic and manual cases.</li>
+  <li><strong>Before validating.</strong> The server checks that both TXT values are visible on the zone's own name servers and on public resolvers. It waits up to 5 minutes.</li>
+  <li><strong>Renewal.</strong> The server checks every 12 hours. It renews when the CA's renewal information (ARI) says so, or 30 days before expiry. For a manual zone, it starts a new order and shows "Action needed". Warnings show at 30, 14 and 7 days. The old certificate stays in use until the new one is issued.</li>
+  <li><strong>Provider zone.</strong> The pipe zone <code>box.example.com</code> is often inside a larger DNS zone, <code>example.com</code>. The server finds the DNS zone with an SOA lookup and writes the relative name <code>_acme-challenge.box</code>.</li>
+  <li><strong>Credentials.</strong> Stored encrypted with AES-GCM and a key file on the server. A <em>Test</em> button creates and removes a test TXT record. It also shows when the API token expires.</li>
+  <li><strong>Staging.</strong> Each zone has a switch to use the Let's Encrypt staging server first, so tests do not use the real rate limits.</li>
+  <li><strong>Only one name level.</strong> A wildcard covers one level only: <code>alice.box.example.com</code> works, <code>api.alice.box.example.com</code> does not. For deeper names, the admin adds <code>alice.box.example.com</code> as a separate zone.</li>
+</ul>
+<p class="note">Cloudflare: the <code>box</code> and <code>*.box</code> records must be "DNS only". If Cloudflare proxies them, it decrypts TLS itself, and direct mode stops working. The zone check warns about this.</p>
+
+<h2 id="ipv6">9. IPv6 on the user's machine</h2>
+<p>The server sends each assigned address into the tunnel of the device that owns it. The WireGuard peer for a device allows two kinds of address: the device's tunnel address, and each public address assigned to it. The server adds one route for each assigned address.</p>
+<p>The agent then applies three switches from the dashboard:</p>
+<ul>
+  <li><strong>Mount.</strong> The agent adds the address to its tunnel interface. It also adds a rule: traffic <em>from</em> this address uses the tunnel. So a program that binds to the address always sends through the server.
+<pre><code>ip -6 addr add 2001:db8::105/128 dev pipe0
+ip -6 rule add from 2001:db8::105 lookup pipe
+ip -6 route add default dev pipe0 table pipe</code></pre></li>
+  <li><strong>Default outgoing.</strong> The agent makes the tunnel the default route for all IPv6 traffic from the machine, with this address as the source. Only one address per device can have this switch on. The tunnel itself connects over IPv4, so it cannot send its own packets into itself. The agent records the old routes and puts them back when the switch goes off, or after a crash.</li>
+  <li><strong>Allow inbound.</strong> Off by default. When it is off, the server firewall drops new connections from the internet to the address. This stops a laptop from being open to the internet by accident.</li>
+</ul>
+<p>The block has 16 addresses. The server uses one, so 15 are free for users. The data model allows more address pools later.</p>
+
+<h2 id="devices">10. Adding a device</h2>
+<ol>
+  <li>In the dashboard, the user clicks <em>Add device</em> and types a name.</li>
+  <li>The dashboard shows an install command with a one-time token. The token is valid for 15 minutes.
+<pre><code>curl -fsSL https://box.example.com/install.sh | sudo sh -s -- &lt;token&gt;</code></pre></li>
+  <li>The agent installs itself as a system service. It makes a WireGuard key pair on the machine. The private key never leaves the machine.</li>
+  <li>The agent sends the token and the public key to the server. The server returns a long-term device credential and the tunnel settings. The token is now used and no longer works.</li>
+  <li>The dialog in the dashboard changes to "Connected" as soon as the agent enrolls.</li>
+</ol>
+<p>After this, the server pushes the full settings to the agent through a server-sent events stream whenever something changes. The agent compares the settings with the real state of the machine, and it fixes any difference. Every 30 seconds it reports health: can it reach each target, and did each switch apply?</p>
+<p>The agent has only four commands: <code>pipe setup &lt;token&gt;</code>, <code>pipe status</code>, <code>pipe logs</code> and <code>pipe uninstall</code>. When an admin or user revokes a device, the server removes its tunnel peer at once. Its addresses go back to the pool. Its mappings are kept but turned off.</p>
+
+<h2 id="dashboard">11. Dashboard</h2>
+<p>The dashboard is a Vue 3 app with TypeScript and the frappe-ui component library. It is built into the Go server. It runs on the zone's own name, <code>box.example.com</code>, which the certificate already covers.</p>
+<ul>
+  <li><strong>Data.</strong> <code>@tanstack/vue-query</code> loads and caches data. One server-sent events stream tells the page when data changes, for example when a device goes online.</li>
+  <li><strong>Types.</strong> <code>tygo</code> makes TypeScript types from the Go API types, so the front end and the back end stay the same.</li>
+  <li><strong>Access.</strong> The server enforces all rules. A user sees only their own devices and mappings. The IPv6 grid shows that an address is taken, but not who took it.</li>
+  <li><strong>Security.</strong> User services run on sibling names under the same domain, so SameSite rules do not isolate the dashboard from them. The session cookie uses the <code>__Host-</code> prefix, so no sibling name can set or replace it. The CSRF token is stored on the server with the session. There is a strict content security policy, and the dashboard cannot be framed.</li>
+</ul>
+<div class="tablewrap"><table>
+<thead><tr><th>Page</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td>Overview</td><td>Counts of devices, addresses and mappings. A list of items that need attention.</td></tr>
+<tr><td>Devices</td><td>Add, rename and revoke devices. Status, last seen, traffic.</td></tr>
+<tr><td>IPv6</td><td>A grid of the 16 addresses. Assign an address to a device. The three switches, each with a state: pending, applied or error.</td></tr>
+<tr><td>Mappings</td><td>Name and zone, device, mode switch. Proxy fields or direct fields. Health history and a <em>Test</em> button.</td></tr>
+<tr><td>Admin: users</td><td>Users, roles, quotas. Invite links.</td></tr>
+<tr><td>Admin: zones</td><td>DNS provider, credentials, DNS check, certificate steps, the manual TXT flow, <em>Renew now</em>.</td></tr>
+<tr><td>Admin: pool</td><td>Address pools and reserved addresses.</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="milestones">12. Build order <span class="tag proposed">proposed</span></h2>
+<p>Each milestone depends on the one before it. Each has one check that shows it is done.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>#</th><th>Milestone</th><th>Contents</th><th>Done when</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Core and devices</td><td>Server, database, invites and passwords, Devices page, enroll flow, WireGuard manager, settings push, <code>pipe status</code></td><td>Server and device ping each other on tunnel addresses. Revoke drops the tunnel.</td></tr>
+<tr><td>2</td><td>Zones and TLS</td><td>Zones page, encrypted credentials, certificate state machine. Manual provider first, then Cloudflare and Route53. Renewal. Dashboard served over TLS.</td><td>A manual wildcard certificate issues on staging, then on production.</td></tr>
+<tr><td>3</td><td>Mappings</td><td>Mappings page. Proxy mode first. Then direct mode with SNI reading, raw forwarding and PROXY headers.</td><td>A visitor reaches a service on the device in both modes.</td></tr>
+<tr><td>4</td><td>IPv6</td><td>Assignments, routes, mount, default outgoing, inbound firewall. AAAA records for the zone.</td><td>A probe reaches each assigned address on the device, with the correct destination.</td></tr>
+<tr><td>5</td><td>Hardening</td><td>WireGuard over WebSocket on port 443 for networks that block UDP. macOS and Windows support. Audit log, quotas, metrics.</td><td>A device on a UDP-blocked network connects.</td></tr>
+</tbody>
+</table></div>
+
+<pre><code>pipe/
+  cmd/pipe/            agent: setup, status, logs, uninstall
+  cmd/pipe-server/     server
+  internal/api/        shared types: Enroll, DeviceConfig, DeviceStatus
+  internal/server/     http, auth, store, alloc, wgmgr, push, firewall, edge, acme, dnsprov, secrets
+  internal/agent/      enroll, reconcile, tunnel, netcfg, edge, health, ctl
+  web/                 Vue dashboard, built into the server binary
+  deploy/              systemd unit, nftables template, install.sh</code></pre>
+
+<h2 id="verify">13. How we check success</h2>
+<h3>Unit tests</h3>
+<ul>
+  <li>The certificate state machine against Pebble, a local ACME test server, with a fake DNS provider and a fake <em>Proceed</em> click. This includes two TXT values on one name and a restart in the middle of an order.</li>
+  <li>SNI reading on real TLS handshakes from Go, curl and Chrome, including handshakes split over several TCP packets. The bytes that the server sends on must be identical to the bytes it read.</li>
+  <li>PROXY v1 and v2 headers, including the custom fields.</li>
+  <li>The address allocator never gives one address twice. Names are unique in a zone. Enroll tokens work once and expire.</li>
+</ul>
+<h3>Integration tests</h3>
+<p>Two Linux network namespaces, one for the server and one for a device, with a real WireGuard link between them. Create a mapping through the API. Check that the agent applies it, and that <code>curl --resolve</code> gets the service's reply. Switch the mapping to direct mode. Check that <code>openssl s_client</code> shows the device's certificate, not the wildcard. With PROXY protocol on, check that nginx logs the real client address.</p>
+<h3>End-to-end on the real server</h3>
+<ul>
+  <li>Outside HTTP probes to <code>https://</code> and <code>http://</code> names return 200 from a service on a device.</li>
+  <li>Probes to each assigned address reach the device, and <code>getsockname()</code> shows the same address. This repeats the test in section 2, but through the tunnel.</li>
+  <li>With <em>default outgoing</em> on, <code>curl -6 https://api64.ipify.org</code> on the device returns the assigned address. When the switch goes off, the old route comes back in a few seconds.</li>
+</ul>
+
+<h2 id="limits">14. Limits and risks <span class="tag risk">open</span></h2>
+<ul>
+  <li><strong>UDP blocked.</strong> WireGuard uses UDP. Some networks block it. Milestone 5 adds a fallback over WebSocket on port 443.</li>
+  <li><strong>Small pool.</strong> Only 15 addresses are free for users. More pools need a second provider or a larger block.</li>
+  <li><strong>Plain text in proxy mode.</strong> The server can read proxied HTTP. Users who need privacy must use direct mode.</li>
+  <li><strong>SNI is needed.</strong> Direct mode needs a client that sends SNI. All modern clients do. We will not publish Encrypted Client Hello (ECH) settings, because ECH hides the SNI.</li>
+  <li><strong>Manual zones need a person.</strong> Every renewal needs new TXT values. If nobody adds them, the certificate expires. The dashboard warns 30 days before.</li>
+  <li><strong>API token expiry.</strong> If the DNS API token expires before a renewal, automatic renewal fails. The dashboard warns about this.</li>
+  <li><strong>Abuse.</strong> Traffic from user addresses comes from our server block. Complaints go to the server owner. Quotas and the audit log help, but they are not a full answer.</li>
+</ul>
+
+<h2 id="sources">Sources</h2>
+<ul>
+  <li><a href="https://www.wireguard.com/protocol/">WireGuard protocol</a></li>
+  <li><a href="https://www.rfc-editor.org/rfc/rfc9484">RFC 9484: Proxying IP in HTTP (MASQUE CONNECT-IP)</a></li>
+  <li><a href="https://www.rfc-editor.org/rfc/rfc8555#section-8.4">RFC 8555 §8.4: ACME DNS-01 challenge</a></li>
+  <li><a href="https://www.rfc-editor.org/rfc/rfc8737">RFC 8737: ACME TLS-ALPN-01 challenge</a></li>
+  <li><a href="https://www.haproxy.org/download/2.9/doc/proxy-protocol.txt">PROXY protocol v1 and v2 specification</a></li>
+  <li><a href="https://letsencrypt.org/docs/rate-limits/">Let's Encrypt rate limits</a></li>
+  <li><a href="https://github.com/mholt/acmez">mholt/acmez</a>, <a href="https://github.com/libdns/libdns">libdns</a>, <a href="https://github.com/gzuidhof/tygo">tygo</a>, <a href="https://ui.frappe.io/">frappe-ui</a></li>
+</ul>
+
+</main>
+</body>
+</html>
