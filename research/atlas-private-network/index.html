@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas Private Host Network</title>
+<meta name="description" content="How Atlas reaches its VM hosts only through WireGuard, and what an end-to-end test on AWS found.">
+<style>
+:root {
+  --bg: #ffffff;
+  --ink: #1d232a;
+  --muted: #5d6873;
+  --rule: #dde2e6;
+  --accent: #1c6f86;
+  --soft: #f3f6f8;
+  --good: #23784a;
+  --bad: #a3392f;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { color-scheme: light; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 var(--sans); }
+main { max-width: 760px; margin: 0 auto; padding-inline: 20px; padding-block: 48px 80px; }
+header { margin-bottom: 40px; }
+.kicker { font: 13px/1.4 var(--mono); color: var(--muted); margin: 0 0 8px; }
+h1 { font-size: clamp(28px, 5vw, 38px); line-height: 1.15; margin: 0 0 14px; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.25; margin: 48px 0 12px; text-wrap: balance; }
+h3 { font-size: 17px; margin: 28px 0 8px; }
+p, li { max-width: 66ch; }
+p { margin: 0 0 14px; }
+ul, ol { margin: 0 0 14px; padding-left: 22px; }
+li { margin-bottom: 6px; }
+code { font: 0.88em var(--mono); background: var(--soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { font: 13px/1.55 var(--mono); background: var(--soft); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; overflow-x: auto; margin: 0 0 16px; }
+.lede { font-size: 18px; color: var(--muted); }
+figure { margin: 22px 0 26px; }
+.diagram { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); }
+.diagram svg { display: block; min-width: 640px; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+.table { overflow-x: auto; margin: 0 0 18px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; font-size: 13px; color: var(--muted); }
+td.ok { color: var(--good); font-weight: 600; white-space: nowrap; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0 0 16px; }
+dt { font-family: var(--mono); font-size: 14px; }
+dd { margin: 0; min-width: 0; }
+.note { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; color: var(--muted); }
+footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--muted); }
+a { color: var(--accent); }
+@media (max-width: 520px) { dl { grid-template-columns: 1fr; gap: 2px 0; } dd { margin-bottom: 8px; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <p class="kicker">research · Atlas · October 2026</p>
+  <h1>Atlas private host network</h1>
+  <p class="lede">Atlas manages the bare-metal hosts that run customer virtual machines (VMs). This note explains how Atlas now reaches each host only through an encrypted tunnel, and what a test on two cloud providers found.</p>
+</header>
+
+<h2>The problem</h2>
+<p>Atlas is the control plane. It sends commands to each host. Before this change, each host accepted those commands on its public internet address.</p>
+<p>Three services were open to the internet on every host:</p>
+<ul>
+  <li>SSH on port 22. Atlas uses SSH to install and repair the host.</li>
+  <li>The Metal API on port 9000. Metal is the agent on each host that starts and stops VMs.</li>
+  <li>WireGuard on port 51820. WireGuard is an encrypted network tunnel. Hosts use it to connect to each other.</li>
+</ul>
+<p>Each open port is a target for attacks. Atlas must also know the public address of every host. The goal is simple: a host accepts no management traffic on its public address.</p>
+
+<h2>The simple case: one Atlas, one host</h2>
+<p>The hosts already have a WireGuard interface, <code>wg0</code>, for host-to-host traffic. The change adds Atlas as one more WireGuard peer of each host. A peer is one end of a WireGuard tunnel.</p>
+<p>Atlas then sends SSH and Metal API requests to the host <code>wg0</code> address. The host firewall drops these requests on all other interfaces.</p>
+<figure>
+  <div class="diagram"><svg id="d-before-after" viewBox="0 0 760 330" role="img" aria-label="Before: Atlas connects to the host public address on ports 22, 9000 and 51820. After: Atlas connects only through a WireGuard tunnel to the host wg0 interface, and the public address accepts no management traffic."></svg></div>
+  <figcaption>Before: three management ports on the public address. After: one tunnel, and the public address drops management traffic.</figcaption>
+</figure>
+
+<h2>Addresses</h2>
+<p>Each region has its own address space. Atlas gives each host and each VM an IPv6 address from that space.</p>
+<dl>
+  <dt>fdab:&lt;region&gt;:&lt;host&gt;</dt><dd>The <code>wg0</code> address of a host.</dd>
+  <dt>fdaa:&lt;region&gt;:&lt;tenant&gt;::&lt;vm&gt;</dt><dd>The mesh address of a VM. A tenant is one customer account. Tenant 0 holds the regional services, such as the HTTP proxy.</dd>
+  <dt>fdaa:&lt;region&gt;::ffff:ffff:ffff:ffff</dt><dd>The Atlas address. It is a tenant-0 VM address with the last VM number, so no real VM can take it.</dd>
+</dl>
+<p>Atlas uses a VM address, not a host address, on purpose. The mesh treats an <code>fdab</code> sender as a host and trusts it to carry VM traffic. Atlas does not need that trust. With a tenant-0 address, Atlas cannot send traffic into a customer network. Only tenant-0 VMs can reach Atlas.</p>
+
+<h2>How Atlas gets inside the provider network</h2>
+<p>Each host has a private network address at the cloud provider. Atlas connects to that private address, not to the public one. So Atlas must have a path into the provider private network.</p>
+
+<h3>Production</h3>
+<p>In production, Atlas runs in its own VM, the Atlas VM, on one host of the region. The parent host masquerades the Atlas VM traffic to the private network. Masquerade is a form of network address translation (NAT): the parent host replaces the VM source address with its own private address. Other hosts then see a normal private-network sender.</p>
+
+<h3>Development</h3>
+<p>A developer runs Atlas on a laptop, outside the provider network. The laptop uses a gateway. The gateway is the same Atlas VM program in a gateway mode. It runs on one host and forwards WireGuard packets to the private network.</p>
+<figure>
+  <div class="diagram"><svg id="d-gateway" viewBox="0 0 760 300" role="img" aria-label="The laptop sends an outer WireGuard tunnel to the gateway on host A. The gateway masquerades the packets to the private address of host B. Inside the outer tunnel, the atlas0 tunnel runs end to end from the laptop to the wg0 interface of host B."></svg></div>
+  <figcaption>Two tunnels. The outer tunnel reaches the gateway. The inner tunnel, <code>atlas0</code>, runs end to end to the host. The gateway cannot decrypt it.</figcaption>
+</figure>
+<p>The gateway uses the public address of its host, port 51821. It needs no extra public IPv4 address.</p>
+
+<h2>Trace: Atlas opens a shell in a VM</h2>
+<p>A VM has no public address for SSH. Atlas reaches it through its host in four steps:</p>
+<ol>
+  <li>Atlas connects to the host <code>wg0</code> address over <code>atlas0</code>.</li>
+  <li>The host firewall accepts SSH because the source is the Atlas address on <code>wg0</code>.</li>
+  <li>On the host, SSH runs <code>nc</code> inside the network namespace of the VM. A network namespace is the isolated network stack that holds one VM.</li>
+  <li><code>nc</code> connects to port 22 of the guest. The SSH session runs through that pipe.</li>
+</ol>
+<pre>ssh -o ProxyCommand="ssh root@fdab:&lt;region&gt;:&lt;host&gt; ip netns exec metal-&lt;vm&gt; nc 172.16.0.2 22" root@&lt;vm&gt;</pre>
+
+<h2>Host firewall</h2>
+<p>Each host loads one input firewall table at boot. It controls traffic to the host itself. It does not change VM traffic.</p>
+<div class="table">
+<table>
+  <thead><tr><th>Traffic to the host</th><th>Accepted from</th></tr></thead>
+  <tbody>
+    <tr><td>WireGuard</td><td>The provider private network, and the local Atlas VM</td></tr>
+    <tr><td>SSH and the Metal API</td><td>The Atlas address on <code>wg0</code></td></tr>
+    <tr><td>VM migration</td><td>Other host addresses on <code>wg0</code></td></tr>
+    <tr><td>SSH for recovery</td><td>The provider private network</td></tr>
+    <tr><td>ICMP, DHCP, and replies</td><td>Any address</td></tr>
+  </tbody>
+</table>
+</div>
+<p>A separate rule drops VM packets to the provider private network. A VM can reach the internet, but it cannot reach the hosts.</p>
+
+<h2>Evidence: an end-to-end test on AWS</h2>
+<p>The design first ran on three bare-metal hosts at one provider. Then it ran on a second provider, AWS, with two virtual hosts that have nested virtualization. Atlas created the first host. The second host was started by hand and then added with the new Import Server action.</p>
+<div class="table">
+<table>
+  <thead><tr><th>Check</th><th>Result</th><th>What was measured</th></tr></thead>
+  <tbody>
+    <tr><td>Host lockdown</td><td class="ok">Pass</td><td>Public SSH and port 9000 time out. The Metal API listens only on <code>wg0</code>.</td></tr>
+    <tr><td>Import Server</td><td class="ok">Pass</td><td>A second import returns the same record and resumes a failed setup.</td></tr>
+    <tr><td>VM in the same tenant, other host</td><td class="ok">Pass</td><td>Ping works, about 1.5 ms.</td></tr>
+    <tr><td>VM in another tenant</td><td class="ok">Pass</td><td>Ping fails.</td></tr>
+    <tr><td>VM to the provider private network</td><td class="ok">Pass</td><td>TCP to host port 22 is blocked.</td></tr>
+    <tr><td>VM to the internet over IPv4</td><td class="ok">Pass</td><td>HTTPS works through host NAT. The VM has no public IPv4 address.</td></tr>
+    <tr><td>Tenant-0 VM to Atlas</td><td class="ok">Pass</td><td>A file download returns HTTP 200.</td></tr>
+    <tr><td>Other tenant to Atlas</td><td class="ok">Pass</td><td>The request fails.</td></tr>
+    <tr><td>Live migration</td><td class="ok">Pass</td><td>The <code>atlas0</code> route moves with the VM to its new host.</td></tr>
+    <tr><td>Reboot of the gateway host</td><td class="ok">Pass</td><td>The gateway, firewall, Metal, and <code>wg0</code> start again with no manual step, in about one minute.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>What failed first</h2>
+<p>The test found these faults. Each one is fixed.</p>
+<h3>Atlas did not list tenant-0 VMs</h3>
+<p>Host names are UUIDs, so the database stores the VM host field in a native UUID column. The query filter "field is set" compares that column with an empty string. That comparison never matches, so the result was always empty. The query now omits that filter.</p>
+<h3>The gateway lost NAT on AWS</h3>
+<p>The masquerade rule named one output interface. It took the interface from the route to one probe address. On AWS, traffic to other hosts uses a second network interface, so the rule did not match, and AWS dropped the packets. The rule now matches only the private network range, on any interface.</p>
+<h3>The Atlas VM did not start after a restart</h3>
+<p>Firecracker, the VM monitor, does not start when its old API socket file exists. Also, the service was not enabled at boot. The service now deletes the socket file first, and setup enables it.</p>
+<h3>The Atlas VM kernel had no TUN device</h3>
+<p>The VM needs TUN for a user-space WireGuard. The first kernel did not have it. The Atlas VM now uses the same Ubuntu kernel as other VMs.</p>
+<h3>A single-interface host did not isolate VMs</h3>
+<p>The drop rule named the private interface. On a host with one interface for both networks, the rule was skipped. The rule now matches the private network range on any interface.</p>
+
+<h2>Limits and next steps</h2>
+<ul>
+  <li>The first host of a new region still uses public SSH during its setup. The firewall closes it at the end of the setup.</li>
+  <li>The AWS test did not cover the HTTP proxy, the object store service, the IPv6 router, or the production Atlas VM.</li>
+  <li>A new Atlas key needs console access to every host. Keep a backup of the key.</li>
+  <li>One development laptop connects to one region at a time, because two test regions use the same private range.</li>
+</ul>
+<p class="note">Status: the change is complete on a feature branch and waits for review.</p>
+
+<footer>Diagrams drawn with <a href="https://roughjs.com/">Rough.js</a>. Tunnel details follow the <a href="https://www.wireguard.com/">WireGuard</a> design.</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  if (!window.rough) return;
+  var NS = "http://www.w3.org/2000/svg";
+  var INK = "#1d232a", MUTED = "#5d6873", ACCENT = "#1c6f86", BAD = "#a3392f";
+  function make(id) { var svg = document.getElementById(id); return { svg: svg, rc: rough.svg(svg) }; }
+  function add(d, node) { d.svg.appendChild(node); return node; }
+  function text(d, x, y, value, options) {
+    options = options || {};
+    var t = document.createElementNS(NS, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y);
+    t.setAttribute("text-anchor", options.anchor || "middle");
+    t.setAttribute("font-family", options.mono ? "ui-monospace, Menlo, Consolas, monospace" : "system-ui, -apple-system, Segoe UI, sans-serif");
+    t.setAttribute("font-size", options.size || 14);
+    t.setAttribute("font-weight", options.weight || 400);
+    t.setAttribute("fill", options.color || INK);
+    t.textContent = value;
+    return add(d, t);
+  }
+  function box(d, x, y, w, h, options) {
+    options = options || {};
+    return add(d, d.rc.rectangle(x, y, w, h, { roughness: 1.1, stroke: options.stroke || INK, strokeWidth: options.width || 1.4, strokeLineDash: options.dash, fill: "none", seed: options.seed || 3 }));
+  }
+  function arrow(d, x1, y1, x2, y2, options) {
+    options = options || {};
+    var color = options.stroke || INK;
+    add(d, d.rc.line(x1, y1, x2, y2, { roughness: 0.9, stroke: color, strokeWidth: options.width || 1.6, strokeLineDash: options.dash, seed: options.seed || 5 }));
+    var angle = Math.atan2(y2 - y1, x2 - x1), size = 9;
+    add(d, d.rc.linearPath([
+      [x2 - size * Math.cos(angle - 0.45), y2 - size * Math.sin(angle - 0.45)],
+      [x2, y2],
+      [x2 - size * Math.cos(angle + 0.45), y2 - size * Math.sin(angle + 0.45)]
+    ], { roughness: 0.6, stroke: color, strokeWidth: options.width || 1.6, seed: 7 }));
+  }
+  function cross(d, x, y) {
+    add(d, d.rc.line(x - 8, y - 8, x + 8, y + 8, { stroke: BAD, strokeWidth: 2, roughness: 0.8 }));
+    add(d, d.rc.line(x - 8, y + 8, x + 8, y - 8, { stroke: BAD, strokeWidth: 2, roughness: 0.8 }));
+  }
+
+  var a = make("d-before-after");
+  text(a, 190, 28, "Before", { weight: 600, size: 16 });
+  text(a, 570, 28, "After", { weight: 600, size: 16 });
+  add(a, a.rc.line(380, 18, 380, 315, { stroke: "#c8cfd5", strokeWidth: 1, roughness: 0.6 }));
+  box(a, 30, 130, 90, 50); text(a, 75, 160, "Atlas", { weight: 600 });
+  box(a, 205, 70, 165, 190, { seed: 9 }); text(a, 290, 92, "Host", { weight: 600 });
+  text(a, 290, 112, "public address", { size: 12, color: MUTED });
+  [["SSH :22", 140], ["Metal :9000", 185], ["WireGuard :51820", 230]].forEach(function (row, i) {
+    arrow(a, 120, 155, 214, row[1] - 4, { seed: 11 + i, stroke: BAD });
+    text(a, 300, row[1], row[0], { size: 12, mono: true, color: BAD });
+  });
+  text(a, 190, 300, "Open to the whole internet", { size: 13, color: BAD });
+
+  box(a, 410, 130, 90, 50); text(a, 455, 152, "Atlas", { weight: 600 }); text(a, 455, 170, "atlas0", { size: 12, mono: true, color: MUTED });
+  box(a, 590, 70, 150, 190, { seed: 9 }); text(a, 665, 92, "Host", { weight: 600 });
+  box(a, 605, 125, 120, 90, { stroke: ACCENT, seed: 13 }); text(a, 665, 145, "wg0", { mono: true, color: ACCENT });
+  text(a, 665, 172, "SSH :22", { size: 12, mono: true }); text(a, 665, 194, "Metal :9000", { size: 12, mono: true });
+  arrow(a, 500, 155, 603, 160, { stroke: ACCENT, width: 2.2, seed: 21 });
+  text(a, 552, 145, "tunnel", { size: 12, color: ACCENT });
+  text(a, 665, 240, "public address", { size: 12, color: MUTED });
+  cross(a, 720, 240);
+  text(a, 570, 300, "Public address drops management traffic", { size: 13, color: MUTED });
+
+  var g = make("d-gateway");
+  box(g, 25, 95, 120, 70); text(g, 85, 122, "Laptop", { weight: 600 }); text(g, 85, 144, "Atlas", { size: 12, color: MUTED });
+  box(g, 230, 30, 500, 250, { dash: [6, 6], stroke: MUTED, seed: 17 }); text(g, 480, 52, "Provider private network", { size: 13, color: MUTED });
+  box(g, 260, 80, 170, 100, { seed: 19 }); text(g, 345, 104, "Host A", { weight: 600 });
+  box(g, 278, 118, 134, 46, { stroke: ACCENT, seed: 23 }); text(g, 345, 146, "gateway VM", { size: 13, color: ACCENT });
+  box(g, 560, 80, 150, 100, { seed: 29 }); text(g, 635, 104, "Host B", { weight: 600 }); text(g, 635, 146, "wg0", { mono: true });
+  arrow(g, 145, 120, 276, 132, { seed: 31 });
+  text(g, 205, 112, "outer tunnel", { size: 12 });
+  arrow(g, 412, 141, 558, 141, { seed: 37 });
+  text(g, 485, 132, "masquerade", { size: 12 });
+  text(g, 485, 160, "to private IP", { size: 12, color: MUTED });
+  arrow(g, 85, 165, 85, 235, { stroke: ACCENT, width: 2.2, seed: 41, dash: [1, 0] });
+  add(g, g.rc.line(85, 235, 635, 235, { stroke: ACCENT, strokeWidth: 2.2, roughness: 0.9, seed: 43 }));
+  arrow(g, 635, 235, 635, 182, { stroke: ACCENT, width: 2.2, seed: 47 });
+  text(g, 380, 258, "atlas0: end to end, encrypted from laptop to Host B", { size: 13, color: ACCENT });
+}());
+</script>
+</body>
+</html>
