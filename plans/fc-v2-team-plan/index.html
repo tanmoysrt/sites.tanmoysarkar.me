@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frappe Cloud V2 Launch Plan</title>
+<meta name="description" content="Engineering plan for the public launch of Frappe Cloud V2: milestones, workstreams, dependencies, and launch checks.">
+<style>
+  :root { --fg:#1d1d1f; --muted:#5f6368; --line:#e3e3e3; --bg:#fff; --soft:#f6f6f4; --p0:#b3261e; --accent:#1f5fbf; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:40px 16px 80px; }
+  h1 { font-size:1.9rem; line-height:1.2; margin:0 0 8px; }
+  h2 { font-size:1.3rem; margin:48px 0 8px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:1.05rem; margin:28px 0 8px; }
+  p, li { max-width:70ch; }
+  .meta { color:var(--muted); margin:0 0 24px; }
+  .legend { background:var(--soft); padding:12px 16px; border-radius:6px; font-size:.92rem; }
+  .legend p { margin:4px 0; }
+  .wrap { overflow-x:auto; margin:8px 0 16px; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; }
+  th, td { text-align:left; vertical-align:top; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { font-weight:600; color:var(--muted); font-size:.82rem; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+  td:first-child { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.85rem; white-space:nowrap; }
+  .p0 { color:var(--p0); font-weight:600; }
+  .dep { color:var(--muted); font-size:.85rem; display:block; margin-top:2px; }
+  ol.ms { padding-left:20px; }
+  ol.ms li { margin:6px 0; }
+  .chain { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.88rem; background:var(--soft); padding:12px 16px; border-radius:6px; line-height:1.9; overflow-x:auto; }
+  ul.cols { columns:2 260px; padding-left:20px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Frappe Cloud V2 launch plan</h1>
+<p class="meta">Engineering plan · 4 October 2026</p>
+
+<p>Frappe Cloud V2 has three parts: <b>Central</b> (teams, billing, and resources), <b>Atlas</b> (virtual machines, or VMs), and <b>Pilot</b> (Frappe benches, apps, and sites). This plan lists the engineering work that must be done before the first public V2 offer.</p>
+
+<p>Public launch does not turn off V1. Customers stay on V1 until their path to V2 works. That move is a separate project, listed near the end.</p>
+
+<div class="legend">
+  <p><b>Size:</b> S = under 1 week · M = 1–3 weeks · L = 1–2 months · XL = more than 2 months.</p>
+  <p><b>Priority:</b> <span class="p0">P0</span> = data, access, or money risk · P1 = needed for a good launch.</p>
+  <p><b>IDs:</b> L-numbers come from the full delivery plan. Other IDs are new tasks added after the plan audit.</p>
+</div>
+
+<h2>Milestones</h2>
+<p>Do the milestones in this order. A task can start early when its dependencies are done.</p>
+<ol class="ms">
+  <li><b>Stop the risks.</b> Fix access checks, backup choice, and backup status. Start site move, because it is the largest task.</li>
+  <li><b>Make data and money safe.</b> Restore, archive, billing correctness, invoices, and deploy checks.</li>
+  <li><b>Complete the journey.</b> Site creation choices, trial, site move, support access, and incidents.</li>
+  <li><b>Prove it.</b> Restore drills, payment gateway tests, region tests, and the launch check.</li>
+</ol>
+
+<h3>Dependency chains</h3>
+<div class="chain">
+  L06 access checks → L25 support access<br>
+  L09 backup choice → L10 backup status → L11 restore → L12 restore drills<br>
+  B5 archive state → L08 trial expiry → L13 billing on stop and archive<br>
+  L07 creation choices → L02 price preview
+</div>
+
+<h2>A. Access and security</h2>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Done when</th><th>Size</th><th>Pri</th><th>MS</th></tr>
+<tr><td>L06</td><td>Tighten Pilot access checks so each Central permission gives only the matching Pilot access.</td><td>Access tests pass for every Central role and scope.</td><td>M</td><td class="p0">P0</td><td>1</td></tr>
+<tr><td>L25</td><td>Add support staff access to Pilot. Use the Central identity. Get approval from a team admin.</td><td>Access is limited, expires, and every action is logged.<span class="dep">Needs L06.</span></td><td>L</td><td>P1</td><td>3</td></tr>
+<tr><td>A3</td><td>Test 2FA setup, recovery codes, and forced 2FA in V2.</td><td>V1 users with 2FA keep it after they move.</td><td>S</td><td>P1</td><td>2</td></tr>
+</table></div>
+
+<h2>B. Backup and restore</h2>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Done when</th><th>Size</th><th>Pri</th><th>MS</th></tr>
+<tr><td>L09</td><td>Ask for a backup mode at site creation: none, GFS, or another mode. Let the user change it in Pilot.</td><td>No site is created without a recorded backup choice.</td><td>M</td><td class="p0">P0</td><td>1</td></tr>
+<tr><td>L10</td><td>Show local and offsite backup status separately. Retry and alert on failure.</td><td>A failed offsite upload shows as failed and sends an alert.</td><td>M</td><td class="p0">P0</td><td>1</td></tr>
+<tr><td>L11</td><td>Add self-service restore of a selected backup. Take a backup before the restore.</td><td>A user restores a site without support and sees progress.<span class="dep">Needs L10.</span></td><td>L</td><td class="p0">P0</td><td>2</td></tr>
+<tr><td>L12</td><td>Run sampled restore drills. Publish recovery time and data loss window.</td><td>Drill results exist for each offered region.<span class="dep">Needs L11.</span></td><td>L</td><td class="p0">P0</td><td>4</td></tr>
+<tr><td>B5</td><td>Add an archive state in Pilot. Keep the last backup for the retention period.</td><td>An archived site can be recovered until retention ends.</td><td>M</td><td class="p0">P0</td><td>2</td></tr>
+</table></div>
+
+<h2>C. Site creation and trial</h2>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Done when</th><th>Size</th><th>Pri</th><th>MS</th></tr>
+<tr><td>L07</td><td>Let the user choose app, region, Frappe version, VM size, and bucket. Reject bad combinations.</td><td>All choices are required and validated.</td><td>L</td><td>P1</td><td>3</td></tr>
+<tr><td>L02</td><td>Show the VM price before creation.</td><td>The price shows on the creation screen.<span class="dep">Needs L07.</span></td><td>S</td><td>P1</td><td>3</td></tr>
+<tr><td>L04</td><td>Check app compatibility with version, country, and region before creation.</td><td>An incompatible app cannot be selected.</td><td>L</td><td>P1</td><td>3</td></tr>
+<tr><td>L08</td><td>Trial: explain conversion, warn before expiry, stop unpaid sites, then archive them.</td><td>Each trial step sends a notice.<span class="dep">Needs B5.</span></td><td>L</td><td>P1</td><td>3</td></tr>
+</table></div>
+
+<h2>D. Billing and payments</h2>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Done when</th><th>Size</th><th>Pri</th><th>MS</th></tr>
+<tr><td>L13</td><td>Charge only for usable resources. Stop charges on failure, stop, and archive.</td><td>Test cases pass for each state, including credit and refund.<span class="dep">Needs L08.</span></td><td>L</td><td class="p0">P0</td><td>2</td></tr>
+<tr><td>L14</td><td>Enable invoice PDF and email. Add regional tax fields.</td><td>Users download and receive invoices with tax details.</td><td>M</td><td>P1</td><td>2</td></tr>
+<tr><td>L15</td><td>Finish auto-recharge and stop-billing to match V1.</td><td>Suspension and pending invoices work as in V1.</td><td>L</td><td>P1</td><td>2</td></tr>
+<tr><td>L16</td><td>Test Stripe and Razorpay in each offered region and currency.</td><td>A live payment passes in each region and currency.</td><td>M</td><td>P1</td><td>4</td></tr>
+</table></div>
+
+<h2>E. Hosting reliability</h2>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Done when</th><th>Size</th><th>Pri</th><th>MS</th></tr>
+<tr><td>L17</td><td>Check disk, memory, and dependencies before deploy and update. Limit how long a task can run.</td><td>A low-resource update stops before it starts. No task stays stuck. Fix-and-continue and rollback pass failure tests.</td><td>L</td><td class="p0">P0</td><td>2</td></tr>
+<tr><td>L20</td><td>Test private GitHub app install and update.</td><td>Private repositories install, and credentials stay separate per team.</td><td>L</td><td>P1</td><td>3</td></tr>
+<tr><td>L21</td><td>Test domain and TLS changes, renewal, and fallback login.</td><td>A broken primary domain does not block admin login.</td><td>M</td><td>P1</td><td>3</td></tr>
+<tr><td>L22</td><td>Test VM create, resize, snapshot, restore, and console in each offered region.</td><td>All operations pass in each region and plan.</td><td>L</td><td>P1</td><td>4</td></tr>
+</table></div>
+
+<h2>F. Site move and releases</h2>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Done when</th><th>Size</th><th>Pri</th><th>MS</th></tr>
+<tr><td>L18</td><td>Add self-service site move between Pilot VMs and regions.</td><td>A move shows status, checks the data, and can roll back.<span class="dep">Start in milestone 1.</span></td><td>XL</td><td>P1</td><td>3</td></tr>
+<tr><td>L19</td><td>Give V1 release-group users a V2 equivalent, or keep them on V1.</td><td>Each affected user has a working path.<span class="dep">Only for affected users.</span></td><td>XL</td><td>P1</td><td>3</td></tr>
+</table></div>
+
+<h2>G. Customer journey and operations</h2>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Done when</th><th>Size</th><th>Pri</th><th>MS</th></tr>
+<tr><td>L23</td><td>One site list in Central with links to Pilot. Same task status in both. A support link on each resource.</td><td>New users finish the core tasks in a usability test.</td><td>L</td><td>P1</td><td>3</td></tr>
+<tr><td>L24</td><td>Add fleet alerts, maintenance notices, an incident timeline, and RCA updates in the product.</td><td>A test incident reaches affected users and shows in the timeline.</td><td>L</td><td>P1</td><td>3</td></tr>
+</table></div>
+
+<h2>Owned outside engineering</h2>
+<p>Engineering gives data for these tasks. Another team owns the result.</p>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Owner team</th><th>Launch</th></tr>
+<tr><td>L01</td><td>Publish the supported offer: features, prices, regions, and gateways.</td><td>Product</td><td>Yes</td></tr>
+<tr><td>L02</td><td>Compare V1 and V2 bills and margin.</td><td>Finance and Product</td><td>Yes</td></tr>
+<tr><td>L03</td><td>Publish a plan matrix of verified protections and recovery targets.</td><td>Compliance</td><td>Yes</td></tr>
+<tr><td>L05</td><td>Keep a per-customer list of the V1 features each customer uses.</td><td>Product and Support</td><td>Yes</td></tr>
+<tr><td>L26</td><td>Partner program in V2. Partners stay on V1 until their flows work.</td><td>Partner team</td><td>For new V2 partners</td></tr>
+<tr><td>L27</td><td>Freemium on shared Pilot VMs.</td><td>Freemium team</td><td>Only if advertised</td></tr>
+</table></div>
+
+<h2>V1 migration (separate project)</h2>
+<div class="wrap"><table>
+<tr><th>ID</th><th>Task</th><th>Size</th></tr>
+<tr><td>M01</td><td>List every active V1 account and its V2 destination.</td><td>L</td></tr>
+<tr><td>M02</td><td>Move V1 shared sites to dedicated Pilot VMs, in tested batches.</td><td>XL</td></tr>
+<tr><td>M03</td><td>Keep users on V1 when their workflow has no V2 equivalent.</td><td>XL</td></tr>
+<tr><td>M04</td><td>Test update, backup, restore, domain, payment, and support for moved accounts.</td><td>XL</td></tr>
+<tr><td>MIG-5</td><td>Add site import from an external site or backup file.</td><td>L</td></tr>
+</table></div>
+
+<h2>Not for launch</h2>
+<p>Do not advertise these features at launch.</p>
+<ul class="cols">
+  <li>MariaDB encryption at rest</li>
+  <li>Point-in-time recovery</li>
+  <li>DB replicas, failover, and active-active hosting</li>
+  <li>Customer API and webhooks</li>
+  <li>Paid marketplace apps</li>
+  <li>GitLab, Codeberg, and monorepo apps</li>
+  <li>Site transfer between teams</li>
+  <li>Customer backup storage and backup region</li>
+  <li>Masked staging copy and table-level DB access</li>
+  <li>Annual prepayment and pre-billing estimates</li>
+  <li>PayPal, M-Pesa, and other regional payment methods</li>
+  <li>Static egress IP, private network, wildcard domains, and IPv6</li>
+  <li>Scheduled auto-update, site DB users, and bulk site drop</li>
+</ul>
+
+<h2>Launch check</h2>
+<p>Launch when all of these are true:</p>
+<ol>
+  <li>Every launch task has a result that its owner approved.</li>
+  <li>The paid and trial journeys pass end to end.</li>
+  <li>The archive period, plans, and regions are published.</li>
+  <li>Any advertised Freemium or partner path passes its own tests.</li>
+</ol>
+
+<h2>Sources</h2>
+<p>This plan is a short version of an internal delivery plan. That plan used a review of the Frappe Cloud V1 code (<a href="https://github.com/frappe/press">frappe/press</a>, <a href="https://github.com/frappe/agent">frappe/agent</a>), the V2 code, open Press issues, and six months of support tickets. Sizes are estimates, not a schedule.</p>
+
+</main>
+</body>
+</html>
