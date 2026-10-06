@@ -53,12 +53,12 @@
   <table>
     <tr><th>Attribute</th><th>Target file</th><th>Scope</th></tr>
     <tr><td><code>pilot-common-config</code></td><td><code>common_config.toml</code></td><td>All benches on the host</td></tr>
-    <tr><td><code>pilot-bench-config</code></td><td><code>bench.toml</code></td><td>One bench</td></tr>
+    <tr><td><code>pilot-config</code></td><td><code>bench.toml</code></td><td>One bench</td></tr>
     <tr><td><code>pilot-common-site-config</code></td><td><code>sites/common_site_config.json</code></td><td>All sites of one bench (Frappe reads it)</td></tr>
   </table>
   <p>The value of each attribute is the patch itself. There is no envelope and no version field.</p>
 <pre><code>pilot-common-config       {"telemetry": {"endpoint": "https://...", "token": "..."}}
-pilot-bench-config        {"s3": {"bucket": "...", "region": "..."}}
+pilot-config        {"s3": {"bucket": "...", "region": "..."}}
 pilot-common-site-config  {"max_file_size": 104857600}</code></pre>
 
   <div class="diagram" id="after" role="img" aria-label="After: pilot-central stays structured. Three config attributes go through one merge step into their three files."></div>
@@ -93,7 +93,7 @@ pilot-common-site-config  {"max_file_size": 104857600}</code></pre>
   </ul>
 
   <h2>Breaking change</h2>
-  <p>This change is not backward compatible. Pilot no longer reads <code>pilot-storage</code> or <code>pilot-telemetry</code>. Central sends S3 settings in <code>pilot-bench-config</code> and telemetry in <code>pilot-common-config</code>. <code>pilot-central</code> does not change.</p>
+  <p>This change is not backward compatible. Pilot no longer reads <code>pilot-storage</code> or <code>pilot-telemetry</code>. Central sends S3 settings in <code>pilot-config</code> and telemetry in <code>pilot-common-config</code>. <code>pilot-central</code> does not change.</p>
 
   <h2>Limits</h2>
   <ul>
@@ -168,7 +168,7 @@ pilot-common-site-config  {"max_file_size": 104857600}</code></pre>
   arrow(after, 440, 35, 498, 35);
   box(after, 500, 15, 210, 40, "bootstrap state");
 
-  [["pilot-common-config", "common_config.toml", 95], ["pilot-bench-config", "bench.toml", 145], ["pilot-common-site-config", "common_site_config.json", 195]].forEach(([attribute, file, y]) => {
+  [["pilot-common-config", "common_config.toml", 95], ["pilot-config", "bench.toml", 145], ["pilot-common-site-config", "common_site_config.json", 195]].forEach(([attribute, file, y]) => {
     box(after, 10, y, 200, 40, attribute, accent);
     arrow(after, 210, y + 20, 268, 165, accent);
     box(after, 500, y, 210, 40, file);
