@@ -32,7 +32,7 @@
 <body>
 <main>
   <h1>Pilot Metadata Config Patches</h1>
-  <p class="lede">A plan to replace fixed config blocks in instance metadata with generic JSON patches. <span class="tag">Plan</span> <span class="tag">Proposed</span></p>
+  <p class="lede">A plan to replace fixed config blocks in instance metadata with three generic JSON patches, applied one time at bootstrap. <span class="tag">Plan</span> <span class="tag">Agreed</span></p>
 
   <h2>The situation</h2>
   <p>Pilot manages Frappe benches on a host. When a new VM starts from an image, Pilot reads its first settings from <em>instance metadata</em>. Instance metadata is a small key-value service that the cloud makes available inside the VM at <code>169.254.169.254</code>. Each key is an <em>attribute</em>.</p>
@@ -49,22 +49,20 @@
   <p class="caption">Before: one custom code path for each attribute.</p>
 
   <h2>The idea</h2>
-  <p>Deliver settings as a <em>patch</em>. A patch is a JSON object that describes only the changes to make to a config file. Each top-level key names a target file. Pilot merges each value into its target.</p>
-<pre><code>{
-  "common_config":      { "proxy": { "protocol_v2": true } },
-  "bench_config":       { "gunicorn": { "workers": 4 } },
-  "common_site_config": { "max_file_size": 104857600 }
-}</code></pre>
-  <p>The three targets are the files an operator usually changes:</p>
+  <p>Deliver settings as <em>patches</em>. A patch is a JSON object that names only the keys to change. Central writes one attribute for each config file. Pilot merges each attribute into its file one time, when the host bootstraps.</p>
   <table>
-    <tr><th>Target</th><th>File</th><th>Scope</th></tr>
-    <tr><td><code>common_config</code></td><td><code>common_config.toml</code></td><td>All benches on the host</td></tr>
-    <tr><td><code>bench_config</code></td><td><code>bench.toml</code></td><td>One bench</td></tr>
-    <tr><td><code>common_site_config</code></td><td><code>sites/common_site_config.json</code></td><td>All sites of one bench (Frappe reads it)</td></tr>
+    <tr><th>Attribute</th><th>Target file</th><th>Scope</th></tr>
+    <tr><td><code>pilot-common-config</code></td><td><code>common_config.toml</code></td><td>All benches on the host</td></tr>
+    <tr><td><code>pilot-bench-config</code></td><td><code>bench.toml</code></td><td>One bench</td></tr>
+    <tr><td><code>pilot-common-site-config</code></td><td><code>sites/common_site_config.json</code></td><td>All sites of one bench (Frappe reads it)</td></tr>
   </table>
+  <p>The value of each attribute is the patch itself. There is no envelope and no version field.</p>
+<pre><code>pilot-common-config       {"telemetry": {"endpoint": "https://...", "token": "..."}}
+pilot-bench-config        {"s3": {"bucket": "...", "region": "..."}}
+pilot-common-site-config  {"max_file_size": 104857600}</code></pre>
 
-  <div class="diagram" id="after" role="img" aria-label="After: pilot-central stays structured. pilot-config attributes go through one merge step into three target files."></div>
-  <p class="caption">After: one merge step for all settings. The Central credential stays structured.</p>
+  <div class="diagram" id="after" role="img" aria-label="After: pilot-central stays structured. Three config attributes go through one merge step into their three files."></div>
+  <p class="caption">After: one merge step. Each attribute has one target file. The Central credential stays structured.</p>
 
   <h2>How a patch merges</h2>
   <p>Pilot uses <a href="https://www.rfc-editor.org/rfc/rfc7396">JSON Merge Patch (RFC 7396)</a>. It is a published standard, so Pilot does not invent its own rules. The rules are:</p>
@@ -74,42 +72,41 @@
     <li><code>null</code> deletes the key.</li>
   </ul>
   <p>Example. The file has <code>{"s3": {"bucket": "a", "region": "x"}}</code>. The patch is <code>{"s3": {"bucket": "b"}}</code>. The result is <code>{"s3": {"bucket": "b", "region": "x"}}</code>.</p>
-  <p>If Pilot applies the same patch two times, the result does not change. Thus a retry after a partial failure is safe.</p>
+  <p>A patch changes only the keys that it names. Settings that a user adds, for example mail settings, stay. If Pilot applies the same patch two times, the result does not change. Thus a retry after a partial failure is safe.</p>
 
-  <h2>Large payloads</h2>
-  <p>A useful patch can be larger than 1 KiB. Pilot reads <code>pilot-config</code>, then <code>pilot-config-1</code>, <code>pilot-config-2</code> and continues until an attribute is missing. Each attribute is a complete patch. Pilot applies them in order.</p>
-  <p>Pilot does not join chunks into one string. If one chunk of a joined string is missing, the full payload becomes incorrect JSON.</p>
+  <h2>When it runs</h2>
+  <p>Pilot reads the config attributes one time, during bootstrap, before it marks the host as bootstrapped. After bootstrap, Pilot does not read them again. <code>pilot setup central --rebootstrap</code> clears the bootstrap flag, so it applies the credential and the patches again.</p>
+  <p>We examined later updates through metadata (revision numbers, content hashes, polling) and rejected them for now. A host usually gets its settings only one time, and a one-time apply cannot lose an update or revert a user change.</p>
+
+  <h2>Rules for Central</h2>
+  <ol>
+    <li><strong>Write the config attributes before <code>pilot-central</code>.</strong> Pilot bootstraps when <code>pilot-central</code> appears, and it reads the other attributes only at that time. An attribute that arrives later is not applied.</li>
+    <li><strong>Keep each value under 1 KiB.</strong> S3 and telemetry are in different attributes, so each one fits.</li>
+  </ol>
 
   <h2>Safety rules</h2>
   <ul>
-    <li><strong>Locks.</strong> Each target uses the lock and atomic write that Pilot already uses for that file. A CLI call, an Admin request and a task worker can change the same bench at the same time.</li>
-    <li><strong>Validation.</strong> Pilot validates the merged result before it writes. Unknown keys in a TOML target cause an error, so a spelling mistake does not disappear silently. External URLs get the same checks as before.</li>
+    <li><strong>Locks.</strong> Each file uses the lock and atomic write that Pilot already uses for that file. A CLI call, an Admin request and a task worker can change the same bench at the same time.</li>
+    <li><strong>Validation.</strong> Pilot checks the shape of all three patches and rejects unknown TOML keys before it writes a file. A spelling mistake does not disappear silently. Pilot validates the merged config before each write. External URLs get the same checks as before.</li>
     <li><strong>Failure.</strong> A bad patch stops the bootstrap with an error. The bootstrap watcher tries again. The host does not show as bootstrapped with a half-applied config.</li>
     <li><strong>Trust.</strong> Only the cloud can write instance metadata, and it already delivers credentials. Thus every key is writable. The validation is the limit.</li>
   </ul>
 
-  <h2>When it runs</h2>
-  <p>Pilot applies the patches one time, at bootstrap, before it marks the host as bootstrapped. Pilot does not watch for later changes. Usually a host gets its settings only when it starts for the first time.</p>
+  <h2>Breaking change</h2>
+  <p>This change is not backward compatible. Pilot no longer reads <code>pilot-storage</code> or <code>pilot-telemetry</code>. Central sends S3 settings in <code>pilot-bench-config</code> and telemetry in <code>pilot-common-config</code>. <code>pilot-central</code> does not change.</p>
 
-  <h2>Compatibility</h2>
+  <h2>Limits</h2>
   <ul>
-    <li><code>pilot-central</code> does not change. It controls the bootstrap state and fills the JWKS key cache, so it stays structured.</li>
-    <li><code>pilot-storage</code> and <code>pilot-telemetry</code> continue to work. Pilot converts each one into a patch on the same path. The old custom code is removed.</li>
-    <li>The stored config does not change shape, so no data migration is necessary.</li>
-  </ul>
-
-  <h2>Open points</h2>
-  <ul>
-    <li>Per-site <code>site_config.json</code> targets (for example <code>"sites": {"site.local": {...}}</code>) are not in the first version.</li>
-    <li>If the cloud can list attributes, Pilot can find <code>pilot-config*</code> by prefix instead of probing numbers.</li>
+    <li>The bench services can already run when bootstrap applies the patches. A value that a service reads only at start, for example the number of gunicorn workers, has an effect after the next restart. This is the same as the S3 and telemetry behavior before this change.</li>
+    <li>Per-site <code>site_config.json</code> is not a target in this version.</li>
   </ul>
 
   <h2>Next steps</h2>
   <ol>
-    <li>Add a raw, validated read-modify-write mode for <code>common_config.toml</code>.</li>
-    <li>Add the merge and target code, and read the <code>pilot-config*</code> attributes.</li>
-    <li>Move <code>pilot-storage</code> and <code>pilot-telemetry</code> onto the patch path.</li>
-    <li>Add tests: merge rules, each target, unknown keys, chunk order, retry after failure.</li>
+    <li>Add a raw, validated read-modify-write mode for <code>common_config.toml</code>, with a schema for unknown keys.</li>
+    <li>Add the merge code and read the three attributes during bootstrap.</li>
+    <li>Remove the <code>pilot-storage</code> and <code>pilot-telemetry</code> code.</li>
+    <li>Add tests: merge rules, each target, unknown keys, user settings that stay, retry after failure.</li>
     <li>Update the configuration docs.</li>
   </ol>
 
@@ -164,24 +161,20 @@
   arrow(before, 430, 117, 518, 160);
   arrow(before, 430, 192, 518, 75);
 
-  const after = canvas("after", 720, 280);
-  box(after, 10, 20, 160, 44, "pilot-central");
-  box(after, 260, 20, 170, 44, "credential parser", muted);
-  arrow(after, 170, 42, 258, 42);
-  arrow(after, 430, 42, 518, 42);
-  box(after, 520, 20, 190, 44, "bootstrap state");
+  const after = canvas("after", 720, 250);
+  box(after, 10, 15, 200, 40, "pilot-central");
+  box(after, 270, 15, 170, 40, "credential parser", muted);
+  arrow(after, 210, 35, 268, 35);
+  arrow(after, 440, 35, 498, 35);
+  box(after, 500, 15, 210, 40, "bootstrap state");
 
-  box(after, 10, 110, 160, 70, "pilot-config\npilot-config-1\n…", accent);
-  box(after, 10, 200, 160, 50, "pilot-storage\npilot-telemetry", muted);
-  box(after, 260, 140, 170, 60, "merge patch\nvalidate, lock", accent);
-  arrow(after, 170, 145, 258, 165, accent);
-  arrow(after, 170, 225, 258, 185, muted);
-  box(after, 520, 95, 190, 40, "common_config.toml");
-  box(after, 520, 150, 190, 40, "bench.toml");
-  box(after, 520, 205, 190, 40, "common_site_config.json");
-  arrow(after, 430, 160, 518, 115, accent);
-  arrow(after, 430, 170, 518, 170, accent);
-  arrow(after, 430, 180, 518, 225, accent);
+  [["pilot-common-config", "common_config.toml", 95], ["pilot-bench-config", "bench.toml", 145], ["pilot-common-site-config", "common_site_config.json", 195]].forEach(([attribute, file, y]) => {
+    box(after, 10, y, 200, 40, attribute, accent);
+    arrow(after, 210, y + 20, 268, 165, accent);
+    box(after, 500, y, 210, 40, file);
+    arrow(after, 440, 165, 498, y + 20, accent);
+  });
+  box(after, 270, 135, 170, 60, "merge patch\nvalidate, lock", accent);
 </script>
 </body>
 </html>
