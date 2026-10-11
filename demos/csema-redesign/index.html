@@ -107,7 +107,7 @@ code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; 
 .nav a.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--line2); }
 .nav a.on .i { color: var(--brand); }
 .side-foot { padding: 10px; }
-.primebox { padding: 12px; border-radius: 10px; border: 1px solid var(--brand-soft2); background: linear-gradient(160deg, var(--brand-soft), transparent 70%), var(--card); }
+.primebox { padding: 14px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card); }
 .me { width: 100%; display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 6px; border: 0; border-radius: 8px; background: transparent; text-align: left; }
 .me:hover { background: var(--s3); }
 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -131,24 +131,28 @@ main { flex: 1; min-height: 0; overflow-y: auto; }
 .crumbs a { color: var(--ink5); white-space: nowrap; } .crumbs a:hover { color: var(--ink8); }
 .crumbs .sep { color: var(--ink4); }
 .crumbs .cur { color: var(--ink9); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.body { max-width: 1040px; margin: 0 auto; padding: 24px 24px 56px; display: flex; flex-direction: column; gap: 28px; }
+.body { max-width: 1040px; margin: 0 auto; padding: 32px 24px 72px; display: flex; flex-direction: column; gap: 40px; }
 .body.narrow { max-width: 1040px; }
-@media (max-width: 640px) { .body { padding: 16px 12px 48px; gap: 24px; } }
-.sec-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 640px) { .body { padding: 20px 12px 56px; gap: 32px; } }
+.sec-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .sec-h h2 { font-size: 16px; font-weight: 600; color: var(--ink9); }
 .sec-h p { font-size: 13px; color: var(--ink5); margin-top: 2px; }
 
 /* Cards: the one container for everything */
 .card { background: var(--card); border: 1px solid var(--line2); border-radius: 12px; box-shadow: var(--shadow-sm); }
-.pad { padding: 16px; } .pad-lg { padding: 20px; }
+.pad { padding: 20px; } .pad-lg { padding: 28px; }
 @media (max-width: 640px) { .pad-lg { padding: 16px; } }
 a.card { display: flex; flex-direction: column; transition: border-color .15s, box-shadow .15s, transform .15s; }
 a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) { a.card, a.card:hover { transition: none; transform: none; } }
-.cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); }
+.cards { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); }
 .cards.sm { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .cards.fit { grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); }
-.grid2 { display: grid; gap: 16px; } @media (min-width: 820px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.cards.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.cards.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .cards.four { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+@media (max-width: 900px) { .cards.five { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } }
+.grid2 { display: grid; gap: 20px; } @media (min-width: 820px) { .grid2 { grid-template-columns: 1fr 1fr; } }
 .grid3 { display: grid; gap: 16px; } @media (min-width: 820px) { .grid3 { grid-template-columns: repeat(3, 1fr); } }
 
 .cover {
@@ -164,9 +168,11 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
 /* Light category tint on covers */
 .cover.c-brand { --tint: var(--brand-soft); } .cover.c-blue { --tint: var(--blue-bg); } .cover.c-violet { --tint: var(--violet-bg); }
 .cover.c-green { --tint: var(--green-bg); } .cover.c-orange { --tint: var(--orange-bg); } .cover.c-amber { --tint: var(--amber-bg); } .cover.c-gray { --tint: var(--s2); }
-.cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, linear-gradient(135deg, var(--tint), color-mix(in srgb, var(--tint) 35%, var(--s1))); }
-.card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; flex: 1; }
-.card-foot { margin-top: auto; padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, var(--tint); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, color-mix(in srgb, var(--tint) 45%, var(--s1)); } }
+:root[data-theme="dark"] .cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, color-mix(in srgb, var(--tint) 45%, var(--s1)); }
+.card-body { padding: 18px 20px 20px; display: flex; flex-direction: column; flex: 1; }
+.card-foot { margin-top: auto; padding-top: 18px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tile { width: 40px; height: 40px; border-radius: 10px; background: var(--s2); display: grid; place-items: center; color: var(--ink6); flex-shrink: 0; }
 .tile.brand { background: var(--brand-soft2); color: var(--brand); }
 
@@ -180,7 +186,7 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
   .stats > div:nth-child(n+3) { border-top: 1px solid var(--line1); }
 }
 .rows > * + * { border-top: 1px solid var(--line1); }
-.li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.li { display: flex; align-items: center; gap: 14px; padding: 16px 20px; }
 a.li:hover { background: var(--s1); }
 .rows > a.li:last-child:hover { border-radius: 0 0 11px 11px; }
 .li.cur { background: var(--brand-soft); }
@@ -247,11 +253,10 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 .hero { position: relative; overflow: hidden; }
 .hero .row-s > .min0.flex1 { flex: 1 1 320px; }
 @media (max-width: 640px) { .hero .row-s > .tile { display: none; } .hero .row-s > .btn, .hero .row-s > .row { width: 100%; } .hero .row-s > .row > .btn { flex: 1; } }
-.hero::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: linear-gradient(90deg, #dc2626, #ef4444); }
-.banner { background: linear-gradient(100deg, var(--brand-soft) 0%, transparent 60%), var(--card); border-color: var(--brand-soft2); }
+.banner { background: var(--card); }
 .podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: end; }
 .podium .card { text-align: center; padding: 16px 12px; }
-.podium .first { padding-top: 24px; border-color: var(--brand-soft2); background: linear-gradient(180deg, var(--brand-soft), transparent 70%), var(--card); }
+.podium .first { padding-top: 24px; border-color: var(--brand); }
 .rank { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--s3); color: var(--ink7); }
 .rank.r1 { background: var(--brand); color: #fff; }
 .heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 12px); grid-auto-columns: 12px; gap: 4px; justify-content: start; overflow-x: auto; padding-bottom: 2px; }
@@ -278,10 +283,10 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 
 /* Home */
 .home-hero { display: grid; grid-template-columns: minmax(0, 1fr) 344px; }
-.home-hero .hh-main { padding: 24px; display: flex; flex-direction: column; }
+.home-hero .hh-main { padding: 32px; display: flex; flex-direction: column; }
 .home-hero .hh-side {
   padding: 20px; border-left: 1px solid var(--line1); border-radius: 0 11px 11px 0; display: flex; flex-direction: column;
-  background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, linear-gradient(160deg, var(--brand-soft), var(--s1) 70%);
+  background: var(--s1);
 }
 @media (max-width: 860px) {
   .home-hero { grid-template-columns: 1fr; }
@@ -290,9 +295,9 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 }
 .steps { position: relative; margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
 .steps::before { content: ""; position: absolute; left: 17px; top: 18px; bottom: 18px; width: 1px; background: var(--line3); }
-.steps a { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
+.steps a { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 10px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
 .steps a:hover { background: var(--card); }
-.steps a.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--brand-soft2); }
+.steps a.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--line2); }
 .steps .i { background: var(--s1); border-radius: 99px; }
 .steps a.on .i, .steps a:hover .i { background: var(--card); }
 .daily { display: flex; overflow: hidden; }
@@ -330,7 +335,7 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
     <div class="side-foot">
       <div class="primebox">
         <p class="row g2 t-sm semi ink9"><span data-icon="crown" class="brand"></span>Go Prime</p>
-        <p class="t-xs p ink6 mt1">Get all challenges, all seasons and 60 machine hours each month.</p>
+        <p class="t-xs p ink6 mt1">All challenges and seasons.</p>
         <a class="btn soft full mt3" href="#/plans">See plans</a>
       </div>
       <button class="me" data-act="account" aria-haspopup="menu">
@@ -612,7 +617,7 @@ function itemCard(i) {
       <p class="t-xs ink5">${i.category}</p>
       <h3 class="t-base semi ink9 mt1 trunc">${i.title}</h3>
       <p class="t-sm p ink6 mt1 clamp2">${i.summary}</p>
-      <div class="card-foot">${diff(i.difficulty)}<span class="row g3 t-xs ink5"><span class="row g1">${ic('zap', 'i-sm')}${i.xp} XP</span><span class="row g1">${ic('users', 'i-sm')}${i.solves}</span></span></div>
+      <div class="card-foot">${diff(i.difficulty)}<span class="row g1 t-xs ink5">${ic('zap', 'i-sm')}${i.xp} XP</span></div>
     </div>
   </a>`;
 }
@@ -622,10 +627,10 @@ function pathCard(p, step) {
     <div class="cover c-${tint}"><div class="emblem tint-${tint}">${ic(p.icon)}</div>
       <div class="corner">${p.done ? badge('In progress', 'brand') : ''}</div>${step ? `<div class="corner-l">${badge('Step ' + step, '', 'outline')}</div>` : ''}</div>
     <div class="card-body">
-      <p class="t-xs ink5">${p.track} · ${p.lessons} lessons · ${p.hours} h</p>
+      <p class="t-xs ink5">${p.lessons} lessons · ${p.hours} h</p>
       <h3 class="t-base semi ink9 mt1">${p.title}</h3>
       <p class="t-sm p ink6 mt1 clamp2">${p.description}</p>
-      <div class="card-foot" style="display:block">${prog(p.done / p.lessons * 100, true)}<p class="t-xs ink5 mt2">${p.done ? `${p.done} of ${p.lessons} lessons done` : 'Not started'}</p></div>
+      ${p.done ? `<div class="card-foot" style="display:block">${prog(p.done / p.lessons * 100, true)}<p class="t-xs ink5 mt2">${p.done} of ${p.lessons} lessons done</p></div>` : ''}
     </div>
   </a>`;
 }
@@ -696,10 +701,6 @@ function seasonBanner() {
       <div class="row g2"><p class="t-base semi ink9">Season ${SEASON.number}: ${SEASON.title}</p>${badge('Live', 'solid')}</div>
       <p class="t-sm ink6 mt1">${total} challenges · ${d > 0 ? `ends in ${d} days` : 'ended'}</p>
     </div>
-    <div class="hide-sm" style="text-align:right">
-      <div class="pips" aria-hidden="true">${SEASON.chapters.map((_, i) => `<i class="${i === 0 ? 'on' : ''}"></i>`).join('')}</div>
-      <p class="t-xs ink5 mt2">Chapter 1 of ${SEASON.chapters.length} open</p>
-    </div>
     <a class="btn outline md" href="#/season">Open season</a>
   </div>`;
 }
@@ -716,7 +717,6 @@ function home() {
   const recs = ['disk-of-secrets', 'serv-u', 'backup-portal'].map((id) => ITEMS.find((i) => i.id === id));
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  const goalsDone = WEEKLY.filter(([, v, t]) => v >= t).length;
   const pct = Math.round(path.done / path.lessons * 100);
   return page(`<h1>${greet}, ${USER.name}</h1>`, `
     <section class="card hero home-hero">
@@ -740,9 +740,6 @@ function home() {
       </aside>
     </section>
 
-    ${statStrip([['zap', '', 'XP', USER.xp, `${USER.nextLevelXp - USER.xp} XP to ${USER.nextLevelName}`], ['trophy', '', 'Global rank', '#' + USER.rank, `${USER.league} league`],
-      ['flag', '', 'Solved', USER.solved, 'challenges, machines, labs'], ['flame', 'brand', 'Streak', USER.streak + ' days', 'Learn or solve today to start']])}
-
     <div class="grid2">
       <section class="card daily">
         <div class="cover c-${dTint}"><div class="emblem tint-${dTint}">${ic(dIcon)}</div></div>
@@ -757,7 +754,7 @@ function home() {
         </div>
       </section>
       <section class="card pad" style="display:flex;flex-direction:column">
-        <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="t-xs ink5">${goalsDone} of ${WEEKLY.length} done · resets Monday</span></div>
+        <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="t-xs ink5">Resets Monday</span></div>
         <div class="mt4" style="display:flex;flex-direction:column;gap:14px">${WEEKLY.map(([l, v, t]) =>
           `<div><div class="row between t-sm"><span class="ink7">${l}</span><span class="ink5 num">${v} / ${t}</span></div><div class="mt2">${prog(v / t * 100, true)}</div></div>`).join('')}</div>
         <div style="margin-top:auto;padding-top:16px"><span class="chip">${ic('gift', 'i-sm')}Do all three to get 250 bonus XP</span></div>
@@ -777,8 +774,8 @@ function learn() {
   return page(`<h1>Learn</h1><span class="t-sm ink5 hide-sm ml-auto">${PATHS.length} paths · ${total} lessons</span>`, `
     <div>${seg('track', [['All', 'All tracks'], ...TRACKS.map((x) => [x, x, PATHS.filter((p) => p.track === x).length])], t)}</div>
     ${t === 'All'
-      ? sec('Core path', TRACK_META.Core[0], '', `<div class="cards fit">${PATHS.filter((p) => p.track === 'Core').map((p, i) => pathCard(p, i + 1)).join('')}</div>`)
-        + sec('Specialist tracks', 'Do one of these after the core path.', '', `<div class="cards fit">${PATHS.filter((p) => p.track !== 'Core').map((p) => pathCard(p, 0)).join('')}</div>`)
+      ? sec('Core path', TRACK_META.Core[0], '', `<div class="cards four">${PATHS.filter((p) => p.track === 'Core').map((p, i) => pathCard(p, i + 1)).join('')}</div>`)
+        + sec('Specialist tracks', 'Do one of these after the core path.', '', `<div class="cards four">${PATHS.filter((p) => p.track !== 'Core').map((p) => pathCard(p, 0)).join('')}</div>`)
       : sec(t, TRACK_META[t][0], '', `<div class="cards">${PATHS.filter((p) => p.track === t).map((p, i) => pathCard(p, t === 'Core' ? i + 1 : 0)).join('')}</div>`)}
     ${upcoming.length ? sec('Coming soon', `${upcoming.length} more paths. Each one opens when it is ready.`,
       `<button class="btn ghost" data-act="toggle-upcoming" aria-expanded="${state.upcomingOpen}">${state.upcomingOpen ? 'Hide' : 'Show all'} ${ic(state.upcomingOpen ? 'chevron-up' : 'chevron-down', 'i-sm')}</button>`,
@@ -814,7 +811,6 @@ function pathDetail(id) {
             <span class="t-sm ink5 trunc" style="display:block">${l.description}</span>
           </span>
           <span class="t-sm ink5 right hide-sm" style="width:56px">${l.minutes} min</span>
-          <span class="t-sm ink5 right hide-sm" style="width:56px">${l.xp} XP</span>
         </a>`; }).join('')}</div>`)).join('')}
     <p class="t-sm ink5 center">This demo shows 4 of 12 units.</p>
   `, 'narrow');
@@ -970,7 +966,7 @@ function practiceItem(id) {
       <p class="t-xs ink5 mt4">Demo tip: <code>CSEMA{demo}</code> is accepted.</p>
     </section>`;
   }
-  const meta = [['Type', m.label], ['Category', it.category], ['Difficulty', diff(it.difficulty)], ['XP', it.xp], ['Solves', it.solves], ['Plan', ACCESS[it.access]]];
+  const meta = [['Category', it.category], ['Difficulty', diff(it.difficulty)], ['XP', it.xp], ['Plan', ACCESS[it.access]]];
   return page(crumbs([['Practice', '#/practice'], [m.plural, `#/practice?type=${it.type}`], [it.title]]), `
     <div class="row-s wrapf g6">
       <div class="min0" style="flex:1 1 520px;display:flex;flex-direction:column;gap:16px">
@@ -1010,27 +1006,26 @@ function season() {
       <div class="row-s wrapf g4">
         <div class="tile brand" style="width:52px;height:52px">${ic('radio', 'i-xl')}</div>
         <div class="min0 flex1">
-          <div class="row g2">${badge('Live', 'solid')}<span class="t-sm ink5">Season ${SEASON.number} · ends ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'short' })}</span></div>
+          <div class="row g2">${badge('Live', 'solid')}<span class="t-sm ink5">Ends ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'short' })} · 0 of ${total} solved</span></div>
           <h2 class="t-4xl semi ink9 mt2">${SEASON.title}</h2>
           <p class="t-base p ink7 mt1" style="max-width:600px">${SEASON.tagline}</p>
         </div>
         <div class="row g2"><button class="btn ghost lg" data-toast="The trailer plays here" data-toast-icon="play">${ic('play', 'i-sm')} Trailer</button>
           <a class="btn solid lg" href="#/practice/disk-of-secrets">Start chapter 1</a></div>
       </div>
-      <div class="mt5">${prog(0)}<p class="t-xs ink5 mt2">0 of ${total} challenges solved</p></div>
     </section>
     ${sec('Chapters', 'Finish a chapter to open the next one.', '', `
-      <div class="cards sm">${SEASON.chapters.map((ch, i) => `
+      <div class="cards five">${SEASON.chapters.map((ch, i) => `
         <div class="card pad" style="${i === 0 ? 'border-color:var(--brand);box-shadow:var(--shadow-md)' : ''}">
           <div class="row between"><span class="rank ${i === 0 ? 'r1' : ''}">${i + 1}</span>${i === 0 ? badge('Open', 'brand') : ic('lock', 'i-sm ink4')}</div>
           <p class="t-base semi ${i === 0 ? 'ink9' : 'ink6'} mt3">${ch.title}</p>
-          <p class="t-xs ink5 mt1">${ch.place} · ${ch.challenges.length} challenges</p>
+          <p class="t-xs ink5 mt1">${ch.challenges.length} challenges</p>
         </div>`).join('')}</div>`)}
     ${sec(`Chapter 1: ${ch1.title}`, ch1.story, '', `
-      <div class="cards">${ch1.challenges.map(([t, cat, d]) => {
+      <div class="cards four">${ch1.challenges.map(([t, cat, d]) => {
         const [icon, tint] = CATEGORY[cat];
         return `<a class="card" href="#/practice/disk-of-secrets"><div class="cover c-${tint}" style="height:84px"><div class="emblem tint-${tint}" style="width:40px;height:40px">${ic(icon)}</div></div>
-          <div class="card-body"><p class="t-xs ink5">${cat}</p><h3 class="t-base semi ink9 mt1">${t}</h3><div class="card-foot">${diff(d)}<span class="t-xs ink5">Not started</span></div></div></a>`; }).join('')}</div>`)}
+          <div class="card-body"><p class="t-xs ink5">${cat}</p><h3 class="t-base semi ink9 mt1">${t}</h3><div class="card-foot">${diff(d)}</div></div></a>`; }).join('')}</div>`)}
   `);
 }
 
@@ -1050,9 +1045,9 @@ function compete(tab) {
       <div class="podium">${pod(second, '')}${pod(first, 'first')}${pod(third, '')}</div>
       <div class="card rows">
         ${rows.slice(3).map((r) => `<div class="li"><span class="rank">${r.rank}</span>${av(r.handle, 'sm')}<span class="t-base med ink8 min0 flex1 trunc">${r.handle}</span>
-          <span class="t-sm ink5 num hide-sm" style="width:80px;text-align:right">${r.solved} solved</span><span class="t-sm semi ink9 num" style="width:80px;text-align:right">${fmt.format(r.xp)}</span></div>`).join('')}
+<span class="t-sm semi ink9 num" style="width:80px;text-align:right">${fmt.format(r.xp)}</span></div>`).join('')}
         <div class="li cur"><span class="rank r1" style="width:auto;padding:0 6px">${USER.rank}</span>${av(USER.handle, 'sm', 'brand')}<span class="t-base semi ink9 min0 flex1 trunc">${USER.handle} (you)</span>
-          <span class="t-sm ink5 num hide-sm" style="width:80px;text-align:right">${USER.solved} solved</span><span class="t-sm semi ink9 num" style="width:80px;text-align:right">${USER.xp}</span></div>
+<span class="t-sm semi ink9 num" style="width:80px;text-align:right">${USER.xp}</span></div>
       </div>`;
   } else if (tab === 'teams') {
     body = `
@@ -1279,7 +1274,7 @@ function hydrateIcons() {
 $('#me-av').outerHTML = av(USER.name, 'md', 'brand');
 $('#me-av-m').outerHTML = av(USER.name, 'md', 'brand');
 $('#me-name').textContent = USER.name;
-$('#me-meta').innerHTML = `<span class="row g1">${ic('flame', 'i-sm brand')}${USER.streak}</span><span class="row g1">${ic('zap', 'i-sm amber')}${USER.xp} XP</span><span>Level ${USER.level}</span>`;
+$('#me-meta').textContent = `Level ${USER.level} · ${USER.xp} XP`;
 window.addEventListener('hashchange', render);
 render();
 </script>
