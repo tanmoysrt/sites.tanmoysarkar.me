@@ -357,12 +357,13 @@ select.input { appearance: none; padding-right: 30px; background: var(--s2) url(
 .dmeta > span + span::before { content: "·"; margin: 0 6px; color: var(--ink4); }
 /* Lesson mode: the path outline replaces the app sidebar; the player fills the rest */
 body.lesson-mode .side { display: none; }
+@media (max-width: 767px) { body.lesson-mode .mtop, body.lesson-mode .bnav { display: none !important; } body.lesson-mode main { padding-bottom: 0; } }
 main.lesson-mode { display: grid; grid-template-columns: 17rem minmax(0, 1fr); overflow: hidden; }
 main.lesson-mode { transition: grid-template-columns .24s cubic-bezier(.2, .8, .2, 1); }
 main.lesson-mode.no-outline { grid-template-columns: 0rem minmax(0, 1fr); }
 .course-nav { min-width: 0; transition: opacity .18s ease, padding .24s ease, visibility 0s linear 0s; }
 main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border-right-color: transparent; padding-left: 0; padding-right: 0; transition: opacity .12s ease, visibility 0s linear .24s; }
-@media (max-width: 860px) { .outline-toggle { display: none !important; } }
+
 .course-nav { background: var(--sidebar); border-right: 1px solid var(--line1); overflow-y: auto; padding: 0 10px 32px; }
 .course-nav .back { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; height: 48px; margin: 0 -10px 6px; padding: 0 20px; border-bottom: 1px solid var(--line1); background: var(--sidebar); font-size: 14px; font-weight: 600; color: var(--ink9); }
 .course-nav .back .i { color: var(--ink5); }
@@ -371,15 +372,35 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
 .course-nav a.les { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
 .course-nav a.les:hover { background: var(--s3); }
 .course-nav a.les.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--line2); }
+.nav-scrim { display: none; }
 .lesson-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 /* The stage is a 16:9 frame that fits the screen; the controls sit under it */
 .lesson-stage { flex: 1; min-height: 0; padding: 24px; display: flex; align-items: center; justify-content: center; overflow-y: auto; }
 .lesson-stage > .card { width: min(100%, 1040px, calc((100dvh - 48px - 48px - 58px) * 16 / 9)); display: flex; flex-direction: column; overflow: hidden; }
 .lesson-stage .slide { aspect-ratio: 16 / 9; height: auto; min-height: 0; overflow-y: auto; padding: clamp(24px, 5%, 56px); }
 @media (max-width: 860px) {
-  main.lesson-mode { grid-template-columns: 1fr; } .course-nav { display: none; }
-  .lesson-stage { padding: 16px; align-items: flex-start; } .lesson-stage > .card { width: 100%; }
-  .lesson-stage .slide { aspect-ratio: auto; min-height: 360px; }
+  main.lesson-mode { grid-template-columns: 1fr; }
+  main.lesson-mode .course-nav, main.lesson-mode.no-outline .course-nav {
+    position: fixed; left: 0; top: 0; bottom: 0; width: min(320px, 86vw); z-index: 60; padding: 0 10px 32px;
+    opacity: 1; visibility: hidden; transform: translateX(-100%); box-shadow: var(--shadow-lg); border-right: 1px solid var(--line2);
+    transition: transform .24s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .24s;
+  }
+  main.lesson-mode.nav-open .course-nav { visibility: visible; transform: none; transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
+  .nav-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: var(--overlay); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  main.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
+  .lesson-stage { padding: 0; align-items: stretch; overflow: hidden; }
+  .lesson-stage > .card { width: 100%; flex: 1; min-height: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+  .lesson-stage .slide { flex: 1; aspect-ratio: auto; min-height: 0; justify-content: flex-start; padding: 36px 20px 24px; border-radius: 0; background: none; }
+  .lesson-stage .slide h3 { font-size: 26px; line-height: 1.25; letter-spacing: -0.02em; }
+  .lesson-stage .slide .lead { margin-top: 14px; font-size: 17px; line-height: 1.7; color: var(--ink7); max-width: none; }
+  .lesson-stage .slide.quiz h3 { font-size: 21px; line-height: 1.4; letter-spacing: -0.01em; }
+  .lesson-stage .opts { margin-top: 28px; gap: 10px; max-width: none; }
+  .lesson-stage .opt { min-height: 54px; padding: 0 16px; border-radius: 12px; font-size: 15px; }
+  .lesson-stage .player-foot { gap: 10px; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); background: var(--bg); }
+  .lesson-stage .player-foot .btn { height: 46px; padding: 0 20px; font-size: 15px; border-radius: 10px; }
+  .lesson-stage .player-foot .btn:last-child { flex: 1; }
+  .lesson-stage .step-n { display: none; }
+  .lesson-main > .ph { padding: 0 20px 0 14px; } .lesson-main > .ph h1 { font-size: 16px; }
 }
 .chap { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "n s" "t t"; align-items: center; row-gap: 12px; }
 .chap > .rank { grid-area: n; } .chap-s { grid-area: s; justify-self: end; display: inline-flex; } .chap-t { grid-area: t; }
@@ -1124,15 +1145,15 @@ function lesson(pid, lid) {
       <p class="unit"><span class="trunc">Unit ${ui + 1}: ${u.title}</span><span class="num">${u.lessons.filter((x) => x.status === 'done').length}/${u.lessons.length}</span></p>
       ${u.lessons.map((x) => `<a class="les ${x.id === lid ? 'on' : ''}" href="#/learn/${p.id}/${x.id}" ${x.id === lid ? 'aria-current="page"' : ''}>${lessonIcon(x.status === 'current' && x.id !== lid ? 'todo' : x.status, x.id === lid)}<span class="min0 flex1 trunc">${x.title}</span></a>`).join('')}`).join('')}
   </nav>`;
-  return `${outline}
+  return `${outline}<div class="nav-scrim" data-act="close-nav" aria-hidden="true"></div>
   <div class="lesson-main">
-    <div class="ph"><button class="btn ghost icon md outline-toggle" style="width:32px;margin-left:-8px" data-act="toggle-outline" aria-label="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" title="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" aria-pressed="${!state.outlineOpen}">${ic('panel-left')}</button><h1 class="trunc">${l.title}</h1><span class="t-sm ink5 hide-sm shrink0">${l.minutes} min · ${l.xp} XP</span><span class="t-sm ink5 ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span></div>
+    <div class="ph"><button class="btn ghost icon md outline-toggle" style="width:32px;margin-left:-8px" data-act="toggle-outline" aria-label="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" title="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" aria-pressed="${!state.outlineOpen}">${ic('panel-left')}</button><h1 class="trunc">${l.title}</h1><span class="t-sm ink5 hide-sm shrink0">${l.minutes} min · ${l.xp} XP</span><span class="t-sm ink5 ml-auto shrink0 hide-sm">Lesson ${idx + 1} of ${p.lessons}</span><span class="t-sm ink5 ml-auto shrink0 num only-sm">${s + 1} of ${STEPS.length}</span></div>
     <div class="lesson-stage">
       <div class="card">
         ${stepView(st, s)}
         <div class="player-foot">
           <button class="btn outline md" data-act="prev" ${s === 0 ? 'disabled' : ''}>Back</button>
-          <span class="flex1 center t-sm ink5 num">${s + 1} / ${STEPS.length}</span>
+          <span class="flex1 center t-sm ink5 num step-n">${s + 1} / ${STEPS.length}</span>
           ${action}
         </div>
       </div>
@@ -1637,6 +1658,11 @@ document.addEventListener('click', (e) => {
   else if (a === 'close') closeLayer();
   else if (a === 'prev') lessonStep(-1);
   else if (a === 'next') lessonStep(1);
+  else if (a === 'close-nav') { $('#main').classList.remove('nav-open'); $('.outline-toggle')?.focus(); }
+  else if (a === 'toggle-outline' && matchMedia('(max-width: 860px)').matches) {
+    const open = $('#main').classList.toggle('nav-open');
+    if (open) $('.course-nav .les.on')?.scrollIntoView({ block: 'center' });
+  }
   else if (a === 'toggle-outline') {
     // Toggle in place so the width transition can run.
     state.outlineOpen = !state.outlineOpen;
@@ -1721,6 +1747,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName);
   if (e.key === 'Escape' && $('#layer').innerHTML) { closeLayer(); return; }
+  if (e.key === 'Escape' && $('#main.nav-open')) { $('#main').classList.remove('nav-open'); return; }
   if (e.key === 'Enter' && document.activeElement?.id === 'coupon') { $('[data-act="coupon-apply"]')?.click(); return; }
   if (typing) return;
   if (e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); openSearch(); return; }
