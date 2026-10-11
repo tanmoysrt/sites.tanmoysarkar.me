@@ -324,6 +324,9 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 /* Lesson mode: the path outline replaces the app sidebar; the player fills the rest */
 body.lesson-mode .side { display: none; }
 main.lesson-mode { display: grid; grid-template-columns: 17rem minmax(0, 1fr); overflow: hidden; }
+main.lesson-mode.no-outline { grid-template-columns: minmax(0, 1fr); }
+main.lesson-mode.no-outline .course-nav { display: none; }
+@media (max-width: 860px) { .outline-toggle { display: none !important; } }
 .course-nav { background: var(--sidebar); border-right: 1px solid var(--line1); overflow-y: auto; padding: 0 10px 32px; }
 .course-nav .back { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; height: 48px; margin: 0 -10px 6px; padding: 0 20px; border-bottom: 1px solid var(--line1); background: var(--sidebar); font-size: 14px; font-weight: 600; color: var(--ink9); }
 .course-nav .back .i { color: var(--ink5); }
@@ -520,6 +523,7 @@ const ICONS = {
   'life-buoy': '<circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/>',
   activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   signal: '<path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/>',
+  'panel-left': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
   'help-circle': '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
 };
 const ic = (n, cls = '') =>
@@ -747,7 +751,7 @@ function pathCard(p) {
 }
 
 /* ---------- Router ---------- */
-const state = { slide: 0, qsel: {}, qdone: {}, qwrong: null, practiceLoaded: false, seasonOpen: true, machine: {}, solved: {}, got: {}, hints: {}, answered: false, billing: 'monthly', scope: 'global',
+const state = { outlineOpen: (() => { try { return localStorage.getItem('csema-demo-outline') !== 'closed'; } catch { return true; } })(), slide: 0, qsel: {}, qdone: {}, qwrong: null, practiceLoaded: false, seasonOpen: true, machine: {}, solved: {}, got: {}, hints: {}, answered: false, billing: 'monthly', scope: 'global',
   filters: { q: '', category: '', difficulty: '', free: false }, upcomingOpen: false, track: 'All' };
 let timer = null;
 const machineEnds = {};
@@ -799,7 +803,8 @@ function render() {
   else if (a === 'terminal') html = terminalPane(b || 'devops-leftovers', true);
   else html = page('<h1>Not found</h1>', `<div class="card empty"><div class="circ">${ic('search-x', 'i-xl')}</div><p class="t-base ink8">This page does not exist</p><p class="t-sm ink5">The link is old or incorrect.</p><a class="btn solid mt2" href="#/">Go to Home</a></div>`, 'narrow');
   const lessonMode = a === 'learn' && !!c;
-  $('#main').className = split ? 'split' : a === 'terminal' ? 'term-only' : lessonMode ? 'lesson-mode' : '';
+  if (!lessonMode && lessonKey) { lessonMem[lessonKey] = { qsel: state.qsel, qdone: state.qdone }; lessonKey = ''; }
+  $('#main').className = split ? 'split' : a === 'terminal' ? 'term-only' : lessonMode ? `lesson-mode${state.outlineOpen ? '' : ' no-outline'}` : '';
   document.body.classList.toggle('lesson-mode', lessonMode);
   document.body.classList.toggle('term-only', a === 'terminal');
   document.body.classList.toggle('has-split', split);
@@ -969,6 +974,28 @@ function pathDetail(id) {
 }
 
 let lessonKey = '';
+const STORE = 'csema-demo-progress';
+const saved = (() => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } })();
+saved.steps = saved.steps || {}; saved.done = saved.done || [];
+const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch {} };
+const lessonMem = {};
+function setLessonStatus(id, st) {
+  const f = FLAT.find((l) => l.id === id); if (f) f.status = st;
+  for (const u of UNITS) for (const l of u.lessons) if (l.id === id) l.status = st;
+}
+// Mark a lesson done; the next open lesson becomes the current one.
+function markDone(lid) {
+  const i = FLAT.findIndex((l) => l.id === lid);
+  if (i < 0 || FLAT[i].status === 'done') return false;
+  const wasCurrent = FLAT[i].status === 'current';
+  setLessonStatus(lid, 'done');
+  PATHS[1].done++; USER.lessonsDone++;
+  USER.xp += FLAT[i].xp;
+  if (wasCurrent) { const nx = FLAT.slice(i + 1).find((l) => l.status !== 'done'); if (nx) setLessonStatus(nx.id, 'current'); }
+  if (!saved.done.includes(lid)) saved.done.push(lid);
+  return true;
+}
+saved.done.forEach((id) => markDone(id));
 function stepView(st, i) {
   if (st.type === 'slide') return `<div class="slide" aria-live="polite"><h3>${st.title}</h3><p class="lead">${st.body}</p></div>`;
   const sel = state.qsel[i] || [];
@@ -990,7 +1017,14 @@ function lesson(pid, lid) {
   const p = PATHS.find((x) => x.id === pid) || PATHS[1];
   const idx = Math.max(0, FLAT.findIndex((l) => l.id === lid));
   const l = FLAT[idx];
-  if (lessonKey !== lid) { state.slide = 0; lessonKey = lid; state.qsel = {}; state.qdone = {}; state.qwrong = null; }
+  if (lessonKey !== lid) {
+    if (lessonKey) lessonMem[lessonKey] = { qsel: state.qsel, qdone: state.qdone };
+    const mem = lessonMem[lid] || { qsel: {}, qdone: {} };
+    state.slide = Math.min(saved.steps[lid] || 0, STEPS.length - 1);
+    state.qsel = mem.qsel; state.qdone = mem.qdone; state.qwrong = null; lessonKey = lid;
+    if (state.slide > 0) setTimeout(() => toast(`Resumed at step ${state.slide + 1}`, 'info'), 0);
+  }
+  saved.steps[lid] = state.slide; persist();
   const s = state.slide, st = STEPS[s], last = s === STEPS.length - 1;
   const blocked = st.type === 'question' && !state.qdone[s];
   const action = blocked
@@ -1004,7 +1038,7 @@ function lesson(pid, lid) {
   </nav>`;
   return `${outline}
   <div class="lesson-main">
-    <div class="ph"><h1 class="trunc">${l.title}</h1><span class="t-sm ink5 hide-sm shrink0">${l.minutes} min · ${l.xp} XP</span><span class="t-sm ink5 ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span></div>
+    <div class="ph"><button class="btn ghost icon md outline-toggle" style="width:32px;margin-left:-8px" data-act="toggle-outline" aria-label="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" title="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" aria-pressed="${!state.outlineOpen}">${ic('panel-left')}</button><h1 class="trunc">${l.title}</h1><span class="t-sm ink5 hide-sm shrink0">${l.minutes} min · ${l.xp} XP</span><span class="t-sm ink5 ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span></div>
     <div class="lesson-stage">
       <div class="card">
         ${stepView(st, s)}
@@ -1025,9 +1059,12 @@ function lessonStep(dir) {
   if (st.type === 'question' && !state.qdone[state.slide]) return;
   if (state.slide < STEPS.length - 1) { state.slide++; render(); return; }
   const idx = FLAT.findIndex((l) => l.id === parts[2]);
-  toast(`Lesson complete · +${FLAT[idx].xp} XP`);
+  const first = markDone(parts[2]);
+  saved.steps[parts[2]] = 0; lessonMem[parts[2]] = null; lessonKey = ''; persist();
+  refreshMe();
+  toast(first ? `Lesson complete · +${FLAT[idx].xp} XP` : 'Lesson complete');
   const nx = FLAT[idx + 1];
-  if (nx) go(`#/learn/${parts[1]}/${nx.id}`);
+  if (nx) go(`#/learn/${parts[1]}/${nx.id}`); else render();
 }
 
 function practice(type) {
@@ -1424,6 +1461,11 @@ document.addEventListener('click', (e) => {
   else if (a === 'close') closeLayer();
   else if (a === 'prev') lessonStep(-1);
   else if (a === 'next') lessonStep(1);
+  else if (a === 'toggle-outline') {
+    state.outlineOpen = !state.outlineOpen;
+    try { localStorage.setItem('csema-demo-outline', state.outlineOpen ? 'open' : 'closed'); } catch {}
+    render();
+  }
   else if (a === 'opt') {
     const i = +t.dataset.step, k = +t.dataset.k, st = STEPS[i];
     const sel = state.qsel[i] || [];
@@ -1481,7 +1523,8 @@ function hydrateIcons() {
 $('#me-av').outerHTML = av(USER.name, 'md', 'brand');
 $('#me-av-m').outerHTML = av(USER.name, 'md', 'brand');
 $('#me-name').textContent = USER.name;
-$('#me-meta').textContent = `Level ${USER.level} · ${USER.xp} XP`;
+function refreshMe() { $('#me-meta').textContent = `Level ${USER.level} · ${USER.xp} XP`; }
+refreshMe();
 window.addEventListener('hashchange', render);
 matchMedia('(min-width: 1024px)').addEventListener('change', (e) => { if (!e.matches && state.term) render(); });
 render();
