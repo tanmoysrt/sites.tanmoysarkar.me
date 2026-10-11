@@ -288,8 +288,9 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 .heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 12px); grid-auto-columns: 12px; gap: 4px; justify-content: start; overflow-x: auto; padding-bottom: 2px; }
 .heat i { width: 12px; height: 12px; border-radius: 3px; background: var(--s3); }
 .heat i.l1 { background: #fca5a5; } .heat i.l2 { background: #ef4444; } .heat i.l3 { background: #b91c1c; }
-.slide { min-height: 380px; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; border-radius: 11px 11px 0 0; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 16px 16px, var(--s1); }
-@media (max-width: 640px) { .slide { padding: 24px; min-height: 320px; } }
+.slide { height: 440px; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; border-radius: 11px 11px 0 0; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 16px 16px, var(--s1); }
+@media (max-width: 640px) { .slide { padding: 24px; height: auto; min-height: 360px; } }
+.slide.quiz h3 { font-size: 21px; line-height: 1.35; letter-spacing: -0.01em; }
 .slide h3 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink9); }
 .slide .lead { margin-top: 12px; max-width: 560px; font-size: 16px; line-height: 1.6; color: var(--ink7); }
 .player-foot { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line1); }
@@ -716,7 +717,7 @@ function pathCard(p) {
   const pct = p.done / p.lessons * 100;
   return `<a class="card pad" href="#/learn/${p.id}" style="flex-direction:row;align-items:center;gap:14px">
     ${ring(pct, p.icon, tint)}
-    <div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${p.title}</h3><p class="t-sm ink5 mt1">${p.lessons} lessons · ${p.hours} h${p.done ? ` · ${Math.max(1, Math.round(pct))}% done` : ''}</p></div>
+    <div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${p.title}</h3><p class="t-sm ink5 mt1">${p.lessons} lessons · ${p.hours} h</p></div>
   </a>`;
 }
 
@@ -749,6 +750,7 @@ function renderNav() {
   $('#bnav').innerHTML = NAV.map(link(true)).join('');
 }
 
+let lastHash = null;
 function render() {
   clearInterval(timer);
   closeLayer();
@@ -774,8 +776,13 @@ function render() {
   $('#main').className = split ? 'split' : a === 'terminal' ? 'term-only' : '';
   document.body.classList.toggle('term-only', a === 'terminal');
   document.body.classList.toggle('has-split', split);
+  const scroller = () => $('#main .splitleft') || $('#main');
+  const route = location.hash.split('?')[0];
+  const same = lastHash === route, keep = same ? scroller().scrollTop : 0;
+  lastHash = route;
   $('#main').innerHTML = split ? `<div class="splitleft">${html}</div>${terminalPane(b, false)}` : html;
   $('#main').scrollTop = 0;
+  scroller().scrollTop = keep;
   if (split || a === 'terminal') mountTerminal();
   renderNav();
   hydrateIcons();
@@ -857,7 +864,7 @@ function home() {
     <section class="card hero home-hero">
       <div class="hh-main">
         <h2 class="t-4xl semi ink9">${cur.title}</h2>
-        <p class="t-sm ink5 mt1">${path.title} · ${pct}% done</p>
+        <p class="t-sm ink5 mt1">${path.title}</p>
         <p class="t-base p ink7 mt2" style="max-width:520px">${cur.description}</p>
         <div class="row wrapf g4" style="padding-top:24px">
           <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">Continue lesson</a>
@@ -928,7 +935,6 @@ function pathDetail(id) {
         <span>${p.lessons} lessons</span>
         <span>${p.hours} hours</span>
         <span>Beginner</span>
-        ${p.done ? `<span>${pct}% done</span>` : ''}
       </div>
     </section>
     ${UNITS.map((u, ui) => sec(`Unit ${ui + 1}: ${u.title}`, '', `<span class="t-sm ink5 num">${u.lessons.filter((l) => l.status === 'done').length} / ${u.lessons.length}</span>`, `
@@ -949,7 +955,7 @@ function stepView(st, i) {
   const sel = state.qsel[i] || [];
   const done = !!state.qdone[i];
   const wrong = state.qwrong === i;
-  return `<div class="slide" aria-live="polite">
+  return `<div class="slide quiz" aria-live="polite">
     <h3>${st.q}</h3>
     <p class="t-sm ink5 mt2">${st.multi ? `Select ${st.answer.length} answers.` : 'Select one answer.'}</p>
     <div class="opts" role="${st.multi ? 'group' : 'radiogroup'}" aria-label="Answers">${st.options.map((o, k) => {
