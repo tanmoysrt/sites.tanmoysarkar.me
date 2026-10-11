@@ -52,11 +52,11 @@
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg); color: var(--ink9);
-  font: 14px/1.4 "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 420 14px/1.35 "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 a { color: inherit; text-decoration: none; }
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 p, h1, h2, h3, ul, ol { margin: 0; padding: 0; }
 ul, ol { list-style: none; }
@@ -69,14 +69,14 @@ code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; 
 /* Type scale from frappe-ui */
 .t-xs { font-size: 12px; } .t-sm { font-size: 13px; } .t-base { font-size: 14px; } .t-lg { font-size: 16px; }
 .t-xl { font-size: 17px; } .t-2xl { font-size: 18px; } .t-3xl { font-size: 20px; } .t-4xl { font-size: 24px; }
-.p { line-height: 1.55; } .semi { font-weight: 600; } .med { font-weight: 500; }
-.t-lg, .t-xl, .t-2xl, .t-3xl, .ph h1, .sec-h h2 { letter-spacing: -0.011em; } .t-4xl { letter-spacing: -0.02em; }
+.p { line-height: 1.5; } .semi { font-weight: 600; } .med { font-weight: 500; }
 .ink9 { color: var(--ink9); } .ink8 { color: var(--ink8); } .ink7 { color: var(--ink7); } .ink6 { color: var(--ink6); }
 .ink5 { color: var(--ink5); } .ink4 { color: var(--ink4); } .brand { color: var(--brand); } .green { color: var(--green-ink); } .amber { color: var(--amber-ink); }
 .num { font-variant-numeric: tabular-nums; }
 .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.vstack { display: flex; flex-direction: column; }
 .min0 { min-width: 0; } .flex1 { flex: 1; } .shrink0 { flex-shrink: 0; }
 .row { display: flex; align-items: center; } .row-s { display: flex; align-items: flex-start; }
 .wrapf { flex-wrap: wrap; } .between { justify-content: space-between; }
@@ -89,7 +89,7 @@ code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; 
 /* Shell */
 .app { display: flex; height: 100vh; }
 .side { width: 15rem; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--line1); display: flex; flex-direction: column; }
-.brandbar { display: flex; align-items: center; padding: 14px 12px 2px; }
+.brandbar { display: flex; align-items: center; padding: 14px 12px 14px; }
 .logo { height: 32px; width: auto; display: block; }
 .logo-dark { display: none; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo-light { display: none; } :root:not([data-theme="light"]) .logo-dark { display: block; } }
@@ -142,34 +142,35 @@ body.has-split .toasts { right: auto; left: calc(15rem + 16px); }
 
 /* One page layout everywhere: a 48px header, then a centred body */
 .ph { min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--line1); position: sticky; top: 0; background: var(--bg); z-index: 5; }
-@media (max-width: 640px) { .ph { padding: 0 12px; } }
+@media (max-width: 640px) { .ph { padding: 0 16px; } }
 .ph h1 { font-size: 18px; font-weight: 600; }
 .crumbs { display: flex; align-items: center; gap: 6px; font-size: 16px; min-width: 0; }
 .crumbs a { color: var(--ink5); white-space: nowrap; } .crumbs a:hover { color: var(--ink8); }
 .crumbs .sep { color: var(--ink4); }
 .crumbs .cur { color: var(--ink9); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.body { max-width: 1040px; margin: 0 auto; padding: 32px 24px 72px; display: flex; flex-direction: column; gap: 40px; }
-.body.narrow { max-width: 1040px; }
-@media (max-width: 640px) { .body { padding: 20px 12px 56px; gap: 32px; } }
-.sec-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.body { max-width: 940px; margin: 0 auto; padding: 20px 20px 40px; display: flex; flex-direction: column; gap: 24px; }
+.body.narrow { max-width: 940px; }
+@media (max-width: 640px) { .body { padding: 20px 16px 40px; gap: 24px; } }
+.sec-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .sec-h h2 { font-size: 16px; font-weight: 600; color: var(--ink9); }
 .sec-h p { font-size: 13px; color: var(--ink5); margin-top: 2px; }
+.sec-h > :last-child:not(:first-child) { flex-shrink: 0; white-space: nowrap; }
 
 /* Cards: the one container for everything */
-.card { background: var(--card); border: 1px solid var(--line2); border-radius: 12px; box-shadow: var(--shadow-sm); }
-.pad { padding: 20px; } .pad-lg { padding: 28px; }
+.card { background: var(--card); border: 1px solid var(--line2); border-radius: 10px; box-shadow: var(--shadow-sm); }
+.pad { padding: 16px; } .pad-lg { padding: 20px; }
 @media (max-width: 640px) { .pad-lg { padding: 16px; } }
 a.card { display: flex; flex-direction: column; transition: border-color .15s, box-shadow .15s, transform .15s; }
 a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) { a.card, a.card:hover { transition: none; transform: none; } }
-.cards { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); }
+.cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); }
 .cards.sm { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .cards.fit { grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); }
 .cards.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-@media (max-width: 820px) { .cards.three { grid-template-columns: 1fr; } }
-@media (max-width: 720px) { .cards.two { grid-template-columns: 1fr; } }
+@media (max-width: 820px) { .cards.three { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) { .cards.two { grid-template-columns: minmax(0, 1fr); } }
 .ring { position: relative; width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; }
 .ring svg.track { position: absolute; inset: 0; width: 44px; height: 44px; }
 .ring .i { width: 18px; height: 18px; }
@@ -181,7 +182,7 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
 .cards.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .cards.four { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
 @media (max-width: 900px) { .cards.five { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } }
-.grid2 { display: grid; gap: 20px; } @media (min-width: 820px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.grid2 { display: grid; gap: 16px; } @media (min-width: 820px) { .grid2 { grid-template-columns: 1fr 1fr; } }
 .grid3 { display: grid; gap: 16px; } @media (min-width: 820px) { .grid3 { grid-template-columns: repeat(3, 1fr); } }
 
 .cover {
@@ -200,7 +201,7 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
 .cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, var(--tint); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, color-mix(in srgb, var(--tint) 45%, var(--s1)); } }
 :root[data-theme="dark"] .cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, color-mix(in srgb, var(--tint) 45%, var(--s1)); }
-.card-body { padding: 18px 20px 20px; display: flex; flex-direction: column; flex: 1; }
+.card-body { padding: 16px; display: flex; flex-direction: column; flex: 1; }
 .card-foot { margin-top: auto; padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tile { width: 40px; height: 40px; border-radius: 10px; background: var(--s2); display: grid; place-items: center; color: var(--ink6); flex-shrink: 0; }
 .tile.brand { background: var(--brand-soft2); color: var(--brand); }
@@ -215,9 +216,9 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
   .stats > div:nth-child(n+3) { border-top: 1px solid var(--line1); }
 }
 .rows > * + * { border-top: 1px solid var(--line1); }
-.li { display: flex; align-items: center; gap: 14px; padding: 16px 20px; }
+.li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
 a.li:hover { background: var(--s1); }
-.rows > a.li:last-child:hover { border-radius: 0 0 11px 11px; }
+.rows > a.li:last-child:hover { border-radius: 0 0 9px 9px; }
 .li.cur { background: var(--brand-soft); }
 
 /* Controls (frappe-ui Button, Badge, TabButtons, Switch, inputs) */
@@ -243,12 +244,12 @@ a.li:hover { background: var(--s1); }
 .btn[disabled] { opacity: .5; cursor: default; }
 .btn.soft { background: var(--brand-soft2); color: var(--brand-ink); } .btn.soft:hover { background: var(--brand-soft2); filter: brightness(.97); }
 .input { height: 32px; width: 100%; border: 1px solid transparent; border-radius: 8px; background: var(--s2); padding: 0 10px; font-size: 13px; color: var(--ink8); }
-.input:hover { background: var(--s3); }
-.input:focus { outline: none; background: var(--card); border-color: var(--line3); box-shadow: 0 0 0 3px var(--s3); }
+.input:hover { background-color: var(--s3); }
+.input:focus { outline: none; background-color: var(--card); border-color: var(--line3); box-shadow: 0 0 0 3px var(--s3); }
 .input::placeholder { color: var(--ink4); }
 .inputwrap { position: relative; display: block; } .inputwrap .i { position: absolute; left: 10px; top: 8px; color: var(--ink5); }
 .inputwrap .input { padding-left: 32px; }
-select.input { appearance: none; padding-right: 28px; background-image: linear-gradient(45deg, transparent 50%, var(--ink5) 50%), linear-gradient(135deg, var(--ink5) 50%, transparent 50%); background-position: calc(100% - 14px) 14px, calc(100% - 10px) 14px; background-size: 4px 4px; background-repeat: no-repeat; }
+select.input { appearance: none; padding-right: 30px; background: var(--s2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center; }
 .label { display: block; font-size: 12px; color: var(--ink6); margin-bottom: 6px; }
 .help { font-size: 12px; color: var(--ink5); margin-top: 6px; }
 .seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 9px; background: var(--s2); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
@@ -256,11 +257,12 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 .seg button:hover { color: var(--ink9); }
 .seg button.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); }
 .seg .cnt { color: var(--ink4); margin-left: 5px; font-weight: 400; }
+@media (max-width: 640px) { .seg { display: flex; width: 100%; } .seg button { flex: 1 1 auto; padding: 0 8px; } .seg .cnt { display: none; } .seg-inline .seg { display: inline-flex; width: auto; } .seg-inline .seg button { flex: none; padding: 0 10px; } }
 .sw { position: relative; width: 30px; height: 18px; border-radius: 99px; border: 0; background: var(--s5); padding: 0; flex-shrink: 0; transition: background .15s; }
 .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 99px; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
 .sw[aria-checked="true"] { background: var(--brand); }
 .sw[aria-checked="true"]::after { transform: translateX(12px); }
-.badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; background: var(--s3); color: var(--ink7); }
+.badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; background: var(--s3); color: var(--ink7); }
 .badge.outline { background: var(--card); box-shadow: inset 0 0 0 1px var(--line3); }
 .b-green { background: var(--green-bg); color: var(--green-ink); } .b-amber { background: var(--amber-bg); color: var(--amber-ink); }
 .b-orange { background: var(--orange-bg); color: var(--orange-ink); } .b-violet { background: var(--violet-bg); color: var(--violet-ink); }
@@ -285,15 +287,40 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 .hero .row-s > .min0.flex1 { flex: 1 1 320px; }
 @media (max-width: 640px) { .hero .row-s > .tile { display: none; } .hero .row-s > .btn, .hero .row-s > .row { width: 100%; } .hero .row-s > .row > .btn { flex: 1; } }
 .banner { background: var(--card); }
-.podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: end; }
-.podium .card { text-align: center; padding: 16px 12px; }
-.podium .first { padding-top: 24px; }
+.strip { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 12px; overflow: hidden; transition: opacity .2s, margin .2s, max-height .2s; max-height: 60px; }
+.strip-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 32px; }
+.strip-link:hover .semi { text-decoration: underline; text-underline-offset: 3px; }
+.strip.gone { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-width: 0; margin-bottom: -24px; }
+.podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: end; }
+.podium .card { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 20px 12px; }
+.podium .first { padding-top: 32px; }
+.medal { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 99px; font-size: 12px; font-weight: 700; }
+.medal.m1 { background: #f2c94c; color: #3d2c00; } .medal.m2 { background: #cfd5dd; color: #1f2733; } .medal.m3 { background: #d99a6c; color: #3b1d07; }
+.lb-zone { display: flex; align-items: center; gap: 10px; padding: 6px 16px; font-size: 12px; font-weight: 600; }
+.lb-zone::after { content: ""; flex: 1; height: 1px; background: currentColor; opacity: .25; }
+.lb-zone.up { color: var(--green-ink); } .lb-zone.down { color: var(--brand); }
+.lb-row.you { background: var(--brand-soft); }
+.rank-up { color: var(--green-ink); } .rank-down { color: var(--brand); }
+.lb-table .lb-row { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) 5rem 6rem; align-items: center; gap: 12px; padding: 10px 16px; }
+.lb-table .lb-head { padding: 8px 16px; font-size: 12px; color: var(--ink5); }
+.lb-table .r { text-align: right; }
+@media (max-width: 640px) { .lb-table .lb-row { grid-template-columns: 2.5rem minmax(0, 1fr) 5.5rem; } .lb-table .w { display: none; } }
+.heat, .heat-m { display: grid; gap: 3px; }
+.heat { grid-auto-flow: column; grid-template-rows: repeat(7, auto); }
+.heat i { aspect-ratio: 1; border-radius: 2px; background: var(--s3); }
+.heat i.l1 { background: #fca5a5; } .heat i.l2 { background: #ef4444; } .heat i.l3 { background: #b91c1c; }
+.heat-m { margin-bottom: 6px; white-space: nowrap; }
+.hm-sm { display: none; }
+.f-more { display: none; }
+.mob-only { display: none !important; }
+@media (max-width: 640px) { .mob-only { display: flex !important; } }
+@media (max-width: 640px) { .sm-xs { font-size: 12px; line-height: 1.45; } }
+@media (max-width: 640px) { .hm-lg { display: none; } .hm-sm { display: block; } }
+.ring-av { position: relative; width: 52px; height: 52px; display: grid; place-items: center; flex-shrink: 0; }
+.ring-av svg { position: absolute; inset: 0; }
 .rank { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--s3); color: var(--ink7); }
 .rank.r1 { background: var(--brand); color: #fff; }
-.heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 12px); grid-auto-columns: 12px; gap: 4px; justify-content: start; overflow-x: auto; padding-bottom: 2px; }
-.heat i { width: 12px; height: 12px; border-radius: 3px; background: var(--s3); }
-.heat i.l1 { background: #fca5a5; } .heat i.l2 { background: #ef4444; } .heat i.l3 { background: #b91c1c; }
-.slide { height: 440px; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; border-radius: 11px 11px 0 0; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 16px 16px, var(--s1); }
+.slide { height: 440px; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; border-radius: 9px 9px 0 0; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 16px 16px, var(--s1); }
 @media (max-width: 640px) { .slide { padding: 24px; height: auto; min-height: 360px; } }
 .slide.quiz h3 { font-size: 21px; line-height: 1.35; letter-spacing: -0.01em; }
 .slide h3 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink9); }
@@ -319,9 +346,15 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 /* Challenge page: numbered tasks */
 .dhead h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink9); }
 .dhead .desc { margin-top: 6px; max-width: 640px; font-size: 14px; line-height: 1.55; color: var(--ink6); }
-.dmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-top: 16px; font-size: 13px; color: var(--ink6); }
-.dmeta > span { display: inline-flex; align-items: center; gap: 6px; }
-.dmeta .i { color: var(--ink5); }
+.story { line-height: 21px; overflow: hidden; transition: max-height .25s cubic-bezier(.2, .8, .2, 1); }
+.story p + p { margin-top: 21px; }
+.story.clamp p:first-child { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.story.clamp p + p { display: none; }
+.more { margin-top: 4px; padding: 2px 0; font-size: 13px; font-weight: 500; color: var(--ink5); background: none; border: 0; cursor: pointer; transition: color .15s; }
+.more:hover { color: var(--ink8); }
+.more:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+.dmeta { margin-top: 6px; font-size: 13px; color: var(--ink6); }
+.dmeta > span + span::before { content: "·"; margin: 0 6px; color: var(--ink4); }
 /* Lesson mode: the path outline replaces the app sidebar; the player fills the rest */
 body.lesson-mode .side { display: none; }
 main.lesson-mode { display: grid; grid-template-columns: 17rem minmax(0, 1fr); overflow: hidden; }
@@ -345,8 +378,25 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
 .lesson-stage .slide { aspect-ratio: 16 / 9; height: auto; min-height: 0; overflow-y: auto; padding: clamp(24px, 5%, 56px); }
 @media (max-width: 860px) {
   main.lesson-mode { grid-template-columns: 1fr; } .course-nav { display: none; }
-  .lesson-stage { padding: 12px; align-items: stretch; } .lesson-stage > .card { width: 100%; }
+  .lesson-stage { padding: 16px; align-items: flex-start; } .lesson-stage > .card { width: 100%; }
   .lesson-stage .slide { aspect-ratio: auto; min-height: 360px; }
+}
+.chap { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "n s" "t t"; align-items: center; row-gap: 12px; }
+.chap > .rank { grid-area: n; } .chap-s { grid-area: s; justify-self: end; display: inline-flex; } .chap-t { grid-area: t; }
+@media (max-width: 640px) {
+  .cards.five { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .chap { grid-template-columns: auto 1fr auto; grid-template-areas: "n t s"; column-gap: 12px; }
+  .filters { gap: 8px; }
+  .filters .f-search { flex: 1 1 200px; width: auto !important; order: 0; } .filters .f-more { display: inline-flex; order: 1; }
+  .filters .f-sel { order: 2; } .filters .f-tog { order: 3; } .filters #f-clear { order: 4; }
+  .filters .f-sel, .filters .f-tog, .filters #f-clear { display: none; }
+  .filters.open .f-sel { display: block; flex: 1 1 40%; width: auto !important; animation: rise-in .2s cubic-bezier(.2, .8, .2, 1) both; }
+  .filters.open .f-tog { display: flex; margin-left: 0 !important; height: 32px; } .filters.open #f-clear { display: inline-flex; }
+  .tasks-card { background: none; border: 0; box-shadow: none; } .tasks-card > .pad-lg { padding: 4px 0 0; }
+  .drail { flex-basis: 100% !important; min-width: 0 !important; position: static !important; } .drail .players, .drail.later { display: none !important; }
+  .banner > .min0 { flex-basis: 100%; } .banner > .btn { width: 100%; }
+  .ev { align-items: flex-start; } .ev .t-base.trunc { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .ev > .btn { align-self: center; }
 }
 .tasks { display: flex; flex-direction: column; }
 .task { position: relative; display: flex; gap: 16px; padding-bottom: 28px; }
@@ -380,7 +430,7 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
 
 /* Home */
 .home-hero { display: grid; grid-template-columns: minmax(0, 1fr) 344px; }
-.home-hero .hh-main { padding: 32px; display: flex; flex-direction: column; justify-content: center; }
+.home-hero .hh-main { padding: 24px; display: flex; flex-direction: column; justify-content: center; }
 .home-hero .hh-side {
   padding: 20px; border-left: 1px solid var(--line1); border-radius: 0 11px 11px 0; display: flex; flex-direction: column;
   background: var(--s1);
@@ -424,7 +474,7 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
 
 /* Overlays */
 .overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 12px 12px; }
-.dialog { width: 100%; max-width: 580px; background: var(--card); border: 1px solid var(--line2); border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; }
+.dialog { width: 100%; max-width: 580px; background: var(--card); border: 1px solid var(--line2); border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden; }
 .menu { position: fixed; z-index: 30; min-width: 230px; background: var(--card); border: 1px solid var(--line2); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 5px; }
 .menu button { width: 100%; display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; font-size: 13px; color: var(--ink8); text-align: left; }
 .menu button:hover, .menu button:focus-visible { background: var(--s2); }
@@ -443,7 +493,6 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
       <img class="logo logo-light" src="brand/csema-logo-light.png" alt="CSEMA">
       <img class="logo logo-dark" src="brand/csema-logo-dark.png" alt="CSEMA">
     </a>
-    <a class="concept" href="#/about">Concept with demo data</a>
     <button class="searchbtn" data-act="search"><span data-icon="search"></span>Search<span class="kbd">/</span></button>
     <nav class="nav" id="sidenav"></nav>
     <div class="side-foot">
@@ -543,6 +592,7 @@ const ICONS = {
   'life-buoy': '<circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/>',
   activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   signal: '<path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   'panel-left': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
   'help-circle': '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
 };
@@ -551,7 +601,7 @@ const ic = (n, cls = '') =>
 
 /* ---------- Demo data. One name per concept: Path > Unit > Lesson, Challenge / Machine / Lab / Scenario, Season > Chapter, XP. ---------- */
 const USER = { name: 'Alex', handle: 'alex_learner', level: 2, levelName: 'Beginner', nextLevelName: 'Rookie', xp: 50, nextLevelXp: 100,
-  rank: 710, streak: 0, solved: 0, lessonsDone: 1, plan: 'Free', machineMinutesLeft: 290, joined: '2025-09-14', league: 'Bronze' };
+  rank: 710, streak: 0, solved: 0, lessonsDone: 1, plan: 'Free', machineMinutesLeft: 290, joined: '2025-09-14', league: 'Silver' };
 
 const TRACKS = ['Core', 'Red team', 'Blue team', 'AI security'];
 const TRACK_META = {
@@ -684,6 +734,14 @@ const HINTS = {
   OSINT: ['Look at the metadata of the photo.', 'Search for the landmarks you can see.'],
   Boot2Root: ['Scan all ports, not only the common ones.', 'Look for files that the developers left behind.'],
 };
+const STORY = {
+  'disk-of-secrets': [
+    'A survey team worked for three weeks in the hills north of the city. On the last night, their camp was broken into. The thieves took two laptops and left the field drive behind.',
+    'The team lead says that nothing important was on the drive. But someone deleted a folder on it one hour before the break-in. The deletion came from an account that the team does not know.',
+    'You have a full image of the drive. Find out what was deleted, who deleted it and why it was worth the trouble.',
+    'The flag is inside the file that the attacker wanted to remove.',
+  ],
+};
 const FIRST = { 'disk-of-secrets': 'quietroot', 'devops-leftovers': 'byteknight' };
 const DIFF = { Easy: 'green', Medium: 'amber', Hard: 'orange', Expert: 'violet' };
 const ACCESS = { free: 'Free', prime: 'Prime', labs: 'Prime + Labs' };
@@ -701,6 +759,15 @@ const BOARD = [
   ['quietroot', 18450, 212], ['lambda_lynx', 11806, 160], ['byteknight', 11030, 151], ['nullbyte_ria', 9875, 133], ['k3rnelpanic', 9410, 127],
   ['segfault_sam', 8802, 119], ['r00tkid', 8240, 112], ['hexhound', 7915, 104], ['ciph3rqueen', 7660, 98], ['packetpirate', 7302, 95],
 ].map(([handle, xp, solved], i) => ({ rank: i + 1, handle, xp, solved }));
+// Weekly league of 30. Top 7 move up, bottom 5 move down. The viewer is #18.
+const LEAGUE = { name: 'Silver', up: 'Gold', down: 'Bronze', promote: 7, demote: 5, endsIn: '3 days', players: [
+  ['packet_owl', 612], ['zer0trust', 580], ['sudo_sana', 544], ['bitflip', 501], ['mallory_x', 476], ['grepgod', 452], ['tcpdump_tia', 430],
+  ['hashcat_hari', 398], ['xor_queen', 361], ['nop_sled', 344], ['reverse_ravi', 318], ['cron_jobs', 290], ['dns_diva', 254], ['lfi_lord', 220],
+  ['jwt_jay', 188], ['syn_ack', 140], ['ssrf_sam', 96], [null, 50], ['ping_pal', 44], ['base64_ben', 40], ['chmod_777', 33], ['curl_kid', 29],
+  ['vim_viper', 24], ['arp_ace', 18], ['wget_wiz', 15], ['ls_la', 10], ['echo_one', 8], ['tty_tom', 5], ['nmap_noob', 2], ['root_me', 0],
+].map(([h, xp], i) => ({ rank: i + 1, handle: h || 'alex_learner', you: !h, xp })) };
+const AROUND = [['byte_bandit', 53, 4], ['nmap_ninja', 52, 3], ['shellshock', 51, 2], [null, 50, 0], ['hexa_hana', 49, 1], ['pingpong', 48, 1], ['rootless', 46, 0]]
+  .map(([h, xp, solved], i) => ({ rank: 707 + i, handle: h || 'alex_learner', you: !h, xp, solved }));
 const TEAMS = [['Hex Raiders', 6, 19135], ['Echo Shell', 5, 16420], ['Exit Code Zero', 4, 15980], ['Packet Storm', 6, 12210], ['Blue Lantern', 3, 10874], ['Null Route', 4, 9020]];
 const EVENTS = [
   { id: 'cyber-sprint', status: 'live', title: 'Cyber Sprint ’26', org: 'CSEMA', format: 'Teams of 4', ticket: 'Free', players: 248, left: '2 h 14 min left' },
@@ -718,7 +785,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const fmt = new Intl.NumberFormat('en-IN');
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 const badge = (label, theme = '', cls = '') => `<span class="badge ${theme ? 'b-' + theme : ''} ${cls}">${label}</span>`;
-const diff = (d) => badge(d, DIFF[d]);
+const diff = (d) => `<span style="color:var(--${DIFF[d]}-ink)">${d}</span>`;
 const prog = (pct, thin) => `<div class="prog ${thin ? 'thin' : ''}"><div style="width:${Math.max(0, Math.min(100, pct))}%${pct > 0 ? '' : ';min-width:0'}"></div></div>`;
 const av = (label, size = 'md', cls = '') => `<span class="av av-${size} ${cls}">${esc(label[0].toUpperCase())}</span>`;
 const seg = (name, opts, value) =>
@@ -730,7 +797,7 @@ const page = (head, body, cls = '') => `<div class="ph">${head}</div><div class=
 const sec = (title, sub, action, content) =>
   `<section><div class="sec-h"><div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div>${action || ''}</div>${content}</section>`;
 const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / 864e5);
-const fmtDate = (d, o) => new Date(d).toLocaleDateString('en-GB', o);
+const fmtDate = (d, o) => new Date(d).toLocaleDateString('en-GB', o).replace('Sept', 'Sep');
 
 function toast(msg, icon = 'check') {
   const el = document.createElement('div');
@@ -774,7 +841,7 @@ function pathCard(p) {
 }
 
 /* ---------- Router ---------- */
-const state = { outlineOpen: (() => { try { return localStorage.getItem('csema-demo-outline') !== 'closed'; } catch { return true; } })(), slide: 0, qsel: {}, qdone: {}, qwrong: null, practiceLoaded: false, seasonOpen: true, machine: {}, solved: {}, got: {}, hints: {}, answered: false, billing: 'monthly', scope: 'global',
+const state = { range: 'all', outlineOpen: (() => { try { return localStorage.getItem('csema-demo-outline') !== 'closed'; } catch { return true; } })(), slide: 0, qsel: {}, qdone: {}, qwrong: null, practiceLoaded: false, seasonOpen: true, machine: {}, solved: {}, got: {}, hints: {}, answered: false, billing: 'monthly', scope: 'global',
   filters: { q: '', category: '', difficulty: '', free: false }, upcomingOpen: false, track: 'All' };
 let timer = null;
 const machineEnds = {};
@@ -819,7 +886,7 @@ function render() {
   else if (a === 'practice' && b) html = practiceItem(b);
   else if (a === 'practice') html = practice(query.get('type') || 'challenge');
   else if (a === 'season') html = season();
-  else if (a === 'compete') html = compete(query.get('tab') || 'events');
+  else if (a === 'compete') html = compete(query.get('tab') || 'leaderboard');
   else if (a === 'profile') html = profile();
   else if (a === 'plans') html = plans();
   else if (a === 'about') html = about();
@@ -896,14 +963,11 @@ function mountTerminal() {
 
 /* ---------- Pages ---------- */
 function seasonBanner() {
-  const total = SEASON.chapters.reduce((n, c) => n + c.challenges.length, 0);
+  try { if (localStorage.getItem('csema-demo-season') === 'hidden') return ''; } catch {}
   const d = daysUntil(SEASON.endsOn);
-  return `<div class="card banner row wrapf g4" style="padding:14px 16px">
-    <div class="min0 flex1">
-      <div class="row g2"><p class="t-base semi ink9">Season ${SEASON.number}: ${SEASON.title}</p>${badge('Live', 'solid')}</div>
-      <p class="t-sm ink6 mt1">${total} challenges · ${d > 0 ? `ends in ${d} days` : 'ended'}</p>
-    </div>
-    <a class="btn outline md" href="#/season">Open season</a>
+  return `<div class="card strip" id="season-strip">
+    <a class="strip-link" href="#/season">${badge('Live', 'solid')}<span class="min0 trunc t-sm"><span class="semi ink9">Season ${SEASON.number}: ${SEASON.title}</span><span class="ink5 hide-sm"> · ${d > 0 ? `ends in ${d} days` : 'ended'}</span></span>${ic('chevron-right', 'i-sm ink4')}</a>
+    <button class="btn ghost icon md" style="width:32px" data-act="dismiss-season" aria-label="Hide the season banner">${ic('x', 'i-sm')}</button>
   </div>`;
 }
 const statStrip = (list) => `<div class="card stats">${list.map(([icon, tint, l, v, h]) =>
@@ -922,7 +986,7 @@ function home() {
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   const pct = Math.round(path.done / path.lessons * 100);
-  return page(`<h1>${greet}, ${USER.name}</h1><span class="pill ml-auto" title="Days in a row with a lesson or a solve">${ic('flame', 'i-sm brand')}${USER.streak}-day streak</span>`, `
+  return page(`<h1>${greet}, ${USER.name}</h1>${USER.streak ? `<span class="pill ml-auto" title="Days in a row with a lesson or a solve">${ic('flame', 'i-sm brand')}${USER.streak}-day streak</span>` : ''}`, `
     <section class="card hero home-hero">
       <div class="hh-main">
         <h2 class="t-4xl semi ink9">${cur.title}</h2>
@@ -944,6 +1008,7 @@ function home() {
 
     ${sec('Today', '', '', `
       <div class="cards two">
+        ${rowCard('#/season', 'radio', 'brand', `Season ${SEASON.number}: ${SEASON.title}`, `<span class="brand med">Live</span> · ${daysUntil(SEASON.endsOn)} days left`, false).replace('class="card pad"', 'class="card pad mob-only"')}
         ${rowCard(`#/practice/${daily.id}`, dIcon, dTint, daily.title, `Today’s challenge · ${daily.difficulty} · ${daily.xp} XP`, false)}
         <div class="card pad" style="flex-direction:row;align-items:center;gap:14px;display:flex">
           ${ring(goalPct, 'gift', 'brand')}
@@ -960,7 +1025,7 @@ function learn() {
   const t = state.track;
   const upcoming = UPCOMING.filter((u) => t === 'All' || u.track === t);
   return page(`<h1>Learn</h1><span class="t-sm ink5 hide-sm ml-auto">${PATHS.length} paths · ${total} lessons</span>`, `
-    <div>${seg('track', [['All', 'All tracks'], ...TRACKS.map((x) => [x, x, PATHS.filter((p) => p.track === x).length])], t)}</div>
+    <div class="hide-sm">${seg('track', [['All', 'All tracks'], ...TRACKS.map((x) => [x, x, PATHS.filter((p) => p.track === x).length])], t)}</div>
     ${t === 'All'
       ? sec('Core path', 'Start here. Do these four in order.', '', `<div class="cards two">${PATHS.filter((p) => p.track === 'Core').map((p) => pathCard(p)).join('')}</div>`)
         + sec('Specialist tracks', 'Do one of these after the core path.', '', `<div class="cards two">${PATHS.filter((p) => p.track !== 'Core').map((p) => pathCard(p)).join('')}</div>`)
@@ -981,17 +1046,13 @@ function pathDetail(id) {
   return page(crumbs([['Learn', '#/learn'], [p.title]]) + action, `
     <section class="dhead">
       <h2>${p.title}</h2>
-      <p class="desc">${p.description}</p>
-      <div class="dmeta">
-        <span>${p.lessons} lessons</span>
-        <span>${p.hours} hours</span>
-        <span>Beginner</span>
-      </div>
+      <p class="dmeta"><span>${p.lessons} lessons</span><span>${p.hours} hours</span><span>Beginner</span></p>
+      <p class="desc" style="margin-top:12px">${p.description}</p>
     </section>
     ${UNITS.map((u, ui) => sec(`Unit ${ui + 1}: ${u.title}`, '', `<span class="t-sm ink5 num">${u.lessons.filter((l) => l.status === 'done').length} / ${u.lessons.length}</span>`, `
       <div class="card rows">${u.lessons.map((l) => {
         const here = l.status === 'current';
-        return `<a class="li ${here ? 'cur' : ''}" href="#/learn/${p.id}/${l.id}" style="padding:13px 20px" ${here ? 'aria-current="step"' : ''}>
+        return `<a class="li ${here ? 'cur' : ''}" href="#/learn/${p.id}/${l.id}"  ${here ? 'aria-current="step"' : ''}>
           ${lessonIcon(l.status, here)}
           <span class="min0 flex1 t-base trunc ${l.status === 'done' ? 'ink6' : 'ink9'} ${here ? 'med' : ''}">${l.title}</span>
           <span class="t-sm ink5">${l.minutes} min</span>
@@ -1101,15 +1162,15 @@ function practice(type) {
   const left = USER.machineMinutesLeft;
   return page(`<h1>Practice</h1><span class="pill ml-auto hide-sm">${ic('clock', 'i-sm')}${Math.floor(left / 60)} h ${left % 60} min machine time left</span>`, `
     ${seasonBanner()}
-    <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;flex-direction:column;gap:16px">
       <div>${seg('type', types.map((t) => [t, TYPE[t].plural, ITEMS.filter((i) => i.type === t).length]), type)}</div>
-      <p class="t-sm ink6">${TYPE[type].blurb}</p>
       ${type === 'lab' ? `<div class="card banner row wrapf g3" style="padding:12px 16px"><p class="t-sm p ink7 min0 flex1">Labs need the <b>Prime + Labs</b> plan. You can look at all labs now.</p><a class="btn outline md" href="#/plans">See plans</a></div>` : ''}
-      <div class="row wrapf g2">
-        <label class="inputwrap" style="width:260px;max-width:100%">${ic('search')}<input class="input" id="f-q" type="search" placeholder="Search by name or topic" aria-label="Search" value="${esc(f.q)}"></label>
-        <select class="input" id="f-cat" aria-label="Category" style="width:180px"><option value="">All categories</option>${cats.map((c) => `<option ${c === f.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
-        <select class="input" id="f-diff" aria-label="Difficulty" style="width:160px"><option value="">Any difficulty</option>${['Easy', 'Medium', 'Hard', 'Expert'].map((d) => `<option ${d === f.difficulty ? 'selected' : ''}>${d}</option>`).join('')}</select>
-        <span class="row g2" style="margin-left:6px"><button class="sw" role="switch" id="f-free" aria-checked="${f.free}" aria-label="Hide locked items"></button><span class="t-sm ink7">Hide locked</span></span>
+      <div class="row wrapf g2 filters ${state.filtersOpen ? 'open' : ''}">
+        <label class="inputwrap f-search" style="width:260px;max-width:100%">${ic('search')}<input class="input" id="f-q" type="search" placeholder="Search by name or topic" aria-label="Search" value="${esc(f.q)}"></label>
+        <select class="input f-sel" id="f-cat" aria-label="Category" style="width:180px"><option value="">All categories</option>${cats.map((c) => `<option ${c === f.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
+        <select class="input f-sel" id="f-diff" aria-label="Difficulty" style="width:160px"><option value="">Any difficulty</option>${['Easy', 'Medium', 'Hard', 'Expert'].map((d) => `<option ${d === f.difficulty ? 'selected' : ''}>${d}</option>`).join('')}</select>
+        <span class="row g2 f-tog" style="margin-left:6px"><button class="sw" role="switch" id="f-free" aria-checked="${f.free}" aria-label="Hide locked items"></button><span class="t-sm ink7">Hide locked</span></span>
+        <button class="btn outline md f-more" data-act="filters" id="f-more" aria-expanded="${!!state.filtersOpen}">Filters</button>
         <button class="btn ghost ml-auto" data-act="clear-filters" id="f-clear" style="visibility:hidden">Clear filters</button>
       </div>
     </div>
@@ -1125,6 +1186,8 @@ function mountPractice() {
       && (!q || i.title.toLowerCase().includes(q) || i.category.toLowerCase().includes(q))
       && (!f.category || i.category === f.category) && (!f.difficulty || i.difficulty === f.difficulty) && (!f.free || canOpen(i.access)));
     $('#f-clear').style.visibility = (f.q || f.category || f.difficulty || f.free) ? 'visible' : 'hidden';
+    const nf = [f.category, f.difficulty, f.free].filter(Boolean).length;
+    $('#f-more').textContent = nf ? `Filters · ${nf}` : 'Filters';
     if (!state.practiceLoaded) {
       $('#plist').innerHTML = `<div class="cards two" aria-busy="true">${Array.from({ length: 8 }, () =>
         `<div class="card pad row g3"><div class="skel" style="width:40px;height:40px;border-radius:10px"></div><div class="flex1"><div class="skel" style="height:12px;width:55%"></div><div class="skel mt2" style="height:10px;width:75%"></div></div></div>`).join('')}</div>`;
@@ -1143,6 +1206,11 @@ function mountPractice() {
   if (!state.practiceLoaded) setTimeout(() => { state.practiceLoaded = true; if (parse().parts[0] === 'practice' && !parse().parts[1]) draw(); }, 450);
 }
 
+function storyBlock(id) {
+  const open = !!state.storyOpen?.[id];
+  return `<div class="story desc ${open ? '' : 'clamp'}" style="margin-top:12px" id="story-${id}">${STORY[id].map((t) => `<p>${t}</p>`).join('')}</div>
+    <button class="more" data-act="story" data-id="${id}" aria-expanded="${open}" aria-controls="story-${id}">${open ? 'Show less' : 'Read more'}</button>`;
+}
 function practiceItem(id) {
   const it = ITEMS.find((i) => i.id === id) || ITEMS[0];
   const m = TYPE[it.type];
@@ -1161,7 +1229,7 @@ function practiceItem(id) {
         <button class="btn md ${primary ? 'solid' : 'outline'}" data-act="submit-flag" data-id="${id}" data-k="${k}" data-xp="${k === 'user' ? Math.round(it.xp * 0.4) : k === 'root' ? Math.round(it.xp * 0.6) : it.xp}">Submit</button></div>`;
   const hintBlock = hints.length ? `
     ${hints.slice(0, shown).map((h, n) => `<div class="inset hint mt3" ${n === shown - 1 ? 'data-anim="hint"' : ''}>${ic('help-circle', 'brand')}<span><b class="ink9">Hint ${n + 1}.</b> ${h}</span></div>`).join('')}
-    ${shown < hints.length ? `<button class="btn ghost md mt2 flush" data-act="hint" data-id="${id}">Show hint ${shown + 1} of ${hints.length}</button>` : ''}` : '';
+    ${shown < hints.length ? `<button class="more mt2" data-act="hint" data-id="${id}">Show hint ${shown + 1} of ${hints.length}</button>` : ''}` : '';
   const task = (state, n, title, body) =>
     `<li class="task ${state}"><span class="task-n">${state === 'done' ? ic('check', 'i-sm') : n}</span><div class="task-body"><p class="t-base">${title}</p>${body}</div></li>`;
 
@@ -1169,22 +1237,19 @@ function practiceItem(id) {
   if (it.type === 'challenge') {
     const s3 = solved('flag') ? 'done' : got ? 'current' : 'todo';
     tasks = [
-      task(got ? 'done' : 'current', 1, 'Get the files', `
-        <div class="inset row wrapf g3 mt3">
-          <div class="min0 flex1"><p class="t-sm med ink9 mono">handout.zip</p><p class="t-xs ink5">48 MB</p></div>
-          <button class="btn outline md" data-act="get-file" data-id="${id}">Download</button></div>`),
-      task(solved('flag') ? 'done' : got ? 'current' : 'todo', 2, 'Find the flag', hintBlock),
+      task(got || solved('flag') ? 'done' : 'current', 1, 'Get the files', `<p class="t-sm p ink6 mt1"><code>handout.zip</code>, 48 MB</p>
+        <button class="btn outline md mt3" data-act="get-file" data-id="${id}">Download</button>`),
+      task(solved('flag') ? 'done' : got ? 'current' : 'todo', 2, 'Find the flag', `<p class="t-sm p ink6 mt1">Look inside the files. The flag looks like <code>CSEMA{...}</code>.</p>${solved('flag') ? '' : hintBlock}`),
       task(s3 === 'done' ? 'done' : 'todo', 3, 'Submit the flag', flagForm('flag', 'Flag', true)),
     ].join('');
   } else if (it.type === 'machine') {
     const run = ms === 'running';
     tasks = [
       task(run ? 'done' : 'current', 1, 'Start the machine', `
-        <div class="inset row wrapf g3 mt3">
-          <p class="t-sm ink7 min0 flex1">${run ? `Running at <code class="ink9">10.10.4.17</code> · <span id="clock" class="num">60:00</span> left`
+          <p class="t-sm p ink6 mt1">${run ? `Running at <code class="ink9">10.10.4.17</code> · <span id="clock" class="num">60:00</span> left`
             : ms === 'starting' ? 'Starting. This takes about one minute.' : `It runs for 60 minutes. You have ${Math.floor(USER.machineMinutesLeft / 60)} h of machine time.`}</p>
-          ${ms === 'off' ? `<button class="btn solid md" data-act="start-machine" data-id="${id}">Start</button>`
-            : ms === 'starting' ? `<button class="btn md" disabled>Starting…</button>` : `<button class="btn ghost md danger" data-act="stop-machine" data-id="${id}">Stop</button>`}</div>`),
+          ${ms === 'off' ? `<button class="btn solid md mt3" data-act="start-machine" data-id="${id}">Start</button>`
+            : ms === 'starting' ? `<button class="btn md mt3" disabled>Starting…</button>` : `<button class="btn outline md danger mt3" data-act="stop-machine" data-id="${id}">Stop</button>`}`),
       task(run ? 'current' : 'todo', 2, 'Connect', `<p class="t-sm p ink6 mt1">Use the browser terminal or the VPN.</p>
         ${run ? (state.term === id
           ? `<p class="t-sm ink5 mt2">The terminal is open on the right.</p>`
@@ -1219,30 +1284,27 @@ function practiceItem(id) {
   return page(crumbs([['Practice', '#/practice'], [m.plural, `#/practice?type=${it.type}`], [it.title]]) +
     '', `
     <div class="row-s wrapf g6">
-      <div class="min0" style="flex:1 1 560px;display:flex;flex-direction:column;gap:24px">
+      <div class="min0 dmain" style="flex:1 1 560px;display:flex;flex-direction:column;gap:24px">
       <section class="dhead">
-        <div class="row wrapf g2"><h2>${it.title}</h2>${it.status === 'started' && !locked ? badge('In progress', 'brand') : ''}</div>
-        <p class="desc">${it.summary}</p>
-        <div class="dmeta"><span>${it.category}</span><span>${it.difficulty}</span><span>${it.xp} XP</span></div>
+        <h2>${it.title}</h2>
+        <p class="dmeta"><span>${it.category}</span>${diff(it.difficulty)}<span>${it.xp} XP</span></p>
+        ${STORY[id] ? storyBlock(id) : `<p class="desc" style="margin-top:12px">${it.summary}</p>`}
       </section>
-      <section class="card">
+      <section class="card tasks-card">
         <div class="pad-lg">${locked ? lockedBlock : `<ol class="tasks">${tasks}</ol>`}</div>
       </section>
       </div>
 
-      <aside style="flex:0 1 300px;min-width:260px;display:flex;flex-direction:column;gap:20px">
-        <section class="card pad">
+      <aside class="drail ${solved('flag') || solved('root') ? '' : 'later'}" style="flex:0 1 300px;min-width:260px;display:flex;flex-direction:column;gap:20px;position:sticky;top:20px;align-self:flex-start">
+        <section class="card pad players">
           <p class="t-base semi ink9">Players</p>
           ${it.solves ? `<div class="row g3 mt3"><div class="avs">${solvers.map((r) => av(r.handle, 'sm')).join('')}</div><p class="t-sm ink6">${it.solves} players solved this</p></div>` : `<p class="t-sm ink6 mt2">Nobody has solved this yet.</p>`}
           ${first ? `<p class="row g2 t-sm ink6 mt3">${ic('award', 'i-sm amber')}First solve by <span class="med ink9">${first}</span></p>` : ''}
         </section>
         ${similar.length ? `<section class="card">
-          <p class="t-base semi ink9" style="padding:16px 20px 8px">Try next</p>
-          <div class="rows">${similar.map((x) => {
-            const [xi, xt] = CATEGORY[x.category] || [TYPE[x.type].icon, 'gray'];
-            return `<a class="li" href="#/practice/${x.id}" style="padding:12px 20px"><div class="ti ti-sm ti-${xt}">${ic(x.icon || xi, 'i-sm')}</div>
-              <span class="min0 flex1 t-sm med ink9 trunc">${x.title}</span><span class="t-xs ink5">${x.xp} XP</span></a>`;
-          }).join('')}</div>
+          <p class="t-base semi ink9" style="padding:16px 16px 4px">Try next</p>
+          <div class="rows">${similar.map((x) => `<a class="li" href="#/practice/${x.id}" style="padding:10px 16px;display:block">
+              <p class="t-sm med ink9 trunc">${x.title}</p><p class="t-xs ink5 mt1">${x.category} · ${x.difficulty} · ${x.xp} XP</p></a>`).join('')}</div>
         </section>` : ''}
       </aside>
     </div>
@@ -1265,19 +1327,14 @@ function season() {
   return page(crumbs([['Practice', '#/practice'], [`Season ${SEASON.number}`]]) + `<a class="btn solid md ml-auto" href="#/practice/disk-of-secrets">Start chapter 1</a>`, `
     <section class="dhead">
       <div class="row g2"><h2>${SEASON.title}</h2>${badge('Live', 'solid')}</div>
-      <p class="desc">${SEASON.tagline}</p>
-      <div class="dmeta">
-        <span>Ends ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'short' })}</span>
-        <span>${total} challenges</span>
-        <span>0 solved</span>
-      </div>
+      <p class="dmeta"><span>Ends ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'short' })}</span><span>${total} challenges</span><span>0 solved</span></p>
+      <p class="desc" style="margin-top:12px">${SEASON.tagline}</p>
     </section>
     ${sec('Chapters', 'Finish a chapter to open the next one.', '', `
       <div class="cards five">${SEASON.chapters.map((ch, i) => `
-        <div class="card pad">
-          <div class="row between"><span class="rank ${i === 0 ? 'r1' : ''}">${i + 1}</span>${i === 0 ? badge('Open', 'brand') : ic('lock', 'i-sm ink4')}</div>
-          <p class="t-base semi ${i === 0 ? 'ink9' : 'ink6'} mt3">${ch.title}</p>
-          <p class="t-xs ink5 mt1">${ch.challenges.length} challenges</p>
+        <div class="card pad chap">
+          <span class="rank ${i === 0 ? 'r1' : ''}">${i + 1}</span><span class="chap-s">${i === 0 ? badge('Open', 'brand') : ic('lock', 'i-sm ink4')}</span>
+          <div class="chap-t min0"><p class="t-base semi ${i === 0 ? 'ink9' : 'ink6'}">${ch.title}</p><p class="t-xs ink5 mt1">${ch.challenges.length} challenges</p></div>
         </div>`).join('')}</div>`)}
     ${sec(`Chapter 1: ${ch1.title}`, ch1.story, '', `
       <div class="cards two">${ch1.challenges.map(([t, cat, d]) => {
@@ -1287,7 +1344,8 @@ function season() {
 }
 
 function compete(tab) {
-  const tabs = seg('tab', [['events', 'Events'], ['leaderboard', 'Leaderboard'], ['teams', 'Teams']], tab);
+  const tabs = seg('tab', [['leaderboard', 'Leaderboard'], ['events', 'Events'], ['teams', 'Teams']], tab);
+  const liveNow = EVENTS.find((e) => e.status === 'live');
   const dateTile = (d) => `<div class="calbox"><span class="t-xs semi">${fmtDate(d, { month: 'short' })}</span><span class="t-xl semi num">${fmtDate(d, { day: 'numeric' })}</span></div>`;
   let body = '';
   if (tab === 'events') {
@@ -1295,16 +1353,15 @@ function compete(tab) {
     const next = EVENTS.filter((e) => e.status === 'upcoming');
     const past = EVENTS.filter((e) => e.status === 'past');
     body = `
-      <p class="t-sm ink6">Compete solo or as a team on live scoreboards. Organizations can create their own event.</p>
+      <div class="vstack" style="gap:16px">
       ${live.length ? sec('Live now', '', '', live.map((e) => `
-        <div class="card pad row wrapf g4">
-          <div class="ti ti-brand">${ic('radio')}</div>
+        <div class="card pad row g4 ev">
           <div class="min0 flex1"><p class="row g2"><span class="t-base semi ink9 trunc">${e.title}</span>${badge('Live', 'solid')}</p>
             <p class="t-sm ink5 mt1 trunc">${e.org} · ${e.format} · ${e.ticket} · ${e.players} players · ${e.left}</p></div>
           <button class="btn solid md" data-toast="The event opens here (demo)">Join event</button>
-        </div>`).join('')) : ''}
+        </div>`).join('')) : ''}</div>
       ${sec('Upcoming', '', '', `<div style="display:flex;flex-direction:column;gap:12px">${next.map((e) => `
-        <div class="card pad row wrapf g4">
+        <div class="card pad row g4 ev">
           ${dateTile(e.date)}
           <div class="min0 flex1"><p class="t-base semi ink9 trunc">${e.title}</p>
             <p class="t-sm ink5 mt1 trunc">${e.org} · ${e.format} · ${e.ticket}${e.players ? ` · ${e.players} registered` : ''}</p></div>
@@ -1312,30 +1369,55 @@ function compete(tab) {
             : `<button class="btn ghost md" data-toast="We will remind you when registration opens">Opens ${e.opens}</button>`}
         </div>`).join('')}</div>`)}
       ${sec('Past events', '', '', `<div class="card rows">${past.map((e) => `
-        <div class="li" style="padding:14px 20px">
+        <div class="li" >
           <span class="t-sm ink5 num" style="width:56px">${fmtDate(e.date, { day: 'numeric', month: 'short' })}</span>
           <span class="min0 flex1"><span class="t-base med ink9 trunc" style="display:block">${e.title}</span><span class="t-sm ink5">${e.org} · ${e.players} players</span></span>
           <button class="btn ghost md" data-toast="Results open here (demo)">Results</button>
         </div>`).join('')}</div>`)}`;
   } else if (tab === 'leaderboard') {
-    const rows = state.scope === 'global' ? BOARD : BOARD.filter((_, i) => i % 3 === 1).map((r, i) => ({ ...r, rank: i + 1 }));
-    const [first, second, third] = rows;
-    const pod = (r, cls) => `<div class="card ${cls}">${av(r.handle, 'lg', r.rank === 1 ? 'brand' : '')}<p class="t-base semi ink9 mt2 trunc">${r.handle}</p>
-      <p class="t-sm ink5 mt1 num">${fmt.format(r.xp)} XP</p><p class="mt2"><span class="rank ${r.rank === 1 ? 'r1' : ''}">${r.rank}</span></p></div>`;
-    body = `
-      <div class="card pad row wrapf g4">
-        ${av(USER.name, 'lg', 'brand')}
-        <div class="min0 flex1"><p class="t-base semi ink9">You are #${USER.rank}</p><p class="t-sm ink5 mt1">${USER.league} league · 1,144 XP to the top 50</p></div>
-        <a class="btn outline md" href="#/practice">Earn XP</a>
-      </div>
-      ${sec('Top players', '', seg('scope', [['global', 'Global'], ['college', 'My college']], state.scope), `
-        <div class="podium">${pod(second, '')}${pod(first, 'first')}${pod(third, '')}</div>
-        <div class="card rows mt4">
-          ${rows.slice(3).map((r) => `<div class="li" style="padding:12px 20px"><span class="rank">${r.rank}</span>${av(r.handle, 'sm')}<span class="t-base med ink8 min0 flex1 trunc">${r.handle}</span>
-            <span class="t-sm semi ink9 num">${fmt.format(r.xp)} XP</span></div>`).join('')}
-          <div class="li cur" style="padding:12px 20px"><span class="rank r1" style="width:auto;padding:0 6px">${USER.rank}</span>${av(USER.handle, 'sm', 'brand')}<span class="t-base semi ink9 min0 flex1 trunc">${USER.handle} (you)</span>
-            <span class="t-sm semi ink9 num">${USER.xp} XP</span></div>
-        </div>`)}`;
+    const view = state.lbView || 'league';
+    const row = (r, opts = {}) => `<div class="lb-row ${r.you ? 'you' : ''}">
+      <span class="t-sm num ${opts.rankCls || (r.you ? 'semi brand' : 'ink5')}">${opts.medal && r.rank <= 3 ? `<span class="medal m${r.rank}">${r.rank}</span>` : r.rank}</span>
+      <span class="row g2 min0">${av(r.handle, 'sm', r.you ? 'brand' : '')}<span class="t-base ${r.you ? 'semi ink9' : 'med ink8'} trunc">${r.handle}${r.you ? ' (you)' : ''}</span></span>
+      <span class="r w t-sm ink5 num">${opts.third != null ? opts.third(r) : ''}</span><span class="r t-sm semi ink9 num">${fmt.format(r.xp)}</span></div>`;
+    const lbHead = `<div class="row between g3"><h2 class="t-lg semi ink9">${view === 'league' ? 'This week' : 'All time'}</h2><div class="seg-inline">${seg('lbview', [['league', 'My league'], ['global', 'Global']], view)}</div></div>`;
+    const live = liveNow ? `<div class="card pad row wrapf g3 hide-sm" style="padding:12px 16px">
+        ${badge('Live', 'solid')}<p class="t-sm ink7 min0 flex1 trunc"><span class="semi ink9">${liveNow.title}</span> · ${liveNow.players} players · ${liveNow.left}</p>
+        <a class="btn ghost md" href="#/compete?tab=events">See event</a></div>` : '';
+    if (view === 'league') {
+      const L = LEAGUE, me = L.players.find((p) => p.you), n = L.players.length;
+      const toUp = L.players[L.promote - 1].xp - me.xp + 1;
+      body = `${live}<div class="vstack" style="gap:12px">${lbHead}
+        <div class="card pad row wrapf g4">
+          <div class="ti ti-amber hide-sm">${ic('award')}</div>
+          <div class="min0 flex1"><p class="t-base semi ink9">${L.name} league</p><p class="t-sm ink5 mt1 sm-xs">Top ${L.promote} move up to ${L.up}. Bottom ${L.demote} move down to ${L.down}. Ends in ${L.endsIn}.</p></div>
+          <div class="right"><p class="t-2xl semi ink9 num">#${me.rank}</p><p class="t-xs ink5">of ${n}</p></div>
+        </div>
+        <p class="t-sm ink6 sm-xs">Earn ${toUp} more XP this week to reach the promotion zone.</p>
+        <div class="card lb-table">
+          <div class="lb-row lb-head"><span>#</span><span>Player</span><span class="r w"></span><span class="r">XP this week</span></div>
+          ${L.players.map((r) => {
+            const zone = r.rank <= L.promote ? 'rank-up' : r.rank > n - L.demote ? 'rank-down' : '';
+            return (r.rank === L.promote + 1 ? `<div class="lb-zone up">Promotion zone above</div>` : '')
+              + (r.rank === n - L.demote + 1 ? `<div class="lb-zone down">Demotion zone below</div>` : '')
+              + row(r, { rankCls: r.you ? 'semi brand' : zone || 'ink5' });
+          }).join('')}
+        </div></div>`;
+    } else {
+      const toTop = 1144, pct = USER.xp / (USER.xp + toTop) * 100, rc = 2 * Math.PI * 24;
+      const head = `<div class="lb-row lb-head"><span>#</span><span>Player</span><span class="r w">Solved</span><span class="r">XP</span></div>`;
+      body = `${live}<div class="vstack" style="gap:12px">${lbHead}
+        <div class="card pad row wrapf g4">
+          <span class="ring-av" role="img" aria-label="${Math.round(pct)}% of the way to the top 50">
+            <svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24" fill="none" stroke="var(--s3)" stroke-width="3"/>
+            <circle cx="26" cy="26" r="24" fill="none" stroke="var(--brand)" stroke-width="3" stroke-linecap="round" stroke-dasharray="${rc.toFixed(1)}" stroke-dashoffset="${(rc * (1 - Math.max(pct, 4) / 100)).toFixed(1)}" transform="rotate(-90 26 26)"/></svg>
+            ${av(USER.name, 'lg', 'brand')}</span>
+          <div class="min0 flex1"><p class="t-base semi ink9">You are #${USER.rank} worldwide</p><p class="t-sm ink5 mt1">${fmt.format(toTop)} XP to the top 50</p></div>
+          <a class="btn outline md" href="#/practice">Earn XP</a>
+        </div></div>
+        ${sec('Top 10', '', '', `<div class="card lb-table rows">${head}${BOARD.map((r) => row(r, { medal: true, third: (x) => x.solved })).join('')}</div>`)}
+        ${sec('Around you', '', '', `<div class="card lb-table rows">${head}${AROUND.map((r) => row(r, { third: (x) => x.solved })).join('')}</div>`)}`;
+    }
   } else {
     body = `
       <div class="card empty"><div class="circ">${ic('users', 'i-xl')}</div>
@@ -1347,39 +1429,46 @@ function compete(tab) {
         <div class="min0 flex1"><p class="t-base semi ink9 trunc">${n}</p><p class="t-sm ink5 mt1">${mem} members · ${fmt.format(xp)} XP</p></div>
         <span class="rank ${i === 0 ? 'r1' : ''}">${i + 1}</span></div>`).join('')}</div>`)}`;
   }
-  return page(`<h1>Compete</h1><button class="btn ghost md ml-auto" data-toast="Event setup opens here (demo)">Create event</button>`, `<div>${tabs}</div>${body}`, 'narrow');
+  const sub = '';
+  return page(`<h1>Compete</h1><button class="btn ghost md ml-auto" data-toast="Event setup opens here (demo)">Create event</button>`, `<div class="vstack" style="gap:24px"><div class="row wrapf between g3">${tabs}${sub}</div><div class="vstack" style="gap:24px">${body}</div></div>`, 'narrow');
 }
 
-function heatmap() {
-  const weeks = 26, cells = [];
+function heatmap(weeks) {
+  const cells = [], months = [];
   const today = new Date(); const dow = (today.getDay() + 6) % 7;
   const total = weeks * 7 - (6 - dow);
+  let last = -1, lastCol = -9;
+  for (let w = 0; w < weeks; w++) {
+    const d = new Date(today); d.setDate(d.getDate() - (total - 1 - w * 7));
+    if (d.getMonth() !== last && w - lastCol >= 3 && w <= weeks - 2) { months.push(`<span style="grid-column:${w + 1} / span 3">${d.toLocaleDateString('en-US', { month: 'short' })}</span>`); lastCol = w; }
+    last = d.getMonth();
+  }
   for (let i = 0; i < weeks * 7; i++) {
     const daysAgo = total - 1 - i;
     let lvl = '';
     if (daysAgo === 2) lvl = 'l2'; else if (daysAgo === 3) lvl = 'l1';
     cells.push(i < total ? `<i class="${lvl}" title="${daysAgo === 0 ? 'Today' : daysAgo + ' days ago'}"></i>` : '<i style="visibility:hidden"></i>');
   }
-  return `<div class="heat" role="img" aria-label="Activity over the last 26 weeks: 2 active days">${cells.join('')}</div>`;
+  return `<div class="heat-m t-xs ink5" style="grid-template-columns:repeat(${weeks}, minmax(0, 1fr))" aria-hidden="true">${months.join('')}</div>
+    <div class="heat" style="grid-template-columns:repeat(${weeks}, minmax(0, 1fr))" role="img" aria-label="Activity over the last ${weeks === 52 ? '12' : '6'} months: 2 active days">${cells.join('')}</div>`;
 }
 
 function profile() {
   const badges = [['First day', 'sun', true], ['First flag', 'flag'], ['First root', 'terminal'], ['7-day streak', 'flame'], ['Path finished', 'graduation-cap'], ['Season 1', 'radio']];
-  return page(`<h1>Profile</h1><button class="btn outline md ml-auto" data-toast="The profile editor opens here">Edit profile</button>`, `
+  return page(`<h1>Profile</h1><button class="btn outline md ml-auto" data-act="settings">Edit profile</button>`, `
     <section class="card hero pad-lg">
       <div class="row wrapf g4">${av(USER.name, 'xl', 'brand')}
         <div class="min0 flex1">
-          <div class="row wrapf g2"><h2 class="t-4xl semi ink9">${USER.handle}</h2>${badge(USER.plan + ' plan', '', 'outline')}${badge(USER.league + ' league', 'amber')}</div>
-          <p class="t-sm ink5 mt1">Level ${USER.level} · ${USER.levelName} · member since ${fmtDate(USER.joined, { month: 'short', year: 'numeric' })}</p>
+          <div class="row wrapf g2"><h2 class="t-4xl semi ink9">${esc(USER.handle)}</h2>${badge(USER.plan + ' plan', '', 'outline')}${badge(USER.league + ' league', 'amber')}</div>
+          ${USER.bio ? `<p class="t-base p ink7 mt1">${esc(USER.bio)}</p>` : ''}<p class="t-sm ink5 mt1">Level ${USER.level} · ${USER.levelName} · member since ${fmtDate(USER.joined, { month: 'short', year: 'numeric' })}</p>
         </div>
       </div>
       <div class="mt5"><div class="row between t-sm"><span class="ink7">Level ${USER.level + 1}: ${USER.nextLevelName}</span><span class="ink5 num">${USER.xp} / ${USER.nextLevelXp} XP</span></div><div class="mt2">${prog(USER.xp / USER.nextLevelXp * 100)}</div></div>
     </section>
     ${statStrip([['zap', '', 'XP', USER.xp], ['trophy', '', 'Global rank', '#' + USER.rank], ['flag', '', 'Solved', USER.solved], ['book-open', '', 'Lessons done', USER.lessonsDone]])}
     <section class="card pad">
-      <div class="row between"><h3 class="t-lg semi ink9">Activity</h3><span class="t-xs ink5">Last 26 weeks · 2 active days</span></div>
-      <div class="mt4">${heatmap()}</div>
-      <div class="row g2 t-xs ink5 mt3" style="justify-content:flex-end">Less <span class="heat" style="grid-template-rows:12px;display:inline-grid"><i></i><i class="l1"></i><i class="l2"></i><i class="l3"></i></span> More</div>
+      <div class="row between"><h3 class="t-lg semi ink9">Activity</h3><span class="t-xs ink5">2 active days</span></div>
+      <div class="mt4 hm-lg">${heatmap(52)}</div><div class="mt4 hm-sm">${heatmap(26)}</div>
     </section>
     <div class="grid2">
       <section class="card pad"><h3 class="t-lg semi ink9">Skills</h3><p class="t-sm ink5">Percent done in each area.</p>
@@ -1421,9 +1510,10 @@ function plans() {
         ${state.coupon
           ? `<span class="chip">${ic('check', 'i-sm')}${state.coupon} applied · 20% off</span><button class="btn ghost md" data-act="coupon-remove">Remove</button>`
           : state.couponOpen
-            ? `<input class="input mono" id="coupon" placeholder="Coupon code" aria-label="Coupon code" style="width:200px" autocomplete="off"><button class="btn outline md" data-act="coupon-apply">Apply</button>${state.couponErr ? `<span class="t-sm brand" role="alert">${state.couponErr}</span>` : ''}`
+            ? `<input class="input mono" id="coupon" placeholder="Coupon code" aria-label="Coupon code" value="${esc(state.couponVal || '')}" style="width:200px;${state.couponErr ? 'border-color:var(--brand)' : ''}" autocomplete="off" ${state.couponErr ? 'aria-invalid="true" aria-describedby="coupon-err"' : ''}><button class="btn outline md" data-act="coupon-apply">Apply</button>`
             : `<button class="btn ghost md" data-act="coupon-open">Have a coupon code?</button>`}
       </div>
+      ${state.couponOpen && !state.coupon && state.couponErr ? `<p class="t-sm brand" id="coupon-err" role="alert" style="margin-top:-6px" data-anim="hint">${state.couponErr}</p>` : ''}
       <p class="row g2 t-sm ink5">${ic('lock', 'i-sm')}Secure checkout with Razorpay. Prices include GST.</p>
     </div>
   `);
@@ -1449,7 +1539,7 @@ function about() {
       <ul class="about mt3">
         <li>${ic('arrow-right', 'brand')}<span><a class="ink9 semi" href="#/learn/networking-1/components">The current lesson</a>: change slides with the arrow keys. Then answer the question.</span></li>
         <li>${ic('arrow-right', 'brand')}<span><a class="ink9 semi" href="#/practice?type=machine">Practice → Machines</a>: start a machine. Submit <code>CSEMA{demo}</code>.</span></li>
-        <li>${ic('arrow-right', 'brand')}<span>Press <span class="kbd">/</span> to search.</span></li>
+        <li class="hide-sm">${ic('arrow-right', 'brand')}<span>Press <span class="kbd">/</span> to search.</span></li>
       </ul>
     </div>
   `, 'narrow');
@@ -1482,12 +1572,37 @@ function openSearch() {
 function openAccount(anchor) {
   const r = anchor.getBoundingClientRect();
   const below = r.top < window.innerHeight / 2;
-  const items = [['Profile', 'user', '#/profile'], ['Plans and billing', 'credit-card', '#/plans'], ['About this concept', 'info', '#/about'], null,
+  const items = [['Profile', 'user', '#/profile'], ['Settings', 'settings', null, null, 'settings'], ['Plans and billing', 'credit-card', '#/plans'], ['About this concept', 'info', '#/about'], null,
     ['Become an ambassador', 'megaphone', null, 'The ambassador form opens here'], ['Sign out', 'log-out', null, 'Signed out (demo)']];
   $('#layer').innerHTML = `<div style="position:fixed;inset:0;z-index:29" data-close></div>
     <div class="menu" role="menu" style="${below ? `top:${r.bottom + 6}px;right:${Math.max(8, window.innerWidth - r.right)}px` : `bottom:${window.innerHeight - r.top + 6}px;left:${r.left}px`}">
-    ${items.map((x) => x ? `<button role="menuitem" ${x[2] ? `data-href="${x[2]}"` : `data-toast="${x[3]}"`}><span class="ink6">${ic(x[1])}</span>${x[0]}</button>` : '<hr>').join('')}</div>`;
+    ${items.map((x) => x ? `<button role="menuitem" ${x[4] ? `data-act="${x[4]}"` : x[2] ? `data-href="${x[2]}"` : `data-toast="${x[3]}"`}><span class="ink6">${ic(x[1])}</span>${x[0]}</button>` : '<hr>').join('')}</div>`;
   $('#layer .menu button').focus();
+}
+function openSettings() {
+  const row = (title, sub, btn) => `<div class="row g4"><div class="min0 flex1"><p class="t-base med ink9">${title}</p><p class="t-sm ink5 mt1">${sub}</p></div>${btn}</div>`;
+  $('#layer').innerHTML = `<div class="overlay" data-close><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="st-title" style="max-width:480px">
+    <div class="row between" style="padding:16px 20px 0"><h2 id="st-title" class="t-xl semi ink9">Settings</h2><button class="btn ghost icon md" style="width:32px" data-act="close" aria-label="Close">${ic('x', 'i-sm')}</button></div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:16px;max-height:75vh;overflow-y:auto">
+      <div class="row g3">${av(USER.name, 'lg', 'brand')}<button class="btn outline md" data-toast="Avatar upload opens here (demo)">Change avatar</button></div>
+      <div><label class="label" for="st-handle">Handle</label><input class="input" id="st-handle" value="${esc(USER.handle)}" maxlength="24" autocomplete="off"><p class="help">Others see this on leaderboards and teams.</p></div>
+      <div><div class="row between"><label class="label" for="st-bio">Bio</label><span class="help num" style="margin:0 0 6px"><span id="st-count">${(USER.bio || '').length}</span>/240</span></div>
+        <textarea class="input" id="st-bio" rows="3" maxlength="240" placeholder="Tell others what you work on" style="height:auto;padding:8px 10px;resize:vertical;line-height:1.5">${esc(USER.bio || '')}</textarea></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn solid md" data-act="save-settings">Save changes</button></div>
+      <hr class="divider" style="margin:4px 0">
+      <div style="display:flex;flex-direction:column;gap:20px">${row('Plan', `${USER.plan} plan`, '<a class="btn outline md" href="#/plans">Change plan</a>')}
+      ${row('Delete account', 'This removes your XP, badges and progress.', '<button class="btn outline md danger" data-act="delete-account">Delete</button>')}</div>
+    </div>
+  </div></div>`;
+  $('#st-bio').oninput = (e) => { $('#st-count').textContent = e.target.value.length; };
+  $('#st-handle').focus();
+}
+function confirmDelete() {
+  $('#layer').innerHTML = `<div class="overlay" data-close><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-title" style="max-width:420px;padding:20px">
+    <h2 id="del-title" class="t-xl semi ink9">Delete your account?</h2>
+    <p class="t-sm p ink6 mt2">Your XP, badges and progress are removed. You cannot undo this.</p>
+    <div class="row g2 mt5" style="justify-content:flex-end"><button class="btn ghost md" data-act="settings">Cancel</button><button class="btn solid md" data-act="delete-confirm">Delete account</button></div>
+  </div></div>`;
 }
 function joinTeam() {
   $('#layer').innerHTML = `<div class="overlay" data-close><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="jt" style="max-width:420px;padding:20px">
@@ -1504,13 +1619,15 @@ document.addEventListener('click', (e) => {
   if (!t) return;
   if (t.dataset.close !== undefined) { if (e.target === t) closeLayer(); return; }
   if (t.dataset.href) { closeLayer(); return go(t.dataset.href); }
-  if (t.dataset.toast) { closeLayer(); return toast(t.dataset.toast, t.dataset.toastIcon || 'info'); }
+  if (t.dataset.toast) { if (!t.closest('.dialog')) closeLayer(); return toast(t.dataset.toast, t.dataset.toastIcon || 'info'); }
   if (t.dataset.seg) {
     const v = t.dataset.val, n = t.dataset.seg;
     if (n === 'type') { setQuery('type', v); state.filters.category = ''; state.anim = 'list'; }
     if (n === 'tab') setQuery('tab', v);
     if (n === 'track') state.track = v;
     if (n === 'scope') state.scope = v;
+    if (n === 'range') state.range = v;
+    if (n === 'lbview') state.lbView = v;
     if (n === 'billing') state.billing = v;
     return render();
   }
@@ -1541,6 +1658,12 @@ document.addEventListener('click', (e) => {
     else { state.qwrong = i; render(); }
   }
   else if (a === 'toggle-upcoming') { state.upcomingOpen = !state.upcomingOpen; state.anim = 'upcoming'; render(); }
+  else if (a === 'filters') { state.filtersOpen = !state.filtersOpen; t.closest('.filters').classList.toggle('open', state.filtersOpen); t.setAttribute('aria-expanded', state.filtersOpen); }
+  else if (a === 'dismiss-season') {
+    try { localStorage.setItem('csema-demo-season', 'hidden'); } catch {}
+    const el = $('#season-strip'); el.classList.add('gone'); setTimeout(() => el.remove(), 220);
+    toast('Season banner hidden', 'info');
+  }
   else if (a === 'clear-filters') { state.filters = { q: '', category: '', difficulty: '', free: false }; render(); }
   else if (a === 'get-file') { state.got[t.dataset.id] = true; render(); toast('Download started (demo)', 'download'); }
   else if (a === 'hint') { const id = t.dataset.id; state.hints[id] = (state.hints[id] || 0) + 1; state.anim = 'hint'; render(); }
@@ -1563,12 +1686,30 @@ document.addEventListener('click', (e) => {
     if (!/^CSEMA\{.+\}$/.test(v)) return toast('Use the format CSEMA{...}.', 'info');
     if (v !== 'CSEMA{demo}') return toast('Incorrect flag. Check the spelling and the case.', 'info');
     state.solved[id + k] = true; render(); toast(`Correct · +${xp} XP`);
+  } else if (a === 'story') {
+    const id = t.dataset.id, el = $('#story-' + id); state.storyOpen = state.storyOpen || {};
+    const open = !state.storyOpen[id]; state.storyOpen[id] = open;
+    t.textContent = open ? 'Show less' : 'Read more'; t.setAttribute('aria-expanded', open);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { el.classList.toggle('clamp', !open); return; }
+    el.classList.add('clamp'); const short = el.offsetHeight; el.classList.remove('clamp'); const full = el.scrollHeight;
+    el.style.maxHeight = (open ? short : full) + 'px'; el.offsetHeight;
+    el.style.maxHeight = (open ? full : short) + 'px';
+    el.addEventListener('transitionend', () => { el.style.maxHeight = ''; el.classList.toggle('clamp', !open); }, { once: true });
   } else if (a === 'join-team') joinTeam();
+  else if (a === 'settings') openSettings();
+  else if (a === 'delete-account') confirmDelete();
+  else if (a === 'delete-confirm') { closeLayer(); toast('Account deletion requested (demo)', 'info'); }
+  else if (a === 'save-settings') {
+    const h = $('#st-handle').value.trim();
+    if (!/^[A-Za-z0-9_]{3,24}$/.test(h)) { toast('Use 3 to 24 letters, numbers or underscores.', 'info'); $('#st-handle').focus(); return; }
+    USER.handle = h; USER.bio = $('#st-bio').value.trim(); closeLayer(); render(); toast('Changes saved');
+  }
   else if (a === 'join-confirm') { closeLayer(); toast('Request sent to the team captain'); }
   else if (a === 'checkout') toast(`Razorpay checkout opens for ${t.dataset.plan}${state.coupon ? ` with ${state.coupon}` : ''} (demo)`, 'lock');
   else if (a === 'coupon-open') { state.couponOpen = true; state.couponErr = null; render(); $('#coupon')?.focus(); }
   else if (a === 'coupon-apply') {
     const v = ($('#coupon').value || '').trim().toUpperCase();
+    state.couponVal = $('#coupon').value;
     if (!v) { state.couponErr = 'Type a code.'; }
     else if (v === 'CSEMA20') { state.coupon = v; state.couponErr = null; state.couponOpen = false; toast('Coupon applied'); }
     else { state.couponErr = 'This code is not valid.'; }
