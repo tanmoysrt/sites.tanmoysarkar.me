@@ -1009,7 +1009,7 @@ function lesson(pid, lid) {
       <div class="card">
         ${stepView(st, s)}
         <div class="player-foot">
-          <button class="btn icon md" style="width:32px" data-act="prev" aria-label="Previous step" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
+          <button class="btn outline md" data-act="prev" ${s === 0 ? 'disabled' : ''}>Back</button>
           <span class="flex1 center t-sm ink5 num">${s + 1} / ${STEPS.length}</span>
           ${action}
         </div>
