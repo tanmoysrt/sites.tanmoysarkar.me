@@ -324,19 +324,24 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 /* Lesson mode: the path outline replaces the app sidebar; the player fills the rest */
 body.lesson-mode .side { display: none; }
 main.lesson-mode { display: grid; grid-template-columns: 17rem minmax(0, 1fr); overflow: hidden; }
-.course-nav { background: var(--sidebar); border-right: 1px solid var(--line1); overflow-y: auto; padding: 10px 10px 32px; }
-.course-nav .back { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--ink9); }
+.course-nav { background: var(--sidebar); border-right: 1px solid var(--line1); overflow-y: auto; padding: 0 10px 32px; }
+.course-nav .back { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; height: 48px; margin: 0 -10px 6px; padding: 0 20px; border-bottom: 1px solid var(--line1); background: var(--sidebar); font-size: 14px; font-weight: 600; color: var(--ink9); }
 .course-nav .back .i { color: var(--ink5); }
-.course-nav .back:hover { background: var(--s3); }
-.course-nav .unit { display: flex; justify-content: space-between; margin: 18px 0 4px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--ink5); }
+.course-nav .back:hover { color: var(--ink9); background: var(--s2); }
+.course-nav .unit { display: flex; justify-content: space-between; gap: 12px; margin: 18px 0 4px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--ink5); }
 .course-nav a.les { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
 .course-nav a.les:hover { background: var(--s3); }
 .course-nav a.les.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--line2); }
 .lesson-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.lesson-stage { flex: 1; min-height: 0; width: 100%; max-width: 1000px; margin: 0 auto; padding: 20px 24px 24px; display: flex; flex-direction: column; }
-.lesson-stage > .card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.lesson-stage .slide { flex: 1; height: auto; min-height: 0; overflow-y: auto; }
-@media (max-width: 860px) { main.lesson-mode { grid-template-columns: 1fr; } .course-nav { display: none; } .lesson-stage { padding: 12px; } }
+/* The stage is a 16:9 frame that fits the screen; the controls sit under it */
+.lesson-stage { flex: 1; min-height: 0; padding: 24px; display: flex; align-items: center; justify-content: center; overflow-y: auto; }
+.lesson-stage > .card { width: min(100%, 1040px, calc((100dvh - 48px - 48px - 58px) * 16 / 9)); display: flex; flex-direction: column; overflow: hidden; }
+.lesson-stage .slide { aspect-ratio: 16 / 9; height: auto; min-height: 0; overflow-y: auto; padding: clamp(24px, 5%, 56px); }
+@media (max-width: 860px) {
+  main.lesson-mode { grid-template-columns: 1fr; } .course-nav { display: none; }
+  .lesson-stage { padding: 12px; align-items: stretch; } .lesson-stage > .card { width: 100%; }
+  .lesson-stage .slide { aspect-ratio: auto; min-height: 360px; }
+}
 .tasks { display: flex; flex-direction: column; }
 .task { position: relative; display: flex; gap: 16px; padding-bottom: 28px; }
 .task:last-child { padding-bottom: 0; }
