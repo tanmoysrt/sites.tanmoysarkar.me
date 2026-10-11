@@ -276,6 +276,33 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 .about li { display: flex; gap: 10px; font-size: 14px; line-height: 1.55; color: var(--ink7); }
 .about li + li { margin-top: 12px; } .about b { color: var(--ink9); font-weight: 600; }
 
+/* Home */
+.home-hero { display: grid; grid-template-columns: minmax(0, 1fr) 344px; }
+.home-hero .hh-main { padding: 24px; display: flex; flex-direction: column; }
+.home-hero .hh-side {
+  padding: 20px; border-left: 1px solid var(--line1); border-radius: 0 11px 11px 0; display: flex; flex-direction: column;
+  background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, linear-gradient(160deg, var(--brand-soft), var(--s1) 70%);
+}
+@media (max-width: 860px) {
+  .home-hero { grid-template-columns: 1fr; }
+  .home-hero .hh-side { border-left: 0; border-top: 1px solid var(--line1); border-radius: 0 0 11px 11px; }
+  .home-hero .hh-main { padding: 20px; }
+}
+.steps { position: relative; margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.steps::before { content: ""; position: absolute; left: 17px; top: 18px; bottom: 18px; width: 1px; background: var(--line3); }
+.steps a { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
+.steps a:hover { background: var(--card); }
+.steps a.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--brand-soft2); }
+.steps .i { background: var(--s1); border-radius: 99px; }
+.steps a.on .i, .steps a:hover .i { background: var(--card); }
+.daily { display: flex; overflow: hidden; }
+.daily .cover { width: 136px; height: auto; flex-shrink: 0; border-bottom: 0; border-right: 1px solid var(--line1); border-radius: 11px 0 0 11px; }
+@media (max-width: 480px) { .daily { flex-direction: column; } .daily .cover { width: auto; height: 96px; border-right: 0; border-bottom: 1px solid var(--line1); border-radius: 11px 11px 0 0; } }
+.pips { display: flex; gap: 4px; }
+.pips i { width: 22px; height: 4px; border-radius: 99px; background: var(--s4); }
+.pips i.on { background: var(--brand); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px; background: var(--brand-soft); color: var(--brand-ink); font-size: 12px; font-weight: 500; }
+
 /* Overlays */
 .overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 12px 12px; }
 .dialog { width: 100%; max-width: 580px; background: var(--card); border: 1px solid var(--line2); border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; }
@@ -667,7 +694,11 @@ function seasonBanner() {
     <div class="tile brand">${ic('radio', 'i-lg')}</div>
     <div class="min0 flex1">
       <div class="row g2"><p class="t-base semi ink9">Season ${SEASON.number}: ${SEASON.title}</p>${badge('Live', 'solid')}</div>
-      <p class="t-sm ink6 mt1">${SEASON.chapters.length} chapters · ${total} challenges · ${d > 0 ? `ends in ${d} days` : 'ended'}</p>
+      <p class="t-sm ink6 mt1">${total} challenges · ${d > 0 ? `ends in ${d} days` : 'ended'}</p>
+    </div>
+    <div class="hide-sm" style="text-align:right">
+      <div class="pips" aria-hidden="true">${SEASON.chapters.map((_, i) => `<i class="${i === 0 ? 'on' : ''}"></i>`).join('')}</div>
+      <p class="t-xs ink5 mt2">Chapter 1 of ${SEASON.chapters.length} open</p>
     </div>
     <a class="btn outline md" href="#/season">Open season</a>
   </div>`;
@@ -679,54 +710,63 @@ function home() {
   const path = PATHS[1];
   const ci = FLAT.findIndex((l) => l.status === 'current');
   const cur = FLAT[ci];
+  const unit = UNITS[cur.unitIndex];
   const daily = ITEMS.find((i) => i.id === 'devops-leftovers');
+  const [dIcon, dTint] = [daily.icon || 'server', (CATEGORY[daily.category] || [])[1] || 'blue'];
   const recs = ['disk-of-secrets', 'serv-u', 'backup-portal'].map((id) => ITEMS.find((i) => i.id === id));
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  const head = `<h1>${greet}, ${USER.name}</h1>`;
-  return page(head, `
-    <section class="card hero pad-lg">
-      <div class="row-s wrapf g4">
-        <div class="tile brand" style="width:52px;height:52px">${ic(path.icon, 'i-xl')}</div>
-        <div class="min0 flex1">
-          <p class="t-sm ink5">Continue learning · ${path.title} · Unit ${cur.unitIndex + 1}</p>
-          <h2 class="t-4xl semi ink9 mt1">${cur.title}</h2>
-          <p class="t-base p ink7 mt1">${cur.description}</p>
-          <p class="row g3 t-sm ink5 mt2"><span class="row g1">${ic('clock', 'i-sm')}${cur.minutes} min</span><span class="row g1">${ic('zap', 'i-sm')}${cur.xp} XP</span></p>
+  const goalsDone = WEEKLY.filter(([, v, t]) => v >= t).length;
+  const pct = Math.round(path.done / path.lessons * 100);
+  return page(`<h1>${greet}, ${USER.name}</h1>`, `
+    <section class="card hero home-hero">
+      <div class="hh-main">
+        <p class="row g2 t-sm"><span class="semi brand">Continue learning</span><span class="ink4">·</span><span class="ink5 trunc">${path.title}</span></p>
+        <h2 class="t-4xl semi ink9 mt3">${cur.title}</h2>
+        <p class="t-base p ink7 mt2" style="max-width:520px">${cur.description}</p>
+        <div class="row wrapf g4" style="margin-top:auto;padding-top:24px">
+          <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">${ic('play', 'i-sm')}Continue lesson</a>
+          <span class="row g3 t-sm ink5"><span class="row g1">${ic('clock', 'i-sm')}${cur.minutes} min</span><span class="row g1">${ic('zap', 'i-sm')}${cur.xp} XP</span></span>
         </div>
-        <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">${ic('play', 'i-sm')}Continue lesson</a>
       </div>
-      <div class="mt5">${prog(path.done / path.lessons * 100)}<div class="row between t-xs ink5 mt2"><span>Lesson ${ci + 1} of ${path.lessons}</span><span>${Math.round(path.done / path.lessons * 100)}% of the path</span></div></div>
+      <aside class="hh-side" aria-label="Lessons in this unit">
+        <p class="t-xs ink5">Unit ${cur.unitIndex + 1} of 12</p>
+        <p class="t-base semi ink9">${unit.title}</p>
+        <div class="steps">${unit.lessons.map((l) => {
+          const here = l.id === cur.id;
+          return `<a class="${here ? 'on' : ''}" href="#/learn/${path.id}/${l.id}" ${here ? 'aria-current="step"' : ''}>${lessonIcon(l.status, here)}<span class="min0 flex1 trunc">${l.title}</span><span class="t-xs ink5">${l.minutes}m</span></a>`;
+        }).join('')}</div>
+        <div style="margin-top:auto;padding-top:16px">${prog(pct, true)}<p class="row between t-xs ink5 mt2"><span>${path.done} of ${path.lessons} lessons</span><span>${pct}%</span></p></div>
+      </aside>
     </section>
 
     ${statStrip([['zap', '', 'XP', USER.xp, `${USER.nextLevelXp - USER.xp} XP to ${USER.nextLevelName}`], ['trophy', '', 'Global rank', '#' + USER.rank, `${USER.league} league`],
       ['flag', '', 'Solved', USER.solved, 'challenges, machines, labs'], ['flame', 'brand', 'Streak', USER.streak + ' days', 'Learn or solve today to start']])}
 
     <div class="grid2">
-      <section class="card pad" style="display:flex;flex-direction:column">
-        <div class="row between"><h3 class="t-lg semi ink9">Today’s challenge</h3><span class="t-xs ink5">New in ${24 - h} h</span></div>
-        <div class="row-s g3 mt4">
-          <div class="tile">${ic('server', 'i-lg')}</div>
-          <div class="min0">
-            <p class="t-base semi ink9">${daily.title}</p>
-            <p class="t-sm p ink6 mt1">${daily.summary}</p>
-            <div class="row g2 mt2">${diff(daily.difficulty)}<span class="t-xs ink5">Machine · ${daily.xp} XP</span></div>
+      <section class="card daily">
+        <div class="cover c-${dTint}"><div class="emblem tint-${dTint}">${ic(dIcon)}</div></div>
+        <div class="card-body">
+          <div class="row between"><h3 class="t-lg semi ink9">Today’s challenge</h3><span class="t-xs ink5">New in ${24 - h} h</span></div>
+          <p class="t-base semi ink9 mt3">${daily.title}</p>
+          <p class="t-sm p ink6 mt1 clamp2">${daily.summary}</p>
+          <div class="card-foot">
+            <span class="row g2">${diff(daily.difficulty)}<span class="t-xs ink5">${daily.xp} XP</span></span>
+            <a class="btn outline md" href="#/practice/${daily.id}">${ic('play', 'i-sm')}Start machine</a>
           </div>
         </div>
-        <div style="margin-top:auto;padding-top:16px"><a class="btn outline md full" href="#/practice/${daily.id}">${ic('play', 'i-sm')}Start machine</a></div>
       </section>
-      <section class="card pad">
-        <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="t-xs ink5">Resets Monday</span></div>
+      <section class="card pad" style="display:flex;flex-direction:column">
+        <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="t-xs ink5">${goalsDone} of ${WEEKLY.length} done · resets Monday</span></div>
         <div class="mt4" style="display:flex;flex-direction:column;gap:14px">${WEEKLY.map(([l, v, t]) =>
           `<div><div class="row between t-sm"><span class="ink7">${l}</span><span class="ink5 num">${v} / ${t}</span></div><div class="mt2">${prog(v / t * 100, true)}</div></div>`).join('')}</div>
-        <p class="row g2 t-sm ink6 mt4">${ic('gift', 'i-sm brand')}Do all three to get 250 bonus XP</p>
+        <div style="margin-top:auto;padding-top:16px"><span class="chip">${ic('gift', 'i-sm')}Do all three to get 250 bonus XP</span></div>
       </section>
     </div>
 
     ${seasonBanner()}
 
     ${sec('Recommended for you', 'Based on your current path.', `<a class="btn ghost" href="#/practice">See all</a>`, `<div class="cards fit">${recs.map(itemCard).join('')}</div>`)}
-
   `);
 }
 
