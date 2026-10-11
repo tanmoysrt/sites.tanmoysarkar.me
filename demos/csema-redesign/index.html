@@ -321,6 +321,22 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 .dmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-top: 16px; font-size: 13px; color: var(--ink6); }
 .dmeta > span { display: inline-flex; align-items: center; gap: 6px; }
 .dmeta .i { color: var(--ink5); }
+/* Lesson mode: the path outline replaces the app sidebar; the player fills the rest */
+body.lesson-mode .side { display: none; }
+main.lesson-mode { display: grid; grid-template-columns: 17rem minmax(0, 1fr); overflow: hidden; }
+.course-nav { background: var(--sidebar); border-right: 1px solid var(--line1); overflow-y: auto; padding: 10px 10px 32px; }
+.course-nav .back { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--ink9); }
+.course-nav .back .i { color: var(--ink5); }
+.course-nav .back:hover { background: var(--s3); }
+.course-nav .unit { display: flex; justify-content: space-between; margin: 18px 0 4px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--ink5); }
+.course-nav a.les { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
+.course-nav a.les:hover { background: var(--s3); }
+.course-nav a.les.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--line2); }
+.lesson-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.lesson-stage { flex: 1; min-height: 0; width: 100%; max-width: 1000px; margin: 0 auto; padding: 20px 24px 24px; display: flex; flex-direction: column; }
+.lesson-stage > .card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.lesson-stage .slide { flex: 1; height: auto; min-height: 0; overflow-y: auto; }
+@media (max-width: 860px) { main.lesson-mode { grid-template-columns: 1fr; } .course-nav { display: none; } .lesson-stage { padding: 12px; } }
 .tasks { display: flex; flex-direction: column; }
 .task { position: relative; display: flex; gap: 16px; padding-bottom: 28px; }
 .task:last-child { padding-bottom: 0; }
@@ -777,7 +793,9 @@ function render() {
   else if (a === 'about') html = about();
   else if (a === 'terminal') html = terminalPane(b || 'devops-leftovers', true);
   else html = page('<h1>Not found</h1>', `<div class="card empty"><div class="circ">${ic('search-x', 'i-xl')}</div><p class="t-base ink8">This page does not exist</p><p class="t-sm ink5">The link is old or incorrect.</p><a class="btn solid mt2" href="#/">Go to Home</a></div>`, 'narrow');
-  $('#main').className = split ? 'split' : a === 'terminal' ? 'term-only' : '';
+  const lessonMode = a === 'learn' && !!c;
+  $('#main').className = split ? 'split' : a === 'terminal' ? 'term-only' : lessonMode ? 'lesson-mode' : '';
+  document.body.classList.toggle('lesson-mode', lessonMode);
   document.body.classList.toggle('term-only', a === 'terminal');
   document.body.classList.toggle('has-split', split);
   const scroller = () => $('#main .splitleft') || $('#main');
@@ -787,6 +805,7 @@ function render() {
   $('#main').innerHTML = split ? `<div class="splitleft">${html}</div>${terminalPane(b, false)}` : html;
   $('#main').scrollTop = 0;
   scroller().scrollTop = keep;
+  if (lessonMode && !same) $('.course-nav .les.on')?.scrollIntoView({ block: 'center' });
   if (split || a === 'terminal') mountTerminal();
   renderNav();
   hydrateIcons();
@@ -860,11 +879,13 @@ function home() {
   const unit = UNITS[cur.unitIndex];
   const daily = ITEMS.find((i) => i.id === 'devops-leftovers');
   const [dIcon, dTint] = [daily.icon || 'server', (CATEGORY[daily.category] || [])[1] || 'blue'];
-  const recs = ['disk-of-secrets', 'serv-u', 'backup-portal', 'lost-phone'].map((id) => ITEMS.find((i) => i.id === id));
+  const recs = ['disk-of-secrets', 'serv-u'].map((id) => ITEMS.find((i) => i.id === id));
+  const goalsDone = WEEKLY.filter(([, v, t]) => v >= t).length;
+  const goalPct = WEEKLY.reduce((n, [, v, t]) => n + Math.min(1, v / t), 0) / WEEKLY.length * 100;
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   const pct = Math.round(path.done / path.lessons * 100);
-  return page(`<h1>${greet}, ${USER.name}</h1>`, `
+  return page(`<h1>${greet}, ${USER.name}</h1><span class="pill ml-auto" title="Days in a row with a lesson or a solve">${ic('flame', 'i-sm brand')}${USER.streak}-day streak</span>`, `
     <section class="card hero home-hero">
       <div class="hh-main">
         <h2 class="t-4xl semi ink9">${cur.title}</h2>
@@ -884,23 +905,16 @@ function home() {
       </aside>
     </section>
 
-    ${sec('Today’s challenge', '', `<span class="t-sm ink5">New in ${24 - h} h</span>`, `
-      <div class="card pad row wrapf g4">
-        <div class="ti ti-${dTint}">${ic(dIcon)}</div>
-        <div class="min0 flex1"><p class="t-base semi ink9 trunc">${daily.title}</p><p class="t-sm ink5 mt1 trunc">Machine · ${daily.difficulty} · ${daily.xp} XP</p></div>
-        <a class="btn outline md" href="#/practice/${daily.id}">Start machine</a>
+    ${sec('Today', '', '', `
+      <div class="cards two">
+        ${rowCard(`#/practice/${daily.id}`, dIcon, dTint, daily.title, `Today’s challenge · ${daily.difficulty} · ${daily.xp} XP`, false)}
+        <div class="card pad" style="flex-direction:row;align-items:center;gap:14px;display:flex">
+          ${ring(goalPct, 'gift', 'brand')}
+          <div class="min0 flex1"><p class="t-base semi ink9">Weekly goals</p><p class="t-sm ink5 mt1">${goalsDone} of ${WEEKLY.length} done · +250 XP · ends Monday</p></div>
+        </div>
       </div>`)}
 
-    ${sec('This week', 'Do all three by Monday to get 250 bonus XP.', '', `
-      <div class="cards three">${WEEKLY.map(([label, v, t], n) => `
-        <div class="card pad" style="flex-direction:row;align-items:center;gap:14px;display:flex">
-          ${ring(v / t * 100, ['flag', 'zap', 'book-open'][n], 'gray')}
-          <div class="min0 flex1"><p class="t-base semi ink9 trunc">${label}</p><p class="t-sm ink5 mt1 num">${v} of ${t}</p></div>
-        </div>`).join('')}</div>`)}
-
-    ${seasonBanner()}
-
-    ${sec('Recommended for you', 'Based on your current path.', `<a class="btn ghost" href="#/practice">See all</a>`, `<div class="cards two">${recs.map(itemCard).join('')}</div>`)}
+    ${sec('Recommended for you', '', `<a class="btn ghost" href="#/practice">See all</a>`, `<div class="cards two">${recs.map(itemCard).join('')}</div>`)}
   `);
 }
 
@@ -972,32 +986,31 @@ function lesson(pid, lid) {
   const idx = Math.max(0, FLAT.findIndex((l) => l.id === lid));
   const l = FLAT[idx];
   if (lessonKey !== lid) { state.slide = 0; lessonKey = lid; state.qsel = {}; state.qdone = {}; state.qwrong = null; }
-  const unit = UNITS[l.unitIndex];
   const s = state.slide, st = STEPS[s], last = s === STEPS.length - 1;
   const blocked = st.type === 'question' && !state.qdone[s];
   const action = blocked
     ? `<button class="btn solid md" data-act="check" ${(state.qsel[s] || []).length ? '' : 'disabled'}>Check</button>`
     : `<button class="btn md ${last ? 'solid' : 'outline'}" data-act="next">${last ? 'Complete lesson' : 'Next'}</button>`;
-  return page(crumbs([['Learn', '#/learn'], [p.title, `#/learn/${p.id}`], [l.title]]) + `<span class="t-sm ink5 hide-sm ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span>`, `
-    <div class="lesson-grid">
-      <div class="min0" style="display:flex;flex-direction:column;gap:16px">
-        <div><h2 class="t-4xl semi ink9">${l.title}</h2><p class="t-sm ink5 mt1">${l.minutes} min · ${l.xp} XP</p></div>
-        <div class="card">
-          ${stepView(st, s)}
-          <div class="player-foot">
-            <button class="btn icon md" style="width:32px" data-act="prev" aria-label="Previous step" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
-            <span class="flex1 center t-sm ink5 num">${s + 1} / ${STEPS.length}</span>
-            ${action}
-          </div>
+  const outline = `<nav class="course-nav" aria-label="Lessons in this path">
+    <a class="back" href="#/learn/${p.id}">${ic('arrow-left', 'i-sm')}<span class="trunc">${p.title}</span></a>
+    ${UNITS.map((u, ui) => `
+      <p class="unit"><span class="trunc">Unit ${ui + 1}: ${u.title}</span><span class="num">${u.lessons.filter((x) => x.status === 'done').length}/${u.lessons.length}</span></p>
+      ${u.lessons.map((x) => `<a class="les ${x.id === lid ? 'on' : ''}" href="#/learn/${p.id}/${x.id}" ${x.id === lid ? 'aria-current="page"' : ''}>${lessonIcon(x.status === 'current' && x.id !== lid ? 'todo' : x.status, x.id === lid)}<span class="min0 flex1 trunc">${x.title}</span></a>`).join('')}`).join('')}
+  </nav>`;
+  return `${outline}
+  <div class="lesson-main">
+    <div class="ph"><h1 class="trunc">${l.title}</h1><span class="t-sm ink5 hide-sm shrink0">${l.minutes} min · ${l.xp} XP</span><span class="t-sm ink5 ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span></div>
+    <div class="lesson-stage">
+      <div class="card">
+        ${stepView(st, s)}
+        <div class="player-foot">
+          <button class="btn icon md" style="width:32px" data-act="prev" aria-label="Previous step" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
+          <span class="flex1 center t-sm ink5 num">${s + 1} / ${STEPS.length}</span>
+          ${action}
         </div>
       </div>
-      <aside class="card pad outline" style="align-self:start" aria-label="Lessons in this unit">
-        <p class="t-base semi ink9">Unit ${l.unitIndex + 1}: ${unit.title}</p>
-        <div class="mt3" style="display:flex;flex-direction:column;gap:2px">${unit.lessons.map((x) =>
-          `<a class="${x.id === lid ? 'on' : ''}" href="#/learn/${p.id}/${x.id}">${lessonIcon(x.status === 'current' ? 'todo' : x.status, x.id === lid)}<span class="min0 flex1 trunc">${x.title}</span><span class="t-xs ink5">${x.minutes}m</span></a>`).join('')}</div>
-      </aside>
     </div>
-  `);
+  </div>`;
 }
 function lessonStep(dir) {
   const { parts } = parse();
