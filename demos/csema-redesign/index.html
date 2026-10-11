@@ -1,0 +1,1182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Concept redesign of the CSEMA cybersecurity learning platform: four sections, one next step on Home, one practice catalog, and one name per concept. Demo data only.">
+<title>CSEMA redesign concept</title>
+<style>
+:root {
+  --bg: #ffffff; --sidebar: #f8f8f8; --s1: #f8f8f8; --s2: #f3f3f3; --s3: #ebebeb; --s5: #c7c7c7;
+  --ink9: #171717; --ink8: #262626; --ink7: #4d4d4d; --ink6: #666666; --ink5: #7c7c7c; --ink4: #a6a6a6;
+  --line1: #ededed; --line2: #e2e2e2; --line4: #c7c7c7;
+  --solid: #171717; --solid-ink: #ffffff; --overlay: rgba(0,0,0,.35);
+  --brand: #e03636; --brand-soft: #ffe7e7;
+  --green-bg: #e4f8eb; --green-ink: #137547; --green-dot: #30a66d;
+  --amber-bg: #fff4d6; --amber-ink: #a35a00; --amber-dot: #e79913;
+  --red-bg: #ffe7e7; --red-ink: #c62828;
+  --violet-bg: #efeaff; --violet-ink: #6a43d8;
+  --blue-bg: #e3f1ff; --blue-ink: #0b6bcb;
+  --shadow: 0 1px 2px rgba(0,0,0,.06);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.16);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0f0f; --sidebar: #161616; --s1: #191919; --s2: #222222; --s3: #2c2c2c; --s5: #4a4a4a;
+    --ink9: #f5f5f5; --ink8: #e6e6e6; --ink7: #bdbdbd; --ink6: #9e9e9e; --ink5: #858585; --ink4: #5e5e5e;
+    --line1: #262626; --line2: #2f2f2f; --line4: #4a4a4a;
+    --solid: #f5f5f5; --solid-ink: #171717; --overlay: rgba(0,0,0,.6);
+    --brand-soft: #3a1717;
+    --green-bg: #13301f; --green-ink: #5fd18e; --amber-bg: #36290c; --amber-ink: #f1b64a;
+    --red-bg: #3a1717; --red-ink: #ff7b7b; --violet-bg: #261d40; --violet-ink: #b39dff;
+    --blue-bg: #0f2a44; --blue-ink: #6fb5ff;
+    --shadow: 0 1px 2px rgba(0,0,0,.4); --shadow-lg: 0 12px 32px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0f0f; --sidebar: #161616; --s1: #191919; --s2: #222222; --s3: #2c2c2c; --s5: #4a4a4a;
+  --ink9: #f5f5f5; --ink8: #e6e6e6; --ink7: #bdbdbd; --ink6: #9e9e9e; --ink5: #858585; --ink4: #5e5e5e;
+  --line1: #262626; --line2: #2f2f2f; --line4: #4a4a4a;
+  --solid: #f5f5f5; --solid-ink: #171717; --overlay: rgba(0,0,0,.6);
+  --brand-soft: #3a1717;
+  --green-bg: #13301f; --green-ink: #5fd18e; --amber-bg: #36290c; --amber-ink: #f1b64a;
+  --red-bg: #3a1717; --red-ink: #ff7b7b; --violet-bg: #261d40; --violet-ink: #b39dff;
+  --blue-bg: #0f2a44; --blue-ink: #6fb5ff;
+  --shadow: 0 1px 2px rgba(0,0,0,.4); --shadow-lg: 0 12px 32px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--ink9);
+  font: 14px/1.4 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+p, h1, h2, h3, ul { margin: 0; padding: 0; }
+ul { list-style: none; }
+:focus-visible { outline: 2px solid var(--ink5); outline-offset: 2px; border-radius: 6px; }
+
+.i { width: 16px; height: 16px; flex-shrink: 0; display: inline-block; vertical-align: middle; }
+.i-sm { width: 14px; height: 14px; }
+.i-lg { width: 20px; height: 20px; }
+.i-xl { width: 24px; height: 24px; }
+
+/* Text */
+.t-xs { font-size: 12px; } .t-sm { font-size: 13px; } .t-base { font-size: 14px; } .t-lg { font-size: 16px; }
+.t-xl { font-size: 17px; } .t-2xl { font-size: 18px; } .t-3xl { font-size: 20px; } .t-4xl { font-size: 24px; }
+.p { line-height: 1.55; }
+.semi { font-weight: 600; } .med { font-weight: 500; }
+.ink9 { color: var(--ink9); } .ink8 { color: var(--ink8); } .ink7 { color: var(--ink7); } .ink6 { color: var(--ink6); }
+.ink5 { color: var(--ink5); } .ink4 { color: var(--ink4); } .green { color: var(--green-ink); } .amber { color: var(--amber-ink); }
+.num { font-variant-numeric: tabular-nums; }
+.trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.min0 { min-width: 0; } .flex1 { flex: 1; } .shrink0 { flex-shrink: 0; }
+.row { display: flex; align-items: center; } .row-s { display: flex; align-items: flex-start; }
+.wrapf { flex-wrap: wrap; } .between { justify-content: space-between; }
+.g1 { gap: 4px; } .g2 { gap: 8px; } .g3 { gap: 12px; } .g4 { gap: 16px; } .g6 { gap: 24px; }
+.stack > * + * { margin-top: 24px; } .stack-s > * + * { margin-top: 12px; }
+.mt1 { margin-top: 4px; } .mt2 { margin-top: 8px; } .mt3 { margin-top: 12px; } .mt4 { margin-top: 16px; } .mt5 { margin-top: 20px; } .mt8 { margin-top: 32px; }
+.ml-auto { margin-left: auto; } .right { text-align: right; } .center { text-align: center; }
+.w-full { width: 100%; }
+.hide-sm { } .only-sm { display: none; }
+@media (max-width: 640px) { .hide-sm { display: none !important; } .only-sm { display: initial; } }
+
+/* Shell */
+.app { display: flex; height: 100vh; }
+.side {
+  width: 14rem; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--line1);
+  display: flex; flex-direction: column;
+}
+.brand { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; }
+.logo { width: 28px; height: 28px; border-radius: 8px; background: var(--brand); color: #fff; display: grid; place-items: center; }
+.concept { margin: 0 12px 8px; font-size: 11px; color: var(--ink5); }
+.nav { padding: 2px 8px; flex: 1; overflow-y: auto; }
+.nav a {
+  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 8px;
+  color: var(--ink7); font-size: 13px; margin-bottom: 2px;
+}
+.nav a:hover { background: var(--s2); }
+.nav a.on { background: var(--bg); color: var(--ink9); box-shadow: var(--shadow); border: 1px solid var(--line1); }
+.searchbtn {
+  margin: 0 8px 8px; height: 30px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; border-radius: 8px; background: var(--s2); color: var(--ink5); font-size: 13px;
+}
+.searchbtn:hover { background: var(--s3); }
+.side-foot { padding: 8px; }
+.me {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px; border: 0; border-radius: 8px;
+  background: transparent; text-align: left;
+}
+.me:hover { background: var(--s2); }
+.col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mtop { display: none; height: 48px; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line1); flex-shrink: 0; }
+main { flex: 1; min-height: 0; overflow-y: auto; }
+.bnav { display: none; }
+@media (max-width: 767px) {
+  .side { display: none; }
+  .mtop { display: flex; }
+  main { padding-bottom: 56px; }
+  .bnav {
+    display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; inset: auto 0 0 0; height: 56px; z-index: 10;
+    background: var(--bg); border-top: 1px solid var(--line1);
+  }
+  .bnav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; color: var(--ink5); }
+  .bnav a.on { color: var(--ink9); }
+}
+
+.ph {
+  min-height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 20px;
+  border-bottom: 1px solid var(--line1); position: sticky; top: 0; background: var(--bg); z-index: 5;
+}
+@media (max-width: 640px) { .ph { padding: 0 12px; } }
+.ph h1 { font-size: 18px; font-weight: 500; }
+.crumbs { display: flex; align-items: center; gap: 6px; font-size: 16px; min-width: 0; }
+.crumbs a { color: var(--ink5); white-space: nowrap; } .crumbs a:hover { color: var(--ink8); }
+.crumbs .sep { color: var(--ink4); }
+.crumbs .cur { color: var(--ink9); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wrap { margin: 0 auto; padding: 20px 20px 48px; }
+@media (max-width: 640px) { .wrap { padding: 20px 12px 48px; } }
+.w4 { max-width: 896px; } .w9 { max-width: 940px; } .w11 { max-width: 1100px; } .w10 { max-width: 1000px; }
+
+/* Surfaces */
+.card { border: 1px solid var(--line1); border-radius: 10px; }
+.card-pad { padding: 16px; }
+.card-tint { background: var(--s1); border-color: var(--line2); }
+.dashed { border-style: dashed; border-color: var(--line2); }
+.list { border: 1px solid var(--line1); border-radius: 10px; overflow: hidden; }
+.list > * + * { border-top: 1px solid var(--line1); }
+.li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+a.li:hover, button.li:hover { background: var(--s1); }
+.li.cur { background: var(--s1); }
+.tile { width: 36px; height: 36px; border-radius: 8px; background: var(--s2); display: grid; place-items: center; color: var(--ink6); flex-shrink: 0; }
+.tile-red { background: var(--brand-soft); color: var(--red-ink); }
+.grid2 { display: grid; gap: 16px; }
+@media (min-width: 768px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.grid3 { display: grid; gap: 16px; }
+@media (min-width: 768px) { .grid3 { grid-template-columns: repeat(3, 1fr); } }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line1); border-radius: 10px; }
+.stats > div { padding: 12px 16px; } .stats > div + div { border-left: 1px solid var(--line1); }
+@media (max-width: 640px) {
+  .stats { grid-template-columns: 1fr 1fr; }
+  .stats > div + div { border-left: 0; }
+  .stats > div:nth-child(2n) { border-left: 1px solid var(--line1); }
+  .stats > div:nth-child(n+3) { border-top: 1px solid var(--line1); }
+}
+
+/* Controls */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 10px;
+  border: 1px solid transparent; border-radius: 8px; font-size: 13px; white-space: nowrap;
+  background: var(--s2); color: var(--ink8); transition: background .12s;
+}
+.btn:hover { background: var(--s3); }
+.btn.solid { background: var(--solid); color: var(--solid-ink); }
+.btn.solid:hover { opacity: .9; }
+.btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--s2); }
+.btn.danger { color: var(--red-ink); }
+.btn.ok { background: var(--green-bg); color: var(--green-ink); }
+.btn.lg { height: 36px; padding: 0 14px; font-size: 14px; }
+.btn.icon { width: 28px; padding: 0; }
+.btn[disabled] { opacity: .5; cursor: default; }
+.btn.full { width: 100%; }
+.input {
+  height: 28px; border: 1px solid transparent; border-radius: 8px; background: var(--s2); padding: 0 8px; font-size: 13px; color: var(--ink8); width: 100%;
+}
+.input:hover { background: var(--s3); }
+.input:focus { outline: none; background: var(--bg); border-color: var(--line4); }
+.input::placeholder { color: var(--ink4); }
+.inputwrap { position: relative; } .inputwrap .i { position: absolute; left: 8px; top: 6px; color: var(--ink5); }
+.inputwrap .input { padding-left: 28px; }
+select.input { appearance: none; padding-right: 26px; background-image: linear-gradient(45deg, transparent 50%, var(--ink5) 50%), linear-gradient(135deg, var(--ink5) 50%, transparent 50%); background-position: calc(100% - 13px) 12px, calc(100% - 9px) 12px; background-size: 4px 4px; background-repeat: no-repeat; }
+.label { display: block; font-size: 12px; color: var(--ink6); margin-bottom: 6px; }
+.help { font-size: 12px; color: var(--ink5); margin-top: 6px; }
+
+.seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 8px; background: var(--s2); max-width: 100%; overflow-x: auto; }
+.seg button { border: 0; background: transparent; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 13px; color: var(--ink6); white-space: nowrap; }
+.seg button:hover { color: var(--ink8); }
+.seg button.on { background: var(--bg); color: var(--ink9); box-shadow: var(--shadow); }
+.seg .cnt { color: var(--ink4); margin-left: 4px; }
+
+.sw { position: relative; width: 28px; height: 16px; border-radius: 99px; border: 0; background: var(--s5); padding: 0; flex-shrink: 0; transition: background .15s; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 99px; background: #fff; transition: transform .15s; }
+.sw[aria-checked="true"] { background: var(--solid); }
+.sw[aria-checked="true"]::after { transform: translateX(12px); background: var(--solid-ink); }
+
+.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 12px; white-space: nowrap; background: var(--s2); color: var(--ink7); }
+.badge.outline { background: transparent; border: 1px solid var(--line2); }
+.b-green { background: var(--green-bg); color: var(--green-ink); }
+.b-amber { background: var(--amber-bg); color: var(--amber-ink); }
+.b-red { background: var(--red-bg); color: var(--red-ink); }
+.b-violet { background: var(--violet-bg); color: var(--violet-ink); }
+.b-blue { background: var(--blue-bg); color: var(--blue-ink); }
+
+.prog { height: 4px; border-radius: 99px; background: var(--s3); overflow: hidden; }
+.prog > div { height: 100%; background: var(--ink9); border-radius: 99px; min-width: 2px; transition: width .2s; }
+
+.av { display: inline-grid; place-items: center; border-radius: 99px; background: var(--s3); color: var(--ink7); font-weight: 500; flex-shrink: 0; }
+.av-sm { width: 20px; height: 20px; font-size: 11px; } .av-md { width: 28px; height: 28px; font-size: 13px; }
+.av-lg { width: 36px; height: 36px; font-size: 15px; } .av-xl { width: 56px; height: 56px; font-size: 22px; }
+.dot { width: 8px; height: 8px; border-radius: 99px; background: var(--s5); flex-shrink: 0; }
+.dot.amber { background: var(--amber-dot); } .dot.green { background: var(--green-dot); }
+
+.skel { background: var(--s2); border-radius: 4px; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } * { transition: none !important; } }
+
+/* Practice table */
+.tbl { display: grid; }
+.tr { display: grid; grid-template-columns: minmax(0,1fr) 6rem 5rem 5rem 8rem; align-items: center; gap: 12px; padding: 0 8px; min-height: 56px; border-bottom: 1px solid var(--line1); }
+.tr.head { min-height: 32px; font-size: 12px; color: var(--ink5); }
+a.tr:hover { background: var(--s1); border-radius: 8px; }
+.lb .tr { grid-template-columns: 3rem minmax(0,1fr) 6rem 7rem; min-height: 48px; }
+@media (max-width: 767px) {
+  .tr { grid-template-columns: minmax(0,1fr) 5.5rem; }
+  .tr .wide { display: none; }
+  .lb .tr { grid-template-columns: 2.5rem minmax(0,1fr) 5.5rem; }
+}
+
+/* Overlays */
+.overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 12px 12px; }
+.dialog { width: 100%; max-width: 560px; background: var(--bg); border: 1px solid var(--line2); border-radius: 12px; box-shadow: var(--shadow-lg); overflow: hidden; }
+.menu { position: fixed; z-index: 30; min-width: 220px; background: var(--bg); border: 1px solid var(--line2); border-radius: 10px; box-shadow: var(--shadow-lg); padding: 4px; }
+.menu button { width: 100%; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: var(--ink8); text-align: left; }
+.menu button:hover { background: var(--s2); }
+.res { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; }
+.res:hover, .res.sel { background: var(--s2); }
+.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 767px) { .toasts { bottom: 72px; left: 12px; right: 12px; } }
+.toast { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--solid); color: var(--solid-ink); border-radius: 10px; font-size: 13px; box-shadow: var(--shadow-lg); }
+
+.slide { aspect-ratio: 16/9; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; background: var(--s1); border: 1px solid var(--line1); border-radius: 10px; }
+@media (max-width: 640px) { .slide { padding: 24px; aspect-ratio: 4/3; } }
+.outline { width: 20rem; flex-shrink: 0; border-left: 1px solid var(--line1); overflow-y: auto; }
+@media (max-width: 1023px) { .outline { display: none; } }
+.outline a { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
+.outline a:hover { background: var(--s2); } .outline a.on { background: var(--s2); color: var(--ink9); }
+.kbd { font-size: 11px; padding: 1px 5px; border: 1px solid var(--line2); border-radius: 4px; color: var(--ink5); }
+.feat li { display: flex; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--ink7); }
+.feat li + li { margin-top: 10px; }
+.feat .i { margin-top: 2px; color: var(--ink5); }
+.badgegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.badgegrid > div { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 8px; border: 1px solid var(--line1); border-radius: 8px; text-align: center; font-size: 12px; color: var(--ink7); }
+.badgegrid > div.off { opacity: .45; }
+.calbox { width: 48px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; padding: 4px 0; border: 1px solid var(--line1); border-radius: 8px; }
+.empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 16px; text-align: center; }
+.empty .circ { width: 48px; height: 48px; border-radius: 99px; background: var(--s2); display: grid; place-items: center; color: var(--ink5); }
+.note { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; background: var(--s2); border-radius: 10px; }
+.about li { display: flex; gap: 10px; font-size: 14px; line-height: 1.55; color: var(--ink7); }
+.about li + li { margin-top: 12px; }
+.about b { color: var(--ink9); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" aria-label="Main navigation">
+    <div class="brand">
+      <div class="logo" data-icon="hexagon"></div>
+      <span class="t-lg semi">CSEMA</span>
+    </div>
+    <a class="concept" href="#/about">Concept redesign · demo data</a>
+    <button class="searchbtn" data-act="search"><span data-icon="search"></span>Search</button>
+    <nav class="nav" id="sidenav"></nav>
+    <div class="side-foot">
+      <div class="card card-pad card-tint" style="padding:12px">
+        <p class="t-sm semi ink8">Free plan</p>
+        <p class="t-xs p ink6 mt1">Prime unlocks every challenge, 60 machine hours a month and all seasons.</p>
+        <a class="btn full mt3" href="#/plans">See plans</a>
+      </div>
+      <button class="me mt3" data-act="account" aria-haspopup="menu">
+        <span class="av av-md" id="me-av"></span>
+        <span class="min0 flex1">
+          <span class="t-sm semi ink8 trunc" style="display:block" id="me-name"></span>
+          <span class="t-xs ink5 trunc" style="display:block" id="me-meta"></span>
+        </span>
+        <span data-icon="chevrons-up-down" class="ink5"></span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="col">
+    <div class="mtop">
+      <div class="logo" data-icon="hexagon"></div>
+      <span class="t-lg semi">CSEMA</span>
+      <button class="btn ghost icon ml-auto" data-act="search" aria-label="Search"><span data-icon="search"></span></button>
+      <button class="btn ghost icon" data-act="account" aria-label="Account" style="width:auto"><span class="av av-md" id="me-av-m"></span></button>
+    </div>
+    <main id="main"></main>
+    <nav class="bnav" id="bnav" aria-label="Main navigation"></nav>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div id="layer"></div>
+
+<script>
+/* ---------- Icons (Lucide, ISC licence) ---------- */
+const ICONS = {
+  house: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  'book-open': '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
+  target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  'search-x': '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+  'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+  'chevron-up': '<path d="m18 15-6-6-6 6"/>',
+  'chevrons-up-down': '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  server: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+  flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+  'flask-conical': '<path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>',
+  siren: '<path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="m4.929 4.929.707.707"/><path d="M12 12v6"/>',
+  lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  circle: '<circle cx="12" cy="12" r="10"/>',
+  'circle-check': '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  'circle-play': '<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  radio: '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>',
+  gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  'credit-card': '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  megaphone: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  'log-out': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+  award: '<path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>',
+  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  network: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
+  router: '<rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6.01 18H6"/><path d="M10.01 18H10"/><path d="M15 10v4"/><path d="M17.84 7.17a4 4 0 0 0-5.66 0"/><path d="M20.66 4.34a8 8 0 0 0-11.31 0"/>',
+  key: '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+  cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  cpu: '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
+  bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  'graduation-cap': '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
+  hexagon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+};
+const ic = (n, cls = '') =>
+  `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+
+/* ---------- Demo data. One name per concept: Path > Unit > Lesson, Challenge / Machine / Lab / Scenario, Season > Chapter, XP. ---------- */
+const USER = { name: 'Alex', handle: 'alex_learner', level: 2, levelName: 'Beginner', nextLevelName: 'Rookie', xp: 50, nextLevelXp: 100,
+  rank: 710, streak: 0, solved: 0, lessonsDone: 1, plan: 'Free', machineMinutesLeft: 290, joined: '2025-09-14' };
+
+const TRACKS = ['Core', 'Red team', 'Blue team', 'AI security'];
+const TRACK_BLURB = { Core: 'Start here. Everything else builds on these.', 'Red team': 'Find, prove and report weaknesses.',
+  'Blue team': 'Detect, investigate and respond.', 'AI security': 'Understand and secure AI systems.' };
+
+const PATHS = [
+  { id: 'cyber-foundation', track: 'Core', title: 'Cyber foundation', description: 'The core ideas, vocabulary and defensive mindset of security work.', lessons: 24, done: 0, hours: 6, icon: 'shield' },
+  { id: 'networking-1', track: 'Core', title: 'Networking deep dive, part 1', description: 'Devices, models, Ethernet and wireless, with build-and-repair scenarios.', lessons: 68, done: 1, hours: 18, icon: 'network' },
+  { id: 'networking-2', track: 'Core', title: 'Networking deep dive, part 2', description: 'Routing, services, network security and automation on real router labs.', lessons: 57, done: 0, hours: 16, icon: 'router' },
+  { id: 'cryptography', track: 'Core', title: 'Cryptography', description: 'From classical ciphers to modern protocols and applied crypto.', lessons: 32, done: 0, hours: 9, icon: 'key' },
+  { id: 'cloud-security-1', track: 'Red team', title: 'Cloud security, part 1', description: 'How cloud identity, storage and compute get misconfigured and attacked.', lessons: 28, done: 0, hours: 8, icon: 'cloud' },
+  { id: 'digital-forensics', track: 'Blue team', title: 'Digital forensics', description: 'Collect, preserve and read evidence from disks, memory and logs.', lessons: 26, done: 0, hours: 7, icon: 'search' },
+  { id: 'ai-systems', track: 'AI security', title: 'Introduction to AI systems', description: 'How modern models are built, deployed and where they break.', lessons: 18, done: 0, hours: 5, icon: 'cpu' },
+  { id: 'ai-robotics', track: 'AI security', title: 'AI robotics simulation lab', description: 'Program and attack simulated robots in a sandboxed world.', lessons: 14, done: 0, hours: 4, icon: 'bot' },
+];
+
+const UPCOMING = [
+  ['Core', 'Operating systems, part 1'], ['Core', 'Operating systems, part 2'], ['Core', 'Software engineering for security'], ['Core', 'Security foundations'],
+  ['Red team', 'Web architecture, part 1'], ['Red team', 'Web architecture, part 2'], ['Red team', 'Reverse engineering'], ['Red team', 'Mobile app pentesting'],
+  ['Red team', 'Operating system VAPT'], ['Red team', 'Web and API security testing'], ['Red team', 'Cloud security, part 2'], ['Red team', 'Advanced VAPT techniques'],
+  ['Blue team', 'Deep dive into digital forensics'], ['Blue team', 'Introduction to malware analysis'], ['Blue team', 'Malware analysis practical'],
+  ['Blue team', 'Mobile forensics basics'], ['Blue team', 'Advanced mobile forensics'], ['Blue team', 'Cloud forensics, part 1'], ['Blue team', 'Cloud forensics, part 2'],
+  ['Blue team', 'Database forensics and incident response'], ['Blue team', 'Introduction to SOC'], ['Blue team', 'Advanced SOC engineering'],
+  ['Blue team', 'HDD and SSD forensics'], ['Blue team', 'Open-source intelligence'],
+  ['AI security', 'LLM and SLM deep dive'], ['AI security', 'AGI systems deep dive'], ['AI security', 'AI security for red teams'], ['AI security', 'AI VAPT testing'],
+].map(([track, title]) => ({ track, title }));
+
+const L = (id, title, description, minutes, status = 'todo', xp = 50) => ({ id, title, description, minutes, xp, status });
+const UNITS = [
+  { title: 'Network foundations', lessons: [
+    L('intro', 'Introduction to computer networks', 'What a network is and how everyday devices talk to each other.', 10, 'done'),
+    L('components', 'Network components', 'Hubs, switches, routers, access points, firewalls and servers, and the job of each.', 12, 'current'),
+    L('topologies', 'Network topologies', 'Star, bus, ring, mesh and hybrid, plus physical versus logical topology.', 12),
+    L('enterprise', 'Enterprise network architectures', 'Two-tier, three-tier, collapsed core and spine-leaf designs.', 15) ] },
+  { title: 'Models and protocols', lessons: [
+    L('osi', 'OSI model fundamentals', 'The seven layers and what happens at each one.', 12),
+    L('tcpip', 'TCP/IP model', 'The four-layer model the internet actually runs on.', 14),
+    L('encapsulation', 'Encapsulation', 'How data gets wrapped and unwrapped on its way across the network.', 10),
+    L('ports', 'Ports and protocols', 'Common ports, what listens on them, and why it matters.', 12),
+    L('ipv4', 'IPv4 addressing basics', 'Addresses, masks and the private ranges.', 15) ] },
+  { title: 'Ethernet and physical connections', lessons: [
+    L('cabling', 'Cabling and connectors', 'Copper, fibre and the connectors on each end.', 10),
+    L('ethernet', 'Ethernet frames', 'What is inside a frame and how switches read it.', 12),
+    L('mac', 'MAC addresses and ARP', 'How a device finds its neighbour on the local network.', 12),
+    L('duplex', 'Speed and duplex', 'Auto-negotiation and the mismatches that slow a link down.', 8),
+    L('build-lan', 'Scenario: build a small office LAN', 'Wire up a switch, three hosts and a printer, then fix what breaks.', 25, 'todo', 100) ] },
+  { title: 'Cisco IOS and management', lessons: [
+    L('cli', 'Getting around the IOS CLI', 'Modes, help and the commands you will use every day.', 14),
+    L('basic-config', 'Basic device configuration', 'Hostnames, passwords, banners and saving config.', 12),
+    L('ssh', 'Secure remote management', 'Replace Telnet with SSH and lock down access.', 12),
+    L('repair', 'Scenario: repair a misconfigured switch', 'Find and fix four config mistakes before users notice.', 25, 'todo', 100) ] },
+];
+const FLAT = UNITS.flatMap((u, ui) => u.lessons.map((l) => ({ ...l, unit: u.title, unitIndex: ui })));
+FLAT.forEach((l, i) => (l.n = i + 1));
+
+const SLIDES = [
+  ['Devices', 'A network is only as useful as the hardware that moves data through it. This lesson covers six devices and the one job each does best.'],
+  ['Hubs', 'A hub repeats every signal it receives out of every port. It is simple, cheap and noisy, and it is why modern networks use switches instead.'],
+  ['Switches', 'A switch learns which device sits on which port and forwards each frame only where it needs to go. Fewer collisions, more privacy.'],
+  ['Routers', 'A router connects different networks and decides the next hop for each packet. Your home router joins your LAN to your provider.'],
+  ['Access points', 'An access point bridges wireless clients onto the wired network. It does not route; it extends.'],
+  ['Firewalls', 'A firewall inspects traffic against rules and drops what is not allowed. It is the first device an attacker has to get past.'],
+  ['Servers', 'A server provides a service to other devices: files, web pages, email, names. Most attacks are aimed at one.'],
+];
+
+const C = (id, title, category, difficulty, xp, solves, access, summary, status = 'new') => ({ id, type: 'challenge', title, category, difficulty, xp, solves, access, summary, status });
+const M = (id, title, difficulty, xp, solves, access, summary) => ({ id, type: 'machine', title, category: 'Boot2Root', difficulty, xp, solves, access, summary, status: 'new' });
+const LB = (id, title, category, difficulty, xp, solves, summary) => ({ id, type: 'lab', title, category, difficulty, xp, solves, access: 'labs', summary, status: 'new' });
+const ITEMS = [
+  C('disk-of-secrets', 'Disk of secrets', 'Forensics', 'Medium', 50, 9, 'free', 'A recovered field-survey drive. Some things were deleted. They did not stay gone.', 'started'),
+  C('bundled-secrets', 'Bundled secrets', 'Reverse engineering', 'Medium', 50, 32, 'free', 'A Linux AppImage that knows more than it shows. Unpack it and find out what.'),
+  C('signed-sealed', 'Signed, sealed, delivered', 'Reverse engineering', 'Medium', 45, 7, 'free', 'A signed binary and its resources. Something in the signature check is off.'),
+  C('root-check', 'Root check roulette', 'Android', 'Hard', 70, 13, 'free', 'The app refuses to run on rooted devices. Convince it otherwise.'),
+  C('native-whispers', 'Native whispers', 'Android', 'Hard', 70, 6, 'free', 'The interesting code is not in Java. Follow it into the native library.'),
+  C('broken-vault', 'Broken vault', 'Android', 'Hard', 75, 4, 'free', 'A password vault app with a very confident developer.'),
+  C('patch-me', 'Patch me if you can', 'Reverse engineering', 'Hard', 75, 5, 'free', 'A native binary that only prints the flag for the right user.'),
+  C('vm-inception', 'VM inception', 'Reverse engineering', 'Expert', 120, 1, 'prime', 'A binary that runs its own tiny virtual machine. Read the bytecode.'),
+  C('empty-database', 'The empty database', 'Web', 'Expert', 150, 2, 'prime', 'The database looks empty. The query log says otherwise.'),
+  C('browser-ghost', 'Browser ghost', 'Forensics', 'Hard', 90, 11, 'prime', 'A browser profile from a suspect laptop. Rebuild what they visited.'),
+  C('lost-phone', 'Lost phone', 'OSINT', 'Hard', 80, 15, 'free', 'A photo from a lost phone. Find where its owner lives.'),
+  C('aviatrix', 'Aviatrix controller command injection', 'Web', 'Hard', 300, 21, 'prime', 'Reproduce CVE-2024-50603 against a vulnerable cloud controller.'),
+  C('serv-u', 'Serv-U path traversal', 'Web', 'Medium', 200, 34, 'free', 'Reproduce CVE-2024-28995 and read a file you should not.'),
+  C('teamcity', 'TeamCity authentication bypass', 'Web', 'Hard', 250, 18, 'prime', 'Reproduce CVE-2024-27198 and get admin on a CI server.'),
+  M('backup-portal', 'Backup portal', 'Easy', 150, 64, 'free', 'An internal backup service that was never meant to face the internet.'),
+  M('devops-leftovers', 'DevOps leftovers', 'Easy', 175, 41, 'free', 'Staging was pushed to production in a hurry, and the debug tools came along.'),
+  M('helpdesk-legacy', 'HelpDesk legacy', 'Easy', 150, 52, 'free', 'An old ticketing system nobody wanted to migrate.'),
+  M('invoice-processor', 'Invoice processor', 'Easy', 150, 38, 'free', 'Finance uploads PDFs here. The parser trusts them a little too much.'),
+  M('photodrop', 'PhotoDrop', 'Easy', 150, 47, 'free', 'A photo sharing app with generous upload rules.'),
+  M('printer-room', 'Printer room', 'Easy', 150, 29, 'free', 'Every office has one printer server nobody patches.'),
+  M('hr-document-server', 'HR document server', 'Medium', 250, 17, 'free', 'Sensitive documents, a search feature and a tired admin.'),
+  M('monitoring-node', 'Monitoring node', 'Medium', 250, 12, 'free', 'It watches everything else on the network. Who watches it?'),
+  M('payroll-gateway', 'Payroll gateway', 'Hard', 400, 6, 'prime', 'A payment gateway with an internal admin API.'),
+  LB('left-the-git', 'Left the .git folder', 'Data stores', 'Easy', 100, 23, 'A small web app shipped in a hurry. Look at what came with it.'),
+  LB('search-and-destroy', 'Search and destroy', 'Data stores', 'Medium', 250, 9, 'You have a foothold. The search cluster behind it is the real prize.'),
+  LB('no-sql', 'No SQL, no problem', 'Data stores', 'Medium', 250, 14, 'A Node.js login page backed by MongoDB. Get in without a password.'),
+  LB('wide-open', 'Wide open', 'Data stores', 'Easy', 100, 19, 'From a low-privilege shell to a service that should never be reachable.'),
+  LB('service-trust', 'Service trust', 'API security', 'Hard', 400, 4, 'Three microservices that trust each other a little too much.'),
+  LB('race-to-redeem', 'Race to redeem', 'API security', 'Hard', 400, 5, 'A voucher wallet. Make one voucher pay twice.'),
+  LB('assign-yourself', 'Assign yourself', 'API security', 'Easy', 100, 27, 'A profile API. Leave with more rights than you came with.'),
+  LB('redirect-me', 'Redirect me', 'API security', 'Medium', 250, 11, 'An OAuth login flow. Make it send the token to you.'),
+  { id: 'runaway-update', type: 'scenario', title: 'Runaway update', category: 'Incident response', difficulty: 'Easy', xp: 100, solves: 88, access: 'free', status: 'new',
+    summary: 'Finance reports a crawling file share and the service desk is flooded with lockouts. Find what changed, contain it, and write it up.' },
+];
+const TYPE = {
+  challenge: { label: 'Challenge', plural: 'Challenges', icon: 'flag', blurb: 'Download a file or open a target, find the flag.' },
+  machine: { label: 'Machine', plural: 'Machines', icon: 'server', blurb: 'A live vulnerable machine. Get a shell, then get root.' },
+  lab: { label: 'Lab', plural: 'Labs', icon: 'flask-conical', blurb: 'Multi-step attack chains on your own cloud range.' },
+  scenario: { label: 'Scenario', plural: 'SOC scenarios', icon: 'siren', blurb: 'Respond to a live incident in a simulated company.' },
+};
+const DIFF = { Easy: 'green', Medium: 'amber', Hard: 'red', Expert: 'violet' };
+const ACCESS = { free: 'Free', prime: 'Prime', labs: 'Prime + Labs' };
+const canOpen = (a) => a === 'free';
+
+const SEASON = { number: 1, title: 'Zero Hour', tagline: 'Trace a breach across five locations and stop Project JANUS before the countdown ends.',
+  endsOn: '2026-10-31', chapters: [
+    { title: 'ARES HQ', story: 'An unknown connection breaches the ARES perimeter. Trace it to the attacker’s relay.', challenges: [
+      ['The first breach', 'Forensics', 'Easy'], ['Relay R-17', 'Machine', 'Medium'], ['Eyes before entry', 'OSINT', 'Easy'], ['Locked out', 'Web', 'Medium']] },
+    { title: 'K-17 facility', challenges: Array(5) }, { title: 'GRID-07', challenges: Array(5) },
+    { title: 'Relay R-17', challenges: Array(5) }, { title: 'JANUS', challenges: Array(5) } ] };
+
+const WEEKLY = [['Solve 5 challenges', 0, 5], ['Earn 500 XP', 50, 500], ['Finish 10 lessons', 1, 10]];
+const BOARD = [
+  ['quietroot', 18450, 212], ['lambda_lynx', 11806, 160], ['byteknight', 11030, 151], ['nullbyte_ria', 9875, 133], ['k3rnelpanic', 9410, 127],
+  ['segfault_sam', 8802, 119], ['r00tkid', 8240, 112], ['hexhound', 7915, 104], ['ciph3rqueen', 7660, 98], ['packetpirate', 7302, 95],
+].map(([handle, xp, solved], i) => ({ rank: i + 1, handle, xp, solved }));
+const TEAMS = [['Hex Raiders', 6, 19135], ['Echo Shell', 5, 16420], ['Exit Code Zero', 4, 15980], ['Packet Storm', 6, 12210], ['Blue Lantern', 3, 10874]];
+const EVENTS = [
+  { title: 'Cyber Security Month CTF', date: '2026-10-25', duration: '24 hours', format: 'Jeopardy, teams of up to 4', status: 'Registration open' },
+  { title: 'Campus Cup qualifier', date: '2026-11-08', duration: '8 hours', format: 'Jeopardy, solo', status: 'Opens 20 Oct' },
+  { title: 'SOC night shift', date: '2026-11-22', duration: '6 hours', format: 'Live incident, teams of 3', status: 'Announced' },
+];
+const SKILLS = ['Security operations', 'Incident response', 'Malware analysis', 'Penetration testing', 'Web exploitation', 'Cryptography'];
+
+/* ---------- Helpers ---------- */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const fmt = new Intl.NumberFormat('en-IN');
+const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+const badge = (label, theme = '', outline = false) => `<span class="badge ${theme ? 'b-' + theme : ''} ${outline ? 'outline' : ''}">${label}</span>`;
+const diff = (d) => badge(d, DIFF[d]);
+const prog = (pct) => `<div class="prog"><div style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>`;
+const av = (label, size = 'md') => `<span class="av av-${size}">${esc(label[0].toUpperCase())}</span>`;
+const seg = (name, opts, value) =>
+  `<div class="seg" role="radiogroup">${opts.map(([v, l, c]) =>
+    `<button role="radio" aria-checked="${v === value}" class="${v === value ? 'on' : ''}" data-seg="${name}" data-val="${v}">${l}${c != null ? `<span class="cnt">${c}</span>` : ''}</button>`).join('')}</div>`;
+const header = (inner) => `<div class="ph">${inner}</div>`;
+const crumbs = (items) => `<nav class="crumbs" aria-label="Breadcrumb">${items.map(([l, h], i) =>
+  (i ? '<span class="sep">/</span>' : '') + (h ? `<a href="${h}">${esc(l)}</a>` : `<span class="cur">${esc(l)}</span>`)).join('')}</nav>`;
+const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / 864e5);
+const fmtDate = (d, o) => new Date(d).toLocaleDateString('en-GB', o);
+
+function toast(msg, icon = 'check') {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = ic(icon) + `<span>${esc(msg)}</span>`;
+  $('#toasts').append(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+/* ---------- Router ---------- */
+const state = { slide: 0, practiceLoaded: false, seasonOpen: 0, machine: {}, solved: {}, billing: 'monthly', scope: 'global',
+  filters: { q: '', category: '', difficulty: '', free: false }, upcomingOpen: false, track: 'All' };
+let timer = null;
+
+function parse() {
+  const raw = location.hash.slice(1) || '/';
+  const [path, qs] = raw.split('?');
+  return { parts: path.split('/').filter(Boolean), query: new URLSearchParams(qs || '') };
+}
+function go(h) { location.hash = h; }
+function setQuery(key, val) {
+  const { parts, query } = parse();
+  query.set(key, val);
+  history.replaceState(null, '', '#/' + parts.join('/') + '?' + query);
+}
+function section() {
+  const p = parse().parts[0] || '';
+  return { '': '/', learn: '/learn', practice: '/practice', season: '/practice', compete: '/compete' }[p] || '';
+}
+
+const NAV = [['Home', 'house', '/'], ['Learn', 'book-open', '/learn'], ['Practice', 'target', '/practice'], ['Compete', 'trophy', '/compete']];
+function renderNav() {
+  const s = section();
+  $('#sidenav').innerHTML = NAV.map(([l, i, to]) =>
+    `<a href="#${to}" class="${s === to ? 'on' : ''}" ${s === to ? 'aria-current="page"' : ''}>${ic(i)}${l}</a>`).join('');
+  $('#bnav').innerHTML = NAV.map(([l, i, to]) =>
+    `<a href="#${to}" class="${s === to ? 'on' : ''}" ${s === to ? 'aria-current="page"' : ''}>${ic(i, 'i-lg')}${l}</a>`).join('');
+}
+
+function render() {
+  clearInterval(timer);
+  closeLayer();
+  const { parts, query } = parse();
+  const [a, b, c] = parts;
+  let html;
+  if (!a) html = home();
+  else if (a === 'learn' && c) html = lesson(b, c);
+  else if (a === 'learn' && b) html = pathDetail(b);
+  else if (a === 'learn') html = learn();
+  else if (a === 'practice' && b) html = practiceItem(b);
+  else if (a === 'practice') html = practice(query.get('type') || 'challenge');
+  else if (a === 'season') html = season();
+  else if (a === 'compete') html = compete(query.get('tab') || 'leaderboard');
+  else if (a === 'profile') html = profile();
+  else if (a === 'plans') html = plans();
+  else if (a === 'about') html = about();
+  else html = header('<h1>Not found</h1>') + `<div class="wrap w4"><a class="btn" href="#/">Go home</a></div>`;
+  $('#main').innerHTML = html;
+  $('#main').scrollTop = 0;
+  renderNav();
+  hydrateIcons();
+  if (a === 'practice' && !b) mountPractice();
+  if (a === 'practice' && b) mountMachineClock(b);
+}
+
+/* ---------- Pages ---------- */
+function seasonStrip() {
+  const total = SEASON.chapters.reduce((n, c) => n + c.challenges.length, 0);
+  const d = daysUntil(SEASON.endsOn);
+  return `<div class="card row wrapf g4" style="padding:12px 16px">
+    <div class="tile tile-red">${ic('radio')}</div>
+    <div class="min0 flex1">
+      <p class="t-base semi ink8">Season ${SEASON.number}: ${SEASON.title}</p>
+      <p class="t-sm ink5 trunc">${SEASON.chapters.length} chapters · ${total} challenges · ${d > 0 ? `ends in ${d} days` : 'ended'}</p>
+    </div>
+    <a class="btn" href="#/season">Open season ${ic('arrow-right', 'i-sm')}</a>
+  </div>`;
+}
+const stats = (list) => `<div class="stats">${list.map(([l, v, h]) =>
+  `<div><p class="t-sm ink5">${l}</p><p class="t-2xl ink9 num mt1">${v}</p>${h ? `<p class="t-xs ink5 mt1">${h}</p>` : ''}</div>`).join('')}</div>`;
+
+function home() {
+  const path = PATHS[1];
+  const ci = FLAT.findIndex((l) => l.status === 'current');
+  const cur = FLAT[ci];
+  const next = FLAT.slice(ci + 1, ci + 4);
+  const daily = ITEMS.find((i) => i.id === 'devops-leftovers');
+  const h = new Date().getHours();
+  const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return header(`<h1>${greet}, ${USER.name}</h1>`) + `
+  <div class="wrap w4 stack">
+    <section class="card card-tint" style="padding:20px">
+      <p class="t-sm ink5">Continue learning · ${path.title} · Unit ${cur.unitIndex + 1}</p>
+      <div class="row-s wrapf g6 mt2">
+        <div class="min0 flex1">
+          <h2 class="t-4xl semi ink9">${cur.title}</h2>
+          <p class="t-base p ink7 mt2">${cur.description}</p>
+          <p class="row g3 t-sm ink5 mt2"><span class="row g1">${ic('clock', 'i-sm')}${cur.minutes} min</span><span class="row g1">${ic('zap', 'i-sm')}${cur.xp} XP</span></p>
+        </div>
+        <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">Continue lesson ${ic('arrow-right')}</a>
+      </div>
+      <div class="mt5">${prog(path.done / path.lessons * 100)}<p class="t-xs ink5 mt2">Lesson ${ci + 1} of ${path.lessons} in this path</p></div>
+    </section>
+
+    ${stats([['XP', USER.xp, `${USER.nextLevelXp - USER.xp} XP to ${USER.nextLevelName}`], ['Global rank', '#' + USER.rank],
+      ['Solved', USER.solved, 'challenges, machines, labs'], ['Streak', USER.streak + ' days', 'Solve or learn today to start one']])}
+
+    <div class="grid2">
+      <section class="card card-pad" style="display:flex;flex-direction:column">
+        <div class="row between"><h3 class="t-lg semi ink8">Today’s challenge</h3><span class="t-xs ink5">New in ${24 - h} h</span></div>
+        <div class="row-s g3 mt3">
+          <div class="tile">${ic('server')}</div>
+          <div class="min0">
+            <p class="t-base semi ink8">${daily.title}</p>
+            <p class="t-sm p ink6 mt1">${daily.summary}</p>
+            <div class="row g2 mt2">${diff(daily.difficulty)}<span class="t-xs ink5">Machine · ${daily.xp} XP</span></div>
+          </div>
+        </div>
+        <div style="margin-top:auto;padding-top:16px"><a class="btn full" href="#/practice/${daily.id}">${ic('play', 'i-sm')} Start machine</a></div>
+      </section>
+      <section class="card card-pad">
+        <div class="row between"><h3 class="t-lg semi ink8">This week</h3><span class="t-xs ink5">Resets Monday</span></div>
+        <div class="stack-s mt3">${WEEKLY.map(([l, v, t]) =>
+          `<div><div class="row between t-sm"><span class="ink7">${l}</span><span class="ink5 num">${v} / ${t}</span></div><div class="mt2">${prog(v / t * 100)}</div></div>`).join('')}</div>
+        <p class="row g2 t-sm ink6 mt4">${ic('gift', 'i-sm')}Finish all three for +250 bonus XP</p>
+      </section>
+    </div>
+
+    ${seasonStrip()}
+
+    <section>
+      <div class="row between"><h3 class="t-lg semi ink8">Up next in ${path.title}</h3><a class="btn ghost" href="#/learn/${path.id}">View path</a></div>
+      <div class="list mt2">${next.map((l) => `
+        <a class="li" href="#/learn/${path.id}/${l.id}">
+          <span class="t-sm num ink4" style="width:20px">${l.n}</span>
+          <span class="min0 flex1"><span class="t-base ink8 trunc" style="display:block">${l.title}</span><span class="t-xs ink5 trunc" style="display:block">Unit ${l.unitIndex + 1} · ${l.unit}</span></span>
+          <span class="t-sm ink5 hide-sm">${l.minutes} min</span>${ic('chevron-right', 'ink4')}
+        </a>`).join('')}</div>
+    </section>
+  </div>`;
+}
+
+function learn() {
+  const total = PATHS.reduce((n, p) => n + p.lessons, 0);
+  const t = state.track;
+  const tracks = t === 'All' ? TRACKS : [t];
+  const upcoming = UPCOMING.filter((u) => t === 'All' || u.track === t);
+  return header(`<h1>Learn</h1><span class="t-sm ink5 hide-sm" style="margin-left:8px">${PATHS.length} paths · ${total} lessons</span>`) + `
+  <div class="wrap w9" style="display:flex;flex-direction:column;gap:32px">
+    <div>${seg('track', [['All', 'All'], ...TRACKS.map((x) => [x, x])], t)}</div>
+    ${tracks.map((tr) => `
+      <section>
+        <h2 class="t-lg semi ink8">${tr}</h2><p class="t-sm ink5">${TRACK_BLURB[tr]}</p>
+        <div class="list mt2">${PATHS.filter((p) => p.track === tr).map((p, i) => `
+          <a class="li" href="#/learn/${p.id}" style="padding:14px 16px;gap:16px">
+            <div class="tile">${ic(p.icon)}</div>
+            <div class="min0 flex1">
+              <div class="row g2"><span class="t-base semi ink8 trunc">${p.title}</span>${tr === 'Core' ? badge('Step ' + (i + 1), '', true) : ''}${p.done ? badge('In progress', 'blue') : ''}</div>
+              <p class="t-sm ink6 trunc mt1">${p.description}</p>
+            </div>
+            <div class="hide-sm shrink0" style="width:160px"><p class="t-xs ink5 right">${p.lessons} lessons · ${p.hours} h</p><div class="mt2">${prog(p.done / p.lessons * 100)}</div></div>
+            ${ic('chevron-right', 'ink4')}
+          </a>`).join('')}</div>
+      </section>`).join('')}
+    ${upcoming.length ? `
+    <section class="card dashed card-pad">
+      <div class="row g3">
+        ${ic('calendar', 'ink5')}
+        <div class="min0 flex1"><p class="t-base ink7">${upcoming.length} more paths coming soon</p><p class="t-sm ink5">They open in curriculum order as their lessons are finished.</p></div>
+        <button class="btn ghost" data-act="toggle-upcoming" aria-expanded="${state.upcomingOpen}">${state.upcomingOpen ? 'Hide' : 'Show'} ${ic(state.upcomingOpen ? 'chevron-up' : 'chevron-down', 'i-sm')}</button>
+      </div>
+      ${state.upcomingOpen ? `<ul class="mt3" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 24px;border-top:1px solid var(--line1);padding-top:12px">
+        ${upcoming.map((u) => `<li class="row between g2 t-sm"><span class="ink6 trunc">${u.title}</span><span class="t-xs ink4 shrink0">${u.track}</span></li>`).join('')}</ul>` : ''}
+    </section>` : ''}
+  </div>`;
+}
+
+const lessonIcon = (s, here) => here ? ic('circle-play', 'ink9') : s === 'done' ? ic('circle-check', 'green') : ic('circle', 'ink4');
+
+function pathDetail(id) {
+  const p = PATHS.find((x) => x.id === id) || PATHS[1];
+  const cur = FLAT.find((l) => l.status === 'current');
+  return header(crumbs([['Learn', '#/learn'], [p.title]])) + `
+  <div class="wrap w9">
+    <div class="row-s wrapf g6">
+      <div class="min0 flex1">
+        <div class="row g2">${badge(p.track, '', true)}<span class="t-sm ink5">Beginner · ${p.lessons} lessons · about ${p.hours} hours</span></div>
+        <h1 class="t-4xl semi ink9 mt2">${p.title}</h1>
+        <p class="t-base p ink7 mt2" style="max-width:640px">${p.description}</p>
+      </div>
+      <a class="btn solid lg" href="#/learn/${p.id}/${cur.id}">${p.done ? 'Continue' : 'Start path'} ${ic('arrow-right')}</a>
+    </div>
+    <div class="row g3 mt5"><div class="flex1">${prog(p.done / p.lessons * 100)}</div><span class="t-sm ink5 num">${p.done} of ${p.lessons} done</span></div>
+    <div class="mt8" style="display:flex;flex-direction:column;gap:24px">
+      ${UNITS.map((u, ui) => `
+        <section>
+          <div class="row between" style="margin-bottom:8px"><h2 class="t-lg semi ink8">Unit ${ui + 1}: ${u.title}</h2>
+            <span class="t-sm ink5 num">${u.lessons.filter((l) => l.status === 'done').length} / ${u.lessons.length}</span></div>
+          <div class="list">${u.lessons.map((l) => {
+            const n = FLAT.find((f) => f.id === l.id).n;
+            return `<a class="li ${l.status === 'current' ? 'cur' : ''}" href="#/learn/${p.id}/${l.id}">
+              ${lessonIcon(l.status, l.status === 'current')}
+              <span class="min0 flex1">
+                <span class="row g2"><span class="t-base trunc ${l.status === 'done' ? 'ink6' : 'ink8'}">${n}. ${l.title}</span>${l.status === 'current' ? badge('Up next', 'blue') : ''}</span>
+                <span class="t-sm ink5 trunc" style="display:block">${l.description}</span>
+              </span>
+              <span class="t-sm ink5 right hide-sm" style="width:56px">${l.minutes} min</span>
+              <span class="t-sm ink5 right hide-sm" style="width:60px">${l.xp} XP</span>
+            </a>`; }).join('')}</div>
+        </section>`).join('')}
+      <p class="t-sm ink5 center">This demo shows 4 of 12 units.</p>
+    </div>
+  </div>`;
+}
+
+let lessonKey = '';
+function lesson(pid, lid) {
+  const p = PATHS.find((x) => x.id === pid) || PATHS[1];
+  const idx = Math.max(0, FLAT.findIndex((l) => l.id === lid));
+  const l = FLAT[idx];
+  if (lessonKey !== lid) { state.slide = 0; lessonKey = lid; }
+  const unit = UNITS[l.unitIndex];
+  const s = state.slide, last = s === SLIDES.length - 1;
+  return `<div style="display:flex;flex-direction:column;height:100%">
+    ${header(crumbs([['Learn', '#/learn'], [p.title, `#/learn/${p.id}`], [l.title]]) + `<span class="t-sm ink5 hide-sm ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span>`)}
+    <div style="display:flex;flex:1;min-height:0">
+      <div class="min0 flex1" style="overflow-y:auto"><div class="wrap" style="max-width:770px">
+        <h1 class="t-3xl semi ink9">${l.title}</h1>
+        <p class="t-sm ink5 mt1">${l.minutes} min · ${l.xp} XP</p>
+        <div class="slide mt5" aria-live="polite">
+          <p class="t-sm ink5">${s + 1} / ${SLIDES.length}</p>
+          <h2 class="semi ink9 mt2" style="font-size:24px">${SLIDES[s][0]}</h2>
+          <p class="t-lg p ink7 mt3" style="max-width:520px">${SLIDES[s][1]}</p>
+        </div>
+        <div class="row g3 mt4">
+          <button class="btn icon" data-act="prev" aria-label="Previous slide" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
+          <div class="flex1">${prog((s + 1) / SLIDES.length * 100)}</div>
+          <button class="btn ${last ? 'solid' : ''}" data-act="next">${last ? 'Complete lesson' : 'Next'} ${ic('arrow-right', 'i-sm')}</button>
+        </div>
+        <p class="t-xs ink5 center mt2">Use the <span class="kbd">←</span> and <span class="kbd">→</span> keys to move between slides.</p>
+      </div></div>
+      <aside class="outline" aria-label="Lessons in this unit">
+        <div style="padding:20px 16px 8px"><p class="t-sm ink5">Unit ${l.unitIndex + 1}</p><p class="t-base semi ink8">${unit.title}</p></div>
+        <div style="padding:0 8px 40px">${unit.lessons.map((x) =>
+          `<a class="${x.id === lid ? 'on' : ''}" href="#/learn/${p.id}/${x.id}">${lessonIcon(x.status === 'current' ? 'todo' : x.status, x.id === lid)}<span class="min0 flex1 trunc">${x.title}</span><span class="t-xs ink5">${x.minutes}m</span></a>`).join('')}</div>
+      </aside>
+    </div>
+  </div>`;
+}
+function lessonStep(dir) {
+  const { parts } = parse();
+  if (parts[0] !== 'learn' || !parts[2]) return;
+  if (dir < 0) { if (state.slide > 0) { state.slide--; render(); } return; }
+  if (state.slide < SLIDES.length - 1) { state.slide++; render(); return; }
+  const idx = FLAT.findIndex((l) => l.id === parts[2]);
+  toast(`Lesson complete · +${FLAT[idx].xp} XP`);
+  const nx = FLAT[idx + 1];
+  if (nx) go(`#/learn/${parts[1]}/${nx.id}`);
+}
+
+function practice(type) {
+  const types = ['challenge', 'machine', 'lab', 'scenario'];
+  const f = state.filters;
+  const cats = [...new Set(ITEMS.filter((i) => i.type === type).map((i) => i.category))];
+  const left = USER.machineMinutesLeft;
+  return header('<h1>Practice</h1>') + `
+  <div class="wrap w11" style="display:flex;flex-direction:column;gap:20px">
+    ${seasonStrip()}
+    <div>${seg('type', types.map((t) => [t, TYPE[t].plural, ITEMS.filter((i) => i.type === t).length]), type)}</div>
+    <div class="row wrapf g3">
+      ${ic(TYPE[type].icon, 'ink5')}<p class="t-sm ink6">${TYPE[type].blurb}</p>
+      ${type === 'machine' ? `<p class="t-sm ink5 ml-auto">${Math.floor(left / 60)} h ${left % 60} min of machine time left this month</p>` : ''}
+    </div>
+    ${type === 'lab' ? `<div class="note">${ic('lock', 'ink6')}<p class="t-sm p ink7 min0 flex1">Labs run on your own cloud range and need the <b>Prime + Labs</b> plan. You can browse them now.</p><a class="btn" href="#/plans">See plans</a></div>` : ''}
+    <div class="row wrapf g2">
+      <label class="inputwrap" style="width:256px;max-width:100%">${ic('search')}<input class="input" id="f-q" type="search" placeholder="Search by name or topic" aria-label="Search" value="${esc(f.q)}"></label>
+      <select class="input" id="f-cat" aria-label="Category" style="width:176px"><option value="">All categories</option>${cats.map((c) => `<option ${c === f.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
+      <select class="input" id="f-diff" aria-label="Difficulty" style="width:160px"><option value="">Any difficulty</option>${['Easy', 'Medium', 'Hard', 'Expert'].map((d) => `<option ${d === f.difficulty ? 'selected' : ''}>${d}</option>`).join('')}</select>
+      <span class="row g2" style="margin-left:8px"><button class="sw" role="switch" id="f-free" aria-checked="${f.free}" aria-label="Only show what I can open"></button><span class="t-sm ink7">Only what I can open</span></span>
+      <button class="btn ghost ml-auto" data-act="clear-filters" id="f-clear" style="visibility:hidden">Clear</button>
+    </div>
+    <div id="plist"></div>
+  </div>`;
+}
+function mountPractice() {
+  const type = parse().query.get('type') || 'challenge';
+  const f = state.filters;
+  const draw = () => {
+    const q = f.q.trim().toLowerCase();
+    const rows = ITEMS.filter((i) => i.type === type
+      && (!q || i.title.toLowerCase().includes(q) || i.category.toLowerCase().includes(q))
+      && (!f.category || i.category === f.category) && (!f.difficulty || i.difficulty === f.difficulty) && (!f.free || canOpen(i.access)));
+    $('#f-clear').style.visibility = (f.q || f.category || f.difficulty || f.free) ? 'visible' : 'hidden';
+    if (!state.practiceLoaded) {
+      $('#plist').innerHTML = Array.from({ length: 6 }, () => `<div class="row g4" style="padding:18px 8px;border-bottom:1px solid var(--line1)"><div class="skel" style="height:14px;width:33%"></div><div class="skel ml-auto" style="height:14px;width:64px"></div></div>`).join('');
+      return;
+    }
+    $('#plist').innerHTML = rows.length ? `<div class="tbl" role="table">
+      <div class="tr head" role="row"><span>Name</span><span>Difficulty</span><span class="wide right">XP</span><span class="wide right">Solves</span><span class="wide right">Status</span></div>
+      ${rows.map((i) => `<a class="tr" role="row" href="#/practice/${i.id}">
+        <span class="min0"><span class="row g1 t-base ink8">${canOpen(i.access) ? '' : `<span class="ink5" title="Locked">${ic('lock', 'i-sm')}</span>`}<span class="trunc">${i.title}</span></span>
+          <span class="t-xs ink5 trunc" style="display:block">${i.category}<span class="only-sm"> · ${i.xp} XP</span></span></span>
+        <span>${diff(i.difficulty)}</span>
+        <span class="wide right t-sm ink7 num">${i.xp}</span>
+        <span class="wide right t-sm ink5 num">${i.solves}</span>
+        <span class="wide right">${!canOpen(i.access) ? `<span class="t-sm ink5">${ACCESS[i.access]}</span>` : i.status === 'started' ? badge('In progress', 'blue') : i.status === 'solved' ? badge('Solved', 'green') : ''}</span>
+      </a>`).join('')}</div>`
+    : `<div class="empty"><div class="circ">${ic('search-x', 'i-xl')}</div><p class="t-base ink7">Nothing matches these filters</p><button class="btn" data-act="clear-filters">Clear filters</button></div>`;
+  };
+  $('#f-q').oninput = (e) => { f.q = e.target.value; draw(); };
+  $('#f-cat').onchange = (e) => { f.category = e.target.value; draw(); };
+  $('#f-diff').onchange = (e) => { f.difficulty = e.target.value; draw(); };
+  $('#f-free').onclick = (e) => { f.free = !f.free; e.currentTarget.setAttribute('aria-checked', f.free); draw(); };
+  draw();
+  if (!state.practiceLoaded) setTimeout(() => { state.practiceLoaded = true; if (parse().parts[0] === 'practice') draw(); }, 450);
+}
+
+function practiceItem(id) {
+  const it = ITEMS.find((i) => i.id === id) || ITEMS[0];
+  const m = TYPE[it.type];
+  const locked = !canOpen(it.access);
+  const flags = it.type === 'machine'
+    ? [['user', 'User flag', 'Found after your first shell, in /home/<user>/user.txt', Math.round(it.xp * 0.4)],
+       ['root', 'Root flag', 'Found after privilege escalation, in /root/root.txt', Math.round(it.xp * 0.6)]]
+    : [['flag', 'Flag', 'Format: CSEMA{...}. Every attempt is logged.', it.xp]];
+  const ms = state.machine[id] || 'off';
+  const body = locked ? `
+    <div class="card" style="padding:20px;border-color:var(--line2)">
+      <div class="row-s g3">${ic('lock', 'ink6')}<div class="min0 flex1">
+        <p class="t-base semi ink8">Included in ${ACCESS[it.access]}</p>
+        <p class="t-sm p ink6 mt1">You are on the Free plan. Upgrade to open this ${m.label.toLowerCase()} and submit flags.</p></div></div>
+      <div class="row g2 mt4"><a class="btn solid" href="#/plans">See plans</a><a class="btn ghost" href="#/practice?type=${it.type}">Show free ones</a></div>
+    </div>` : `
+    ${it.type === 'challenge' ? `<section class="card card-pad row wrapf g3">${ic('file', 'ink5')}
+      <div class="min0 flex1"><p class="t-base ink8">handout.zip</p><p class="t-xs ink5">48 MB · everything you need is inside</p></div>
+      <button class="btn" data-toast="Download started (demo)">${ic('download', 'i-sm')} Download</button></section>` : ''}
+    ${it.type === 'machine' ? `<section class="card card-pad row wrapf g3" id="machine">
+      <span class="dot ${ms === 'starting' ? 'amber' : ms === 'running' ? 'green' : ''}"></span>
+      <div class="min0 flex1">
+        <p class="t-base semi ink8">${{ off: 'Machine is off', starting: 'Starting…', running: 'Running' }[ms]}</p>
+        <p class="t-sm ink5">${ms === 'running' ? `Target 10.10.4.17 · <span id="clock" class="num">60:00</span> left · connect from the browser terminal or VPN`
+          : `Runs up to 60 minutes. Uses your machine time (${Math.floor(USER.machineMinutesLeft / 60)} h left).`}</p>
+      </div>
+      ${ms === 'off' ? `<button class="btn solid" data-act="start-machine" data-id="${id}">${ic('play', 'i-sm')} Start machine</button>`
+        : ms === 'starting' ? `<button class="btn" disabled>Starting…</button>`
+        : `<button class="btn" data-toast="The terminal opens in a new tab">${ic('terminal', 'i-sm')} Open terminal</button><button class="btn ghost danger" data-act="stop-machine" data-id="${id}">Stop</button>`}
+    </section>` : ''}
+    ${it.type === 'scenario' ? `<section class="card card-pad"><p class="t-base semi ink8">How you are scored</p>
+      <p class="t-sm p ink6 mt1">Detection, triage, investigation, containment, business impact and your final report. There are no flags.</p>
+      <button class="btn solid mt4" data-toast="The SOC workstation opens here">${ic('play', 'i-sm')} Start scenario</button></section>` : ''}
+    ${it.type !== 'scenario' ? `<section style="display:flex;flex-direction:column;gap:16px">
+      <h2 class="t-lg semi ink8">Submit ${flags.length > 1 ? 'flags' : 'flag'}</h2>
+      ${flags.map(([k, label, hint, xp]) => {
+        const done = state.solved[id + k];
+        return `<div><label class="label" for="flag-${k}">${label} · ${xp} XP</label>
+          <div class="row g2"><input class="input" id="flag-${k}" placeholder="CSEMA{...}" ${done ? 'disabled value="Solved"' : ''}>
+          <button class="btn ${done ? 'ok' : 'solid'}" data-act="submit-flag" data-id="${id}" data-k="${k}" data-xp="${xp}" ${done ? 'disabled' : ''}>${done ? ic('check', 'i-sm') + ' Solved' : 'Submit'}</button></div>
+          <p class="help">${esc(hint)}</p></div>`; }).join('')}
+      <p class="t-xs ink5">Demo tip: <code>CSEMA{demo}</code> is accepted.</p>
+    </section>` : ''}`;
+  return header(crumbs([['Practice', '#/practice'], [m.plural, `#/practice?type=${it.type}`], [it.title]])) + `
+  <div class="wrap w11" style="display:flex;flex-wrap:wrap;gap:32px">
+    <div class="min0" style="flex:1 1 520px;display:flex;flex-direction:column;gap:24px">
+      <div>
+        <div class="row wrapf g2">${diff(it.difficulty)}<span class="t-sm ink5">${m.label} · ${it.category} · ${it.xp} XP</span></div>
+        <h1 class="t-4xl semi ink9 mt2">${it.title}</h1>
+        <p class="t-base p ink7 mt2" style="max-width:640px">${it.summary}</p>
+      </div>
+      ${body}
+    </div>
+    <aside style="flex:0 1 288px;min-width:240px">
+      <div class="list">${[['Type', m.label], ['Category', it.category], ['XP', it.xp], ['Solves', it.solves], ['Plan', ACCESS[it.access]]].map(([k, v]) =>
+        `<div class="row between t-sm" style="padding:10px 16px"><span class="ink5">${k}</span><span class="ink8">${v}</span></div>`).join('')}</div>
+      <button class="btn ghost full mt3" data-act="copy-link">${ic('link', 'i-sm')} Copy link</button>
+    </aside>
+  </div>`;
+}
+const machineEnds = {};
+function mountMachineClock(id) {
+  if (state.machine[id] !== 'running') return;
+  const tick = () => {
+    const left = Math.max(0, Math.round((machineEnds[id] - Date.now()) / 1000));
+    const el = $('#clock');
+    if (el) el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  };
+  tick();
+  timer = setInterval(tick, 1000);
+}
+
+function season() {
+  const total = SEASON.chapters.reduce((n, c) => n + c.challenges.length, 0);
+  return header(crumbs([['Practice', '#/practice'], [`Season ${SEASON.number}`]])) + `
+  <div class="wrap w9">
+    <div class="row-s wrapf g6">
+      <div class="min0 flex1">
+        <div class="row g2">${badge('Live', 'red')}<span class="t-sm ink5">Season ${SEASON.number} · ends ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'short' })}</span></div>
+        <h1 class="t-4xl semi ink9 mt2">${SEASON.title}</h1>
+        <p class="t-base p ink7 mt2" style="max-width:600px">${SEASON.tagline}</p>
+      </div>
+      <div class="row g2"><button class="btn ghost" data-toast="The trailer plays here" data-icon-toast="play">${ic('play', 'i-sm')} Watch trailer</button>
+        <a class="btn solid lg" href="#/practice/disk-of-secrets">Start chapter 1 ${ic('arrow-right')}</a></div>
+    </div>
+    <div class="row g3 mt5"><div class="flex1">${prog(0)}</div><span class="t-sm ink5 num">0 of ${total} challenges</span></div>
+    <div class="list mt8">${SEASON.chapters.map((ch, i) => `
+      <div>
+        <button class="li w-full" style="border:0;background:transparent;text-align:left;${i ? 'cursor:default' : ''}" ${i === 0 ? `data-act="toggle-chapter" aria-expanded="${state.seasonOpen === 0}"` : 'disabled'}>
+          <span class="t-sm num ink4" style="width:24px">${String(i + 1).padStart(2, '0')}</span>
+          <span class="min0 flex1"><span class="t-base semi ${i ? 'ink5' : 'ink8'}" style="display:block">${ch.title}</span>
+            <span class="t-sm ink5 trunc" style="display:block">${i ? `Unlocks after chapter ${i}` : ch.story}</span></span>
+          <span class="t-sm ink5 hide-sm">${ch.challenges.length} challenges</span>
+          ${i ? ic('lock', 'ink4') : ic(state.seasonOpen === 0 ? 'chevron-up' : 'chevron-down', 'ink5')}
+        </button>
+        ${i === 0 && state.seasonOpen === 0 ? `<div style="background:var(--s1);border-top:1px solid var(--line1);padding:8px 16px">
+          ${ch.challenges.map(([t, cat, d]) => `<a class="li" href="#/practice/disk-of-secrets" style="padding:10px 8px;border-radius:8px">${ic('circle', 'ink4')}
+            <span class="min0 flex1 t-base ink8 trunc">${t}</span><span class="t-sm ink5 hide-sm">${cat}</span>${diff(d)}</a>`).join('')}</div>` : ''}
+      </div>`).join('')}</div>
+  </div>`;
+}
+
+function compete(tab) {
+  const tabs = seg('tab', [['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['events', 'Events']], tab);
+  let body = '';
+  if (tab === 'leaderboard') {
+    const rows = state.scope === 'global' ? BOARD : BOARD.filter((_, i) => i % 3 === 1).map((r, i) => ({ ...r, rank: i + 1 }));
+    body = `
+    <div class="card card-tint row wrapf g3" style="padding:12px 16px">${av(USER.name, 'lg')}
+      <div class="min0 flex1"><p class="t-base semi ink8">You are #${USER.rank}</p><p class="t-sm ink5">${USER.xp} XP · 1,144 XP behind the top 50</p></div>
+      <a class="btn" href="#/practice">Earn XP ${ic('arrow-right', 'i-sm')}</a></div>
+    <div class="row between wrapf g2"><h2 class="t-lg semi ink8">Top players</h2>${seg('scope', [['global', 'Global'], ['college', 'My college']], state.scope)}</div>
+    <div class="tbl lb" role="table">
+      <div class="tr head" role="row"><span>#</span><span>Player</span><span class="wide right">Solved</span><span class="right">XP</span></div>
+      ${rows.map((r) => `<div class="tr" role="row"><span class="t-sm ink5 num">${r.rank}</span>
+        <span class="row g2 min0">${av(r.handle, 'sm')}<span class="t-base ink8 trunc">${r.handle}</span>${r.rank <= 3 ? `<span class="amber" title="Top 3">${ic('award', 'i-sm')}</span>` : ''}</span>
+        <span class="wide right t-sm ink5 num">${r.solved}</span><span class="right t-sm ink8 num">${fmt.format(r.xp)}</span></div>`).join('')}
+    </div>`;
+  } else if (tab === 'teams') {
+    body = `
+    <div class="card dashed empty" style="padding:40px 16px"><div class="circ">${ic('users', 'i-xl')}</div>
+      <p class="t-base ink7">You are not on a team yet</p>
+      <p class="t-sm p ink5" style="max-width:360px">Teams pool XP, compete in team events and get their own leaderboard.</p>
+      <div class="row g2 mt1"><button class="btn solid" data-toast="The team form opens here">${ic('plus', 'i-sm')} Create a team</button><button class="btn" data-act="join-team">Join with a code</button></div></div>
+    <h2 class="t-lg semi ink8">Top teams</h2>
+    <div class="list">${TEAMS.map(([n, mem, xp], i) => `<div class="li"><span class="t-sm ink5 num" style="width:20px">${i + 1}</span>${av(n)}
+      <span class="min0 flex1"><span class="t-base ink8 trunc" style="display:block">${n}</span><span class="t-xs ink5">${mem} members</span></span>
+      <span class="t-sm ink8 num">${fmt.format(xp)} XP</span></div>`).join('')}</div>`;
+  } else {
+    body = `<p class="t-sm ink6">Events run inside the app with the same sign-in. No second login.</p>
+    <div class="list">${EVENTS.map((e) => {
+      const open = e.status === 'Registration open';
+      return `<div class="li wrapf" style="padding:16px;gap:8px 16px">
+        <div class="calbox"><span class="t-xs ink5">${fmtDate(e.date, { month: 'short' })}</span><span class="t-xl semi ink8">${fmtDate(e.date, { day: 'numeric' })}</span></div>
+        <div class="min0 flex1"><div class="row wrapf g2"><span class="t-base semi ink8">${e.title}</span>${badge(e.status, open ? 'green' : '')}</div>
+          <p class="t-sm ink5 mt1">${e.duration} · ${e.format}</p></div>
+        <button class="btn ${open ? 'solid' : ''}" data-toast="${open ? 'You are registered (demo)' : 'We will remind you (demo)'}">${open ? 'Register' : 'Remind me'}</button>
+      </div>`; }).join('')}</div>`;
+  }
+  return header('<h1>Compete</h1>') + `<div class="wrap w9" style="display:flex;flex-direction:column;gap:20px">${tabs}${body}</div>`;
+}
+
+function profile() {
+  const badges = [['First day', 'sun', true], ['First flag', 'flag'], ['First root', 'terminal'], ['7-day streak', 'flame'], ['Path finished', 'graduation-cap'], ['Season 1', 'radio']];
+  return header(`<h1>Profile</h1><button class="btn ml-auto" data-toast="The profile editor opens here">${ic('pencil', 'i-sm')} Edit profile</button>`) + `
+  <div class="wrap w4 stack">
+    <div class="row wrapf g4">${av(USER.name, 'xl')}
+      <div class="min0 flex1"><div class="row g2"><h2 class="t-4xl semi ink9">${USER.handle}</h2>${badge(USER.plan + ' plan', '', true)}</div>
+        <p class="t-sm ink5 mt1">Level ${USER.level} · ${USER.levelName} · member since ${fmtDate(USER.joined, { month: 'short', year: 'numeric' })}</p></div>
+    </div>
+    <section class="card card-pad">
+      <div class="row between t-sm"><span class="ink7">Level ${USER.level} → Level ${USER.level + 1}, ${USER.nextLevelName}</span><span class="ink5 num">${USER.xp} / ${USER.nextLevelXp} XP</span></div>
+      <div class="mt2">${prog(USER.xp / USER.nextLevelXp * 100)}</div>
+    </section>
+    ${stats([['XP', USER.xp], ['Global rank', '#' + USER.rank], ['Solved', USER.solved], ['Lessons done', USER.lessonsDone]])}
+    <div class="grid2">
+      <section class="card card-pad"><h3 class="t-lg semi ink8">Skills</h3><p class="t-sm ink5">Share of each area you have completed.</p>
+        <div class="stack-s mt4">${SKILLS.map((s) => `<div><div class="row between t-sm"><span class="ink7">${s}</span><span class="ink5 num">0%</span></div><div class="mt2">${prog(0)}</div></div>`).join('')}</div></section>
+      <section class="card card-pad"><h3 class="t-lg semi ink8">Badges</h3><p class="t-sm ink5">1 of ${badges.length} earned</p>
+        <div class="badgegrid mt4">${badges.map(([l, i, e]) => `<div class="${e ? '' : 'off'}">${ic(i, 'i-lg ' + (e ? 'amber' : 'ink4'))}<span>${l}</span></div>`).join('')}</div></section>
+    </div>
+    <section class="card card-pad"><h3 class="t-lg semi ink8">Activity</h3>
+      <div class="empty" style="padding:32px 0">${ic('activity', 'i-xl ink4')}<p class="t-base ink7">No activity in the last 12 weeks</p>
+        <p class="t-sm ink5">Solve something or finish a lesson and it shows up here.</p><a class="btn mt1" href="#/practice">Go to practice</a></div></section>
+  </div>`;
+}
+
+function plans() {
+  const y = state.billing === 'yearly';
+  const price = (n) => (y ? Math.round(n * 0.8) : n);
+  const note = y ? 'per month, billed yearly' : 'per month';
+  const P = [
+    { name: 'Free', price: 0, note: 'Forever', cta: 'Current plan', current: true,
+      f: ['Every free challenge and free machine', `All ${PATHS.length} learning paths`, '5 hours of machine time a month', 'Free events and the current season'] },
+    { name: 'Prime', price: price(349), note, cta: 'Upgrade to Prime', featured: true,
+      f: ['Everything in Free', 'Every challenge and every machine', '60 hours of machine time a month, with VPN', 'Personal attack box with tools installed', 'All seasons, exclusive events and official write-ups'] },
+    { name: 'Prime + Labs', price: price(549), note, cta: 'Upgrade to Prime + Labs',
+      f: ['Everything in Prime', 'Every red team lab, new ones every week', 'Your own persistent cloud range for the month', 'Per-lab badges and a completion certificate'] },
+  ];
+  return header('<h1>Plans</h1>') + `
+  <div class="wrap w10 stack">
+    <div class="row wrapf between g3"><p class="t-base p ink7">Start free. Upgrade when you want more practice. Cancel any time.</p>
+      ${seg('billing', [['monthly', 'Monthly'], ['yearly', 'Yearly · save 20%']], state.billing)}</div>
+    <div class="grid3">${P.map((p) => `
+      <div class="card" style="padding:20px;display:flex;flex-direction:column;${p.featured ? 'border-color:var(--line4);box-shadow:var(--shadow)' : ''}">
+        <div class="row between"><h2 class="t-xl semi ink9">${p.name}</h2>${p.featured ? badge('Most popular') : ''}</div>
+        <p class="mt3"><span class="semi ink9" style="font-size:24px">${p.price ? inr.format(p.price) : 'Free'}</span> <span class="t-sm ink5">${p.note}</span></p>
+        <ul class="feat flex1 mt5">${p.f.map((x) => `<li>${ic('check')}<span>${x}</span></li>`).join('')}</ul>
+        <button class="btn ${p.featured ? 'solid' : ''} full mt5" style="height:32px" ${p.current ? 'disabled' : `data-toast="Checkout opens here (demo)"`}>${p.cta}</button>
+      </div>`).join('')}</div>
+    <div class="row wrapf g2">
+      <input class="input" id="coupon" placeholder="Coupon code" aria-label="Coupon code" style="width:224px">
+      <button class="btn" data-act="coupon">Apply</button>
+      <p class="t-xs ink5 ml-auto">Payments through Razorpay. Prices include GST.</p>
+    </div>
+  </div>`;
+}
+
+function about() {
+  const items = [
+    ['Four sections instead of nine menu entries.', 'Home, Learn, Practice and Compete. Profile, plans, ambassador and sign-out move to the account menu.'],
+    ['One name for each concept.', 'Learning is Path, Unit and Lesson. Practice is Challenge, Machine, Lab and Scenario. Story content is Season and Chapter. The only score is XP.'],
+    ['Home shows one next step.', 'A single Continue card is at the top. Today’s challenge and the weekly goal sit in one row. The season is a slim strip, not a full banner.'],
+    ['One practice catalog.', 'Challenges, machines, labs and SOC scenarios share one page with tabs, one filter row and one table. A lock icon marks paid items.'],
+    ['Locked content says why, once.', 'A locked item shows the plan that includes it and one button. Lab descriptions are player-facing, not author notes.'],
+    ['Events stay inside the app.', 'Events are a tab under Compete. There is no second sign-in on another domain.'],
+    ['Three honest plans.', 'Free, Prime and Prime + Labs are shown side by side. The labs tier is a plan, not an add-on.'],
+    ['Calm visual system.', 'Gray first, one accent for the brand mark, readable 12–14 px text, light and dark themes, and a mobile bottom bar with the same four sections.'],
+  ];
+  return header('<h1>About this concept</h1>') + `
+  <div class="wrap" style="max-width:770px">
+    <p class="t-base p ink7">This page is a clickable concept for a simpler CSEMA. It uses demo data. Usernames, numbers and events are examples, not live records.</p>
+    <h2 class="t-lg semi ink8 mt8">What changed and why</h2>
+    <ul class="about mt3">${items.map(([a, b]) => `<li>${ic('check', 'ink5')}<span><b>${a}</b> ${b}</span></li>`).join('')}</ul>
+    <h2 class="t-lg semi ink8 mt8">Try these flows</h2>
+    <ul class="about mt3">
+      <li>${ic('arrow-right', 'ink5')}<span><a class="ink9" style="text-decoration:underline" href="#/">Home</a>: continue the current lesson, then use the arrow keys in the player.</span></li>
+      <li>${ic('arrow-right', 'ink5')}<span><a class="ink9" style="text-decoration:underline" href="#/practice?type=machine">Practice → Machines</a>: start a machine and submit <code>CSEMA{demo}</code> as a flag.</span></li>
+      <li>${ic('arrow-right', 'ink5')}<span>Press <span class="kbd">/</span> to search lessons and practice items together.</span></li>
+    </ul>
+  </div>`;
+}
+
+/* ---------- Overlays: search, account menu, join-team prompt ---------- */
+function closeLayer() { $('#layer').innerHTML = ''; }
+function openSearch() {
+  $('#layer').innerHTML = `<div class="overlay" data-close><div class="dialog" role="dialog" aria-modal="true" aria-label="Search">
+    <label class="inputwrap" style="display:block;padding:8px">${ic('search')}<input class="input" id="sq" placeholder="Search lessons, challenges, machines, labs" aria-label="Search" style="height:36px;font-size:14px;background:transparent;padding-left:32px" autocomplete="off"></label>
+    <div id="sres" style="max-height:60vh;overflow-y:auto;border-top:1px solid var(--line1);padding:8px"></div></div></div>`;
+  $('#layer .inputwrap .i').style.cssText = 'left:16px;top:18px';
+  const draw = () => {
+    const q = $('#sq').value.trim().toLowerCase();
+    if (!q) { $('#sres').innerHTML = `<p class="t-sm ink5 center" style="padding:24px 8px">Try “sql”, “forensics” or “osi”.</p>`; return; }
+    const hit = (s) => s.toLowerCase().includes(q);
+    const learnRows = [...PATHS.filter((p) => hit(p.title)).map((p) => [p.title, 'Path · ' + p.track, p.icon, `#/learn/${p.id}`]),
+      ...FLAT.filter((l) => hit(l.title)).map((l) => [l.title, 'Lesson · Networking deep dive, part 1', 'book-open', `#/learn/networking-1/${l.id}`])].slice(0, 5);
+    const pr = ITEMS.filter((i) => hit(i.title) || hit(i.category)).slice(0, 6)
+      .map((i) => [i.title, `${TYPE[i.type].label} · ${i.category} · ${i.difficulty}`, TYPE[i.type].icon, `#/practice/${i.id}`]);
+    const groups = [['Learn', learnRows], ['Practice', pr]].filter(([, r]) => r.length);
+    $('#sres').innerHTML = groups.length ? groups.map(([g, rows]) => `<p class="t-xs ink5" style="padding:6px 8px">${g}</p>${rows.map(([t, m, i, h]) =>
+      `<a class="res" href="${h}">${ic(i, 'ink5')}<span class="min0 flex1"><span class="t-base ink8 trunc" style="display:block">${esc(t)}</span><span class="t-xs ink5 trunc" style="display:block">${esc(m)}</span></span></a>`).join('')}`).join('')
+      : `<p class="t-sm ink5 center" style="padding:24px 8px">No results for “${esc(q)}”.</p>`;
+  };
+  $('#sq').oninput = draw;
+  $('#sq').onkeydown = (e) => { if (e.key === 'Enter') { const a = $('#sres a'); if (a) go(a.getAttribute('href')); } };
+  draw();
+  $('#sq').focus();
+}
+function openAccount(anchor) {
+  const r = anchor.getBoundingClientRect();
+  const below = r.top < window.innerHeight / 2;
+  const items = [['Profile', 'user', '#/profile'], ['Plans and billing', 'credit-card', '#/plans'], ['About this concept', 'info', '#/about'],
+    ['Become an ambassador', 'megaphone', null, 'The ambassador form opens here'], ['Sign out', 'log-out', null, 'Signed out (demo)']];
+  $('#layer').innerHTML = `<div style="position:fixed;inset:0;z-index:29" data-close></div>
+    <div class="menu" role="menu" style="${below ? `top:${r.bottom + 6}px;right:${Math.max(8, window.innerWidth - r.right)}px` : `bottom:${window.innerHeight - r.top + 6}px;left:${r.left}px`}">
+    ${items.map(([l, i, h, t]) => `<button role="menuitem" ${h ? `data-href="${h}"` : `data-toast="${t}"`}>${ic(i, 'ink6')}${l}</button>`).join('')}</div>`;
+  $('#layer .menu button').focus();
+}
+function joinTeam() {
+  $('#layer').innerHTML = `<div class="overlay" data-close><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="jt" style="max-width:420px;padding:20px">
+    <h2 id="jt" class="t-xl semi ink9">Join a team</h2><p class="t-sm p ink6 mt1">Paste the invite code a teammate shared with you.</p>
+    <label class="label mt4" for="code">Invite code</label><input class="input" id="code" placeholder="HEX-4821">
+    <div class="row g2 mt5" style="justify-content:flex-end"><button class="btn" data-act="close">Cancel</button><button class="btn solid" data-act="join-confirm">Send request</button></div>
+  </div></div>`;
+  $('#code').focus();
+}
+
+/* ---------- Events ---------- */
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-act],[data-seg],[data-toast],[data-href],[data-close]');
+  if (!t) return;
+  if (t.dataset.close !== undefined && e.target !== t) return;
+  if (t.dataset.close !== undefined) return closeLayer();
+  if (t.dataset.href) { closeLayer(); return go(t.dataset.href); }
+  if (t.dataset.toast) { closeLayer(); return toast(t.dataset.toast, t.dataset.iconToast || 'info'); }
+  if (t.dataset.seg) {
+    const v = t.dataset.val, n = t.dataset.seg;
+    if (n === 'type') { setQuery('type', v); state.filters.category = ''; }
+    if (n === 'tab') setQuery('tab', v);
+    if (n === 'track') state.track = v;
+    if (n === 'scope') state.scope = v;
+    if (n === 'billing') state.billing = v;
+    return render();
+  }
+  const a = t.dataset.act;
+  if (a === 'search') openSearch();
+  else if (a === 'account') openAccount(t);
+  else if (a === 'close') closeLayer();
+  else if (a === 'prev') lessonStep(-1);
+  else if (a === 'next') lessonStep(1);
+  else if (a === 'toggle-upcoming') { state.upcomingOpen = !state.upcomingOpen; render(); }
+  else if (a === 'toggle-chapter') { state.seasonOpen = state.seasonOpen === 0 ? -1 : 0; render(); }
+  else if (a === 'clear-filters') { state.filters = { q: '', category: '', difficulty: '', free: false }; render(); }
+  else if (a === 'copy-link') { navigator.clipboard?.writeText(location.href).catch(() => {}); toast('Link copied'); }
+  else if (a === 'start-machine') {
+    const id = t.dataset.id;
+    state.machine[id] = 'starting'; render();
+    setTimeout(() => { state.machine[id] = 'running'; machineEnds[id] = Date.now() + 3600e3; if (parse().parts[1] === id) render(); }, 1600);
+  } else if (a === 'stop-machine') { state.machine[t.dataset.id] = 'off'; render(); toast('Machine stopped', 'info'); }
+  else if (a === 'submit-flag') {
+    const { id, k, xp } = t.dataset;
+    const v = $('#flag-' + k).value.trim();
+    if (!/^CSEMA\{.+\}$/.test(v)) return toast('Flags look like CSEMA{...}', 'info');
+    if (v !== 'CSEMA{demo}') return toast('Not quite. Check spelling and case.', 'info');
+    state.solved[id + k] = true; render(); toast(`Correct · +${xp} XP`);
+  } else if (a === 'join-team') joinTeam();
+  else if (a === 'join-confirm') { closeLayer(); toast('Request sent to the team captain'); }
+  else if (a === 'coupon') toast($('#coupon').value ? 'That code is not valid' : 'Enter a code first', 'info');
+});
+
+document.addEventListener('keydown', (e) => {
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName);
+  if (e.key === 'Escape' && $('#layer').innerHTML) { closeLayer(); return; }
+  if (typing) return;
+  if (e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); openSearch(); return; }
+  if ($('#layer').innerHTML) return;
+  if (e.key === 'ArrowRight') lessonStep(1);
+  if (e.key === 'ArrowLeft') lessonStep(-1);
+});
+
+function hydrateIcons() {
+  document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = ic(el.dataset.icon); el.removeAttribute('data-icon'); });
+}
+
+$('#me-av').outerHTML = av(USER.name);
+$('#me-av-m').outerHTML = av(USER.name);
+$('#me-name').textContent = USER.name;
+$('#me-meta').textContent = `Level ${USER.level} · ${USER.xp} XP`;
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
