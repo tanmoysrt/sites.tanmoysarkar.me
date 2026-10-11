@@ -76,6 +76,7 @@ code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; 
 .num { font-variant-numeric: tabular-nums; }
 .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .min0 { min-width: 0; } .flex1 { flex: 1; } .shrink0 { flex-shrink: 0; }
 .row { display: flex; align-items: center; } .row-s { display: flex; align-items: flex-start; }
 .wrapf { flex-wrap: wrap; } .between { justify-content: space-between; }
@@ -149,6 +150,13 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
 .cards.sm { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .cards.fit { grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); }
 .cards.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 720px) { .cards.two { grid-template-columns: 1fr; } }
+.ti { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
+.ti-sm { width: 32px; height: 32px; border-radius: 8px; }
+.ti-brand { background: var(--brand-soft2); color: var(--brand); } .ti-blue { background: var(--blue-bg); color: var(--blue-ink); }
+.ti-violet { background: var(--violet-bg); color: var(--violet-ink); } .ti-green { background: var(--green-bg); color: var(--green-ink); }
+.ti-orange { background: var(--orange-bg); color: var(--orange-ink); } .ti-amber { background: var(--amber-bg); color: var(--amber-ink); } .ti-gray { background: var(--s3); color: var(--ink7); }
 .cards.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .cards.four { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
 @media (max-width: 900px) { .cards.five { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } }
@@ -172,7 +180,7 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, color-mix(in srgb, var(--tint) 45%, var(--s1)); } }
 :root[data-theme="dark"] .cover[class*="c-"] { background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, color-mix(in srgb, var(--tint) 45%, var(--s1)); }
 .card-body { padding: 18px 20px 20px; display: flex; flex-direction: column; flex: 1; }
-.card-foot { margin-top: auto; padding-top: 18px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card-foot { margin-top: auto; padding-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tile { width: 40px; height: 40px; border-radius: 10px; background: var(--s2); display: grid; place-items: center; color: var(--ink6); flex-shrink: 0; }
 .tile.brand { background: var(--brand-soft2); color: var(--brand); }
 
@@ -268,6 +276,29 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 .outline a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
 .outline a:hover { background: var(--s2); } .outline a.on { background: var(--brand-soft); color: var(--ink9); font-weight: 500; }
 .redact span { display: block; height: 10px; border-radius: 3px; background: var(--s4); }
+/* Challenge page: numbered tasks */
+.dhead h2 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink9); }
+.dhead .desc { margin-top: 6px; max-width: 640px; font-size: 14px; line-height: 1.55; color: var(--ink6); }
+.dmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-top: 16px; font-size: 13px; color: var(--ink6); }
+.dmeta > span { display: inline-flex; align-items: center; gap: 6px; }
+.dmeta .i { color: var(--ink5); }
+.tasks { display: flex; flex-direction: column; }
+.task { position: relative; display: flex; gap: 16px; padding-bottom: 28px; }
+.task:last-child { padding-bottom: 0; }
+.task::before { content: ""; position: absolute; left: 13px; top: 34px; bottom: 6px; width: 1px; background: var(--line3); }
+.task:last-child::before { display: none; }
+.task-n { width: 28px; height: 28px; border-radius: 99px; display: grid; place-items: center; font-size: 13px; font-weight: 600; background: var(--s3); color: var(--ink6); flex-shrink: 0; }
+.task.current .task-n { background: var(--brand); color: #fff; }
+.task.done .task-n { background: var(--green-bg); color: var(--green-ink); }
+.task-body { flex: 1; min-width: 0; padding-top: 4px; }
+.task-body > .t-base { font-weight: 600; color: var(--ink9); }
+.task.todo .task-body > .t-base { color: var(--ink6); }
+.inset { background: var(--s1); border: 1px solid var(--line1); border-radius: 10px; padding: 12px 14px; }
+.hint { display: flex; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--ink7); }
+.divider { border: 0; border-top: 1px solid var(--line1); margin: 0; }
+.ch-head { display: flex; align-items: flex-start; gap: 16px; }
+.ch-head .emblem { width: 56px; height: 56px; flex-shrink: 0; }
+.avs { display: flex; } .avs .av { box-shadow: 0 0 0 2px var(--card); } .avs .av + .av { margin-left: -6px; }
 .calbox { width: 52px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand-ink); }
 .empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 16px; text-align: center; }
 .empty .circ { width: 48px; height: 48px; border-radius: 99px; background: var(--s2); display: grid; place-items: center; color: var(--ink5); margin-bottom: 4px; }
@@ -334,7 +365,7 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
     <nav class="nav" id="sidenav"></nav>
     <div class="side-foot">
       <div class="primebox">
-        <p class="row g2 t-sm semi ink9"><span data-icon="crown" class="brand"></span>Go Prime</p>
+        <p class="t-sm semi ink9">Go Prime</p>
         <p class="t-xs p ink6 mt1">All challenges and seasons.</p>
         <a class="btn soft full mt3" href="#/plans">See plans</a>
       </div>
@@ -426,6 +457,7 @@ const ICONS = {
   folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   'life-buoy': '<circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/>',
   activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  signal: '<path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/>',
   'help-circle': '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
 };
 const ic = (n, cls = '') =>
@@ -552,6 +584,15 @@ const CATEGORY = {
   Forensics: ['search', 'blue'], 'Reverse engineering': ['cpu', 'violet'], Android: ['smartphone', 'green'], Web: ['globe', 'orange'],
   OSINT: ['eye', 'amber'], Boot2Root: ['server', 'blue'], 'Data stores': ['database', 'blue'], 'API security': ['plug', 'violet'], 'Incident response': ['siren', 'brand'],
 };
+const HINTS = {
+  Forensics: ['Deleted files often stay on the disk until new data replaces them.', 'Use a file carving tool on the raw image.'],
+  'Reverse engineering': ['Look at the strings in the binary first.', 'Find the function that checks your input.'],
+  Android: ['Decompile the APK and read the manifest.', 'Find the check, then patch it or hook it.'],
+  Web: ['Read the public advisory for this CVE.', 'Find the request that reaches the weak code.'],
+  OSINT: ['Look at the metadata of the photo.', 'Search for the landmarks you can see.'],
+  Boot2Root: ['Scan all ports, not only the common ones.', 'Look for files that the developers left behind.'],
+};
+const FIRST = { 'disk-of-secrets': 'quietroot', 'devops-leftovers': 'byteknight' };
 const DIFF = { Easy: 'green', Medium: 'amber', Hard: 'orange', Expert: 'violet' };
 const ACCESS = { free: 'Free', prime: 'Prime', labs: 'Prime + Labs' };
 const canOpen = (a) => a === 'free';
@@ -607,36 +648,32 @@ function toast(msg, icon = 'check') {
 /* One card for every practice item: cover with category emblem, then title, summary and stats */
 function itemCard(i) {
   const [catIcon, tint] = CATEGORY[i.category] || [TYPE[i.type].icon, 'gray'];
-  const icon = i.icon || catIcon;
   const locked = !canOpen(i.access);
-  const corner = locked ? badge(`${ic('lock', 'i-sm')}${ACCESS[i.access]}`, '', 'outline')
-    : i.status === 'started' ? badge('In progress', 'brand') : i.status === 'solved' ? badge(`${ic('check', 'i-sm')}Solved`, 'green') : '';
-  return `<a class="card" href="#/practice/${i.id}">
-    <div class="cover c-${tint}"><div class="emblem tint-${tint}">${ic(icon)}</div>${corner ? `<div class="corner">${corner}</div>` : ''}</div>
-    <div class="card-body">
-      <p class="t-xs ink5">${i.category}</p>
-      <h3 class="t-base semi ink9 mt1 trunc">${i.title}</h3>
-      <p class="t-sm p ink6 mt1 clamp2">${i.summary}</p>
-      <div class="card-foot">${diff(i.difficulty)}<span class="row g1 t-xs ink5">${ic('zap', 'i-sm')}${i.xp} XP</span></div>
+  const tag = locked ? badge(`${ic('lock', 'i-sm')}${ACCESS[i.access]}`, '', 'outline')
+    : i.status === 'started' ? badge('In progress', 'brand') : i.status === 'solved' ? badge('Solved', 'green') : '';
+  return `<a class="card pad" href="#/practice/${i.id}" style="gap:16px">
+    <div class="row g3">
+      <div class="ti ti-${tint}">${ic(i.icon || catIcon)}</div>
+      <div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${i.title}</h3><p class="t-sm ink5 mt1 trunc">${i.category}</p></div>
     </div>
+    <div class="row between" style="margin-top:auto">${diff(i.difficulty)}${tag || `<span class="t-sm ink5">${i.xp} XP</span>`}</div>
   </a>`;
 }
-function pathCard(p, step) {
+function pathCard(p) {
   const tint = TRACK_META[p.track][1];
-  return `<a class="card" href="#/learn/${p.id}">
-    <div class="cover c-${tint}"><div class="emblem tint-${tint}">${ic(p.icon)}</div>
-      <div class="corner">${p.done ? badge('In progress', 'brand') : ''}</div>${step ? `<div class="corner-l">${badge('Step ' + step, '', 'outline')}</div>` : ''}</div>
-    <div class="card-body">
-      <p class="t-xs ink5">${p.lessons} lessons · ${p.hours} h</p>
-      <h3 class="t-base semi ink9 mt1">${p.title}</h3>
-      <p class="t-sm p ink6 mt1 clamp2">${p.description}</p>
-      ${p.done ? `<div class="card-foot" style="display:block">${prog(p.done / p.lessons * 100, true)}<p class="t-xs ink5 mt2">${p.done} of ${p.lessons} lessons done</p></div>` : ''}
+  const pct = p.done / p.lessons * 100;
+  return `<a class="card pad" href="#/learn/${p.id}" style="gap:16px">
+    <div class="row g3">
+      <div class="ti ti-${tint}">${ic(p.icon)}</div>
+      <div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${p.title}</h3><p class="t-sm ink5 mt1">${p.lessons} lessons · ${p.hours} h</p></div>
+      ${p.done ? `<span class="t-sm med brand">${Math.max(1, Math.round(pct))}%</span>` : ''}
     </div>
+    ${prog(pct, true)}
   </a>`;
 }
 
 /* ---------- Router ---------- */
-const state = { slide: 0, practiceLoaded: false, seasonOpen: true, machine: {}, solved: {}, answered: false, billing: 'monthly', scope: 'global',
+const state = { slide: 0, practiceLoaded: false, seasonOpen: true, machine: {}, solved: {}, got: {}, hints: {}, answered: false, billing: 'monthly', scope: 'global',
   filters: { q: '', category: '', difficulty: '', free: false }, upcomingOpen: false, track: 'All' };
 let timer = null;
 const machineEnds = {};
@@ -696,7 +733,6 @@ function seasonBanner() {
   const total = SEASON.chapters.reduce((n, c) => n + c.challenges.length, 0);
   const d = daysUntil(SEASON.endsOn);
   return `<div class="card banner row wrapf g4" style="padding:14px 16px">
-    <div class="tile brand">${ic('radio', 'i-lg')}</div>
     <div class="min0 flex1">
       <div class="row g2"><p class="t-base semi ink9">Season ${SEASON.number}: ${SEASON.title}</p>${badge('Live', 'solid')}</div>
       <p class="t-sm ink6 mt1">${total} challenges · ${d > 0 ? `ends in ${d} days` : 'ended'}</p>
@@ -721,17 +757,16 @@ function home() {
   return page(`<h1>${greet}, ${USER.name}</h1>`, `
     <section class="card hero home-hero">
       <div class="hh-main">
-        <p class="row g2 t-sm"><span class="semi brand">Continue learning</span><span class="ink4">·</span><span class="ink5 trunc">${path.title}</span></p>
-        <h2 class="t-4xl semi ink9 mt3">${cur.title}</h2>
+        <h2 class="t-4xl semi ink9">${cur.title}</h2>
+        <p class="t-sm ink5 mt1">${path.title}</p>
         <p class="t-base p ink7 mt2" style="max-width:520px">${cur.description}</p>
         <div class="row wrapf g4" style="margin-top:auto;padding-top:24px">
-          <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">${ic('play', 'i-sm')}Continue lesson</a>
-          <span class="row g3 t-sm ink5"><span class="row g1">${ic('clock', 'i-sm')}${cur.minutes} min</span><span class="row g1">${ic('zap', 'i-sm')}${cur.xp} XP</span></span>
+          <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">Continue lesson</a>
+          <span class="t-sm ink5">${cur.minutes} min · ${cur.xp} XP</span>
         </div>
       </div>
       <aside class="hh-side" aria-label="Lessons in this unit">
-        <p class="t-xs ink5">Unit ${cur.unitIndex + 1} of 12</p>
-        <p class="t-base semi ink9">${unit.title}</p>
+        <p class="t-base semi ink9">Unit ${cur.unitIndex + 1}: ${unit.title}</p>
         <div class="steps">${unit.lessons.map((l) => {
           const here = l.id === cur.id;
           return `<a class="${here ? 'on' : ''}" href="#/learn/${path.id}/${l.id}" ${here ? 'aria-current="step"' : ''}>${lessonIcon(l.status, here)}<span class="min0 flex1 trunc">${l.title}</span><span class="t-xs ink5">${l.minutes}m</span></a>`;
@@ -741,17 +776,14 @@ function home() {
     </section>
 
     <div class="grid2">
-      <section class="card daily">
-        <div class="cover c-${dTint}"><div class="emblem tint-${dTint}">${ic(dIcon)}</div></div>
-        <div class="card-body">
-          <div class="row between"><h3 class="t-lg semi ink9">Today’s challenge</h3><span class="t-xs ink5">New in ${24 - h} h</span></div>
-          <p class="t-base semi ink9 mt3">${daily.title}</p>
-          <p class="t-sm p ink6 mt1 clamp2">${daily.summary}</p>
-          <div class="card-foot">
-            <span class="row g2">${diff(daily.difficulty)}<span class="t-xs ink5">${daily.xp} XP</span></span>
-            <a class="btn outline md" href="#/practice/${daily.id}">${ic('play', 'i-sm')}Start machine</a>
-          </div>
+      <section class="card pad" style="display:flex;flex-direction:column">
+        <div class="row between"><h3 class="t-lg semi ink9">Today’s challenge</h3><span class="t-xs ink5">New in ${24 - h} h</span></div>
+        <div class="row g3 mt4">
+          <div class="ti ti-${dTint}">${ic(dIcon)}</div>
+          <div class="min0 flex1"><p class="t-base semi ink9 trunc">${daily.title}</p><p class="t-sm ink5 mt1">Machine · ${daily.xp} XP</p></div>
+          ${diff(daily.difficulty)}
         </div>
+        <div style="margin-top:auto;padding-top:20px"><a class="btn outline md full" href="#/practice/${daily.id}">Start machine</a></div>
       </section>
       <section class="card pad" style="display:flex;flex-direction:column">
         <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="t-xs ink5">Resets Monday</span></div>
@@ -774,9 +806,9 @@ function learn() {
   return page(`<h1>Learn</h1><span class="t-sm ink5 hide-sm ml-auto">${PATHS.length} paths · ${total} lessons</span>`, `
     <div>${seg('track', [['All', 'All tracks'], ...TRACKS.map((x) => [x, x, PATHS.filter((p) => p.track === x).length])], t)}</div>
     ${t === 'All'
-      ? sec('Core path', TRACK_META.Core[0], '', `<div class="cards four">${PATHS.filter((p) => p.track === 'Core').map((p, i) => pathCard(p, i + 1)).join('')}</div>`)
-        + sec('Specialist tracks', 'Do one of these after the core path.', '', `<div class="cards four">${PATHS.filter((p) => p.track !== 'Core').map((p) => pathCard(p, 0)).join('')}</div>`)
-      : sec(t, TRACK_META[t][0], '', `<div class="cards">${PATHS.filter((p) => p.track === t).map((p, i) => pathCard(p, t === 'Core' ? i + 1 : 0)).join('')}</div>`)}
+      ? sec('Core path', 'Start here. Do these four in order.', '', `<div class="cards two">${PATHS.filter((p) => p.track === 'Core').map((p) => pathCard(p)).join('')}</div>`)
+        + sec('Specialist tracks', 'Do one of these after the core path.', '', `<div class="cards two">${PATHS.filter((p) => p.track !== 'Core').map((p) => pathCard(p)).join('')}</div>`)
+      : sec(t, TRACK_META[t][0], '', `<div class="cards two">${PATHS.filter((p) => p.track === t).map((p) => pathCard(p)).join('')}</div>`)}
     ${upcoming.length ? sec('Coming soon', `${upcoming.length} more paths. Each one opens when it is ready.`,
       `<button class="btn ghost" data-act="toggle-upcoming" aria-expanded="${state.upcomingOpen}">${state.upcomingOpen ? 'Hide' : 'Show all'} ${ic(state.upcomingOpen ? 'chevron-up' : 'chevron-down', 'i-sm')}</button>`,
       state.upcomingOpen ? `<div class="cards sm">${upcoming.map((u) => `<div class="card pad row g3" style="border-style:dashed;box-shadow:none"><div class="tile" style="width:32px;height:32px">${ic('calendar', 'i-sm')}</div><div class="min0"><p class="t-sm med ink8 trunc">${u.title}</p><p class="t-xs ink5">${u.track}</p></div></div>`).join('')}</div>` : '') : ''}
@@ -788,29 +820,26 @@ const lessonIcon = (s, here) => here ? ic('circle-play', 'brand') : s === 'done'
 function pathDetail(id) {
   const p = PATHS.find((x) => x.id === id) || PATHS[1];
   const cur = FLAT.find((l) => l.status === 'current');
-  return page(crumbs([['Learn', '#/learn'], [p.title]]), `
-    <section class="card hero pad-lg">
-      <div class="row-s wrapf g4">
-        <div class="tile brand" style="width:52px;height:52px">${ic(p.icon, 'i-xl')}</div>
-        <div class="min0 flex1">
-          <div class="row wrapf g2">${badge(p.track, '', 'outline')}${badge('Beginner', 'green')}<span class="t-sm ink5">${p.lessons} lessons · about ${p.hours} hours</span></div>
-          <h2 class="t-4xl semi ink9 mt2">${p.title}</h2>
-          <p class="t-base p ink7 mt1" style="max-width:640px">${p.description}</p>
-        </div>
-        <a class="btn solid lg" href="#/learn/${p.id}/${cur.id}">${ic('play', 'i-sm')}${p.done ? 'Continue' : 'Start path'}</a>
+  const pct = Math.max(1, Math.round(p.done / p.lessons * 100));
+  const action = `<a class="btn solid md ml-auto" href="#/learn/${p.id}/${cur.id}">${p.done ? 'Continue' : 'Start path'}</a>`;
+  return page(crumbs([['Learn', '#/learn'], [p.title]]) + action, `
+    <section class="dhead">
+      <h2>${p.title}</h2>
+      <p class="desc">${p.description}</p>
+      <div class="dmeta">
+        <span>${p.lessons} lessons</span>
+        <span>${p.hours} hours</span>
+        <span>Beginner</span>
+        ${p.done ? `<span><span style="width:96px">${prog(pct, true)}</span>${pct}% done</span>` : ''}
       </div>
-      <div class="mt5">${prog(p.done / p.lessons * 100)}<p class="t-xs ink5 mt2">${p.done} of ${p.lessons} lessons done</p></div>
     </section>
-    ${UNITS.map((u, ui) => sec(`Unit ${ui + 1}: ${u.title}`, `${u.lessons.filter((l) => l.status === 'done').length} of ${u.lessons.length} lessons done`, '', `
+    ${UNITS.map((u, ui) => sec(`Unit ${ui + 1}: ${u.title}`, '', `<span class="t-sm ink5 num">${u.lessons.filter((l) => l.status === 'done').length} / ${u.lessons.length}</span>`, `
       <div class="card rows">${u.lessons.map((l) => {
-        const n = FLAT.find((f) => f.id === l.id).n;
-        return `<a class="li ${l.status === 'current' ? 'cur' : ''}" href="#/learn/${p.id}/${l.id}">
-          ${lessonIcon(l.status, l.status === 'current')}
-          <span class="min0 flex1">
-            <span class="row g2"><span class="t-base med trunc ${l.status === 'done' ? 'ink6' : 'ink9'}">${n}. ${l.title}</span>${l.status === 'current' ? badge('Up next', 'brand') : ''}</span>
-            <span class="t-sm ink5 trunc" style="display:block">${l.description}</span>
-          </span>
-          <span class="t-sm ink5 right hide-sm" style="width:56px">${l.minutes} min</span>
+        const here = l.status === 'current';
+        return `<a class="li ${here ? 'cur' : ''}" href="#/learn/${p.id}/${l.id}" style="padding:13px 20px" ${here ? 'aria-current="step"' : ''}>
+          ${lessonIcon(l.status, here)}
+          <span class="min0 flex1 t-base trunc ${l.status === 'done' ? 'ink6' : 'ink9'} ${here ? 'med' : ''}">${l.title}</span>
+          <span class="t-sm ink5">${l.minutes} min</span>
         </a>`; }).join('')}</div>`)).join('')}
     <p class="t-sm ink5 center">This demo shows 4 of 12 units.</p>
   `, 'narrow');
@@ -828,7 +857,7 @@ function lesson(pid, lid) {
   return page(crumbs([['Learn', '#/learn'], [p.title, `#/learn/${p.id}`], [l.title]]) + `<span class="t-sm ink5 hide-sm ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span>`, `
     <div class="lesson-grid">
       <div class="min0" style="display:flex;flex-direction:column;gap:16px">
-        <div><h2 class="t-4xl semi ink9">${l.title}</h2><p class="row g3 t-sm ink5 mt1"><span class="row g1">${ic('clock', 'i-sm')}${l.minutes} min</span><span class="row g1">${ic('zap', 'i-sm')}${l.xp} XP</span></p></div>
+        <div><h2 class="t-4xl semi ink9">${l.title}</h2><p class="t-sm ink5 mt1">${l.minutes} min · ${l.xp} XP</p></div>
         <div class="card">
           <div class="slide" aria-live="polite">
             <p class="t-sm brand semi">Slide ${s + 1} of ${SLIDES.length}</p>
@@ -838,7 +867,7 @@ function lesson(pid, lid) {
           <div class="row g3" style="padding:12px 16px;border-top:1px solid var(--line1)">
             <button class="btn icon md" style="width:32px" data-act="prev" aria-label="Previous slide" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
             <div class="flex1">${prog((s + 1) / SLIDES.length * 100, true)}</div>
-            <button class="btn md ${last ? 'solid' : 'outline'}" data-act="next">${last ? 'Complete lesson' : 'Next'} ${ic('arrow-right', 'i-sm')}</button>
+            <button class="btn md ${last ? 'solid' : 'outline'}" data-act="next">${last ? 'Complete lesson' : 'Next'}</button>
           </div>
         </div>
         <p class="t-xs ink5 center">Use the <span class="kbd">←</span> and <span class="kbd">→</span> keys to change slides.</p>
@@ -850,7 +879,7 @@ function lesson(pid, lid) {
         </div>` : ''}
       </div>
       <aside class="card pad outline" style="align-self:start" aria-label="Lessons in this unit">
-        <p class="t-xs ink5">Unit ${l.unitIndex + 1}</p><p class="t-base semi ink9">${unit.title}</p>
+        <p class="t-base semi ink9">Unit ${l.unitIndex + 1}: ${unit.title}</p>
         <div class="mt3" style="display:flex;flex-direction:column;gap:2px">${unit.lessons.map((x) =>
           `<a class="${x.id === lid ? 'on' : ''}" href="#/learn/${p.id}/${x.id}">${lessonIcon(x.status === 'current' ? 'todo' : x.status, x.id === lid)}<span class="min0 flex1 trunc">${x.title}</span><span class="t-xs ink5">${x.minutes}m</span></a>`).join('')}</div>
       </aside>
@@ -877,8 +906,8 @@ function practice(type) {
     ${seasonBanner()}
     <div style="display:flex;flex-direction:column;gap:14px">
       <div>${seg('type', types.map((t) => [t, TYPE[t].plural, ITEMS.filter((i) => i.type === t).length]), type)}</div>
-      <p class="row g2 t-sm ink6">${ic(TYPE[type].icon, 'ink5')}${TYPE[type].blurb}</p>
-      ${type === 'lab' ? `<div class="card banner row wrapf g3" style="padding:12px 16px">${ic('lock', 'brand')}<p class="t-sm p ink7 min0 flex1">Labs need the <b>Prime + Labs</b> plan. You can look at all labs now.</p><a class="btn outline md" href="#/plans">See plans</a></div>` : ''}
+      <p class="t-sm ink6">${TYPE[type].blurb}</p>
+      ${type === 'lab' ? `<div class="card banner row wrapf g3" style="padding:12px 16px"><p class="t-sm p ink7 min0 flex1">Labs need the <b>Prime + Labs</b> plan. You can look at all labs now.</p><a class="btn outline md" href="#/plans">See plans</a></div>` : ''}
       <div class="row wrapf g2">
         <label class="inputwrap" style="width:260px;max-width:100%">${ic('search')}<input class="input" id="f-q" type="search" placeholder="Search by name or topic" aria-label="Search" value="${esc(f.q)}"></label>
         <select class="input" id="f-cat" aria-label="Category" style="width:180px"><option value="">All categories</option>${cats.map((c) => `<option ${c === f.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
@@ -905,7 +934,7 @@ function mountPractice() {
       return;
     }
     $('#plist').innerHTML = rows.length
-      ? `<p class="t-sm ink5" style="margin-bottom:12px">${rows.length} ${rows.length === 1 ? TYPE[type].label.toLowerCase() : TYPE[type].plural.toLowerCase()}</p><div class="cards">${rows.map(itemCard).join('')}</div>`
+      ? `<div class="cards">${rows.map(itemCard).join('')}</div>`
       : `<div class="card empty"><div class="circ">${ic('search-x', 'i-xl')}</div><p class="t-base ink8">No items match the filters</p><p class="t-sm ink5">Clear the filters to see all items.</p><button class="btn outline md mt2" data-act="clear-filters">Clear filters</button></div>`;
     hydrateIcons();
   };
@@ -923,66 +952,99 @@ function practiceItem(id) {
   const [catIcon, tint] = CATEGORY[it.category] || [m.icon, 'gray'];
   const icon = it.icon || catIcon;
   const locked = !canOpen(it.access);
-  const flags = it.type === 'machine'
-    ? [['user', 'User flag', 'In /home/<user>/user.txt after you get a shell.', Math.round(it.xp * 0.4)],
-       ['root', 'Root flag', 'In /root/root.txt after you get root.', Math.round(it.xp * 0.6)]]
-    : [['flag', 'Flag', 'Format: CSEMA{...}. We record each attempt.', it.xp]];
   const ms = state.machine[id] || 'off';
-  let body = '';
-  if (locked) {
-    body = `<div class="card pad-lg">
-      <div class="row-s g3"><div class="tile brand">${ic('lock')}</div><div class="min0 flex1">
-        <p class="t-lg semi ink9">Included in ${ACCESS[it.access]}</p>
-        <p class="t-sm p ink6 mt1">Your plan is Free. Upgrade to open this ${m.label.toLowerCase()}.</p></div></div>
-      <div class="redact mt4" aria-hidden="true" style="display:flex;flex-direction:column;gap:8px"><span style="width:70%"></span><span style="width:52%"></span><span style="width:80%"></span></div>
-      <div class="row wrapf g2 mt5"><a class="btn solid md" href="#/plans">${ic('crown', 'i-sm')}Upgrade</a><a class="btn ghost md" href="#/practice?type=${it.type}">Show free ${m.plural.toLowerCase()}</a></div>
-    </div>`;
-  } else {
-    if (it.type === 'challenge') body += `<section class="card pad row wrapf g3"><div class="tile">${ic('file')}</div>
-      <div class="min0 flex1"><p class="t-base med ink9">handout.zip</p><p class="t-xs ink5">48 MB · All files for this challenge</p></div>
-      <button class="btn outline md" data-toast="Download started (demo)">${ic('download', 'i-sm')} Download</button></section>`;
-    if (it.type === 'machine') body += `<section class="card pad row wrapf g3">
-      <span class="dot ${ms === 'starting' ? 'amber' : ms === 'running' ? 'green' : ''}"></span>
-      <div class="min0 flex1">
-        <p class="t-base semi ink9">${{ off: 'Machine is off', starting: 'Starting…', running: 'Running' }[ms]}</p>
-        <p class="t-sm ink5">${ms === 'running' ? `Target <code class="ink8">10.10.4.17</code> · <span id="clock" class="num">60:00</span> left · Connect with the terminal or VPN`
-          : `It runs for 60 minutes. You have ${Math.floor(USER.machineMinutesLeft / 60)} h of machine time.`}</p>
-      </div>
-      ${ms === 'off' ? `<button class="btn solid md" data-act="start-machine" data-id="${id}">${ic('play', 'i-sm')} Start machine</button>`
-        : ms === 'starting' ? `<button class="btn md" disabled>Starting…</button>`
-        : `<button class="btn solid md" data-toast="The terminal opens in a new tab">${ic('terminal', 'i-sm')} Open terminal</button><button class="btn ghost md danger" data-act="stop-machine" data-id="${id}">Stop</button>`}
-    </section>`;
-    if (it.type === 'scenario') body += `<section class="card pad"><p class="t-base semi ink9">How you are scored</p>
-      <p class="t-sm p ink6 mt1">We score detection, triage, containment and your report. There are no flags.</p>
-      <button class="btn solid md mt4" data-toast="The SOC workstation opens here">${ic('play', 'i-sm')} Start scenario</button></section>`;
-    if (it.type !== 'scenario') body += `<section class="card pad">
-      <p class="t-lg semi ink9">Submit ${flags.length > 1 ? 'flags' : 'flag'}</p>
-      <div class="mt4" style="display:flex;flex-direction:column;gap:16px">${flags.map(([k, label, hint, xp]) => {
-        const done = state.solved[id + k];
-        return `<div><label class="label" for="flag-${k}">${label} · ${xp} XP</label>
-          <div class="row g2"><input class="input mono" id="flag-${k}" placeholder="CSEMA{...}" autocomplete="off" ${done ? 'disabled value="Solved"' : ''}>
-          <button class="btn md ${done ? 'ok' : it.type === 'machine' ? 'outline' : 'solid'}" data-act="submit-flag" data-id="${id}" data-k="${k}" data-xp="${xp}" ${done ? 'disabled' : ''}>${done ? ic('check', 'i-sm') + ' Solved' : 'Submit'}</button></div>
-          <p class="help">${esc(hint)}</p></div>`; }).join('')}</div>
-      <p class="t-xs ink5 mt4">Demo tip: <code>CSEMA{demo}</code> is accepted.</p>
-    </section>`;
+  const got = !!state.got[id];
+  const hints = HINTS[it.category] || [];
+  const shown = state.hints[id] || 0;
+  const solved = (k) => !!state.solved[id + k];
+
+  const flagForm = (k, label, primary) => solved(k)
+    ? `<p class="row g2 t-sm green mt2">${ic('circle-check')}${label} accepted</p>`
+    : `<div class="row g2 mt3"><label class="sr-only" for="flag-${k}">${label}</label><input class="input mono" id="flag-${k}" placeholder="CSEMA{...}" autocomplete="off" aria-label="${label}">
+        <button class="btn md ${primary ? 'solid' : 'outline'}" data-act="submit-flag" data-id="${id}" data-k="${k}" data-xp="${k === 'user' ? Math.round(it.xp * 0.4) : k === 'root' ? Math.round(it.xp * 0.6) : it.xp}">Submit</button></div>`;
+  const hintBlock = hints.length ? `
+    ${hints.slice(0, shown).map((h, n) => `<div class="inset hint mt3">${ic('help-circle', 'brand')}<span><b class="ink9">Hint ${n + 1}.</b> ${h}</span></div>`).join('')}
+    ${shown < hints.length ? `<button class="btn ghost md mt2" style="padding-left:0" data-act="hint" data-id="${id}">Show hint ${shown + 1} of ${hints.length}</button>` : ''}` : '';
+  const task = (state, n, title, body) =>
+    `<li class="task ${state}"><span class="task-n">${state === 'done' ? ic('check', 'i-sm') : n}</span><div class="task-body"><p class="t-base">${title}</p>${body}</div></li>`;
+
+  let tasks = '';
+  if (it.type === 'challenge') {
+    const s3 = solved('flag') ? 'done' : got ? 'current' : 'todo';
+    tasks = [
+      task(got ? 'done' : 'current', 1, 'Get the files', `
+        <div class="inset row wrapf g3 mt3">
+          <div class="min0 flex1"><p class="t-sm med ink9 mono">handout.zip</p><p class="t-xs ink5">48 MB</p></div>
+          <button class="btn outline md" data-act="get-file" data-id="${id}">Download</button></div>`),
+      task(solved('flag') ? 'done' : got ? 'current' : 'todo', 2, 'Find the flag', hintBlock),
+      task(s3 === 'done' ? 'done' : 'todo', 3, 'Submit the flag', flagForm('flag', 'Flag', true)),
+    ].join('');
+  } else if (it.type === 'machine') {
+    const run = ms === 'running';
+    tasks = [
+      task(run ? 'done' : 'current', 1, 'Start the machine', `
+        <div class="inset row wrapf g3 mt3"><span class="dot ${ms === 'starting' ? 'amber' : run ? 'green' : ''}"></span>
+          <p class="t-sm ink7 min0 flex1">${run ? `Running at <code class="ink9">10.10.4.17</code> · <span id="clock" class="num">60:00</span> left`
+            : ms === 'starting' ? 'Starting. This takes about one minute.' : `It runs for 60 minutes. You have ${Math.floor(USER.machineMinutesLeft / 60)} h of machine time.`}</p>
+          ${ms === 'off' ? `<button class="btn solid md" data-act="start-machine" data-id="${id}">Start</button>`
+            : ms === 'starting' ? `<button class="btn md" disabled>Starting…</button>` : `<button class="btn ghost md danger" data-act="stop-machine" data-id="${id}">Stop</button>`}</div>`),
+      task(run ? 'current' : 'todo', 2, 'Connect', `<p class="t-sm p ink6 mt1">Use the browser terminal or the VPN.</p>
+        ${run ? `<button class="btn solid md mt3" data-toast="The terminal opens in a new tab">Open terminal</button>` : ''}`),
+      task(solved('user') ? 'done' : 'todo', 3, 'Get the user flag', `<p class="t-sm p ink6 mt1">It is in <code>/home/&lt;user&gt;/user.txt</code>.</p>${flagForm('user', 'User flag', false)}${hintBlock}`),
+      task(solved('root') ? 'done' : 'todo', 4, 'Get the root flag', `<p class="t-sm p ink6 mt1">It is in <code>/root/root.txt</code>.</p>${flagForm('root', 'Root flag', false)}`),
+    ].join('');
+  } else if (it.type === 'scenario') {
+    tasks = [
+      task('current', 1, 'Start the scenario', `<p class="t-sm p ink6 mt1">A test company opens in your browser.</p>
+        <button class="btn solid md mt3" data-toast="The SOC workstation opens here">Start scenario</button>`),
+      task('todo', 2, 'Find and stop the attack', `<p class="t-sm p ink6 mt1">Read the alerts and logs. Contain the attack.</p>`),
+      task('todo', 3, 'Write the report', `<p class="t-sm p ink6 mt1">We score detection, triage, containment and your report. There are no flags.</p>`),
+    ].join('');
   }
-  const meta = [['Category', it.category], ['Difficulty', diff(it.difficulty)], ['XP', it.xp], ['Plan', ACCESS[it.access]]];
-  return page(crumbs([['Practice', '#/practice'], [m.plural, `#/practice?type=${it.type}`], [it.title]]), `
-    <div class="row-s wrapf g6">
-      <div class="min0" style="flex:1 1 520px;display:flex;flex-direction:column;gap:16px">
-        <div class="card">
-          <div class="cover c-${tint}" style="height:120px"><div class="emblem tint-${tint}" style="width:56px;height:56px">${ic(icon, 'i-xl')}</div></div>
-          <div class="pad-lg">
-            <div class="row wrapf g2">${diff(it.difficulty)}<span class="t-sm ink5">${m.label} · ${it.category} · ${it.xp} XP</span></div>
-            <h2 class="t-4xl semi ink9 mt2">${it.title}</h2>
-            <p class="t-base p ink7 mt2" style="max-width:640px">${it.summary}</p>
-          </div>
-        </div>
-        ${body}
+
+  const lockedBlock = `
+    <div class="row-s g3">
+      <div class="tile brand">${ic('lock')}</div>
+      <div class="min0 flex1">
+        <p class="t-base semi ink9">Included in ${ACCESS[it.access]}</p>
+        <p class="t-sm p ink6 mt1">Your plan is Free. Upgrade to open this ${m.label.toLowerCase()}.</p>
+        <div class="row wrapf g2 mt4"><a class="btn solid md" href="#/plans">Upgrade</a><a class="btn ghost md" href="#/practice?type=${it.type}">Show free ${m.plural.toLowerCase()}</a></div>
       </div>
-      <aside style="flex:0 1 288px;min-width:240px">
-        <div class="card rows">${meta.map(([k, v]) => `<div class="row between t-sm" style="padding:11px 16px"><span class="ink5">${k}</span><span class="ink8">${v}</span></div>`).join('')}</div>
-        <button class="btn ghost md full mt3" data-act="copy-link">${ic('link', 'i-sm')} Copy link</button>
+    </div>`;
+
+  const similar = ITEMS.filter((x) => x.id !== it.id && x.type === it.type && canOpen(x.access))
+    .sort((a, b) => (b.category === it.category) - (a.category === it.category)).slice(0, 3);
+  const first = FIRST[id];
+  const solvers = BOARD.slice(0, Math.min(4, it.solves));
+
+  return page(crumbs([['Practice', '#/practice'], [m.plural, `#/practice?type=${it.type}`], [it.title]]) +
+    '', `
+    <div class="row-s wrapf g6">
+      <div class="min0" style="flex:1 1 560px;display:flex;flex-direction:column;gap:24px">
+      <section class="dhead">
+        <div class="row wrapf g2"><h2>${it.title}</h2>${it.status === 'started' && !locked ? badge('In progress', 'brand') : ''}</div>
+        <p class="desc">${it.summary}</p>
+        <div class="dmeta"><span>${diff(it.difficulty)}</span><span>${it.category}</span><span>${it.xp} XP</span></div>
+      </section>
+      <section class="card">
+        <div class="pad-lg">${locked ? lockedBlock : `<ol class="tasks">${tasks}</ol>`}</div>
+      </section>
+      </div>
+
+      <aside style="flex:0 1 300px;min-width:260px;display:flex;flex-direction:column;gap:20px">
+        <section class="card pad">
+          <p class="t-base semi ink9">Players</p>
+          ${it.solves ? `<div class="row g3 mt3"><div class="avs">${solvers.map((r) => av(r.handle, 'sm')).join('')}</div><p class="t-sm ink6">${it.solves} players solved this</p></div>` : `<p class="t-sm ink6 mt2">Nobody has solved this yet.</p>`}
+          ${first ? `<p class="row g2 t-sm ink6 mt3">${ic('award', 'i-sm amber')}First solve by <span class="med ink9">${first}</span></p>` : ''}
+        </section>
+        ${similar.length ? `<section class="card">
+          <p class="t-base semi ink9" style="padding:16px 20px 8px">Try next</p>
+          <div class="rows">${similar.map((x) => {
+            const [xi, xt] = CATEGORY[x.category] || [TYPE[x.type].icon, 'gray'];
+            return `<a class="li" href="#/practice/${x.id}" style="padding:12px 20px"><div class="ti ti-sm ti-${xt}">${ic(x.icon || xi, 'i-sm')}</div>
+              <span class="min0 flex1 t-sm med ink9 trunc">${x.title}</span><span class="t-xs ink5">${x.xp} XP</span></a>`;
+          }).join('')}</div>
+        </section>` : ''}
       </aside>
     </div>
   `);
@@ -1001,17 +1063,14 @@ function mountMachineClock(id) {
 function season() {
   const total = SEASON.chapters.reduce((n, c) => n + c.challenges.length, 0);
   const ch1 = SEASON.chapters[0];
-  return page(crumbs([['Practice', '#/practice'], [`Season ${SEASON.number}: ${SEASON.title}`]]), `
-    <section class="card hero banner pad-lg">
-      <div class="row-s wrapf g4">
-        <div class="tile brand" style="width:52px;height:52px">${ic('radio', 'i-xl')}</div>
-        <div class="min0 flex1">
-          <div class="row g2">${badge('Live', 'solid')}<span class="t-sm ink5">Ends ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'short' })} · 0 of ${total} solved</span></div>
-          <h2 class="t-4xl semi ink9 mt2">${SEASON.title}</h2>
-          <p class="t-base p ink7 mt1" style="max-width:600px">${SEASON.tagline}</p>
-        </div>
-        <div class="row g2"><button class="btn ghost lg" data-toast="The trailer plays here" data-toast-icon="play">${ic('play', 'i-sm')} Trailer</button>
-          <a class="btn solid lg" href="#/practice/disk-of-secrets">Start chapter 1</a></div>
+  return page(crumbs([['Practice', '#/practice'], [`Season ${SEASON.number}`]]) + `<a class="btn solid md ml-auto" href="#/practice/disk-of-secrets">Start chapter 1</a>`, `
+    <section class="dhead">
+      <div class="row g2"><h2>${SEASON.title}</h2>${badge('Live', 'solid')}</div>
+      <p class="desc">${SEASON.tagline}</p>
+      <div class="dmeta">
+        <span>Ends ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'short' })}</span>
+        <span>${total} challenges</span>
+        <span>0 solved</span>
       </div>
     </section>
     ${sec('Chapters', 'Finish a chapter to open the next one.', '', `
@@ -1024,8 +1083,9 @@ function season() {
     ${sec(`Chapter 1: ${ch1.title}`, ch1.story, '', `
       <div class="cards four">${ch1.challenges.map(([t, cat, d]) => {
         const [icon, tint] = CATEGORY[cat];
-        return `<a class="card" href="#/practice/disk-of-secrets"><div class="cover c-${tint}" style="height:84px"><div class="emblem tint-${tint}" style="width:40px;height:40px">${ic(icon)}</div></div>
-          <div class="card-body"><p class="t-xs ink5">${cat}</p><h3 class="t-base semi ink9 mt1">${t}</h3><div class="card-foot">${diff(d)}</div></div></a>`; }).join('')}</div>`)}
+        return `<a class="card pad" href="#/practice/disk-of-secrets" style="gap:16px">
+          <div class="row g3"><div class="ti ti-${tint}">${ic(icon)}</div><div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${t}</h3><p class="t-sm ink5 mt1 trunc">${cat}</p></div></div>
+          <div class="row between" style="margin-top:auto">${diff(d)}</div></a>`; }).join('')}</div>`)}
   `);
 }
 
@@ -1054,7 +1114,7 @@ function compete(tab) {
       <div class="card empty"><div class="circ">${ic('users', 'i-xl')}</div>
         <p class="t-base semi ink9">You are not on a team yet</p>
         <p class="t-sm p ink5" style="max-width:380px">A team adds its XP together and can enter team events.</p>
-        <div class="row g2 mt2"><button class="btn solid md" data-toast="The team form opens here">${ic('plus', 'i-sm')} Create a team</button><button class="btn outline md" data-act="join-team">Join with a code</button></div></div>
+        <div class="row g2 mt2"><button class="btn solid md" data-toast="The team form opens here">Create a team</button><button class="btn outline md" data-act="join-team">Join with a code</button></div></div>
       ${sec('Top teams', '', '', `<div class="cards sm">${TEAMS.map(([n, mem, xp], i) => `<div class="card pad">
         <div class="row between">${av(n, 'lg', i === 0 ? 'brand' : '')}<span class="rank ${i === 0 ? 'r1' : ''}">${i + 1}</span></div>
         <p class="t-base semi ink9 mt3 trunc">${n}</p><p class="t-xs ink5 mt1">${mem} members · ${fmt.format(xp)} XP</p></div>`).join('')}</div>`)}`;
@@ -1085,7 +1145,7 @@ function heatmap() {
 
 function profile() {
   const badges = [['First day', 'sun', true], ['First flag', 'flag'], ['First root', 'terminal'], ['7-day streak', 'flame'], ['Path finished', 'graduation-cap'], ['Season 1', 'radio']];
-  return page(`<h1>Profile</h1><button class="btn outline md ml-auto" data-toast="The profile editor opens here">${ic('pencil', 'i-sm')} Edit profile</button>`, `
+  return page(`<h1>Profile</h1><button class="btn outline md ml-auto" data-toast="The profile editor opens here">Edit profile</button>`, `
     <section class="card hero pad-lg">
       <div class="row wrapf g4">${av(USER.name, 'xl', 'brand')}
         <div class="min0 flex1">
@@ -1127,7 +1187,7 @@ function plans() {
       ${seg('billing', [['monthly', 'Monthly'], ['yearly', 'Yearly · save 20%']], state.billing)}</div>
     <div class="grid3">${P.map((p) => `
       <div class="card plan ${p.featured ? 'featured' : ''}" style="padding:20px;display:flex;flex-direction:column">
-        <div class="row between"><div class="row g2"><div class="tile ${p.featured ? 'brand' : ''}" style="width:32px;height:32px">${ic(p.icon, 'i-sm')}</div><h2 class="t-xl semi ink9">${p.name}</h2></div>${p.featured ? badge('Most popular', 'solid') : ''}</div>
+        <div class="row between"><h2 class="t-xl semi ink9">${p.name}</h2>${p.featured ? badge('Most popular', 'solid') : ''}</div>
         <p class="mt4"><span class="semi ink9" style="font-size:28px">${p.price ? inr.format(p.price) : 'Free'}</span> <span class="t-sm ink5">${p.note}</span></p>
         <ul class="feat flex1 mt5">${p.f.map((x) => `<li>${ic('check')}<span>${x}</span></li>`).join('')}</ul>
         <button class="btn ${p.featured ? 'solid' : 'outline'} lg full mt5" ${p.current ? 'disabled' : `data-toast="Checkout opens here (demo)"`}>${p.cta}</button>
@@ -1239,6 +1299,8 @@ document.addEventListener('click', (e) => {
   }
   else if (a === 'toggle-upcoming') { state.upcomingOpen = !state.upcomingOpen; render(); }
   else if (a === 'clear-filters') { state.filters = { q: '', category: '', difficulty: '', free: false }; render(); }
+  else if (a === 'get-file') { state.got[t.dataset.id] = true; render(); toast('Download started (demo)', 'download'); }
+  else if (a === 'hint') { const id = t.dataset.id; state.hints[id] = (state.hints[id] || 0) + 1; render(); }
   else if (a === 'copy-link') { navigator.clipboard?.writeText(location.href).catch(() => {}); toast('Link copied'); }
   else if (a === 'start-machine') {
     const id = t.dataset.id;
