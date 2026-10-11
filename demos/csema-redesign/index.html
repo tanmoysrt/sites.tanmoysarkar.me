@@ -1342,31 +1342,29 @@ function profile() {
 
 function plans() {
   const y = state.billing === 'yearly';
-  const price = (n) => (y ? Math.round(n * 0.8) : n);
-  const note = y ? 'per month, billed yearly' : 'per month';
+  const monthly = (n) => (y ? Math.round(n * 0.8) : n);
+  const sub = (n) => (y ? `${inr.format(Math.round(n * 0.8) * 12)} billed yearly` : 'Billed monthly');
   const P = [
-    { name: 'Free', icon: 'user', price: 0, note: 'forever', cta: 'Current plan', current: true,
+    { name: 'Free', price: 0, sub: 'No card needed', cta: 'Current plan', current: true,
       f: ['All free challenges and machines', `All ${PATHS.length} learning paths`, '5 machine hours each month', 'Free events and the current season'] },
-    { name: 'Prime', icon: 'crown', price: price(349), note, cta: 'Upgrade to Prime', featured: true,
+    { name: 'Prime', price: monthly(349), sub: sub(349), cta: 'Upgrade to Prime', featured: true,
       f: ['Everything in Free', 'All challenges and machines', '60 machine hours each month, with VPN', 'An attack box with tools', 'All seasons, events and write-ups'] },
-    { name: 'Prime + Labs', icon: 'flask-conical', price: price(549), note, cta: 'Upgrade to Prime + Labs',
+    { name: 'Prime + Labs', price: monthly(549), sub: sub(549), cta: 'Upgrade to Prime + Labs',
       f: ['Everything in Prime', 'All red team labs, with new labs each week', 'Your own cloud range', 'A badge for each lab and a certificate'] },
   ];
   return page('<h1>Plans</h1>', `
     <div class="row wrapf between g3"><p class="t-base p ink7">Start free. Upgrade when you need more. Cancel at any time.</p>
       ${seg('billing', [['monthly', 'Monthly'], ['yearly', 'Yearly · save 20%']], state.billing)}</div>
     <div class="grid3">${P.map((p) => `
-      <div class="card plan ${p.featured ? 'featured' : ''}" style="padding:20px;display:flex;flex-direction:column">
-        <div class="row between"><h2 class="t-xl semi ink9">${p.name}</h2>${p.featured ? badge('Most popular', 'solid') : ''}</div>
-        <p class="mt4"><span class="semi ink9" style="font-size:28px">${p.price ? inr.format(p.price) : 'Free'}</span> <span class="t-sm ink5">${p.note}</span></p>
-        <ul class="feat flex1 mt5">${p.f.map((x) => `<li>${ic('check')}<span>${x}</span></li>`).join('')}</ul>
-        <button class="btn ${p.featured ? 'solid' : 'outline'} lg full mt5" ${p.current ? 'disabled' : `data-toast="Checkout opens here (demo)"`}>${p.cta}</button>
+      <div class="card plan ${p.featured ? 'featured' : ''}" style="padding:24px;display:flex;flex-direction:column">
+        <div class="row between"><h2 class="t-xl semi ink9">${p.name}</h2>${p.featured ? badge('Most popular', 'brand') : ''}</div>
+        <p class="mt4"><span class="semi ink9 num" style="font-size:30px;letter-spacing:-0.02em">${inr.format(p.price)}</span><span class="t-sm ink5"> / month</span></p>
+        <p class="t-sm ink5 mt1">${p.sub}</p>
+        <hr class="divider" style="margin:20px 0">
+        <ul class="feat flex1">${p.f.map((x) => `<li>${ic('check')}<span>${x}</span></li>`).join('')}</ul>
+        <button class="btn ${p.featured ? 'solid' : 'outline'} lg full mt6" ${p.current ? 'disabled' : `data-act="checkout" data-plan="${p.name}"`}>${p.cta}</button>
       </div>`).join('')}</div>
-    <div class="card pad row wrapf g2">
-      <input class="input mono" id="coupon" placeholder="Coupon code" aria-label="Coupon code" style="width:220px">
-      <button class="btn outline md" data-act="coupon">Apply</button>
-      <p class="t-xs ink5 ml-auto">Payments through Razorpay. Prices include GST.</p>
-    </div>
+    <p class="row g2 t-sm ink5" style="justify-content:center">${ic('lock', 'i-sm')}Secure checkout with Razorpay. You can add a coupon there. Prices include GST.</p>
   `);
 }
 
@@ -1503,7 +1501,7 @@ document.addEventListener('click', (e) => {
     state.solved[id + k] = true; render(); toast(`Correct · +${xp} XP`);
   } else if (a === 'join-team') joinTeam();
   else if (a === 'join-confirm') { closeLayer(); toast('Request sent to the team captain'); }
-  else if (a === 'coupon') toast($('#coupon').value ? 'This code is not valid.' : 'Type a code.', 'info');
+  else if (a === 'checkout') toast(`Razorpay checkout opens for ${t.dataset.plan} (demo)`, 'lock');
 });
 
 document.addEventListener('keydown', (e) => {
