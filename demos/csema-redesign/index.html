@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Concept redesign of the CSEMA cybersecurity learning platform on a frappe-ui base: four sections, one next step on Home, card-based practice, and one name per concept. Demo data only.">
 <title>CSEMA redesign concept</title>
 <link rel="icon" type="image/png" href="brand/csema-mark.png">
@@ -87,7 +87,7 @@ code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; 
 @media (max-width: 640px) { .hide-sm { display: none !important; } .only-sm { display: initial; } }
 
 /* Shell */
-.app { display: flex; height: 100vh; }
+.app { display: flex; height: 100vh; height: 100dvh; }
 .side { width: 15rem; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--line1); display: flex; flex-direction: column; }
 .brandbar { display: flex; align-items: center; padding: 14px 12px 14px; }
 .logo { height: 32px; width: auto; display: block; }
@@ -134,8 +134,8 @@ body.has-split .toasts { right: auto; left: calc(15rem + 16px); }
 @media (max-width: 767px) {
   .side { display: none; }
   .mtop { display: flex; }
-  main { padding-bottom: 60px; }
-  .bnav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; inset: auto 0 0 0; height: 60px; z-index: 10; background: var(--bg); border-top: 1px solid var(--line1); }
+  main { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+  .bnav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; inset: auto 0 0 0; height: calc(60px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); z-index: 10; background: var(--bg); border-top: 1px solid var(--line1); }
   .bnav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; color: var(--ink5); }
   .bnav a.on { color: var(--brand); font-weight: 500; }
 }
@@ -320,11 +320,29 @@ select.input { appearance: none; padding-right: 30px; background: var(--s2) url(
 .ring-av svg { position: absolute; inset: 0; }
 .rank { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--s3); color: var(--ink7); }
 .rank.r1 { background: var(--brand); color: #fff; }
-.slide { height: 440px; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; border-radius: 9px 9px 0 0; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 16px 16px, var(--s1); }
+.slide { height: 440px; overflow-y: auto; display: flex; flex-direction: column; justify-content: safe center; padding: 32px 48px; border-radius: 9px 9px 0 0; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 16px 16px, var(--s1); }
 @media (max-width: 640px) { .slide { padding: 24px; height: auto; min-height: 360px; } }
 .slide.quiz h3 { font-size: 21px; line-height: 1.35; letter-spacing: -0.01em; }
 .slide h3 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink9); }
 .slide .lead { margin-top: 12px; max-width: 560px; font-size: 16px; line-height: 1.6; color: var(--ink7); }
+.prose { max-width: 640px; font-size: 16px; line-height: 1.65; color: var(--ink7); }
+.prose > * { margin: 14px 0 0; } .slide h3 + .prose > :first-child { margin-top: 12px; }
+.prose b { font-weight: 600; color: var(--ink9); }
+.prose ul, .prose ol { padding-left: 22px; } .prose ul { list-style: disc; } .prose ol { list-style: decimal; } .prose li + li { margin-top: 6px; } .prose li::marker { color: var(--ink4); }
+.prose h4 { margin-top: 22px; font-size: 16px; font-weight: 600; color: var(--ink9); }
+.prose code { font: 0.88em/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; padding: 2px 5px; border-radius: 5px; background: var(--s3); color: var(--ink9); }
+.prose pre { padding: 12px 14px; border-radius: 10px; background: var(--s2); border: 1px solid var(--line1); overflow-x: auto; }
+.prose pre code { padding: 0; background: none; font-size: 13px; line-height: 1.65; color: var(--ink8); white-space: pre; }
+.prose blockquote { padding: 12px 14px; border-radius: 10px; background: var(--s2); color: var(--ink8); font-size: 15px; }
+.prose .diagram { display: flex; justify-content: center; padding: 16px; border: 1px solid var(--line2); border-radius: 10px; background: var(--s1); overflow-x: auto; }
+.prose .diagram pre.mermaid { margin: 0; background: none; border: 0; padding: 0; }
+.prose .diagram pre.mermaid:not([data-processed]) { min-height: 140px; color: transparent; }
+.prose .diagram.failed pre.mermaid { color: var(--ink6); font: 13px/1.6 ui-monospace, monospace; white-space: pre; min-height: 0; }
+.prose .diagram svg { max-width: 100%; height: auto; }
+.prose .tbl { overflow-x: auto; border: 1px solid var(--line2); border-radius: 10px; }
+.prose table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
+.prose th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink5); background: var(--s1); padding: 8px 12px; border-bottom: 1px solid var(--line2); }
+.prose td { padding: 9px 12px; border-bottom: 1px solid var(--line1); color: var(--ink8); } .prose tr:last-child td { border-bottom: 0; }
 .player-foot { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line1); }
 .opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 24px; max-width: 640px; }
 @media (max-width: 640px) { .opts { grid-template-columns: 1fr; } }
@@ -365,7 +383,7 @@ main.lesson-mode.no-outline { grid-template-columns: 0rem minmax(0, 1fr); }
 main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border-right-color: transparent; padding-left: 0; padding-right: 0; transition: opacity .12s ease, visibility 0s linear .24s; }
 
 .course-nav { background: var(--sidebar); border-right: 1px solid var(--line1); overflow-y: auto; padding: 0 10px 32px; }
-.course-nav .back { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; height: 48px; margin: 0 -10px 6px; padding: 0 20px; border-bottom: 1px solid var(--line1); background: var(--sidebar); font-size: 14px; font-weight: 600; color: var(--ink9); }
+.course-nav .back { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; height: 48px; margin: 0 -10px 6px; padding: 0 20px; border-bottom: 1px solid var(--line1); background: var(--sidebar); font-size: 15px; font-weight: 600; color: var(--ink9); }
 .course-nav .back .i { color: var(--ink5); }
 .course-nav .back:hover { color: var(--ink9); background: var(--s2); }
 .course-nav .unit { display: flex; justify-content: space-between; gap: 12px; margin: 18px 0 4px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--ink5); }
@@ -373,6 +391,14 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
 .course-nav a.les:hover { background: var(--s3); }
 .course-nav a.les.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--line2); }
 .nav-scrim { display: none; }
+.lesson-main > .ph h1 { font-size: 15px; }
+.lesson-close { display: none !important; }
+.back-ic { display: none; }
+@media (max-width: 860px) {
+  .lesson-close { display: inline-flex !important; }
+  .lesson-main > .ph .lesson-close { order: 3; margin-right: -8px; }
+  .lesson-main > .ph .only-sm { order: 2; }
+}
 .lesson-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 /* The stage is a 16:9 frame that fits the screen; the controls sit under it */
 .lesson-stage { flex: 1; min-height: 0; padding: 24px; display: flex; align-items: center; justify-content: center; overflow-y: auto; }
@@ -393,6 +419,7 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
   .lesson-stage .slide { flex: 1; aspect-ratio: auto; min-height: 0; justify-content: flex-start; padding: 36px 20px 24px; border-radius: 0; background: none; }
   .lesson-stage .slide h3 { font-size: 26px; line-height: 1.25; letter-spacing: -0.02em; }
   .lesson-stage .slide .lead { margin-top: 14px; font-size: 17px; line-height: 1.7; color: var(--ink7); max-width: none; }
+  .lesson-stage .prose { font-size: 16px; line-height: 1.7; max-width: none; }
   .lesson-stage .slide.quiz h3 { font-size: 21px; line-height: 1.4; letter-spacing: -0.01em; }
   .lesson-stage .opts { margin-top: 28px; gap: 10px; max-width: none; }
   .lesson-stage .opt { min-height: 54px; padding: 0 16px; border-radius: 12px; font-size: 15px; }
@@ -400,7 +427,8 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
   .lesson-stage .player-foot .btn { height: 46px; padding: 0 20px; font-size: 15px; border-radius: 10px; }
   .lesson-stage .player-foot .btn:last-child { flex: 1; }
   .lesson-stage .step-n { display: none; }
-  .lesson-main > .ph { padding: 0 20px 0 14px; } .lesson-main > .ph h1 { font-size: 16px; }
+  .lesson-stage .back-btn { width: 46px; padding: 0 !important; justify-content: center; } .lesson-stage .back-lbl { display: none; } .lesson-stage .back-ic { display: inline-flex; }
+  .lesson-main > .ph { padding: 0 20px 0 14px; }
 }
 .chap { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "n s" "t t"; align-items: center; row-gap: 12px; }
 .chap > .rank { grid-area: n; } .chap-s { grid-area: s; justify-self: end; display: inline-flex; } .chap-t { grid-area: t; }
@@ -546,6 +574,671 @@ main.lesson-mode.no-outline .course-nav { opacity: 0; visibility: hidden; border
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div id="layer"></div>
 
+<!-- Lesson content. One block per lesson. "---" separates steps. A step that starts with "?" is a question; "- [x]" marks a correct answer. -->
+<script type="text/markdown" data-lesson="intro">
+# What is a network?
+
+A **computer network** is two or more devices that connect so they can share data. Your phone, your laptop, the office printer and the servers behind a website are all on networks.
+
+Every network has three parts:
+
+- **Devices** that send and receive data
+- **Links** that carry the data: copper cable, fibre or radio
+- **Protocols**, the rules that tell devices how to talk
+
+---
+
+# Why networks matter
+
+Networks let people share files and printers, use the internet, and talk to each other in real time.
+
+> In security work, you protect networks. You must know how a network works before you can defend it.
+
+---
+
+? What are the three parts of every network?
+- [x] Devices
+- [x] Links
+- [x] Protocols
+- [ ] Firewalls
+
+---
+
+# Network sizes
+
+We name networks by the area they cover.
+
+| Type | Area | Example |
+| --- | --- | --- |
+| PAN | A few metres | Phone to earbuds |
+| LAN | One building | Office Wi-Fi |
+| MAN | One city | A city council network |
+| WAN | Countries | The internet |
+
+---
+
+# How data moves
+
+Data travels in small pieces called **packets**. Each packet has a source address, a destination address and some data.
+
+```mermaid
+flowchart LR
+  A[Your laptop] --> B[Home router] --> C[Provider] --> D[Web server]
+```
+
+Each device on the path reads the destination and sends the packet one step closer.
+
+---
+
+? A network that covers one office building is a...
+- [ ] PAN
+- [x] LAN
+- [ ] MAN
+- [ ] WAN
+</script>
+
+<script type="text/markdown" data-lesson="components">
+# Devices
+
+A network is only as useful as the hardware that moves data through it. This lesson covers six devices and the one job each does best.
+
+---
+
+# Hubs
+
+A hub repeats every signal it receives out of **every** port.
+
+- Simple and cheap
+- Every device sees all traffic
+- Only one device can send at a time
+
+This is why modern networks use switches instead.
+
+---
+
+# Switches
+
+A switch learns which device is on which port. Then it sends each frame **only** to the port that needs it.
+
+```
+Port 1  ->  3C:22:FB:9A:10:7E  (laptop)
+Port 2  ->  00:1B:44:11:3A:B7  (printer)
+Port 3  ->  A4:83:E7:02:5C:19  (server)
+```
+
+Fewer collisions, more privacy.
+
+---
+
+? Which device sends a frame only to the port where the destination is connected?
+- [ ] Hub
+- [x] Switch
+- [ ] Router
+- [ ] Access point
+
+---
+
+# Routers
+
+A router connects **different networks** and picks the path between them. Your home router connects your LAN to your provider's network.
+
+Routers read IP addresses. Switches read MAC addresses.
+
+---
+
+# Access points
+
+An access point connects wireless clients to the wired network. It does not route. It extends the LAN over radio.
+
+---
+
+# Firewalls and servers
+
+| Device | Job |
+| --- | --- |
+| Firewall | Allows or blocks traffic by rules |
+| Server | Gives a service: web, mail, files |
+
+A firewall usually sits between your network and the internet.
+
+---
+
+? Which two devices can control traffic between networks?
+- [x] Router
+- [ ] Hub
+- [x] Firewall
+- [ ] Access point
+</script>
+
+<script type="text/markdown" data-lesson="topologies">
+# Physical and logical topology
+
+A **topology** is the shape of a network.
+
+- The **physical** topology is how the cables run.
+- The **logical** topology is how the data flows.
+
+The two are not always the same.
+
+---
+
+# Star
+
+Every device connects to one central switch. Most office LANs use a star.
+
+```mermaid
+flowchart TB
+  SW[Switch] --- A[Laptop]
+  SW --- B[Printer]
+  SW --- C[Server]
+  SW --- D[Phone]
+```
+
+- Easy to add and remove devices
+- One bad cable affects one device
+- If the central switch fails, the whole network stops
+
+---
+
+# Bus and ring
+
+- **Bus**: all devices share one cable. A break stops everything.
+- **Ring**: each device connects to two neighbours. Data goes around the ring.
+
+You will mostly see these in older networks and in exams.
+
+---
+
+# Mesh
+
+Each device connects to many others. If one link fails, data takes another path.
+
+A **full mesh** connects every device to every other device. It is very reliable and very expensive.
+
+---
+
+# Compare them
+
+| Topology | Strength | Weakness |
+| --- | --- | --- |
+| Star | Simple to manage | Central point of failure |
+| Bus | Little cable | One break stops all |
+| Ring | Predictable | One break can stop all |
+| Mesh | Very reliable | Costly to build |
+
+---
+
+? In which topology does the whole network stop if the central device fails?
+- [x] Star
+- [ ] Mesh
+- [ ] Bus
+- [ ] Ring
+</script>
+
+<script type="text/markdown" data-lesson="enterprise">
+# Why design matters
+
+A small office can use one switch. A company with thousands of users needs a plan, so the network stays fast, reliable and easy to fix.
+
+---
+
+# Three-tier design
+
+The classic design has three layers:
+
+```mermaid
+flowchart TB
+  C1[Core] --- D1[Distribution 1]
+  C1 --- D2[Distribution 2]
+  D1 --- A1[Access 1]
+  D1 --- A2[Access 2]
+  D2 --- A3[Access 3]
+  D2 --- A4[Access 4]
+```
+
+1. **Access**: connects users, phones and printers
+2. **Distribution**: joins access switches and applies policy
+3. **Core**: moves traffic fast between buildings
+
+---
+
+# Collapsed core
+
+Smaller sites join the core and distribution layers into one. This is a **two-tier** design. It costs less and is simpler to run.
+
+---
+
+# Spine-leaf
+
+Data centres use **spine-leaf**. Every leaf switch connects to every spine switch.
+
+```mermaid
+flowchart TB
+  S1[Spine 1] --- L1[Leaf 1]
+  S1 --- L2[Leaf 2]
+  S1 --- L3[Leaf 3]
+  S2[Spine 2] --- L1
+  S2 --- L2
+  S2 --- L3
+```
+
+Any server is the same number of hops from any other server.
+
+---
+
+? Which layer connects end devices such as laptops and printers?
+- [x] Access
+- [ ] Distribution
+- [ ] Core
+- [ ] Spine
+</script>
+
+<script type="text/markdown" data-lesson="osi">
+# The seven layers
+
+The OSI model splits network work into seven layers. Each layer does one job.
+
+| # | Layer | Example |
+| --- | --- | --- |
+| 7 | Application | HTTP, DNS |
+| 6 | Presentation | TLS, encoding |
+| 5 | Session | Open and close sessions |
+| 4 | Transport | TCP, UDP |
+| 3 | Network | IP, routers |
+| 2 | Data link | Ethernet, switches |
+| 1 | Physical | Cables, radio |
+
+---
+
+# Why layers help
+
+When something breaks, you check one layer at a time. Start at layer 1: is the cable in? Then go up.
+
+---
+
+? At which layer do routers work?
+- [ ] Layer 2, Data link
+- [x] Layer 3, Network
+- [ ] Layer 4, Transport
+- [ ] Layer 7, Application
+</script>
+
+<script type="text/markdown" data-lesson="tcpip">
+# Four layers
+
+The internet runs on the TCP/IP model. It has four layers.
+
+| TCP/IP | OSI layers |
+| --- | --- |
+| Application | 5, 6, 7 |
+| Transport | 4 |
+| Internet | 3 |
+| Link | 1, 2 |
+
+---
+
+# TCP and UDP
+
+- **TCP** confirms that each segment arrives and puts them in order. Web pages and email use TCP.
+- **UDP** sends and does not check. Calls, games and DNS use UDP because speed matters more.
+
+---
+
+? Which protocol confirms that each segment arrives?
+- [x] TCP
+- [ ] UDP
+- [ ] IP
+- [ ] Ethernet
+</script>
+
+<script type="text/markdown" data-lesson="encapsulation">
+# Wrapping data
+
+On the way out, each layer adds its own header to the data. On the way in, each layer removes it.
+
+```
+[ Ethernet | IP | TCP | HTTP data | FCS ]
+```
+
+---
+
+# Names at each layer
+
+| Layer | Name of the unit |
+| --- | --- |
+| Application | Data |
+| Transport | Segment |
+| Network | Packet |
+| Data link | Frame |
+| Physical | Bits |
+
+---
+
+? What is the unit of data at layer 2 called?
+- [ ] Segment
+- [ ] Packet
+- [x] Frame
+- [ ] Bits
+</script>
+
+<script type="text/markdown" data-lesson="ports">
+# What a port is
+
+An IP address finds the device. A **port number** finds the service on that device.
+
+| Port | Service |
+| --- | --- |
+| 22 | SSH |
+| 53 | DNS |
+| 80 | HTTP |
+| 443 | HTTPS |
+| 3389 | RDP |
+
+---
+
+# Why it matters
+
+> Attackers scan for open ports to find services they can attack. Close every port that you do not need.
+
+---
+
+? Which port does HTTPS use by default?
+- [ ] 80
+- [ ] 22
+- [x] 443
+- [ ] 3389
+</script>
+
+<script type="text/markdown" data-lesson="ipv4">
+# An IPv4 address
+
+An IPv4 address has 32 bits, written as four numbers from 0 to 255.
+
+```
+192.168.1.20 /24
+```
+
+The **mask** (/24) says the first 24 bits name the network. The last 8 bits name the host.
+
+---
+
+# Private ranges
+
+These ranges are for internal networks. They do not route on the internet.
+
+| Range | Size |
+| --- | --- |
+| 10.0.0.0/8 | Large |
+| 172.16.0.0/12 | Medium |
+| 192.168.0.0/16 | Small |
+
+---
+
+? Which address is private?
+- [ ] 8.8.8.8
+- [x] 172.20.4.1
+- [ ] 142.250.72.14
+- [ ] 1.1.1.1
+</script>
+
+<script type="text/markdown" data-lesson="cabling">
+# Copper
+
+Most LANs use **twisted-pair** copper cable, such as Cat 6, with RJ45 connectors.
+
+- One run can be up to **100 metres** long
+- Cheap and easy to install
+
+---
+
+# Fibre
+
+Fibre carries light. It goes much further and is not affected by electrical noise.
+
+| Type | Distance | Use |
+| --- | --- | --- |
+| Multimode | Up to about 500 m | Inside a building |
+| Single-mode | Many kilometres | Between buildings and sites |
+
+Common connectors are **LC** and **SC**.
+
+---
+
+? What is the maximum length of one copper Ethernet run?
+- [ ] 10 metres
+- [x] 100 metres
+- [ ] 500 metres
+- [ ] 2 kilometres
+</script>
+
+<script type="text/markdown" data-lesson="ethernet">
+# Inside a frame
+
+```
+| Preamble | Dest MAC | Src MAC | Type | Payload | FCS |
+```
+
+- **Dest MAC** and **Src MAC**: who receives and who sends
+- **Type**: what is inside, for example IPv4
+- **FCS**: a checksum to find damaged frames
+
+---
+
+# How a switch reads it
+
+1. The switch reads the **source** MAC and records the port.
+2. It reads the **destination** MAC and sends the frame to that port.
+3. If it does not know the destination yet, it sends the frame to all ports.
+
+---
+
+? Which field lets the receiver find a damaged frame?
+- [ ] Type
+- [ ] Src MAC
+- [x] FCS
+- [ ] Preamble
+</script>
+
+<script type="text/markdown" data-lesson="mac">
+# MAC addresses
+
+A MAC address is 48 bits, written in hex. The first half names the maker of the card.
+
+```
+3C:22:FB:9A:10:7E
+```
+
+---
+
+# ARP
+
+To send on the LAN, a device needs the MAC address of the target. **ARP** asks for it with a broadcast.
+
+```mermaid
+sequenceDiagram
+  participant L as Laptop
+  participant R as Router
+  L->>R: Who has 192.168.1.1?
+  R-->>L: I do. 00:1B:44:11:3A:B7
+```
+
+> ARP has no authentication. An attacker can send false replies. This is called ARP spoofing.
+
+---
+
+? What does ARP find?
+- [x] The MAC address for an IP address
+- [ ] The IP address for a domain name
+- [ ] The port for a service
+- [ ] The route to a network
+</script>
+
+<script type="text/markdown" data-lesson="duplex">
+# Speed and duplex
+
+- **Half duplex**: a device sends or receives, not both at once
+- **Full duplex**: a device sends and receives at the same time
+
+Modern switched links are full duplex.
+
+---
+
+# Mismatches
+
+Both ends of a link agree on speed and duplex by **auto-negotiation**. If one end is set by hand and the other is not, they can disagree.
+
+Signs of a mismatch:
+
+- Slow transfers
+- Late collisions on the half-duplex end
+- The link works, but badly
+
+---
+
+? What does a duplex mismatch usually cause?
+- [ ] No link light
+- [x] Slow transfers and late collisions
+- [ ] A wrong IP address
+- [ ] DNS errors
+</script>
+
+<script type="text/markdown" data-lesson="build-lan">
+# The office
+
+A small office needs a LAN:
+
+- One 8-port switch
+- Three desktop computers
+- One network printer
+
+---
+
+# Your task
+
+1. Connect each device to the switch.
+2. Give each device an address in 192.168.10.0/24.
+3. Make sure every computer can print.
+4. Find and fix the two faults in the lab.
+
+---
+
+? A computer shows no link light. What do you check first?
+- [x] The cable and the switch port
+- [ ] The DNS server
+- [ ] The printer driver
+- [ ] The firewall rules
+</script>
+
+<script type="text/markdown" data-lesson="cli">
+# IOS modes
+
+Cisco devices have modes. Each mode allows different commands.
+
+```
+Switch> enable
+Switch# configure terminal
+Switch(config)#
+```
+
+- `>` user mode: look only
+- `#` privileged mode: all show commands
+- `(config)#` configuration mode: make changes
+
+---
+
+# Help
+
+Type `?` to see the commands you can use. Press **Tab** to complete a command.
+
+---
+
+? Which command takes you to privileged mode?
+- [x] enable
+- [ ] configure terminal
+- [ ] exit
+- [ ] show running-config
+</script>
+
+<script type="text/markdown" data-lesson="basic-config">
+# First settings
+
+```
+Switch(config)# hostname SW-OFFICE
+SW-OFFICE(config)# enable secret Str0ng!Pass
+SW-OFFICE(config)# banner motd # Authorised access only #
+SW-OFFICE(config)# end
+SW-OFFICE# copy running-config startup-config
+```
+
+---
+
+# Running and startup config
+
+- **running-config** is in memory. Changes apply now.
+- **startup-config** loads at boot.
+
+If you do not save, a restart removes your changes.
+
+---
+
+? Which command saves your changes?
+- [ ] show running-config
+- [x] copy running-config startup-config
+- [ ] write erase
+- [ ] reload
+</script>
+
+<script type="text/markdown" data-lesson="ssh">
+# Why not Telnet
+
+Telnet sends everything in plain text, including passwords. Anyone on the path can read it.
+
+---
+
+# Turn on SSH
+
+```
+SW(config)# ip domain-name office.local
+SW(config)# crypto key generate rsa modulus 2048
+SW(config)# username admin secret Str0ng!Pass
+SW(config)# line vty 0 15
+SW(config-line)# transport input ssh
+SW(config-line)# login local
+```
+
+---
+
+? Why do we replace Telnet with SSH?
+- [x] SSH encrypts the session
+- [ ] SSH is faster
+- [ ] Telnet does not work on switches
+- [ ] SSH needs no password
+</script>
+
+<script type="text/markdown" data-lesson="repair">
+# The ticket
+
+Users on the second floor cannot reach the printer. Nothing changed, says the last engineer.
+
+---
+
+# Where to look
+
+1. `show interfaces status`: are the ports up?
+2. `show vlan brief`: are the ports in the right VLAN?
+3. `show running-config`: what else is different?
+
+There are four mistakes. Find all of them.
+
+---
+
+? Which command shows you if a port is up?
+- [x] show interfaces status
+- [ ] show version
+- [ ] show clock
+- [ ] show users
+</script>
+
 <script>
 /* ---------- Icons (Lucide, ISC licence) ---------- */
 const ICONS = {
@@ -682,22 +1375,75 @@ const UNITS = [
 const FLAT = UNITS.flatMap((u, ui) => u.lessons.map((l) => ({ ...l, unit: u.title, unitIndex: ui })));
 FLAT.forEach((l, i) => (l.n = i + 1));
 
-const SLIDES = [
-  ['Devices', 'A network is only as useful as the hardware that moves data through it. This lesson covers six devices and the one job each does best.'],
-  ['Hubs', 'A hub repeats every signal it receives out of every port. It is simple, cheap and noisy, and it is why modern networks use switches instead.'],
-  ['Switches', 'A switch learns which device sits on which port and forwards each frame only where it needs to go. Fewer collisions, more privacy.'],
-  ['Routers', 'A router connects different networks and decides the next hop for each packet. Your home router joins your LAN to your provider.'],
-  ['Access points', 'An access point bridges wireless clients onto the wired network. It does not route; it extends.'],
-  ['Firewalls', 'A firewall inspects traffic against rules and drops what is not allowed. It is the first device an attacker has to get past.'],
-  ['Servers', 'A server provides a service to other devices: files, web pages, email, names. Most attacks are aimed at one.'],
-];
-// A lesson is one list of steps. A question step replaces the slide in the same frame.
-const STEPS = [
-  ...SLIDES.slice(0, 3).map(([title, body]) => ({ type: 'slide', title, body })),
-  { type: 'question', q: 'Which device sends a frame only to the port where the destination is connected?', options: ['Hub', 'Switch', 'Router', 'Access point'], answer: [1], xp: 10 },
-  ...SLIDES.slice(3).map(([title, body]) => ({ type: 'slide', title, body })),
-  { type: 'question', q: 'Which two devices can control traffic between networks?', options: ['Router', 'Hub', 'Firewall', 'Access point'], answer: [0, 2], multi: true, xp: 10 },
-];
+// Lessons are written in Markdown (see the text/markdown blocks above the script).
+const esc2 = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const inline = (t) => esc2(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*]+)\*/g, '<i>$1</i>');
+function md(src) {
+  const lines = src.split('\n'), out = [];
+  let title = '', i = 0;
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (!ln.trim()) { i++; continue; }
+    if (ln.startsWith('```')) { const lang = ln.slice(3).trim(), buf = []; i++; while (i < lines.length && !lines[i].startsWith('```')) buf.push(lines[i++]); i++; out.push(lang === 'mermaid' ? `<div class="diagram"><pre class="mermaid">${esc2(buf.join('\n'))}</pre></div>` : `<pre><code>${esc2(buf.join('\n'))}</code></pre>`); continue; }
+    if (ln.startsWith('# ')) { if (!title) title = inline(ln.slice(2)); else out.push(`<h4>${inline(ln.slice(2))}</h4>`); i++; continue; }
+    if (ln.startsWith('## ')) { out.push(`<h4>${inline(ln.slice(3))}</h4>`); i++; continue; }
+    if (ln.startsWith('> ')) { const buf = []; while (i < lines.length && lines[i].startsWith('> ')) buf.push(lines[i++].slice(2)); out.push(`<blockquote>${inline(buf.join(' '))}</blockquote>`); continue; }
+    if (ln.startsWith('|')) {
+      const rows = []; while (i < lines.length && lines[i].startsWith('|')) rows.push(lines[i++]);
+      const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map((c) => inline(c.trim()));
+      const body = rows.slice(2).map((r) => `<tr>${cells(r).map((c) => `<td>${c}</td>`).join('')}</tr>`).join('');
+      out.push(`<div class="tbl"><table><thead><tr>${cells(rows[0]).map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`); continue;
+    }
+    if (/^(- |\d+\. )/.test(ln)) {
+      const ol = /^\d+\. /.test(ln), buf = [];
+      while (i < lines.length && /^(- |\d+\. )/.test(lines[i])) buf.push(lines[i++].replace(/^(- |\d+\. )/, ''));
+      out.push(`<${ol ? 'ol' : 'ul'}>${buf.map((b) => `<li>${inline(b)}</li>`).join('')}</${ol ? 'ol' : 'ul'}>`); continue;
+    }
+    const buf = []; while (i < lines.length && lines[i].trim() && !/^(#|```|> |\||- |\d+\. )/.test(lines[i])) buf.push(lines[i++]);
+    out.push(`<p>${inline(buf.join(' '))}</p>`);
+  }
+  return { title, html: out.join('') };
+}
+function parseLesson(src) {
+  return src.split(/\n---\n/).map((block) => {
+    const b = block.trim();
+    if (b.startsWith('? ')) {
+      const ls = b.split('\n'), opts = ls.filter((x) => /^- \[[ x]\] /.test(x));
+      const answer = opts.map((o, k) => (o.startsWith('- [x]') ? k : -1)).filter((k) => k >= 0);
+      return { type: 'question', q: inline(ls[0].slice(2)), options: opts.map((o) => inline(o.slice(6))), answer, multi: answer.length > 1, xp: 10 };
+    }
+    return { type: 'slide', ...md(b) };
+  });
+}
+const LESSON_MD = Object.fromEntries([...document.querySelectorAll('script[type="text/markdown"][data-lesson]')].map((el) => [el.dataset.lesson, el.textContent]));
+const stepsFor = (l) => (LESSON_MD[l.id] ? parseLesson(LESSON_MD[l.id])
+  : [{ type: 'slide', title: esc2(l.title), html: `<p>${esc2(l.description)}</p>` }]);
+let STEPS = [];
+// Mermaid loads only when a lesson has a diagram. Colours come from the page tokens.
+let mermaidReady;
+function loadMermaid() {
+  return mermaidReady ||= import('https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs').then(({ default: mm }) => {
+    const probe = document.createElement('i'); document.body.appendChild(probe);
+    const tok = (v) => { probe.style.color = `var(${v})`; return getComputedStyle(probe).color; };
+    const t = { card: tok('--card'), s1: tok('--s1'), s2: tok('--s2'), line: tok('--line3'), ink9: tok('--ink9'), ink7: tok('--ink7'), ink5: tok('--ink5'), brand: tok('--brand') };
+    probe.remove();
+    mm.initialize({ startOnLoad: false, theme: 'base', fontFamily: 'Inter, sans-serif', securityLevel: 'strict',
+      flowchart: { curve: 'linear', padding: 12, nodeSpacing: 32, rankSpacing: 40 },
+      sequence: { mirrorActors: false, actorMargin: 60, messageMargin: 28 },
+      themeVariables: { fontSize: '15px', background: t.s1, primaryColor: t.card, primaryTextColor: t.ink9, primaryBorderColor: t.line, lineColor: t.ink5,
+        secondaryColor: t.s2, tertiaryColor: t.s2, clusterBkg: t.s2, clusterBorder: t.line, edgeLabelBackground: t.s1,
+        actorBkg: t.card, actorBorder: t.line, actorTextColor: t.ink9, actorLineColor: t.line, signalColor: t.ink7, signalTextColor: t.ink9,
+        noteBkgColor: t.s2, noteBorderColor: t.line, noteTextColor: t.ink7, labelBoxBkgColor: t.card, labelBoxBorderColor: t.line } });
+    return mm;
+  });
+}
+async function renderDiagrams() {
+  const nodes = [...document.querySelectorAll('pre.mermaid:not([data-processed])')];
+  if (!nodes.length) return;
+  // Wide flowcharts turn vertical on phones so the labels stay readable.
+  if (matchMedia('(max-width: 640px)').matches) nodes.forEach((n) => { n.textContent = n.textContent.replace(/^(\s*flowchart\s+)LR/, '$1TB'); });
+  try { await (await loadMermaid()).run({ nodes }); } catch { nodes.forEach((n) => n.closest('.diagram')?.classList.add('failed')); }
+}
 
 const C = (id, title, category, difficulty, xp, solves, access, summary, status = 'new') => ({ id, type: 'challenge', title, category, difficulty, xp, solves, access, summary, status });
 const M = (id, title, difficulty, xp, solves, access, summary, icon) => ({ id, type: 'machine', title, category: 'Boot2Root', difficulty, xp, solves, access, summary, status: 'new', icon });
@@ -934,6 +1680,7 @@ function render() {
   document.title = (a === 'terminal' ? 'Terminal' : document.querySelector('.ph h1, .ph .cur')?.textContent.trim() || 'Home') + ' · CSEMA';
   if (a === 'practice' && !b) mountPractice();
   if (a === 'practice' && b) mountMachineClock(b);
+  renderDiagrams();
 }
 
 /* ---------- Terminal (demo shell) ---------- */
@@ -1106,7 +1853,7 @@ function markDone(lid) {
 }
 saved.done.forEach((id) => markDone(id));
 function stepView(st, i) {
-  if (st.type === 'slide') return `<div class="slide" data-anim="step" aria-live="polite"><h3>${st.title}</h3><p class="lead">${st.body}</p></div>`;
+  if (st.type === 'slide') return `<div class="slide" data-anim="step" aria-live="polite">${st.title ? `<h3>${st.title}</h3>` : ''}<div class="prose">${st.html}</div></div>`;
   const sel = state.qsel[i] || [];
   const done = !!state.qdone[i];
   const wrong = state.qwrong === i;
@@ -1126,19 +1873,19 @@ function lesson(pid, lid) {
   const p = PATHS.find((x) => x.id === pid) || PATHS[1];
   const idx = Math.max(0, FLAT.findIndex((l) => l.id === lid));
   const l = FLAT[idx];
+  STEPS = stepsFor(l);
   if (lessonKey !== lid) {
     if (lessonKey) lessonMem[lessonKey] = { qsel: state.qsel, qdone: state.qdone };
     const mem = lessonMem[lid] || { qsel: {}, qdone: {} };
     state.slide = Math.min(saved.steps[lid] || 0, STEPS.length - 1);
     state.qsel = mem.qsel; state.qdone = mem.qdone; state.qwrong = null; lessonKey = lid;
-    if (state.slide > 0) setTimeout(() => toast(`Resumed at step ${state.slide + 1}`, 'info'), 0);
   }
   saved.steps[lid] = state.slide; persist();
   const s = state.slide, st = STEPS[s], last = s === STEPS.length - 1;
   const blocked = st.type === 'question' && !state.qdone[s];
   const action = blocked
     ? `<button class="btn solid md" data-act="check" ${(state.qsel[s] || []).length ? '' : 'disabled'}>Check</button>`
-    : `<button class="btn md ${last ? 'solid' : 'outline'}" data-act="next">${last ? 'Complete lesson' : 'Next'}</button>`;
+    : `<button class="btn md solid" data-act="next">${last ? 'Complete lesson' : 'Next'}</button>`;
   const outline = `<nav class="course-nav" aria-label="Lessons in this path">
     <a class="back" href="#/learn/${p.id}">${ic('arrow-left', 'i-sm')}<span class="trunc">${p.title}</span></a>
     ${UNITS.map((u, ui) => `
@@ -1147,12 +1894,12 @@ function lesson(pid, lid) {
   </nav>`;
   return `${outline}<div class="nav-scrim" data-act="close-nav" aria-hidden="true"></div>
   <div class="lesson-main">
-    <div class="ph"><button class="btn ghost icon md outline-toggle" style="width:32px;margin-left:-8px" data-act="toggle-outline" aria-label="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" title="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" aria-pressed="${!state.outlineOpen}">${ic('panel-left')}</button><h1 class="trunc">${l.title}</h1><span class="t-sm ink5 hide-sm shrink0">${l.minutes} min · ${l.xp} XP</span><span class="t-sm ink5 ml-auto shrink0 hide-sm">Lesson ${idx + 1} of ${p.lessons}</span><span class="t-sm ink5 ml-auto shrink0 num only-sm">${s + 1} of ${STEPS.length}</span></div>
+    <div class="ph"><a class="btn ghost icon md lesson-close" style="width:32px" href="#/learn/${p.id}" aria-label="Close lesson" title="Close lesson">${ic('x')}</a><button class="btn ghost icon md outline-toggle" style="width:32px;margin-left:-8px" data-act="toggle-outline" aria-label="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" title="${state.outlineOpen ? 'Hide lessons' : 'Show lessons'}" aria-pressed="${!state.outlineOpen}">${ic('panel-left')}</button><h1 class="trunc">${l.title}</h1><span class="t-sm ink5 ml-auto shrink0 hide-sm">Lesson ${idx + 1} of ${p.lessons}</span><span class="t-sm ink5 ml-auto shrink0 num only-sm">${s + 1} of ${STEPS.length}</span></div>
     <div class="lesson-stage">
       <div class="card">
         ${stepView(st, s)}
         <div class="player-foot">
-          <button class="btn outline md" data-act="prev" ${s === 0 ? 'disabled' : ''}>Back</button>
+          <button class="btn outline md back-btn" data-act="prev" aria-label="Back" ${s === 0 ? 'disabled' : ''}><span class="back-ic">${ic('arrow-left')}</span><span class="back-lbl">Back</span></button>
           <span class="flex1 center t-sm ink5 num step-n">${s + 1} / ${STEPS.length}</span>
           ${action}
         </div>
