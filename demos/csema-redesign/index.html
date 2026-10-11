@@ -703,9 +703,12 @@ const BOARD = [
 ].map(([handle, xp, solved], i) => ({ rank: i + 1, handle, xp, solved }));
 const TEAMS = [['Hex Raiders', 6, 19135], ['Echo Shell', 5, 16420], ['Exit Code Zero', 4, 15980], ['Packet Storm', 6, 12210], ['Blue Lantern', 3, 10874], ['Null Route', 4, 9020]];
 const EVENTS = [
-  { title: 'Cyber Security Month CTF', date: '2026-10-25', duration: '24 hours', format: 'Jeopardy, teams of up to 4', status: 'Registration open', open: true },
-  { title: 'Campus Cup qualifier', date: '2026-11-08', duration: '8 hours', format: 'Jeopardy, solo', status: 'Opens 20 Oct' },
-  { title: 'SOC night shift', date: '2026-11-22', duration: '6 hours', format: 'Live incident, teams of 3', status: 'Announced' },
+  { id: 'cyber-sprint', status: 'live', title: 'Cyber Sprint ’26', org: 'CSEMA', format: 'Teams of 4', ticket: 'Free', players: 248, left: '2 h 14 min left' },
+  { id: 'month-ctf', status: 'upcoming', title: 'Cyber Security Month CTF', org: 'CSEMA', date: '2026-10-25', format: 'Teams of 4', ticket: 'Free', players: 312, open: true },
+  { id: 'campus-cup', status: 'upcoming', title: 'Campus Cup qualifier', org: 'Campus Security League', date: '2026-11-08', format: 'Solo', ticket: '₹99', players: 87, open: true },
+  { id: 'soc-night', status: 'upcoming', title: 'SOC night shift', org: 'CSEMA', date: '2026-11-22', format: 'Teams of 3', ticket: 'Free', players: 0, opens: '1 Nov' },
+  { id: 'monsoon-ctf', status: 'past', title: 'Monsoon CTF', org: 'CSEMA', date: '2026-09-14', format: 'Teams of 4', ticket: 'Free', players: 540 },
+  { id: 'freshers', status: 'past', title: 'Freshers hack night', org: 'Campus Security League', date: '2026-08-30', format: 'Solo', ticket: 'Free', players: 205 },
 ];
 const SKILLS = ['Security operations', 'Incident response', 'Malware analysis', 'Penetration testing', 'Web exploitation', 'Cryptography'];
 
@@ -816,7 +819,7 @@ function render() {
   else if (a === 'practice' && b) html = practiceItem(b);
   else if (a === 'practice') html = practice(query.get('type') || 'challenge');
   else if (a === 'season') html = season();
-  else if (a === 'compete') html = compete(query.get('tab') || 'leaderboard');
+  else if (a === 'compete') html = compete(query.get('tab') || 'events');
   else if (a === 'profile') html = profile();
   else if (a === 'plans') html = plans();
   else if (a === 'about') html = about();
@@ -1284,44 +1287,67 @@ function season() {
 }
 
 function compete(tab) {
-  const tabs = seg('tab', [['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['events', 'Events']], tab);
+  const tabs = seg('tab', [['events', 'Events'], ['leaderboard', 'Leaderboard'], ['teams', 'Teams']], tab);
+  const dateTile = (d) => `<div class="calbox"><span class="t-xs semi">${fmtDate(d, { month: 'short' })}</span><span class="t-xl semi num">${fmtDate(d, { day: 'numeric' })}</span></div>`;
   let body = '';
-  if (tab === 'leaderboard') {
+  if (tab === 'events') {
+    const live = EVENTS.filter((e) => e.status === 'live');
+    const next = EVENTS.filter((e) => e.status === 'upcoming');
+    const past = EVENTS.filter((e) => e.status === 'past');
+    body = `
+      <p class="t-sm ink6">Compete solo or as a team on live scoreboards. Organizations can create their own event.</p>
+      ${live.length ? sec('Live now', '', '', live.map((e) => `
+        <div class="card pad row wrapf g4">
+          <div class="ti ti-brand">${ic('radio')}</div>
+          <div class="min0 flex1"><p class="row g2"><span class="t-base semi ink9 trunc">${e.title}</span>${badge('Live', 'solid')}</p>
+            <p class="t-sm ink5 mt1 trunc">${e.org} · ${e.format} · ${e.ticket} · ${e.players} players · ${e.left}</p></div>
+          <button class="btn solid md" data-toast="The event opens here (demo)">Join event</button>
+        </div>`).join('')) : ''}
+      ${sec('Upcoming', '', '', `<div style="display:flex;flex-direction:column;gap:12px">${next.map((e) => `
+        <div class="card pad row wrapf g4">
+          ${dateTile(e.date)}
+          <div class="min0 flex1"><p class="t-base semi ink9 trunc">${e.title}</p>
+            <p class="t-sm ink5 mt1 trunc">${e.org} · ${e.format} · ${e.ticket}${e.players ? ` · ${e.players} registered` : ''}</p></div>
+          ${e.open ? `<button class="btn outline md" data-toast="Registered for ${e.title} (demo)">Register</button>`
+            : `<button class="btn ghost md" data-toast="We will remind you when registration opens">Opens ${e.opens}</button>`}
+        </div>`).join('')}</div>`)}
+      ${sec('Past events', '', '', `<div class="card rows">${past.map((e) => `
+        <div class="li" style="padding:14px 20px">
+          <span class="t-sm ink5 num" style="width:56px">${fmtDate(e.date, { day: 'numeric', month: 'short' })}</span>
+          <span class="min0 flex1"><span class="t-base med ink9 trunc" style="display:block">${e.title}</span><span class="t-sm ink5">${e.org} · ${e.players} players</span></span>
+          <button class="btn ghost md" data-toast="Results open here (demo)">Results</button>
+        </div>`).join('')}</div>`)}`;
+  } else if (tab === 'leaderboard') {
     const rows = state.scope === 'global' ? BOARD : BOARD.filter((_, i) => i % 3 === 1).map((r, i) => ({ ...r, rank: i + 1 }));
     const [first, second, third] = rows;
     const pod = (r, cls) => `<div class="card ${cls}">${av(r.handle, 'lg', r.rank === 1 ? 'brand' : '')}<p class="t-base semi ink9 mt2 trunc">${r.handle}</p>
-      <p class="t-xs ink5 mt1">${fmt.format(r.xp)} XP</p><p class="mt2"><span class="rank ${r.rank === 1 ? 'r1' : ''}">${r.rank}</span></p></div>`;
+      <p class="t-sm ink5 mt1 num">${fmt.format(r.xp)} XP</p><p class="mt2"><span class="rank ${r.rank === 1 ? 'r1' : ''}">${r.rank}</span></p></div>`;
     body = `
-      <div class="card banner row wrapf g3" style="padding:14px 16px">${av(USER.name, 'lg', 'brand')}
-        <div class="min0 flex1"><p class="t-base semi ink9">You are #${USER.rank} · ${USER.league} league</p><p class="t-sm ink6">Get 1,144 more XP to enter the top 50.</p></div>
-        <a class="btn solid md" href="#/practice">Earn XP</a></div>
-      <div class="row between wrapf g2"><h2 class="t-lg semi ink9">Top players</h2>${seg('scope', [['global', 'Global'], ['college', 'My college']], state.scope)}</div>
-      <div class="podium">${pod(second, '')}${pod(first, 'first')}${pod(third, '')}</div>
-      <div class="card rows">
-        ${rows.slice(3).map((r) => `<div class="li"><span class="rank">${r.rank}</span>${av(r.handle, 'sm')}<span class="t-base med ink8 min0 flex1 trunc">${r.handle}</span>
-<span class="t-sm semi ink9 num" style="width:80px;text-align:right">${fmt.format(r.xp)}</span></div>`).join('')}
-        <div class="li cur"><span class="rank r1" style="width:auto;padding:0 6px">${USER.rank}</span>${av(USER.handle, 'sm', 'brand')}<span class="t-base semi ink9 min0 flex1 trunc">${USER.handle} (you)</span>
-<span class="t-sm semi ink9 num" style="width:80px;text-align:right">${USER.xp}</span></div>
-      </div>`;
-  } else if (tab === 'teams') {
+      <div class="card pad row wrapf g4">
+        ${av(USER.name, 'lg', 'brand')}
+        <div class="min0 flex1"><p class="t-base semi ink9">You are #${USER.rank}</p><p class="t-sm ink5 mt1">${USER.league} league · 1,144 XP to the top 50</p></div>
+        <a class="btn outline md" href="#/practice">Earn XP</a>
+      </div>
+      ${sec('Top players', '', seg('scope', [['global', 'Global'], ['college', 'My college']], state.scope), `
+        <div class="podium">${pod(second, '')}${pod(first, 'first')}${pod(third, '')}</div>
+        <div class="card rows mt4">
+          ${rows.slice(3).map((r) => `<div class="li" style="padding:12px 20px"><span class="rank">${r.rank}</span>${av(r.handle, 'sm')}<span class="t-base med ink8 min0 flex1 trunc">${r.handle}</span>
+            <span class="t-sm semi ink9 num">${fmt.format(r.xp)} XP</span></div>`).join('')}
+          <div class="li cur" style="padding:12px 20px"><span class="rank r1" style="width:auto;padding:0 6px">${USER.rank}</span>${av(USER.handle, 'sm', 'brand')}<span class="t-base semi ink9 min0 flex1 trunc">${USER.handle} (you)</span>
+            <span class="t-sm semi ink9 num">${USER.xp} XP</span></div>
+        </div>`)}`;
+  } else {
     body = `
       <div class="card empty"><div class="circ">${ic('users', 'i-xl')}</div>
         <p class="t-base semi ink9">You are not on a team yet</p>
         <p class="t-sm p ink5" style="max-width:380px">A team adds its XP together and can enter team events.</p>
         <div class="row g2 mt2"><button class="btn solid md" data-toast="The team form opens here">Create a team</button><button class="btn outline md" data-act="join-team">Join with a code</button></div></div>
-      ${sec('Top teams', '', '', `<div class="cards sm">${TEAMS.map(([n, mem, xp], i) => `<div class="card pad">
-        <div class="row between">${av(n, 'lg', i === 0 ? 'brand' : '')}<span class="rank ${i === 0 ? 'r1' : ''}">${i + 1}</span></div>
-        <p class="t-base semi ink9 mt3 trunc">${n}</p><p class="t-xs ink5 mt1">${mem} members · ${fmt.format(xp)} XP</p></div>`).join('')}</div>`)}`;
-  } else {
-    body = `<p class="t-sm ink6">Events use your CSEMA account.</p>
-    <div class="cards">${EVENTS.map((e) => `<div class="card pad" style="display:flex;flex-direction:column;gap:12px">
-        <div class="row g3"><div class="calbox"><span class="t-xs semi">${fmtDate(e.date, { month: 'short' })}</span><span class="t-3xl semi">${fmtDate(e.date, { day: 'numeric' })}</span></div>
-          <div class="min0"><p class="t-base semi ink9">${e.title}</p><p class="t-xs ink5 mt1">${e.duration}</p></div></div>
-        <p class="t-sm ink6">${e.format}</p>
-        <div class="row between" style="margin-top:auto">${badge(e.status, e.open ? 'green' : '')}<button class="btn md ${e.open ? 'solid' : 'outline'}" data-toast="${e.open ? 'You are registered (demo)' : 'We will remind you (demo)'}">${e.open ? 'Register' : 'Remind me'}</button></div>
-      </div>`).join('')}</div>`;
+      ${sec('Top teams', '', '', `<div class="cards three">${TEAMS.map(([n, mem, xp], i) => `<div class="card pad row g3">
+        ${av(n, 'lg', i === 0 ? 'brand' : '')}
+        <div class="min0 flex1"><p class="t-base semi ink9 trunc">${n}</p><p class="t-sm ink5 mt1">${mem} members · ${fmt.format(xp)} XP</p></div>
+        <span class="rank ${i === 0 ? 'r1' : ''}">${i + 1}</span></div>`).join('')}</div>`)}`;
   }
-  return page('<h1>Compete</h1>', `<div>${tabs}</div>${body}`, 'narrow');
+  return page(`<h1>Compete</h1><button class="btn ghost md ml-auto" data-toast="Event setup opens here (demo)">Create event</button>`, `<div>${tabs}</div>${body}`, 'narrow');
 }
 
 function heatmap() {
