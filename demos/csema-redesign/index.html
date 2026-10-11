@@ -6,332 +6,331 @@
 <meta name="description" content="Concept redesign of the CSEMA cybersecurity learning platform: four sections, one next step on Home, one practice catalog, and one name per concept. Demo data only.">
 <title>CSEMA redesign concept</title>
 <style>
+@font-face { font-family: "Archivo"; src: url("fonts/archivo.woff2") format("woff2"); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono.woff2") format("woff2"); font-weight: 400 600; font-display: swap; }
+
+/* Navy ink on cool lab paper. Signal red marks the primary action and "you are here", nothing else. */
 :root {
-  --bg: #ffffff; --sidebar: #f8f8f8; --s1: #f8f8f8; --s2: #f3f3f3; --s3: #ebebeb; --s5: #c7c7c7;
-  --ink9: #171717; --ink8: #262626; --ink7: #4d4d4d; --ink6: #666666; --ink5: #7c7c7c; --ink4: #a6a6a6;
-  --line1: #ededed; --line2: #e2e2e2; --line4: #c7c7c7;
-  --solid: #171717; --solid-ink: #ffffff; --overlay: rgba(0,0,0,.35);
-  --brand: #e03636; --brand-soft: #ffe7e7;
-  --green-bg: #e4f8eb; --green-ink: #137547; --green-dot: #30a66d;
-  --amber-bg: #fff4d6; --amber-ink: #a35a00; --amber-dot: #e79913;
-  --red-bg: #ffe7e7; --red-ink: #c62828;
-  --violet-bg: #efeaff; --violet-ink: #6a43d8;
-  --blue-bg: #e3f1ff; --blue-ink: #0b6bcb;
-  --shadow: 0 1px 2px rgba(0,0,0,.06);
-  --shadow-lg: 0 12px 32px rgba(0,0,0,.16);
+  --page: #eef1f4; --panel: #ffffff; --hover: #e3e8ee;
+  --ink: #0e1a2b; --ink-2: #364559; --ink-3: #627286; --ink-4: #95a1b1;
+  --rule: #d8dee6; --rule-2: #bcc6d2;
+  --signal: #d7263d; --signal-ink: #ffffff; --signal-soft: #f8dde1;
+  --ok: #1d7a52; --scrim: rgba(14, 26, 43, .45);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f0f0f; --sidebar: #161616; --s1: #191919; --s2: #222222; --s3: #2c2c2c; --s5: #4a4a4a;
-    --ink9: #f5f5f5; --ink8: #e6e6e6; --ink7: #bdbdbd; --ink6: #9e9e9e; --ink5: #858585; --ink4: #5e5e5e;
-    --line1: #262626; --line2: #2f2f2f; --line4: #4a4a4a;
-    --solid: #f5f5f5; --solid-ink: #171717; --overlay: rgba(0,0,0,.6);
-    --brand-soft: #3a1717;
-    --green-bg: #13301f; --green-ink: #5fd18e; --amber-bg: #36290c; --amber-ink: #f1b64a;
-    --red-bg: #3a1717; --red-ink: #ff7b7b; --violet-bg: #261d40; --violet-ink: #b39dff;
-    --blue-bg: #0f2a44; --blue-ink: #6fb5ff;
-    --shadow: 0 1px 2px rgba(0,0,0,.4); --shadow-lg: 0 12px 32px rgba(0,0,0,.6);
+    --page: #0c1626; --panel: #122036; --hover: #1a2b45;
+    --ink: #e8edf3; --ink-2: #b9c4d1; --ink-3: #8696aa; --ink-4: #5b6b81;
+    --rule: #20304a; --rule-2: #31445f;
+    --signal: #f04a5e; --signal-soft: #3b1b27; --ok: #4cc38a; --scrim: rgba(3, 8, 16, .65);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0f0f0f; --sidebar: #161616; --s1: #191919; --s2: #222222; --s3: #2c2c2c; --s5: #4a4a4a;
-  --ink9: #f5f5f5; --ink8: #e6e6e6; --ink7: #bdbdbd; --ink6: #9e9e9e; --ink5: #858585; --ink4: #5e5e5e;
-  --line1: #262626; --line2: #2f2f2f; --line4: #4a4a4a;
-  --solid: #f5f5f5; --solid-ink: #171717; --overlay: rgba(0,0,0,.6);
-  --brand-soft: #3a1717;
-  --green-bg: #13301f; --green-ink: #5fd18e; --amber-bg: #36290c; --amber-ink: #f1b64a;
-  --red-bg: #3a1717; --red-ink: #ff7b7b; --violet-bg: #261d40; --violet-ink: #b39dff;
-  --blue-bg: #0f2a44; --blue-ink: #6fb5ff;
-  --shadow: 0 1px 2px rgba(0,0,0,.4); --shadow-lg: 0 12px 32px rgba(0,0,0,.6);
+  --page: #0c1626; --panel: #122036; --hover: #1a2b45;
+  --ink: #e8edf3; --ink-2: #b9c4d1; --ink-3: #8696aa; --ink-4: #5b6b81;
+  --rule: #20304a; --rule-2: #31445f;
+  --signal: #f04a5e; --signal-soft: #3b1b27; --ok: #4cc38a; --scrim: rgba(3, 8, 16, .65);
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
-  background: var(--bg); color: var(--ink9);
-  font: 14px/1.4 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  background: var(--page); color: var(--ink);
+  font-family: "Archivo", ui-sans-serif, system-ui, sans-serif; font-size: 15px; line-height: 1.5; font-stretch: 100%;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
 }
 a { color: inherit; text-decoration: none; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
-p, h1, h2, h3, ul { margin: 0; padding: 0; }
-ul { list-style: none; }
-:focus-visible { outline: 2px solid var(--ink5); outline-offset: 2px; border-radius: 6px; }
+p, h1, h2, h3, ol, ul, dl, dd { margin: 0; padding: 0; }
+ol, ul { list-style: none; }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; border-radius: 4px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.i { width: 16px; height: 16px; flex-shrink: 0; display: inline-block; vertical-align: middle; }
-.i-sm { width: 14px; height: 14px; }
-.i-lg { width: 20px; height: 20px; }
-.i-xl { width: 24px; height: 24px; }
-
-/* Text */
-.t-xs { font-size: 12px; } .t-sm { font-size: 13px; } .t-base { font-size: 14px; } .t-lg { font-size: 16px; }
-.t-xl { font-size: 17px; } .t-2xl { font-size: 18px; } .t-3xl { font-size: 20px; } .t-4xl { font-size: 24px; }
-.p { line-height: 1.55; }
-.semi { font-weight: 600; } .med { font-weight: 500; }
-.ink9 { color: var(--ink9); } .ink8 { color: var(--ink8); } .ink7 { color: var(--ink7); } .ink6 { color: var(--ink6); }
-.ink5 { color: var(--ink5); } .ink4 { color: var(--ink4); } .green { color: var(--green-ink); } .amber { color: var(--amber-ink); }
+/* Type. Condensed Archivo carries headings; body stays at normal width. */
+.display { font-stretch: 72%; font-weight: 760; letter-spacing: -0.005em; line-height: .96; }
+.d-hero { font-size: clamp(44px, 7vw, 76px); }
+.d-1 { font-size: clamp(36px, 5vw, 48px); }
+.d-2 { font-size: 26px; line-height: 1.05; }
+.d-3 { font-size: 21px; line-height: 1.1; }
+.lead { font-size: 17px; line-height: 1.55; color: var(--ink-2); max-width: 60ch; }
+.body { font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+.small { font-size: 13px; } .tiny { font-size: 12px; }
+.c2 { color: var(--ink-2); } .c3 { color: var(--ink-3); } .c4 { color: var(--ink-4); } .ok { color: var(--ok); }
+.strong { font-weight: 600; color: var(--ink); }
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .92em; }
 .num { font-variant-numeric: tabular-nums; }
 .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.min0 { min-width: 0; } .flex1 { flex: 1; } .shrink0 { flex-shrink: 0; }
-.row { display: flex; align-items: center; } .row-s { display: flex; align-items: flex-start; }
-.wrapf { flex-wrap: wrap; } .between { justify-content: space-between; }
-.g1 { gap: 4px; } .g2 { gap: 8px; } .g3 { gap: 12px; } .g4 { gap: 16px; } .g6 { gap: 24px; }
-.stack > * + * { margin-top: 24px; } .stack-s > * + * { margin-top: 12px; }
-.mt1 { margin-top: 4px; } .mt2 { margin-top: 8px; } .mt3 { margin-top: 12px; } .mt4 { margin-top: 16px; } .mt5 { margin-top: 20px; } .mt8 { margin-top: 32px; }
-.ml-auto { margin-left: auto; } .right { text-align: right; } .center { text-align: center; }
-.w-full { width: 100%; }
-.hide-sm { } .only-sm { display: none; }
-@media (max-width: 640px) { .hide-sm { display: none !important; } .only-sm { display: initial; } }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-/* Shell */
-.app { display: flex; height: 100vh; }
-.side {
-  width: 14rem; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--line1);
-  display: flex; flex-direction: column;
-}
-.brand { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; }
-.logo { width: 28px; height: 28px; border-radius: 8px; background: var(--brand); color: #fff; display: grid; place-items: center; }
-.concept { margin: 0 12px 8px; font-size: 11px; color: var(--ink5); }
-.nav { padding: 2px 8px; flex: 1; overflow-y: auto; }
-.nav a {
-  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 8px;
-  color: var(--ink7); font-size: 13px; margin-bottom: 2px;
-}
-.nav a:hover { background: var(--s2); }
-.nav a.on { background: var(--bg); color: var(--ink9); box-shadow: var(--shadow); border: 1px solid var(--line1); }
-.searchbtn {
-  margin: 0 8px 8px; height: 30px; display: flex; align-items: center; justify-content: center; gap: 6px;
-  border: 0; border-radius: 8px; background: var(--s2); color: var(--ink5); font-size: 13px;
-}
-.searchbtn:hover { background: var(--s3); }
-.side-foot { padding: 8px; }
-.me {
-  width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px; border: 0; border-radius: 8px;
-  background: transparent; text-align: left;
-}
-.me:hover { background: var(--s2); }
-.col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.mtop { display: none; height: 48px; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line1); flex-shrink: 0; }
-main { flex: 1; min-height: 0; overflow-y: auto; }
-.bnav { display: none; }
-@media (max-width: 767px) {
-  .side { display: none; }
-  .mtop { display: flex; }
-  main { padding-bottom: 56px; }
-  .bnav {
-    display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; inset: auto 0 0 0; height: 56px; z-index: 10;
-    background: var(--bg); border-top: 1px solid var(--line1);
-  }
-  .bnav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; color: var(--ink5); }
-  .bnav a.on { color: var(--ink9); }
-}
+/* Layout helpers */
+.row { display: flex; align-items: center; } .top { align-items: flex-start; } .wrap { flex-wrap: wrap; }
+.gap-1 { gap: 6px; } .gap-2 { gap: 10px; } .gap-3 { gap: 16px; } .gap-4 { gap: 24px; } .gap-5 { gap: 40px; }
+.grow { flex: 1; min-width: 0; } .push { margin-left: auto; } .shrink0 { flex-shrink: 0; }
+.mt-1 { margin-top: 6px; } .mt-2 { margin-top: 12px; } .mt-3 { margin-top: 20px; } .mt-4 { margin-top: 32px; } .mt-5 { margin-top: 56px; }
+.metas { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-3); }
+.metas span { display: inline-flex; align-items: center; gap: 5px; }
+.hide-m { } .only-m { display: none; }
+@media (max-width: 720px) { .hide-m { display: none !important; } .only-m { display: inline; } }
 
-.ph {
-  min-height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 20px;
-  border-bottom: 1px solid var(--line1); position: sticky; top: 0; background: var(--bg); z-index: 5;
+.i { width: 16px; height: 16px; flex-shrink: 0; display: inline-block; vertical-align: -3px; }
+.i-s { width: 14px; height: 14px; } .i-l { width: 20px; height: 20px; }
+
+/* Shell: a rail of large condensed words, the content set flush left beside it. */
+.app { display: grid; grid-template-columns: 236px minmax(0, 1fr); height: 100vh; }
+.rail { display: flex; flex-direction: column; border-right: 1px solid var(--rule); padding: 24px 20px 16px; overflow-y: auto; }
+.mark { display: flex; align-items: center; gap: 9px; font-stretch: 72%; font-weight: 800; font-size: 24px; letter-spacing: .01em; }
+.mark .hex { width: 22px; height: 22px; color: var(--signal); }
+.concept { display: block; margin-top: 6px; font-size: 12px; color: var(--ink-3); text-decoration: underline; text-decoration-color: var(--rule-2); text-underline-offset: 3px; }
+.findbox {
+  margin-top: 24px; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; width: 100%;
+  border: 1px solid var(--rule-2); border-radius: 6px; background: var(--panel); color: var(--ink-3); font-size: 14px; text-align: left;
 }
-@media (max-width: 640px) { .ph { padding: 0 12px; } }
-.ph h1 { font-size: 18px; font-weight: 500; }
-.crumbs { display: flex; align-items: center; gap: 6px; font-size: 16px; min-width: 0; }
-.crumbs a { color: var(--ink5); white-space: nowrap; } .crumbs a:hover { color: var(--ink8); }
-.crumbs .sep { color: var(--ink4); }
-.crumbs .cur { color: var(--ink9); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.findbox:hover { border-color: var(--ink-3); }
+.key { margin-left: auto; font-size: 11px; line-height: 1; padding: 3px 6px; border: 1px solid var(--rule-2); border-radius: 4px; color: var(--ink-3); }
+.nav { margin-top: 28px; display: flex; flex-direction: column; gap: 2px; }
+.nav a { position: relative; display: flex; align-items: center; height: 40px; padding-left: 22px; font-stretch: 72%; font-weight: 680; font-size: 26px; color: var(--ink-4); }
+.nav a:hover { color: var(--ink-2); }
+.nav a.on { color: var(--ink); }
+.nav a.on::before { content: ""; position: absolute; left: 2px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 4px var(--signal-soft); }
+.planbox { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--rule); font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.planbox a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule-2); }
+.me { margin-top: 16px; width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px; border: 0; border-radius: 6px; background: transparent; text-align: left; }
+.me:hover { background: var(--hover); }
+.av { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--rule-2); background: var(--panel); font-weight: 600; font-size: 13px; color: var(--ink-2); flex-shrink: 0; }
+.av.s { width: 24px; height: 24px; font-size: 11px; } .av.l { width: 64px; height: 64px; font-size: 26px; font-stretch: 72%; font-weight: 760; }
 
-.wrap { margin: 0 auto; padding: 20px 20px 48px; }
-@media (max-width: 640px) { .wrap { padding: 20px 12px 48px; } }
-.w4 { max-width: 896px; } .w9 { max-width: 940px; } .w11 { max-width: 1100px; } .w10 { max-width: 1000px; }
+main { overflow-y: auto; min-width: 0; }
+.page { max-width: 1080px; padding: 40px 56px 96px; }
+.page.narrow { max-width: 860px; }
+@media (max-width: 1100px) { .page { padding: 32px 32px 96px; } }
+.crumb { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--ink-3); margin-bottom: 14px; }
+.crumb a { text-decoration: underline; text-decoration-color: var(--rule-2); text-underline-offset: 3px; }
+.crumb a:hover { color: var(--ink); }
+.crumb .sep { color: var(--ink-4); }
 
-/* Surfaces */
-.card { border: 1px solid var(--line1); border-radius: 10px; }
-.card-pad { padding: 16px; }
-.card-tint { background: var(--s1); border-color: var(--line2); }
-.dashed { border-style: dashed; border-color: var(--line2); }
-.list { border: 1px solid var(--line1); border-radius: 10px; overflow: hidden; }
-.list > * + * { border-top: 1px solid var(--line1); }
-.li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
-a.li:hover, button.li:hover { background: var(--s1); }
-.li.cur { background: var(--s1); }
-.tile { width: 36px; height: 36px; border-radius: 8px; background: var(--s2); display: grid; place-items: center; color: var(--ink6); flex-shrink: 0; }
-.tile-red { background: var(--brand-soft); color: var(--red-ink); }
-.grid2 { display: grid; gap: 16px; }
-@media (min-width: 768px) { .grid2 { grid-template-columns: 1fr 1fr; } }
-.grid3 { display: grid; gap: 16px; }
-@media (min-width: 768px) { .grid3 { grid-template-columns: repeat(3, 1fr); } }
-
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line1); border-radius: 10px; }
-.stats > div { padding: 12px 16px; } .stats > div + div { border-left: 1px solid var(--line1); }
-@media (max-width: 640px) {
-  .stats { grid-template-columns: 1fr 1fr; }
-  .stats > div + div { border-left: 0; }
-  .stats > div:nth-child(2n) { border-left: 1px solid var(--line1); }
-  .stats > div:nth-child(n+3) { border-top: 1px solid var(--line1); }
+.mtop, .bnav { display: none; }
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .rail { display: none; }
+  .mtop { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 16px; border-bottom: 1px solid var(--rule); }
+  .mtop .mark { font-size: 21px; }
+  .page { padding: 24px 16px 104px; }
+  .bnav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; height: 60px; z-index: 10; background: var(--page); border-top: 1px solid var(--rule); }
+  .bnav a { position: relative; display: grid; place-items: center; font-stretch: 72%; font-weight: 680; font-size: 18px; color: var(--ink-4); }
+  .bnav a.on { color: var(--ink); }
+  .bnav a.on::after { content: ""; position: absolute; top: -1px; left: 30%; right: 30%; height: 3px; background: var(--signal); border-radius: 0 0 3px 3px; }
 }
 
 /* Controls */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 10px;
-  border: 1px solid transparent; border-radius: 8px; font-size: 13px; white-space: nowrap;
-  background: var(--s2); color: var(--ink8); transition: background .12s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 14px;
+  border: 1px solid var(--rule-2); border-radius: 6px; background: var(--panel); color: var(--ink); font-size: 14px; font-weight: 520; white-space: nowrap;
 }
-.btn:hover { background: var(--s3); }
-.btn.solid { background: var(--solid); color: var(--solid-ink); }
-.btn.solid:hover { opacity: .9; }
-.btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--s2); }
-.btn.danger { color: var(--red-ink); }
-.btn.ok { background: var(--green-bg); color: var(--green-ink); }
-.btn.lg { height: 36px; padding: 0 14px; font-size: 14px; }
-.btn.icon { width: 28px; padding: 0; }
-.btn[disabled] { opacity: .5; cursor: default; }
-.btn.full { width: 100%; }
-.input {
-  height: 28px; border: 1px solid transparent; border-radius: 8px; background: var(--s2); padding: 0 8px; font-size: 13px; color: var(--ink8); width: 100%;
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--ink-2); }
+.btn.quiet:hover { background: var(--hover); }
+.btn.big { height: 46px; padding: 0 22px; font-size: 16px; }
+.btn.sq { width: 36px; padding: 0; }
+.btn.done { background: transparent; border-color: var(--ok); color: var(--ok); }
+.btn[disabled] { opacity: .45; cursor: default; filter: none; }
+.btn.danger { color: var(--signal); }
+.field {
+  height: 36px; width: 100%; padding: 0 10px; border: 1px solid var(--rule-2); border-radius: 6px; background: var(--panel); color: var(--ink); font-size: 14px;
 }
-.input:hover { background: var(--s3); }
-.input:focus { outline: none; background: var(--bg); border-color: var(--line4); }
-.input::placeholder { color: var(--ink4); }
-.inputwrap { position: relative; } .inputwrap .i { position: absolute; left: 8px; top: 6px; color: var(--ink5); }
-.inputwrap .input { padding-left: 28px; }
-select.input { appearance: none; padding-right: 26px; background-image: linear-gradient(45deg, transparent 50%, var(--ink5) 50%), linear-gradient(135deg, var(--ink5) 50%, transparent 50%); background-position: calc(100% - 13px) 12px, calc(100% - 9px) 12px; background-size: 4px 4px; background-repeat: no-repeat; }
-.label { display: block; font-size: 12px; color: var(--ink6); margin-bottom: 6px; }
-.help { font-size: 12px; color: var(--ink5); margin-top: 6px; }
+.field::placeholder { color: var(--ink-4); }
+.field:focus { outline: none; border-color: var(--ink-2); box-shadow: 0 0 0 3px var(--hover); }
+.field.mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+select.field { appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%); background-position: calc(100% - 15px) 16px, calc(100% - 10px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
+.withicon { position: relative; display: block; } .withicon .i { position: absolute; left: 11px; top: 10px; color: var(--ink-3); } .withicon .field { padding-left: 34px; }
+.flabel { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.fhelp { font-size: 13px; color: var(--ink-3); margin-top: 6px; }
+.toggle { display: inline-flex; align-items: center; gap: 9px; border: 0; background: transparent; padding: 0; font-size: 14px; color: var(--ink-2); }
+.toggle .track { position: relative; width: 32px; height: 18px; border-radius: 99px; background: var(--rule-2); transition: background .15s; }
+.toggle .track::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--panel); transition: transform .15s; }
+.toggle[aria-checked="true"] .track { background: var(--ink); }
+.toggle[aria-checked="true"] .track::after { transform: translateX(14px); }
 
-.seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 8px; background: var(--s2); max-width: 100%; overflow-x: auto; }
-.seg button { border: 0; background: transparent; height: 24px; padding: 0 10px; border-radius: 6px; font-size: 13px; color: var(--ink6); white-space: nowrap; }
-.seg button:hover { color: var(--ink8); }
-.seg button.on { background: var(--bg); color: var(--ink9); box-shadow: var(--shadow); }
-.seg .cnt { color: var(--ink4); margin-left: 4px; }
+/* Text tabs with an ink underline */
+.tabs { display: flex; gap: 26px; border-bottom: 1px solid var(--rule); overflow-x: auto; scrollbar-width: none; }
+.tabs button { position: relative; flex-shrink: 0; border: 0; background: transparent; padding: 0 0 12px; font-size: 16px; font-weight: 560; color: var(--ink-3); }
+.tabs button:hover { color: var(--ink); }
+.tabs button.on { color: var(--ink); }
+.tabs button.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--ink); }
+.tabs .n { margin-left: 6px; font-size: 13px; color: var(--ink-4); font-weight: 500; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button { height: 32px; padding: 0 13px; border: 1px solid var(--rule-2); border-radius: 99px; background: transparent; font-size: 14px; color: var(--ink-2); }
+.chips button:hover { border-color: var(--ink-3); }
+.chips button.on { background: var(--ink); border-color: var(--ink); color: var(--page); }
 
-.sw { position: relative; width: 28px; height: 16px; border-radius: 99px; border: 0; background: var(--s5); padding: 0; flex-shrink: 0; transition: background .15s; }
-.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 99px; background: #fff; transition: transform .15s; }
-.sw[aria-checked="true"] { background: var(--solid); }
-.sw[aria-checked="true"]::after { transform: translateX(12px); background: var(--solid-ink); }
+/* Bars */
+.bar { height: 3px; border-radius: 3px; background: var(--rule); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--ink); min-width: 3px; border-radius: 3px; transition: width .25s; }
 
-.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 12px; white-space: nowrap; background: var(--s2); color: var(--ink7); }
-.badge.outline { background: transparent; border: 1px solid var(--line2); }
-.b-green { background: var(--green-bg); color: var(--green-ink); }
-.b-amber { background: var(--amber-bg); color: var(--amber-ink); }
-.b-red { background: var(--red-bg); color: var(--red-ink); }
-.b-violet { background: var(--violet-bg); color: var(--violet-ink); }
-.b-blue { background: var(--blue-bg); color: var(--blue-ink); }
+/* Difficulty as a four-step signal meter */
+.meter { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); }
+.meter .pips { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.meter i { width: 3px; border-radius: 1px; background: var(--rule-2); }
+.meter i:nth-child(1) { height: 5px; } .meter i:nth-child(2) { height: 7px; } .meter i:nth-child(3) { height: 10px; } .meter i:nth-child(4) { height: 12px; }
+.meter i.on { background: var(--ink); }
+.meter.expert i.on { background: var(--signal); }
 
-.prog { height: 4px; border-radius: 99px; background: var(--s3); overflow: hidden; }
-.prog > div { height: 100%; background: var(--ink9); border-radius: 99px; min-width: 2px; transition: width .2s; }
+/* The signature: learning drawn as a network route. Filled = done, red = you are here, hollow = ahead. */
+.node { display: block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--rule-2); background: var(--page); flex-shrink: 0; position: relative; z-index: 1; }
+.done > .node, .done .node { background: var(--ink); border-color: var(--ink); }
+.here > .node, .here .node { background: var(--signal); border-color: var(--signal); box-shadow: 0 0 0 5px var(--signal-soft); animation: ping 2.4s ease-out infinite; }
+.locked .node { border-style: dashed; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 var(--signal-soft); } 60% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 5px var(--signal-soft); } }
+@media (prefers-reduced-motion: reduce) { .here .node, .here > .node { animation: none; } .bar > i, .toggle .track, .toggle .track::after { transition: none; } }
 
-.av { display: inline-grid; place-items: center; border-radius: 99px; background: var(--s3); color: var(--ink7); font-weight: 500; flex-shrink: 0; }
-.av-sm { width: 20px; height: 20px; font-size: 11px; } .av-md { width: 28px; height: 28px; font-size: 13px; }
-.av-lg { width: 36px; height: 36px; font-size: 15px; } .av-xl { width: 56px; height: 56px; font-size: 22px; }
-.dot { width: 8px; height: 8px; border-radius: 99px; background: var(--s5); flex-shrink: 0; }
-.dot.amber { background: var(--amber-dot); } .dot.green { background: var(--green-dot); }
-
-.skel { background: var(--s2); border-radius: 4px; animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .5; } }
-@media (prefers-reduced-motion: reduce) { .skel { animation: none; } * { transition: none !important; } }
-
-/* Practice table */
-.tbl { display: grid; }
-.tr { display: grid; grid-template-columns: minmax(0,1fr) 6rem 5rem 5rem 8rem; align-items: center; gap: 12px; padding: 0 8px; min-height: 56px; border-bottom: 1px solid var(--line1); }
-.tr.head { min-height: 32px; font-size: 12px; color: var(--ink5); }
-a.tr:hover { background: var(--s1); border-radius: 8px; }
-.lb .tr { grid-template-columns: 3rem minmax(0,1fr) 6rem 7rem; min-height: 48px; }
-@media (max-width: 767px) {
-  .tr { grid-template-columns: minmax(0,1fr) 5.5rem; }
-  .tr .wide { display: none; }
-  .lb .tr { grid-template-columns: 2.5rem minmax(0,1fr) 5.5rem; }
+.route { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.route li { position: relative; padding-right: 14px; }
+.route li::after { content: ""; position: absolute; left: 14px; right: 0; top: 6px; height: 2px; background: var(--rule-2); }
+.route li.done::after { background: var(--ink); }
+.route li:last-child::after { display: none; }
+.route a { display: block; }
+.route .lbl { display: block; margin-top: 10px; font-size: 13px; line-height: 1.35; color: var(--ink-3); }
+.route .here .lbl { color: var(--ink); font-weight: 600; }
+.route .done .lbl { color: var(--ink-2); }
+.route a:hover .lbl { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule-2); }
+@media (max-width: 720px) {
+  .route { grid-auto-flow: row; gap: 0; }
+  .route li { padding: 0 0 14px 28px; }
+  .route li::after { left: 6px; right: auto; top: 14px; bottom: 0; width: 2px; height: auto; }
+  .route .node { position: absolute; left: 0; top: 2px; }
+  .route .lbl { margin-top: 0; }
 }
+
+.vroute > li { position: relative; }
+.vroute > li::before { content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: var(--rule-2); }
+.vroute > li.done::before { background: var(--ink); }
+.vroute > li:first-child::before { top: 24px; }
+.vroute > li:last-child::before { bottom: calc(100% - 24px); }
+.vroute > li:only-child::before { display: none; }
+.vroute .stop { display: flex; align-items: flex-start; gap: 18px; padding: 14px 8px 14px 0; border-radius: 6px; }
+.vroute .stop .node { margin-top: 3px; }
+a.stop:hover .t, button.stop:hover .t { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule-2); }
+.vroute .t { font-size: 16px; font-weight: 600; color: var(--ink); }
+.vroute .done .t { color: var(--ink-2); font-weight: 500; }
+.vroute .d { font-size: 14px; color: var(--ink-3); margin-top: 2px; }
+.vroute .side { margin-left: auto; padding-left: 16px; text-align: right; font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+.here-tag { display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--signal); vertical-align: 1px; }
+
+/* Ruled lists and tables */
+.ruled > * { border-top: 1px solid var(--rule); }
+.ruled > *:last-child { border-bottom: 1px solid var(--rule); }
+.rowlink { display: flex; align-items: center; gap: 16px; padding: 14px 4px; }
+a.rowlink:hover .t { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule-2); }
+.rowlink .t { font-size: 16px; font-weight: 600; }
+.table { width: 100%; }
+.tr { display: grid; grid-template-columns: minmax(0, 1fr) 7.5rem 4.5rem 4.5rem 7rem; gap: 16px; align-items: center; padding: 13px 4px; border-bottom: 1px solid var(--rule); }
+.tr.th { padding: 0 4px 10px; font-size: 13px; color: var(--ink-3); border-bottom-color: var(--rule-2); }
+a.tr:hover { background: var(--hover); }
+a.tr:hover .t { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule-2); }
+.tr .t { font-size: 15px; font-weight: 600; }
+.tr .r { text-align: right; }
+.lb .tr { grid-template-columns: 3rem minmax(0, 1fr) 6rem 7rem; }
+.lb .tr.you { background: var(--signal-soft); border-radius: 6px; }
+@media (max-width: 720px) {
+  .tr { grid-template-columns: minmax(0, 1fr) auto; }
+  .tr .w { display: none; }
+  .lb .tr { grid-template-columns: 2.4rem minmax(0, 1fr) auto; }
+}
+
+/* Panels: used only where grouping matters */
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 20px; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr; gap: 32px; } }
+.hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
+.sentence { font-size: 19px; line-height: 1.55; color: var(--ink-2); max-width: 62ch; }
+.sentence b { font-stretch: 72%; font-weight: 760; font-size: 24px; color: var(--ink); letter-spacing: -.005em; }
+
+/* Redaction: locked content shows its shape, not its contents */
+.redact { border: 1px solid var(--rule); border-radius: 10px; padding: 22px; background: var(--panel); }
+.redact .lines { display: flex; flex-direction: column; gap: 9px; margin: 16px 0 18px; }
+.redact .lines span { display: block; height: 12px; border-radius: 2px; background: var(--ink); opacity: .88; }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-4); flex-shrink: 0; }
+.dot.wait { background: #c98a12; } .dot.live { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 20%, transparent); }
+
+.slide { aspect-ratio: 16 / 9; display: flex; flex-direction: column; justify-content: flex-end; padding: 40px 44px; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; }
+@media (max-width: 720px) { .slide { aspect-ratio: auto; min-height: 300px; padding: 24px; } }
+.lessonwrap { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 48px; }
+@media (max-width: 1100px) { .lessonwrap { grid-template-columns: 1fr; } .lessonwrap aside { display: none; } }
+
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--rule); }
+.plans > div { padding: 24px 24px 0 0; display: flex; flex-direction: column; }
+.plans > div + div { padding-left: 24px; border-left: 1px solid var(--rule); }
+.plans .rec { box-shadow: inset 0 3px 0 var(--signal); }
+@media (max-width: 860px) { .plans { grid-template-columns: 1fr; } .plans > div, .plans > div + div { padding: 24px 0; border-left: 0; } .plans > div + div { border-top: 1px solid var(--rule); } }
+.ticks li { display: flex; gap: 10px; font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.ticks li + li { margin-top: 10px; }
+.ticks .i { margin-top: 2px; color: var(--ink-3); }
+.daybox { width: 56px; flex-shrink: 0; text-align: center; }
+.daybox .d { display: block; font-stretch: 72%; font-weight: 760; font-size: 34px; line-height: 1; }
+.daybox .m { font-size: 13px; color: var(--ink-3); }
+.empty { padding: 40px 0; max-width: 46ch; }
+.honours { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.honours > div { background: var(--panel); padding: 16px 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--ink-2); }
+.honours > div.off { color: var(--ink-4); }
 
 /* Overlays */
-.overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 12px 12px; }
-.dialog { width: 100%; max-width: 560px; background: var(--bg); border: 1px solid var(--line2); border-radius: 12px; box-shadow: var(--shadow-lg); overflow: hidden; }
-.menu { position: fixed; z-index: 30; min-width: 220px; background: var(--bg); border: 1px solid var(--line2); border-radius: 10px; box-shadow: var(--shadow-lg); padding: 4px; }
-.menu button { width: 100%; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: var(--ink8); text-align: left; }
-.menu button:hover { background: var(--s2); }
-.res { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; }
-.res:hover, .res.sel { background: var(--s2); }
-.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; flex-direction: column; gap: 8px; }
-@media (max-width: 767px) { .toasts { bottom: 72px; left: 12px; right: 12px; } }
-.toast { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--solid); color: var(--solid-ink); border-radius: 10px; font-size: 13px; box-shadow: var(--shadow-lg); }
-
-.slide { aspect-ratio: 16/9; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; background: var(--s1); border: 1px solid var(--line1); border-radius: 10px; }
-@media (max-width: 640px) { .slide { padding: 24px; aspect-ratio: 4/3; } }
-.outline { width: 20rem; flex-shrink: 0; border-left: 1px solid var(--line1); overflow-y: auto; }
-@media (max-width: 1023px) { .outline { display: none; } }
-.outline a { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
-.outline a:hover { background: var(--s2); } .outline a.on { background: var(--s2); color: var(--ink9); }
-.kbd { font-size: 11px; padding: 1px 5px; border: 1px solid var(--line2); border-radius: 4px; color: var(--ink5); }
-.feat li { display: flex; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--ink7); }
-.feat li + li { margin-top: 10px; }
-.feat .i { margin-top: 2px; color: var(--ink5); }
-.badgegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.badgegrid > div { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 8px; border: 1px solid var(--line1); border-radius: 8px; text-align: center; font-size: 12px; color: var(--ink7); }
-.badgegrid > div.off { opacity: .45; }
-.calbox { width: 48px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; padding: 4px 0; border: 1px solid var(--line1); border-radius: 8px; }
-.empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 16px; text-align: center; }
-.empty .circ { width: 48px; height: 48px; border-radius: 99px; background: var(--s2); display: grid; place-items: center; color: var(--ink5); }
-.note { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; background: var(--s2); border-radius: 10px; }
-.about li { display: flex; gap: 10px; font-size: 14px; line-height: 1.55; color: var(--ink7); }
-.about li + li { margin-top: 12px; }
-.about b { color: var(--ink9); font-weight: 600; }
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; }
+.sheet { width: 100%; max-width: 600px; background: var(--panel); border: 1px solid var(--rule-2); border-radius: 12px; box-shadow: 0 24px 64px rgba(0, 0, 0, .28); overflow: hidden; }
+.sheet .q { display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid var(--rule); }
+.sheet .q input { flex: 1; height: 58px; border: 0; background: transparent; font-size: 19px; outline: none; }
+.hit { display: flex; gap: 14px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; }
+.hit:hover, .hit:focus-visible { background: var(--hover); }
+.menu { position: fixed; z-index: 30; min-width: 230px; padding: 6px; background: var(--panel); border: 1px solid var(--rule-2); border-radius: 10px; box-shadow: 0 16px 40px rgba(0, 0, 0, .22); }
+.menu button { width: 100%; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; font-size: 14px; text-align: left; }
+.menu button:hover, .menu button:focus-visible { background: var(--hover); }
+.menu hr { border: 0; border-top: 1px solid var(--rule); margin: 6px 0; }
+.toasts { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; z-index: 50; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+@media (max-width: 860px) { .toasts { bottom: 76px; } }
+.toast { display: flex; align-items: center; gap: 10px; padding: 11px 16px; background: var(--ink); color: var(--page); border-radius: 8px; font-size: 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, .25); }
 </style>
 </head>
 <body>
 <div class="app">
-  <aside class="side" aria-label="Main navigation">
-    <div class="brand">
-      <div class="logo" data-icon="hexagon"></div>
-      <span class="t-lg semi">CSEMA</span>
+  <aside class="rail" aria-label="Main">
+    <a class="mark" href="#/"><span data-icon="hexagon" class="hex"></span>CSEMA</a>
+    <a class="concept" href="#/about">Concept with demo data</a>
+    <button class="findbox" data-act="search"><span data-icon="search"></span>Search<span class="key">/</span></button>
+    <nav class="nav" id="nav"></nav>
+    <div class="planbox">
+      You are on the Free plan. Prime opens every challenge and adds 60 machine hours a month.
+      <a href="#/plans">Compare plans</a>
     </div>
-    <a class="concept" href="#/about">Concept redesign · demo data</a>
-    <button class="searchbtn" data-act="search"><span data-icon="search"></span>Search</button>
-    <nav class="nav" id="sidenav"></nav>
-    <div class="side-foot">
-      <div class="card card-pad card-tint" style="padding:12px">
-        <p class="t-sm semi ink8">Free plan</p>
-        <p class="t-xs p ink6 mt1">Prime unlocks every challenge, 60 machine hours a month and all seasons.</p>
-        <a class="btn full mt3" href="#/plans">See plans</a>
-      </div>
-      <button class="me mt3" data-act="account" aria-haspopup="menu">
-        <span class="av av-md" id="me-av"></span>
-        <span class="min0 flex1">
-          <span class="t-sm semi ink8 trunc" style="display:block" id="me-name"></span>
-          <span class="t-xs ink5 trunc" style="display:block" id="me-meta"></span>
-        </span>
-        <span data-icon="chevrons-up-down" class="ink5"></span>
-      </button>
-    </div>
+    <button class="me" data-act="account" aria-haspopup="menu">
+      <span class="av" id="me-av"></span>
+      <span class="grow"><span class="small strong trunc" style="display:block" id="me-name"></span><span class="tiny c3" id="me-meta"></span></span>
+      <span data-icon="chevrons-up-down" class="c3"></span>
+    </button>
   </aside>
 
-  <div class="col">
-    <div class="mtop">
-      <div class="logo" data-icon="hexagon"></div>
-      <span class="t-lg semi">CSEMA</span>
-      <button class="btn ghost icon ml-auto" data-act="search" aria-label="Search"><span data-icon="search"></span></button>
-      <button class="btn ghost icon" data-act="account" aria-label="Account" style="width:auto"><span class="av av-md" id="me-av-m"></span></button>
-    </div>
-    <main id="main"></main>
-    <nav class="bnav" id="bnav" aria-label="Main navigation"></nav>
+  <div class="mtop">
+    <a class="mark" href="#/"><span data-icon="hexagon" class="hex"></span>CSEMA</a>
+    <button class="btn quiet sq push" data-act="search" aria-label="Search"><span data-icon="search"></span></button>
+    <button class="btn quiet sq" data-act="account" aria-label="Account" aria-haspopup="menu" style="width:auto;padding:0 2px"><span class="av s" id="me-av-m"></span></button>
   </div>
+
+  <main id="main"></main>
 </div>
-<div class="toasts" id="toasts" aria-live="polite"></div>
+<nav class="bnav" id="bnav" aria-label="Main"></nav>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 <div id="layer"></div>
 
 <script>
 /* ---------- Icons (Lucide, ISC licence) ---------- */
 const ICONS = {
-  house: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
-  'book-open': '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
-  target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
-  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-  'search-x': '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/>',
   clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-  zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
-  'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
   'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
-  'chevron-right': '<path d="m9 18 6-6-6-6"/>',
   'chevron-down': '<path d="m6 9 6 6 6-6"/>',
   'chevron-up': '<path d="m18 15-6-6-6 6"/>',
   'chevrons-up-down': '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
@@ -339,14 +338,9 @@ const ICONS = {
   flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
   'flask-conical': '<path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>',
   siren: '<path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="m4.929 4.929.707.707"/><path d="M12 12v6"/>',
+  'book-open': '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
   lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
-  circle: '<circle cx="12" cy="12" r="10"/>',
-  'circle-check': '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
-  'circle-play': '<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3"/>',
-  radio: '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>',
-  gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>',
-  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   'credit-card': '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
   megaphone: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
@@ -356,22 +350,13 @@ const ICONS = {
   link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
   terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
-  award: '<path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>',
-  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
-  calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
   flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
-  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
-  network: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
-  router: '<rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6.01 18H6"/><path d="M10.01 18H10"/><path d="M15 10v4"/><path d="M17.84 7.17a4 4 0 0 0-5.66 0"/><path d="M20.66 4.34a8 8 0 0 0-11.31 0"/>',
-  key: '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
-  cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
-  cpu: '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
-  bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   'graduation-cap': '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
-  hexagon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',
+  radio: '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>',
+  hexagon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="currentColor" stroke="none"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
 };
 const ic = (n, cls = '') =>
@@ -382,18 +367,18 @@ const USER = { name: 'Alex', handle: 'alex_learner', level: 2, levelName: 'Begin
   rank: 710, streak: 0, solved: 0, lessonsDone: 1, plan: 'Free', machineMinutesLeft: 290, joined: '2025-09-14' };
 
 const TRACKS = ['Core', 'Red team', 'Blue team', 'AI security'];
-const TRACK_BLURB = { Core: 'Start here. Everything else builds on these.', 'Red team': 'Find, prove and report weaknesses.',
+const TRACK_BLURB = { Core: 'Start here. Every other track builds on these four paths, in this order.', 'Red team': 'Find, prove and report weaknesses.',
   'Blue team': 'Detect, investigate and respond.', 'AI security': 'Understand and secure AI systems.' };
 
 const PATHS = [
-  { id: 'cyber-foundation', track: 'Core', title: 'Cyber foundation', description: 'The core ideas, vocabulary and defensive mindset of security work.', lessons: 24, done: 0, hours: 6, icon: 'shield' },
-  { id: 'networking-1', track: 'Core', title: 'Networking deep dive, part 1', description: 'Devices, models, Ethernet and wireless, with build-and-repair scenarios.', lessons: 68, done: 1, hours: 18, icon: 'network' },
-  { id: 'networking-2', track: 'Core', title: 'Networking deep dive, part 2', description: 'Routing, services, network security and automation on real router labs.', lessons: 57, done: 0, hours: 16, icon: 'router' },
-  { id: 'cryptography', track: 'Core', title: 'Cryptography', description: 'From classical ciphers to modern protocols and applied crypto.', lessons: 32, done: 0, hours: 9, icon: 'key' },
-  { id: 'cloud-security-1', track: 'Red team', title: 'Cloud security, part 1', description: 'How cloud identity, storage and compute get misconfigured and attacked.', lessons: 28, done: 0, hours: 8, icon: 'cloud' },
-  { id: 'digital-forensics', track: 'Blue team', title: 'Digital forensics', description: 'Collect, preserve and read evidence from disks, memory and logs.', lessons: 26, done: 0, hours: 7, icon: 'search' },
-  { id: 'ai-systems', track: 'AI security', title: 'Introduction to AI systems', description: 'How modern models are built, deployed and where they break.', lessons: 18, done: 0, hours: 5, icon: 'cpu' },
-  { id: 'ai-robotics', track: 'AI security', title: 'AI robotics simulation lab', description: 'Program and attack simulated robots in a sandboxed world.', lessons: 14, done: 0, hours: 4, icon: 'bot' },
+  { id: 'cyber-foundation', track: 'Core', title: 'Cyber foundation', description: 'The core ideas, vocabulary and defensive mindset of security work.', lessons: 24, done: 0, hours: 6 },
+  { id: 'networking-1', track: 'Core', title: 'Networking deep dive, part 1', description: 'Devices, models, Ethernet and wireless, with build-and-repair scenarios.', lessons: 68, done: 1, hours: 18 },
+  { id: 'networking-2', track: 'Core', title: 'Networking deep dive, part 2', description: 'Routing, services, network security and automation on real router labs.', lessons: 57, done: 0, hours: 16 },
+  { id: 'cryptography', track: 'Core', title: 'Cryptography', description: 'From classical ciphers to modern protocols and applied crypto.', lessons: 32, done: 0, hours: 9 },
+  { id: 'cloud-security-1', track: 'Red team', title: 'Cloud security, part 1', description: 'How cloud identity, storage and compute get misconfigured and attacked.', lessons: 28, done: 0, hours: 8 },
+  { id: 'digital-forensics', track: 'Blue team', title: 'Digital forensics', description: 'Collect, preserve and read evidence from disks, memory and logs.', lessons: 26, done: 0, hours: 7 },
+  { id: 'ai-systems', track: 'AI security', title: 'Introduction to AI systems', description: 'How modern models are built, deployed and where they break.', lessons: 18, done: 0, hours: 5 },
+  { id: 'ai-robotics', track: 'AI security', title: 'AI robotics simulation lab', description: 'Program and attack simulated robots in a sandboxed world.', lessons: 14, done: 0, hours: 4 },
 ];
 
 const UPCOMING = [
@@ -484,12 +469,12 @@ const ITEMS = [
     summary: 'Finance reports a crawling file share and the service desk is flooded with lockouts. Find what changed, contain it, and write it up.' },
 ];
 const TYPE = {
-  challenge: { label: 'Challenge', plural: 'Challenges', icon: 'flag', blurb: 'Download a file or open a target, find the flag.' },
+  challenge: { label: 'Challenge', plural: 'Challenges', icon: 'flag', blurb: 'Download a file or open a target, then find the flag.' },
   machine: { label: 'Machine', plural: 'Machines', icon: 'server', blurb: 'A live vulnerable machine. Get a shell, then get root.' },
   lab: { label: 'Lab', plural: 'Labs', icon: 'flask-conical', blurb: 'Multi-step attack chains on your own cloud range.' },
   scenario: { label: 'Scenario', plural: 'SOC scenarios', icon: 'siren', blurb: 'Respond to a live incident in a simulated company.' },
 };
-const DIFF = { Easy: 'green', Medium: 'amber', Hard: 'red', Expert: 'violet' };
+const LEVEL = { Easy: 1, Medium: 2, Hard: 3, Expert: 4 };
 const ACCESS = { free: 'Free', prime: 'Prime', labs: 'Prime + Labs' };
 const canOpen = (a) => a === 'free';
 
@@ -507,8 +492,8 @@ const BOARD = [
 ].map(([handle, xp, solved], i) => ({ rank: i + 1, handle, xp, solved }));
 const TEAMS = [['Hex Raiders', 6, 19135], ['Echo Shell', 5, 16420], ['Exit Code Zero', 4, 15980], ['Packet Storm', 6, 12210], ['Blue Lantern', 3, 10874]];
 const EVENTS = [
-  { title: 'Cyber Security Month CTF', date: '2026-10-25', duration: '24 hours', format: 'Jeopardy, teams of up to 4', status: 'Registration open' },
-  { title: 'Campus Cup qualifier', date: '2026-11-08', duration: '8 hours', format: 'Jeopardy, solo', status: 'Opens 20 Oct' },
+  { title: 'Cyber Security Month CTF', date: '2026-10-25', duration: '24 hours', format: 'Jeopardy, teams of up to 4', open: true, status: 'Registration open' },
+  { title: 'Campus Cup qualifier', date: '2026-11-08', duration: '8 hours', format: 'Jeopardy, solo', status: 'Registration opens 20 October' },
   { title: 'SOC night shift', date: '2026-11-22', duration: '6 hours', format: 'Live incident, teams of 3', status: 'Announced' },
 ];
 const SKILLS = ['Security operations', 'Incident response', 'Malware analysis', 'Penetration testing', 'Web exploitation', 'Cryptography'];
@@ -518,18 +503,21 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const fmt = new Intl.NumberFormat('en-IN');
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-const badge = (label, theme = '', outline = false) => `<span class="badge ${theme ? 'b-' + theme : ''} ${outline ? 'outline' : ''}">${label}</span>`;
-const diff = (d) => badge(d, DIFF[d]);
-const prog = (pct) => `<div class="prog"><div style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>`;
-const av = (label, size = 'md') => `<span class="av av-${size}">${esc(label[0].toUpperCase())}</span>`;
-const seg = (name, opts, value) =>
-  `<div class="seg" role="radiogroup">${opts.map(([v, l, c]) =>
-    `<button role="radio" aria-checked="${v === value}" class="${v === value ? 'on' : ''}" data-seg="${name}" data-val="${v}">${l}${c != null ? `<span class="cnt">${c}</span>` : ''}</button>`).join('')}</div>`;
-const header = (inner) => `<div class="ph">${inner}</div>`;
-const crumbs = (items) => `<nav class="crumbs" aria-label="Breadcrumb">${items.map(([l, h], i) =>
-  (i ? '<span class="sep">/</span>' : '') + (h ? `<a href="${h}">${esc(l)}</a>` : `<span class="cur">${esc(l)}</span>`)).join('')}</nav>`;
+const bar = (pct) => `<div class="bar"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>`;
+const av = (label, size = '') => `<span class="av ${size}" aria-hidden="true">${esc(label[0].toUpperCase())}</span>`;
+const meter = (d) => {
+  const n = LEVEL[d];
+  return `<span class="meter ${d === 'Expert' ? 'expert' : ''}"><span class="pips" aria-hidden="true">${[1, 2, 3, 4].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>${d}</span>`;
+};
+const tabs = (name, opts, value) => `<div class="tabs" role="tablist">${opts.map(([v, l, n]) =>
+  `<button role="tab" aria-selected="${v === value}" class="${v === value ? 'on' : ''}" data-tab="${name}" data-val="${v}">${l}${n != null ? `<span class="n">${n}</span>` : ''}</button>`).join('')}</div>`;
+const chips = (name, opts, value) => `<div class="chips" role="radiogroup">${opts.map(([v, l]) =>
+  `<button role="radio" aria-checked="${v === value}" class="${v === value ? 'on' : ''}" data-tab="${name}" data-val="${v}">${l}</button>`).join('')}</div>`;
+const crumb = (items) => `<nav class="crumb" aria-label="Breadcrumb">${items.map(([l, h], i) =>
+  (i ? '<span class="sep">/</span>' : '') + `<a href="${h}">${esc(l)}</a>`).join('')}</nav>`;
 const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / 864e5);
 const fmtDate = (d, o) => new Date(d).toLocaleDateString('en-GB', o);
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 function toast(msg, icon = 'check') {
   const el = document.createElement('div');
@@ -540,16 +528,17 @@ function toast(msg, icon = 'check') {
 }
 
 /* ---------- Router ---------- */
-const state = { slide: 0, practiceLoaded: false, seasonOpen: 0, machine: {}, solved: {}, billing: 'monthly', scope: 'global',
+const state = { slide: 0, loaded: false, seasonOpen: true, machine: {}, solved: {}, billing: 'monthly', scope: 'global',
   filters: { q: '', category: '', difficulty: '', free: false }, upcomingOpen: false, track: 'All' };
 let timer = null;
+const machineEnds = {};
 
 function parse() {
   const raw = location.hash.slice(1) || '/';
   const [path, qs] = raw.split('?');
   return { parts: path.split('/').filter(Boolean), query: new URLSearchParams(qs || '') };
 }
-function go(h) { location.hash = h; }
+const go = (h) => (location.hash = h);
 function setQuery(key, val) {
   const { parts, query } = parse();
   query.set(key, val);
@@ -559,14 +548,12 @@ function section() {
   const p = parse().parts[0] || '';
   return { '': '/', learn: '/learn', practice: '/practice', season: '/practice', compete: '/compete' }[p] || '';
 }
-
-const NAV = [['Home', 'house', '/'], ['Learn', 'book-open', '/learn'], ['Practice', 'target', '/practice'], ['Compete', 'trophy', '/compete']];
+const NAV = [['Home', '/'], ['Learn', '/learn'], ['Practice', '/practice'], ['Compete', '/compete']];
 function renderNav() {
   const s = section();
-  $('#sidenav').innerHTML = NAV.map(([l, i, to]) =>
-    `<a href="#${to}" class="${s === to ? 'on' : ''}" ${s === to ? 'aria-current="page"' : ''}>${ic(i)}${l}</a>`).join('');
-  $('#bnav').innerHTML = NAV.map(([l, i, to]) =>
-    `<a href="#${to}" class="${s === to ? 'on' : ''}" ${s === to ? 'aria-current="page"' : ''}>${ic(i, 'i-lg')}${l}</a>`).join('');
+  const link = ([l, to]) => `<a href="#${to}" class="${s === to ? 'on' : ''}" ${s === to ? 'aria-current="page"' : ''}>${l}</a>`;
+  $('#nav').innerHTML = NAV.map(link).join('');
+  $('#bnav').innerHTML = NAV.map(link).join('');
 }
 
 function render() {
@@ -577,39 +564,45 @@ function render() {
   let html;
   if (!a) html = home();
   else if (a === 'learn' && c) html = lesson(b, c);
-  else if (a === 'learn' && b) html = pathDetail(b);
+  else if (a === 'learn' && b) html = pathPage(b);
   else if (a === 'learn') html = learn();
-  else if (a === 'practice' && b) html = practiceItem(b);
+  else if (a === 'practice' && b) html = item(b);
   else if (a === 'practice') html = practice(query.get('type') || 'challenge');
   else if (a === 'season') html = season();
   else if (a === 'compete') html = compete(query.get('tab') || 'leaderboard');
   else if (a === 'profile') html = profile();
   else if (a === 'plans') html = plans();
   else if (a === 'about') html = about();
-  else html = header('<h1>Not found</h1>') + `<div class="wrap w4"><a class="btn" href="#/">Go home</a></div>`;
+  else html = `<div class="page"><h1 class="display d-1">This page does not exist</h1><p class="lead mt-2">The link may be old. Go back to Home to find your next lesson.</p><a class="btn mt-3" href="#/">Go to Home</a></div>`;
   $('#main').innerHTML = html;
   $('#main').scrollTop = 0;
   renderNav();
   hydrateIcons();
+  document.title = (document.querySelector('#main h1')?.textContent.trim() || 'Home') + ' · CSEMA concept';
   if (a === 'practice' && !b) mountPractice();
-  if (a === 'practice' && b) mountMachineClock(b);
+  if (a === 'practice' && b) mountClock(b);
 }
 
 /* ---------- Pages ---------- */
-function seasonStrip() {
+function unitRoute(unit, current, pid) {
+  return `<ol class="route" aria-label="Lessons in this unit">${unit.lessons.map((l) => {
+    const cls = l.id === current ? 'here' : l.status === 'done' ? 'done' : '';
+    return `<li class="${cls}"><a href="#/learn/${pid}/${l.id}" ${l.id === current ? 'aria-current="step"' : ''}><span class="node"></span><span class="lbl">${l.title}</span></a></li>`;
+  }).join('')}</ol>`;
+}
+
+function seasonLine() {
   const total = SEASON.chapters.reduce((n, c) => n + c.challenges.length, 0);
   const d = daysUntil(SEASON.endsOn);
-  return `<div class="card row wrapf g4" style="padding:12px 16px">
-    <div class="tile tile-red">${ic('radio')}</div>
-    <div class="min0 flex1">
-      <p class="t-base semi ink8">Season ${SEASON.number}: ${SEASON.title}</p>
-      <p class="t-sm ink5 trunc">${SEASON.chapters.length} chapters · ${total} challenges · ${d > 0 ? `ends in ${d} days` : 'ended'}</p>
+  return `<div class="row wrap gap-3" style="padding:18px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)">
+    <span class="c3">${ic('radio', 'i-l')}</span>
+    <div class="grow">
+      <p class="display d-3">Season ${SEASON.number}: ${SEASON.title}</p>
+      <p class="small c3 mt-1">Chapter 1 of ${SEASON.chapters.length} is open, with ${total} challenges in all. ${d > 0 ? `The season ends in ${plural(d, 'day')}.` : 'The season has ended.'}</p>
     </div>
-    <a class="btn" href="#/season">Open season ${ic('arrow-right', 'i-sm')}</a>
+    <a class="btn" href="#/season">Open the season</a>
   </div>`;
 }
-const stats = (list) => `<div class="stats">${list.map(([l, v, h]) =>
-  `<div><p class="t-sm ink5">${l}</p><p class="t-2xl ink9 num mt1">${v}</p>${h ? `<p class="t-xs ink5 mt1">${h}</p>` : ''}</div>`).join('')}</div>`;
 
 function home() {
   const path = PATHS[1];
@@ -617,56 +610,48 @@ function home() {
   const cur = FLAT[ci];
   const next = FLAT.slice(ci + 1, ci + 4);
   const daily = ITEMS.find((i) => i.id === 'devops-leftovers');
-  const h = new Date().getHours();
-  const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  return header(`<h1>${greet}, ${USER.name}</h1>`) + `
-  <div class="wrap w4 stack">
-    <section class="card card-tint" style="padding:20px">
-      <p class="t-sm ink5">Continue learning · ${path.title} · Unit ${cur.unitIndex + 1}</p>
-      <div class="row-s wrapf g6 mt2">
-        <div class="min0 flex1">
-          <h2 class="t-4xl semi ink9">${cur.title}</h2>
-          <p class="t-base p ink7 mt2">${cur.description}</p>
-          <p class="row g3 t-sm ink5 mt2"><span class="row g1">${ic('clock', 'i-sm')}${cur.minutes} min</span><span class="row g1">${ic('zap', 'i-sm')}${cur.xp} XP</span></p>
-        </div>
-        <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">Continue lesson ${ic('arrow-right')}</a>
+  const hrs = 24 - new Date().getHours();
+  return `<div class="page">
+    <section aria-labelledby="hero-title">
+      <p class="small c3">Unit ${cur.unitIndex + 1} of ${path.title}</p>
+      <h1 id="hero-title" class="display d-hero mt-1">${cur.title}</h1>
+      <p class="lead mt-2">${cur.description}</p>
+      <div class="mt-4" style="max-width:760px">${unitRoute(UNITS[cur.unitIndex], cur.id, path.id)}</div>
+      <div class="row wrap gap-3 mt-4">
+        <a class="btn primary big" href="#/learn/${path.id}/${cur.id}">Continue lesson</a>
+        <div class="metas"><span>${ic('clock', 'i-s')}${cur.minutes} minutes</span><span>${cur.xp} XP</span><span>Lesson ${ci + 1} of ${path.lessons} in the path</span></div>
       </div>
-      <div class="mt5">${prog(path.done / path.lessons * 100)}<p class="t-xs ink5 mt2">Lesson ${ci + 1} of ${path.lessons} in this path</p></div>
     </section>
 
-    ${stats([['XP', USER.xp, `${USER.nextLevelXp - USER.xp} XP to ${USER.nextLevelName}`], ['Global rank', '#' + USER.rank],
-      ['Solved', USER.solved, 'challenges, machines, labs'], ['Streak', USER.streak + ' days', 'Solve or learn today to start one']])}
+    <hr class="hr">
+    <p class="sentence">You have <b>${USER.xp} XP</b>, ${USER.nextLevelXp - USER.xp} short of ${USER.nextLevelName}. You rank <b>#${USER.rank}</b> worldwide and have solved <b>${USER.solved}</b> challenges. Solve one today to start a streak.</p>
+    <hr class="hr">
 
-    <div class="grid2">
-      <section class="card card-pad" style="display:flex;flex-direction:column">
-        <div class="row between"><h3 class="t-lg semi ink8">Today’s challenge</h3><span class="t-xs ink5">New in ${24 - h} h</span></div>
-        <div class="row-s g3 mt3">
-          <div class="tile">${ic('server')}</div>
-          <div class="min0">
-            <p class="t-base semi ink8">${daily.title}</p>
-            <p class="t-sm p ink6 mt1">${daily.summary}</p>
-            <div class="row g2 mt2">${diff(daily.difficulty)}<span class="t-xs ink5">Machine · ${daily.xp} XP</span></div>
-          </div>
-        </div>
-        <div style="margin-top:auto;padding-top:16px"><a class="btn full" href="#/practice/${daily.id}">${ic('play', 'i-sm')} Start machine</a></div>
+    <div class="split">
+      <section>
+        <div class="row" style="align-items:baseline"><h2 class="display d-2">Today’s machine</h2><span class="small c3 push">New one in ${plural(hrs, 'hour')}</span></div>
+        <p class="t strong mt-3" style="font-size:17px">${daily.title}</p>
+        <p class="body mt-1">${daily.summary}</p>
+        <div class="metas mt-2">${meter(daily.difficulty)}<span>${daily.xp} XP</span><span>${daily.solves} solves</span></div>
+        <a class="btn mt-3" href="#/practice/${daily.id}">${ic('play', 'i-s')}Start the machine</a>
       </section>
-      <section class="card card-pad">
-        <div class="row between"><h3 class="t-lg semi ink8">This week</h3><span class="t-xs ink5">Resets Monday</span></div>
-        <div class="stack-s mt3">${WEEKLY.map(([l, v, t]) =>
-          `<div><div class="row between t-sm"><span class="ink7">${l}</span><span class="ink5 num">${v} / ${t}</span></div><div class="mt2">${prog(v / t * 100)}</div></div>`).join('')}</div>
-        <p class="row g2 t-sm ink6 mt4">${ic('gift', 'i-sm')}Finish all three for +250 bonus XP</p>
+      <section>
+        <div class="row" style="align-items:baseline"><h2 class="display d-2">This week</h2><span class="small c3 push">Resets on Monday</span></div>
+        <ul class="mt-3" style="display:flex;flex-direction:column;gap:16px">${WEEKLY.map(([l, v, t]) =>
+          `<li><div class="row small"><span class="c2">${l}</span><span class="push c3 num">${v} of ${t}</span></div><div class="mt-1">${bar(v / t * 100)}</div></li>`).join('')}</ul>
+        <p class="small c3 mt-3">Finish all three for a 250 XP bonus.</p>
       </section>
     </div>
 
-    ${seasonStrip()}
+    <div class="mt-5">${seasonLine()}</div>
 
-    <section>
-      <div class="row between"><h3 class="t-lg semi ink8">Up next in ${path.title}</h3><a class="btn ghost" href="#/learn/${path.id}">View path</a></div>
-      <div class="list mt2">${next.map((l) => `
-        <a class="li" href="#/learn/${path.id}/${l.id}">
-          <span class="t-sm num ink4" style="width:20px">${l.n}</span>
-          <span class="min0 flex1"><span class="t-base ink8 trunc" style="display:block">${l.title}</span><span class="t-xs ink5 trunc" style="display:block">Unit ${l.unitIndex + 1} · ${l.unit}</span></span>
-          <span class="t-sm ink5 hide-sm">${l.minutes} min</span>${ic('chevron-right', 'ink4')}
+    <section class="mt-5">
+      <div class="row" style="align-items:baseline"><h2 class="display d-2">After this lesson</h2><a class="btn quiet push" href="#/learn/${path.id}">See the whole path</a></div>
+      <div class="ruled mt-2">${next.map((l) => `
+        <a class="rowlink" href="#/learn/${path.id}/${l.id}">
+          <span class="c4 num small" style="width:22px">${l.n}</span>
+          <span class="grow"><span class="t trunc" style="display:block">${l.title}</span><span class="small c3">Unit ${l.unitIndex + 1}, ${l.unit}</span></span>
+          <span class="small c3 hide-m">${l.minutes} min</span>
         </a>`).join('')}</div>
     </section>
   </div>`;
@@ -675,73 +660,62 @@ function home() {
 function learn() {
   const total = PATHS.reduce((n, p) => n + p.lessons, 0);
   const t = state.track;
-  const tracks = t === 'All' ? TRACKS : [t];
+  const shown = t === 'All' ? TRACKS : [t];
   const upcoming = UPCOMING.filter((u) => t === 'All' || u.track === t);
-  return header(`<h1>Learn</h1><span class="t-sm ink5 hide-sm" style="margin-left:8px">${PATHS.length} paths · ${total} lessons</span>`) + `
-  <div class="wrap w9" style="display:flex;flex-direction:column;gap:32px">
-    <div>${seg('track', [['All', 'All'], ...TRACKS.map((x) => [x, x])], t)}</div>
-    ${tracks.map((tr) => `
-      <section>
-        <h2 class="t-lg semi ink8">${tr}</h2><p class="t-sm ink5">${TRACK_BLURB[tr]}</p>
-        <div class="list mt2">${PATHS.filter((p) => p.track === tr).map((p, i) => `
-          <a class="li" href="#/learn/${p.id}" style="padding:14px 16px;gap:16px">
-            <div class="tile">${ic(p.icon)}</div>
-            <div class="min0 flex1">
-              <div class="row g2"><span class="t-base semi ink8 trunc">${p.title}</span>${tr === 'Core' ? badge('Step ' + (i + 1), '', true) : ''}${p.done ? badge('In progress', 'blue') : ''}</div>
-              <p class="t-sm ink6 trunc mt1">${p.description}</p>
-            </div>
-            <div class="hide-sm shrink0" style="width:160px"><p class="t-xs ink5 right">${p.lessons} lessons · ${p.hours} h</p><div class="mt2">${prog(p.done / p.lessons * 100)}</div></div>
-            ${ic('chevron-right', 'ink4')}
-          </a>`).join('')}</div>
+  const pathRow = (p) => `
+    <a class="rowlink" href="#/learn/${p.id}">
+      <span class="grow"><span class="row gap-2"><span class="t">${p.title}</span>${p.done ? '<span class="here-tag" style="margin:0">In progress</span>' : ''}</span>
+        <span class="small c3 trunc" style="display:block">${p.description}</span></span>
+      <span class="hide-m shrink0" style="width:170px"><span class="small c3" style="display:block;text-align:right">${p.lessons} lessons, ${p.hours} hours</span><span class="mt-1" style="display:block">${bar(p.done / p.lessons * 100)}</span></span>
+    </a>`;
+  return `<div class="page narrow">
+    <h1 class="display d-1">Learn</h1>
+    <p class="lead mt-2">${PATHS.length} paths are open, with ${total} lessons. Work through the core paths in order, then pick a track.</p>
+    <div class="mt-4">${chips('track', [['All', 'All tracks'], ...TRACKS.map((x) => [x, x])], t)}</div>
+    ${shown.map((tr) => `
+      <section class="mt-5">
+        <h2 class="display d-2">${tr}</h2><p class="small c3 mt-1">${TRACK_BLURB[tr]}</p>
+        ${tr === 'Core'
+          ? `<ol class="vroute mt-3">${PATHS.filter((p) => p.track === tr).map((p) => `
+              <li class="${p.done ? 'here' : ''}"><a class="stop" href="#/learn/${p.id}"><span class="node"></span>
+                <span class="grow"><span class="t">${p.title}</span>${p.done ? '<span class="here-tag">You are here</span>' : ''}<span class="d" style="display:block">${p.description}</span></span>
+                <span class="side hide-m">${p.lessons} lessons<br>${p.done} done</span></a></li>`).join('')}</ol>`
+          : `<div class="ruled mt-3">${PATHS.filter((p) => p.track === tr).map(pathRow).join('')}</div>`}
       </section>`).join('')}
     ${upcoming.length ? `
-    <section class="card dashed card-pad">
-      <div class="row g3">
-        ${ic('calendar', 'ink5')}
-        <div class="min0 flex1"><p class="t-base ink7">${upcoming.length} more paths coming soon</p><p class="t-sm ink5">They open in curriculum order as their lessons are finished.</p></div>
-        <button class="btn ghost" data-act="toggle-upcoming" aria-expanded="${state.upcomingOpen}">${state.upcomingOpen ? 'Hide' : 'Show'} ${ic(state.upcomingOpen ? 'chevron-up' : 'chevron-down', 'i-sm')}</button>
-      </div>
-      ${state.upcomingOpen ? `<ul class="mt3" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 24px;border-top:1px solid var(--line1);padding-top:12px">
-        ${upcoming.map((u) => `<li class="row between g2 t-sm"><span class="ink6 trunc">${u.title}</span><span class="t-xs ink4 shrink0">${u.track}</span></li>`).join('')}</ul>` : ''}
-    </section>` : ''}
+      <section class="mt-5">
+        <button class="btn quiet" style="padding-left:0" data-act="toggle-upcoming" aria-expanded="${state.upcomingOpen}">${ic(state.upcomingOpen ? 'chevron-up' : 'chevron-down')}${upcoming.length} more paths are on the way</button>
+        <p class="small c3 mt-1">They open in curriculum order as their lessons are finished.</p>
+        ${state.upcomingOpen ? `<ul class="mt-3" style="columns:2 260px;column-gap:40px">${upcoming.map((u) =>
+          `<li class="small" style="break-inside:avoid;padding:5px 0;border-bottom:1px solid var(--rule)"><span class="c2">${u.title}</span> <span class="c4">${u.track}</span></li>`).join('')}</ul>` : ''}
+      </section>` : ''}
   </div>`;
 }
 
-const lessonIcon = (s, here) => here ? ic('circle-play', 'ink9') : s === 'done' ? ic('circle-check', 'green') : ic('circle', 'ink4');
-
-function pathDetail(id) {
+function pathPage(id) {
   const p = PATHS.find((x) => x.id === id) || PATHS[1];
   const cur = FLAT.find((l) => l.status === 'current');
-  return header(crumbs([['Learn', '#/learn'], [p.title]])) + `
-  <div class="wrap w9">
-    <div class="row-s wrapf g6">
-      <div class="min0 flex1">
-        <div class="row g2">${badge(p.track, '', true)}<span class="t-sm ink5">Beginner · ${p.lessons} lessons · about ${p.hours} hours</span></div>
-        <h1 class="t-4xl semi ink9 mt2">${p.title}</h1>
-        <p class="t-base p ink7 mt2" style="max-width:640px">${p.description}</p>
-      </div>
-      <a class="btn solid lg" href="#/learn/${p.id}/${cur.id}">${p.done ? 'Continue' : 'Start path'} ${ic('arrow-right')}</a>
+  return `<div class="page narrow">
+    ${crumb([['Learn', '#/learn']])}
+    <h1 class="display d-1">${p.title}</h1>
+    <p class="lead mt-2">${p.description}</p>
+    <div class="metas mt-2"><span>${p.track} track</span><span>Beginner</span><span>${p.lessons} lessons</span><span>About ${p.hours} hours</span></div>
+    <div class="row wrap gap-3 mt-3">
+      <a class="btn primary big" href="#/learn/${p.id}/${cur.id}">${p.done ? 'Continue with lesson ' + cur.n : 'Start the path'}</a>
+      <div class="grow" style="max-width:320px">${bar(p.done / p.lessons * 100)}<p class="small c3 mt-1">${p.done} of ${p.lessons} lessons done</p></div>
     </div>
-    <div class="row g3 mt5"><div class="flex1">${prog(p.done / p.lessons * 100)}</div><span class="t-sm ink5 num">${p.done} of ${p.lessons} done</span></div>
-    <div class="mt8" style="display:flex;flex-direction:column;gap:24px">
-      ${UNITS.map((u, ui) => `
-        <section>
-          <div class="row between" style="margin-bottom:8px"><h2 class="t-lg semi ink8">Unit ${ui + 1}: ${u.title}</h2>
-            <span class="t-sm ink5 num">${u.lessons.filter((l) => l.status === 'done').length} / ${u.lessons.length}</span></div>
-          <div class="list">${u.lessons.map((l) => {
-            const n = FLAT.find((f) => f.id === l.id).n;
-            return `<a class="li ${l.status === 'current' ? 'cur' : ''}" href="#/learn/${p.id}/${l.id}">
-              ${lessonIcon(l.status, l.status === 'current')}
-              <span class="min0 flex1">
-                <span class="row g2"><span class="t-base trunc ${l.status === 'done' ? 'ink6' : 'ink8'}">${n}. ${l.title}</span>${l.status === 'current' ? badge('Up next', 'blue') : ''}</span>
-                <span class="t-sm ink5 trunc" style="display:block">${l.description}</span>
-              </span>
-              <span class="t-sm ink5 right hide-sm" style="width:56px">${l.minutes} min</span>
-              <span class="t-sm ink5 right hide-sm" style="width:60px">${l.xp} XP</span>
-            </a>`; }).join('')}</div>
-        </section>`).join('')}
-      <p class="t-sm ink5 center">This demo shows 4 of 12 units.</p>
-    </div>
+    ${UNITS.map((u, ui) => `
+      <section class="mt-5">
+        <div class="row" style="align-items:baseline"><h2 class="display d-2">Unit ${ui + 1}. ${u.title}</h2>
+          <span class="small c3 push num">${u.lessons.filter((l) => l.status === 'done').length} of ${u.lessons.length}</span></div>
+        <ol class="vroute mt-2">${u.lessons.map((l) => {
+          const n = FLAT.find((f) => f.id === l.id).n;
+          const cls = l.status === 'current' ? 'here' : l.status === 'done' ? 'done' : '';
+          return `<li class="${cls}"><a class="stop" href="#/learn/${p.id}/${l.id}"><span class="node"></span>
+            <span class="grow"><span class="t">${n}. ${l.title}</span>${l.status === 'current' ? '<span class="here-tag">Up next</span>' : ''}<span class="d" style="display:block">${l.description}</span></span>
+            <span class="side">${l.minutes} min<br><span class="hide-m">${l.xp} XP</span></span></a></li>`; }).join('')}</ol>
+      </section>`).join('')}
+    <p class="small c3 mt-5">This demo shows 4 of the 12 units.</p>
   </div>`;
 }
 
@@ -753,28 +727,31 @@ function lesson(pid, lid) {
   if (lessonKey !== lid) { state.slide = 0; lessonKey = lid; }
   const unit = UNITS[l.unitIndex];
   const s = state.slide, last = s === SLIDES.length - 1;
-  return `<div style="display:flex;flex-direction:column;height:100%">
-    ${header(crumbs([['Learn', '#/learn'], [p.title, `#/learn/${p.id}`], [l.title]]) + `<span class="t-sm ink5 hide-sm ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span>`)}
-    <div style="display:flex;flex:1;min-height:0">
-      <div class="min0 flex1" style="overflow-y:auto"><div class="wrap" style="max-width:770px">
-        <h1 class="t-3xl semi ink9">${l.title}</h1>
-        <p class="t-sm ink5 mt1">${l.minutes} min · ${l.xp} XP</p>
-        <div class="slide mt5" aria-live="polite">
-          <p class="t-sm ink5">${s + 1} / ${SLIDES.length}</p>
-          <h2 class="semi ink9 mt2" style="font-size:24px">${SLIDES[s][0]}</h2>
-          <p class="t-lg p ink7 mt3" style="max-width:520px">${SLIDES[s][1]}</p>
+  return `<div class="page">
+    ${crumb([['Learn', '#/learn'], [p.title, `#/learn/${p.id}`]])}
+    <div class="lessonwrap">
+      <div class="grow">
+        <h1 class="display d-1">${l.title}</h1>
+        <div class="metas mt-2"><span>Lesson ${idx + 1} of ${p.lessons}</span><span>${l.minutes} minutes</span><span>${l.xp} XP</span></div>
+        <div class="slide mt-3" aria-live="polite">
+          <p class="small c3 num">Slide ${s + 1} of ${SLIDES.length}</p>
+          <h2 class="display mt-1" style="font-size:clamp(32px,4vw,44px)">${SLIDES[s][0]}</h2>
+          <p class="lead mt-2" style="max-width:52ch">${SLIDES[s][1]}</p>
         </div>
-        <div class="row g3 mt4">
-          <button class="btn icon" data-act="prev" aria-label="Previous slide" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
-          <div class="flex1">${prog((s + 1) / SLIDES.length * 100)}</div>
-          <button class="btn ${last ? 'solid' : ''}" data-act="next">${last ? 'Complete lesson' : 'Next'} ${ic('arrow-right', 'i-sm')}</button>
+        <div class="row gap-2 mt-2">
+          <button class="btn sq" data-act="prev" aria-label="Previous slide" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
+          <div class="grow">${bar((s + 1) / SLIDES.length * 100)}</div>
+          <button class="btn ${last ? 'primary' : ''}" data-act="next">${last ? 'Complete the lesson' : 'Next slide'}</button>
         </div>
-        <p class="t-xs ink5 center mt2">Use the <span class="kbd">←</span> and <span class="kbd">→</span> keys to move between slides.</p>
-      </div></div>
-      <aside class="outline" aria-label="Lessons in this unit">
-        <div style="padding:20px 16px 8px"><p class="t-sm ink5">Unit ${l.unitIndex + 1}</p><p class="t-base semi ink8">${unit.title}</p></div>
-        <div style="padding:0 8px 40px">${unit.lessons.map((x) =>
-          `<a class="${x.id === lid ? 'on' : ''}" href="#/learn/${p.id}/${x.id}">${lessonIcon(x.status === 'current' ? 'todo' : x.status, x.id === lid)}<span class="min0 flex1 trunc">${x.title}</span><span class="t-xs ink5">${x.minutes}m</span></a>`).join('')}</div>
+        <p class="small c3 mt-2">The left and right arrow keys also move between slides.</p>
+      </div>
+      <aside aria-label="Lessons in this unit">
+        <p class="small c3">Unit ${l.unitIndex + 1}</p>
+        <p class="display d-3 mt-1">${unit.title}</p>
+        <ol class="vroute mt-2">${unit.lessons.map((x) => {
+          const cls = x.id === lid ? 'here' : x.status === 'done' ? 'done' : '';
+          return `<li class="${cls}"><a class="stop" style="padding:9px 0" href="#/learn/${p.id}/${x.id}" ${x.id === lid ? 'aria-current="page"' : ''}><span class="node"></span>
+            <span class="grow small ${x.id === lid ? 'strong' : 'c2'}">${x.title}</span><span class="tiny c3">${x.minutes}m</span></a></li>`; }).join('')}</ol>
       </aside>
     </div>
   </div>`;
@@ -785,7 +762,7 @@ function lessonStep(dir) {
   if (dir < 0) { if (state.slide > 0) { state.slide--; render(); } return; }
   if (state.slide < SLIDES.length - 1) { state.slide++; render(); return; }
   const idx = FLAT.findIndex((l) => l.id === parts[2]);
-  toast(`Lesson complete · +${FLAT[idx].xp} XP`);
+  toast(`Lesson complete. You earned ${FLAT[idx].xp} XP.`);
   const nx = FLAT[idx + 1];
   if (nx) go(`#/learn/${parts[1]}/${nx.id}`);
 }
@@ -795,23 +772,21 @@ function practice(type) {
   const f = state.filters;
   const cats = [...new Set(ITEMS.filter((i) => i.type === type).map((i) => i.category))];
   const left = USER.machineMinutesLeft;
-  return header('<h1>Practice</h1>') + `
-  <div class="wrap w11" style="display:flex;flex-direction:column;gap:20px">
-    ${seasonStrip()}
-    <div>${seg('type', types.map((t) => [t, TYPE[t].plural, ITEMS.filter((i) => i.type === t).length]), type)}</div>
-    <div class="row wrapf g3">
-      ${ic(TYPE[type].icon, 'ink5')}<p class="t-sm ink6">${TYPE[type].blurb}</p>
-      ${type === 'machine' ? `<p class="t-sm ink5 ml-auto">${Math.floor(left / 60)} h ${left % 60} min of machine time left this month</p>` : ''}
+  return `<div class="page">
+    <h1 class="display d-1">Practice</h1>
+    <p class="lead mt-2">Everything you can hack, in one place. Pick a kind, then filter.</p>
+    <div class="mt-4">${tabs('type', types.map((t) => [t, TYPE[t].plural, ITEMS.filter((i) => i.type === t).length]), type)}</div>
+    <p class="small c3 mt-2">${TYPE[type].blurb}${type === 'machine' ? ` You have ${Math.floor(left / 60)} h ${left % 60} min of machine time left this month.` : ''}</p>
+    ${type === 'lab' ? `<div class="row wrap gap-3 mt-3 panel" style="padding:14px 18px">${ic('lock', 'c3')}<p class="small c2 grow">Labs run on your own cloud range and need the Prime + Labs plan. You can read about every lab now.</p><a class="btn" href="#/plans">Compare plans</a></div>` : ''}
+    <div class="row wrap gap-2 mt-3">
+      <label class="withicon" style="width:260px;max-width:100%">${ic('search')}<input class="field" id="f-q" type="search" placeholder="Name or topic" aria-label="Search by name or topic" value="${esc(f.q)}"></label>
+      <select class="field" id="f-cat" aria-label="Category" style="width:190px"><option value="">Every category</option>${cats.map((c) => `<option ${c === f.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
+      <select class="field" id="f-diff" aria-label="Difficulty" style="width:170px"><option value="">Any difficulty</option>${['Easy', 'Medium', 'Hard', 'Expert'].map((d) => `<option ${d === f.difficulty ? 'selected' : ''}>${d}</option>`).join('')}</select>
+      <button class="toggle" role="switch" id="f-free" aria-checked="${f.free}" style="margin-left:8px"><span class="track"></span>Only what I can open</button>
+      <button class="btn quiet push" data-act="clear-filters" id="f-clear" style="visibility:hidden">Clear filters</button>
     </div>
-    ${type === 'lab' ? `<div class="note">${ic('lock', 'ink6')}<p class="t-sm p ink7 min0 flex1">Labs run on your own cloud range and need the <b>Prime + Labs</b> plan. You can browse them now.</p><a class="btn" href="#/plans">See plans</a></div>` : ''}
-    <div class="row wrapf g2">
-      <label class="inputwrap" style="width:256px;max-width:100%">${ic('search')}<input class="input" id="f-q" type="search" placeholder="Search by name or topic" aria-label="Search" value="${esc(f.q)}"></label>
-      <select class="input" id="f-cat" aria-label="Category" style="width:176px"><option value="">All categories</option>${cats.map((c) => `<option ${c === f.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
-      <select class="input" id="f-diff" aria-label="Difficulty" style="width:160px"><option value="">Any difficulty</option>${['Easy', 'Medium', 'Hard', 'Expert'].map((d) => `<option ${d === f.difficulty ? 'selected' : ''}>${d}</option>`).join('')}</select>
-      <span class="row g2" style="margin-left:8px"><button class="sw" role="switch" id="f-free" aria-checked="${f.free}" aria-label="Only show what I can open"></button><span class="t-sm ink7">Only what I can open</span></span>
-      <button class="btn ghost ml-auto" data-act="clear-filters" id="f-clear" style="visibility:hidden">Clear</button>
-    </div>
-    <div id="plist"></div>
+    <div id="plist" class="mt-3"></div>
+    <div class="mt-5">${seasonLine()}</div>
   </div>`;
 }
 function mountPractice() {
@@ -823,92 +798,96 @@ function mountPractice() {
       && (!q || i.title.toLowerCase().includes(q) || i.category.toLowerCase().includes(q))
       && (!f.category || i.category === f.category) && (!f.difficulty || i.difficulty === f.difficulty) && (!f.free || canOpen(i.access)));
     $('#f-clear').style.visibility = (f.q || f.category || f.difficulty || f.free) ? 'visible' : 'hidden';
-    if (!state.practiceLoaded) {
-      $('#plist').innerHTML = Array.from({ length: 6 }, () => `<div class="row g4" style="padding:18px 8px;border-bottom:1px solid var(--line1)"><div class="skel" style="height:14px;width:33%"></div><div class="skel ml-auto" style="height:14px;width:64px"></div></div>`).join('');
+    if (!state.loaded) {
+      $('#plist').innerHTML = `<div aria-busy="true">${Array.from({ length: 6 }, (_, i) => `<div class="row" style="padding:20px 4px;border-bottom:1px solid var(--rule)"><div style="height:12px;width:${30 + (i * 7) % 20}%;background:var(--rule);border-radius:2px"></div></div>`).join('')}</div>`;
       return;
     }
-    $('#plist').innerHTML = rows.length ? `<div class="tbl" role="table">
-      <div class="tr head" role="row"><span>Name</span><span>Difficulty</span><span class="wide right">XP</span><span class="wide right">Solves</span><span class="wide right">Status</span></div>
+    $('#plist').innerHTML = rows.length ? `<div class="table" role="table" aria-label="${TYPE[type].plural}">
+      <div class="tr th" role="row"><span>Name</span><span>Difficulty</span><span class="w r">XP</span><span class="w r">Solves</span><span class="w r">Status</span></div>
       ${rows.map((i) => `<a class="tr" role="row" href="#/practice/${i.id}">
-        <span class="min0"><span class="row g1 t-base ink8">${canOpen(i.access) ? '' : `<span class="ink5" title="Locked">${ic('lock', 'i-sm')}</span>`}<span class="trunc">${i.title}</span></span>
-          <span class="t-xs ink5 trunc" style="display:block">${i.category}<span class="only-sm"> · ${i.xp} XP</span></span></span>
-        <span>${diff(i.difficulty)}</span>
-        <span class="wide right t-sm ink7 num">${i.xp}</span>
-        <span class="wide right t-sm ink5 num">${i.solves}</span>
-        <span class="wide right">${!canOpen(i.access) ? `<span class="t-sm ink5">${ACCESS[i.access]}</span>` : i.status === 'started' ? badge('In progress', 'blue') : i.status === 'solved' ? badge('Solved', 'green') : ''}</span>
+        <span style="min-width:0"><span class="row gap-1"><span class="t trunc">${i.title}</span>${canOpen(i.access) ? '' : `<span class="c3" title="Locked">${ic('lock', 'i-s')}</span>`}</span>
+          <span class="small c3 trunc" style="display:block">${i.category}<span class="only-m">, ${i.xp} XP</span></span></span>
+        <span>${meter(i.difficulty)}</span>
+        <span class="w r num c2">${i.xp}</span>
+        <span class="w r num c3">${i.solves}</span>
+        <span class="w r small">${!canOpen(i.access) ? `<span class="c3">${ACCESS[i.access]}</span>` : i.status === 'started' ? '<span class="here-tag" style="margin:0">In progress</span>' : i.status === 'solved' ? '<span class="ok">Solved</span>' : ''}</span>
       </a>`).join('')}</div>`
-    : `<div class="empty"><div class="circ">${ic('search-x', 'i-xl')}</div><p class="t-base ink7">Nothing matches these filters</p><button class="btn" data-act="clear-filters">Clear filters</button></div>`;
+    : `<div class="empty"><p class="display d-2">Nothing matches</p><p class="body mt-1">No ${TYPE[type].plural.toLowerCase()} fit these filters. Clear them to see the full list.</p><button class="btn mt-3" data-act="clear-filters">Clear filters</button></div>`;
   };
   $('#f-q').oninput = (e) => { f.q = e.target.value; draw(); };
   $('#f-cat').onchange = (e) => { f.category = e.target.value; draw(); };
   $('#f-diff').onchange = (e) => { f.difficulty = e.target.value; draw(); };
   $('#f-free').onclick = (e) => { f.free = !f.free; e.currentTarget.setAttribute('aria-checked', f.free); draw(); };
   draw();
-  if (!state.practiceLoaded) setTimeout(() => { state.practiceLoaded = true; if (parse().parts[0] === 'practice') draw(); }, 450);
+  if (!state.loaded) setTimeout(() => { state.loaded = true; if (parse().parts[0] === 'practice' && !parse().parts[1]) draw(); }, 450);
 }
 
-function practiceItem(id) {
+function item(id) {
   const it = ITEMS.find((i) => i.id === id) || ITEMS[0];
   const m = TYPE[it.type];
   const locked = !canOpen(it.access);
   const flags = it.type === 'machine'
-    ? [['user', 'User flag', 'Found after your first shell, in /home/<user>/user.txt', Math.round(it.xp * 0.4)],
-       ['root', 'Root flag', 'Found after privilege escalation, in /root/root.txt', Math.round(it.xp * 0.6)]]
-    : [['flag', 'Flag', 'Format: CSEMA{...}. Every attempt is logged.', it.xp]];
+    ? [['user', 'User flag', 'You find it after your first shell, in', '/home/<user>/user.txt', Math.round(it.xp * 0.4)],
+       ['root', 'Root flag', 'You find it after privilege escalation, in', '/root/root.txt', Math.round(it.xp * 0.6)]]
+    : [['flag', 'Flag', 'Every attempt is logged. The format is', 'CSEMA{...}', it.xp]];
   const ms = state.machine[id] || 'off';
-  const body = locked ? `
-    <div class="card" style="padding:20px;border-color:var(--line2)">
-      <div class="row-s g3">${ic('lock', 'ink6')}<div class="min0 flex1">
-        <p class="t-base semi ink8">Included in ${ACCESS[it.access]}</p>
-        <p class="t-sm p ink6 mt1">You are on the Free plan. Upgrade to open this ${m.label.toLowerCase()} and submit flags.</p></div></div>
-      <div class="row g2 mt4"><a class="btn solid" href="#/plans">See plans</a><a class="btn ghost" href="#/practice?type=${it.type}">Show free ones</a></div>
-    </div>` : `
-    ${it.type === 'challenge' ? `<section class="card card-pad row wrapf g3">${ic('file', 'ink5')}
-      <div class="min0 flex1"><p class="t-base ink8">handout.zip</p><p class="t-xs ink5">48 MB · everything you need is inside</p></div>
-      <button class="btn" data-toast="Download started (demo)">${ic('download', 'i-sm')} Download</button></section>` : ''}
-    ${it.type === 'machine' ? `<section class="card card-pad row wrapf g3" id="machine">
-      <span class="dot ${ms === 'starting' ? 'amber' : ms === 'running' ? 'green' : ''}"></span>
-      <div class="min0 flex1">
-        <p class="t-base semi ink8">${{ off: 'Machine is off', starting: 'Starting…', running: 'Running' }[ms]}</p>
-        <p class="t-sm ink5">${ms === 'running' ? `Target 10.10.4.17 · <span id="clock" class="num">60:00</span> left · connect from the browser terminal or VPN`
-          : `Runs up to 60 minutes. Uses your machine time (${Math.floor(USER.machineMinutesLeft / 60)} h left).`}</p>
+  let body;
+  if (locked) {
+    body = `<div class="redact">
+      <p class="display d-3">Included in ${ACCESS[it.access]}</p>
+      <div class="lines" aria-hidden="true"><span style="width:68%"></span><span style="width:52%"></span><span style="width:81%"></span><span style="width:40%"></span></div>
+      <p class="body">The files, target and flag form for this ${m.label.toLowerCase()} open when you upgrade. You are on the Free plan.</p>
+      <div class="row wrap gap-2 mt-3"><a class="btn primary" href="#/plans">Compare plans</a><a class="btn quiet" href="#/practice?type=${it.type}">Show free ${m.plural.toLowerCase()}</a></div>
+    </div>`;
+  } else {
+    body = '';
+    if (it.type === 'challenge') body += `<div class="row wrap gap-3 panel" style="padding:16px 18px">${ic('file', 'c3')}
+      <div class="grow"><p class="mono">handout.zip</p><p class="small c3">48 MB. Everything you need is inside.</p></div>
+      <button class="btn" data-toast="Download started (demo)">${ic('download', 'i-s')}Download</button></div>`;
+    if (it.type === 'machine') body += `<div class="row wrap gap-3 panel" style="padding:16px 18px">
+      <span class="dot ${ms === 'starting' ? 'wait' : ms === 'running' ? 'live' : ''}"></span>
+      <div class="grow">
+        <p class="strong">${{ off: 'The machine is off', starting: 'Starting the machine', running: 'The machine is running' }[ms]}</p>
+        <p class="small c3">${ms === 'running' ? `Target <span class="mono c2">10.10.4.17</span>, <span id="clock" class="num">60:00</span> left. Connect from the browser terminal or over VPN.`
+          : `It runs for up to 60 minutes and uses your machine time. You have ${Math.floor(USER.machineMinutesLeft / 60)} hours left.`}</p>
       </div>
-      ${ms === 'off' ? `<button class="btn solid" data-act="start-machine" data-id="${id}">${ic('play', 'i-sm')} Start machine</button>`
-        : ms === 'starting' ? `<button class="btn" disabled>Starting…</button>`
-        : `<button class="btn" data-toast="The terminal opens in a new tab">${ic('terminal', 'i-sm')} Open terminal</button><button class="btn ghost danger" data-act="stop-machine" data-id="${id}">Stop</button>`}
-    </section>` : ''}
-    ${it.type === 'scenario' ? `<section class="card card-pad"><p class="t-base semi ink8">How you are scored</p>
-      <p class="t-sm p ink6 mt1">Detection, triage, investigation, containment, business impact and your final report. There are no flags.</p>
-      <button class="btn solid mt4" data-toast="The SOC workstation opens here">${ic('play', 'i-sm')} Start scenario</button></section>` : ''}
-    ${it.type !== 'scenario' ? `<section style="display:flex;flex-direction:column;gap:16px">
-      <h2 class="t-lg semi ink8">Submit ${flags.length > 1 ? 'flags' : 'flag'}</h2>
-      ${flags.map(([k, label, hint, xp]) => {
+      ${ms === 'off' ? `<button class="btn primary" data-act="start-machine" data-id="${id}">${ic('play', 'i-s')}Start the machine</button>`
+        : ms === 'starting' ? `<button class="btn" disabled>Starting</button>`
+        : `<button class="btn" data-toast="The terminal opens in a new tab">${ic('terminal', 'i-s')}Open terminal</button><button class="btn quiet danger" data-act="stop-machine" data-id="${id}">Stop</button>`}
+    </div>`;
+    if (it.type === 'scenario') body += `<div class="panel"><p class="display d-3">How you are scored</p>
+      <p class="body mt-1">Detection, triage, investigation, containment, business impact and your final report. There are no flags.</p>
+      <button class="btn primary mt-3" data-toast="The SOC workstation opens here">${ic('play', 'i-s')}Start the scenario</button></div>`;
+    if (it.type !== 'scenario') body += `<section>
+      <h2 class="display d-2">Submit ${flags.length > 1 ? 'flags' : 'the flag'}</h2>
+      <div style="display:flex;flex-direction:column;gap:20px;margin-top:16px">${flags.map(([k, label, hint, code, xp]) => {
         const done = state.solved[id + k];
-        return `<div><label class="label" for="flag-${k}">${label} · ${xp} XP</label>
-          <div class="row g2"><input class="input" id="flag-${k}" placeholder="CSEMA{...}" ${done ? 'disabled value="Solved"' : ''}>
-          <button class="btn ${done ? 'ok' : 'solid'}" data-act="submit-flag" data-id="${id}" data-k="${k}" data-xp="${xp}" ${done ? 'disabled' : ''}>${done ? ic('check', 'i-sm') + ' Solved' : 'Submit'}</button></div>
-          <p class="help">${esc(hint)}</p></div>`; }).join('')}
-      <p class="t-xs ink5">Demo tip: <code>CSEMA{demo}</code> is accepted.</p>
-    </section>` : ''}`;
-  return header(crumbs([['Practice', '#/practice'], [m.plural, `#/practice?type=${it.type}`], [it.title]])) + `
-  <div class="wrap w11" style="display:flex;flex-wrap:wrap;gap:32px">
-    <div class="min0" style="flex:1 1 520px;display:flex;flex-direction:column;gap:24px">
-      <div>
-        <div class="row wrapf g2">${diff(it.difficulty)}<span class="t-sm ink5">${m.label} · ${it.category} · ${it.xp} XP</span></div>
-        <h1 class="t-4xl semi ink9 mt2">${it.title}</h1>
-        <p class="t-base p ink7 mt2" style="max-width:640px">${it.summary}</p>
+        return `<div><label class="flabel" for="flag-${k}">${label}, ${xp} XP</label>
+          <div class="row gap-2"><input class="field mono" id="flag-${k}" placeholder="CSEMA{...}" autocomplete="off" ${done ? 'disabled value="Accepted"' : ''}>
+          <button class="btn ${done ? 'done' : 'primary'}" data-act="submit-flag" data-id="${id}" data-k="${k}" data-xp="${xp}" ${done ? 'disabled' : ''}>${done ? ic('check', 'i-s') + 'Accepted' : 'Submit'}</button></div>
+          <p class="fhelp">${hint} <span class="mono">${esc(code)}</span>.</p></div>`; }).join('')}</div>
+      <p class="small c3 mt-3">In this demo, <span class="mono">CSEMA{demo}</span> is accepted.</p>
+    </section>`;
+  }
+  return `<div class="page">
+    ${crumb([['Practice', '#/practice'], [m.plural, `#/practice?type=${it.type}`]])}
+    <div class="row top wrap gap-5">
+      <div style="flex:1 1 520px;min-width:0;display:flex;flex-direction:column;gap:28px">
+        <div>
+          <h1 class="display d-1">${it.title}</h1>
+          <p class="lead mt-2">${it.summary}</p>
+        </div>
+        ${body}
       </div>
-      ${body}
+      <aside style="flex:0 1 260px;min-width:220px">
+        <dl class="ruled small">${[['Kind', m.label], ['Category', it.category], ['Difficulty', meter(it.difficulty)], ['Reward', it.xp + ' XP'], ['Solves', it.solves], ['Plan', ACCESS[it.access]]].map(([k, v]) =>
+          `<div class="row" style="padding:10px 0"><dt class="c3">${k}</dt><dd class="push c2">${v}</dd></div>`).join('')}</dl>
+        <button class="btn quiet mt-2" style="padding-left:0" data-act="copy-link">${ic('link', 'i-s')}Copy link</button>
+      </aside>
     </div>
-    <aside style="flex:0 1 288px;min-width:240px">
-      <div class="list">${[['Type', m.label], ['Category', it.category], ['XP', it.xp], ['Solves', it.solves], ['Plan', ACCESS[it.access]]].map(([k, v]) =>
-        `<div class="row between t-sm" style="padding:10px 16px"><span class="ink5">${k}</span><span class="ink8">${v}</span></div>`).join('')}</div>
-      <button class="btn ghost full mt3" data-act="copy-link">${ic('link', 'i-sm')} Copy link</button>
-    </aside>
   </div>`;
 }
-const machineEnds = {};
-function mountMachineClock(id) {
+function mountClock(id) {
   if (state.machine[id] !== 'running') return;
   const tick = () => {
     const left = Math.max(0, Math.round((machineEnds[id] - Date.now()) / 1000));
@@ -921,174 +900,172 @@ function mountMachineClock(id) {
 
 function season() {
   const total = SEASON.chapters.reduce((n, c) => n + c.challenges.length, 0);
-  return header(crumbs([['Practice', '#/practice'], [`Season ${SEASON.number}`]])) + `
-  <div class="wrap w9">
-    <div class="row-s wrapf g6">
-      <div class="min0 flex1">
-        <div class="row g2">${badge('Live', 'red')}<span class="t-sm ink5">Season ${SEASON.number} · ends ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'short' })}</span></div>
-        <h1 class="t-4xl semi ink9 mt2">${SEASON.title}</h1>
-        <p class="t-base p ink7 mt2" style="max-width:600px">${SEASON.tagline}</p>
-      </div>
-      <div class="row g2"><button class="btn ghost" data-toast="The trailer plays here" data-icon-toast="play">${ic('play', 'i-sm')} Watch trailer</button>
-        <a class="btn solid lg" href="#/practice/disk-of-secrets">Start chapter 1 ${ic('arrow-right')}</a></div>
+  return `<div class="page narrow">
+    ${crumb([['Practice', '#/practice']])}
+    <h1 class="display d-hero">${SEASON.title}</h1>
+    <p class="lead mt-2">${SEASON.tagline}</p>
+    <div class="metas mt-2"><span>Season ${SEASON.number}</span><span>Live until ${fmtDate(SEASON.endsOn, { day: 'numeric', month: 'long' })}</span><span>${total} challenges in ${SEASON.chapters.length} chapters</span></div>
+    <div class="row wrap gap-2 mt-3">
+      <a class="btn primary big" href="#/practice/disk-of-secrets">Start chapter 1</a>
+      <button class="btn big quiet" data-toast="The trailer plays here" data-toast-icon="play">${ic('play', 'i-s')}Watch the trailer</button>
     </div>
-    <div class="row g3 mt5"><div class="flex1">${prog(0)}</div><span class="t-sm ink5 num">0 of ${total} challenges</span></div>
-    <div class="list mt8">${SEASON.chapters.map((ch, i) => `
-      <div>
-        <button class="li w-full" style="border:0;background:transparent;text-align:left;${i ? 'cursor:default' : ''}" ${i === 0 ? `data-act="toggle-chapter" aria-expanded="${state.seasonOpen === 0}"` : 'disabled'}>
-          <span class="t-sm num ink4" style="width:24px">${String(i + 1).padStart(2, '0')}</span>
-          <span class="min0 flex1"><span class="t-base semi ${i ? 'ink5' : 'ink8'}" style="display:block">${ch.title}</span>
-            <span class="t-sm ink5 trunc" style="display:block">${i ? `Unlocks after chapter ${i}` : ch.story}</span></span>
-          <span class="t-sm ink5 hide-sm">${ch.challenges.length} challenges</span>
-          ${i ? ic('lock', 'ink4') : ic(state.seasonOpen === 0 ? 'chevron-up' : 'chevron-down', 'ink5')}
-        </button>
-        ${i === 0 && state.seasonOpen === 0 ? `<div style="background:var(--s1);border-top:1px solid var(--line1);padding:8px 16px">
-          ${ch.challenges.map(([t, cat, d]) => `<a class="li" href="#/practice/disk-of-secrets" style="padding:10px 8px;border-radius:8px">${ic('circle', 'ink4')}
-            <span class="min0 flex1 t-base ink8 trunc">${t}</span><span class="t-sm ink5 hide-sm">${cat}</span>${diff(d)}</a>`).join('')}</div>` : ''}
-      </div>`).join('')}</div>
+    <ol class="vroute mt-5">${SEASON.chapters.map((ch, i) => `
+      <li class="${i === 0 ? 'here' : 'locked'}">
+        ${i === 0
+          ? `<button class="stop" style="width:100%;border:0;background:transparent;text-align:left" data-act="toggle-chapter" aria-expanded="${state.seasonOpen}"><span class="node"></span>
+              <span class="grow"><span class="t">Chapter 1. ${ch.title}</span><span class="d" style="display:block">${ch.story}</span></span>
+              <span class="side">${ch.challenges.length} challenges ${ic(state.seasonOpen ? 'chevron-up' : 'chevron-down', 'i-s')}</span></button>
+            ${state.seasonOpen ? `<div class="ruled" style="margin:0 0 12px 32px">${ch.challenges.map(([t, cat, d]) =>
+              `<a class="rowlink" href="#/practice/disk-of-secrets" style="padding:11px 0"><span class="grow"><span class="t" style="font-size:15px">${t}</span><span class="small c3" style="display:block">${cat}</span></span>${meter(d)}</a>`).join('')}</div>` : ''}`
+          : `<div class="stop"><span class="node"></span><span class="grow"><span class="t c3">Chapter ${i + 1}. ${ch.title}</span><span class="d" style="display:block">Opens after you finish chapter ${i}.</span></span>
+              <span class="side">${ch.challenges.length} challenges ${ic('lock', 'i-s')}</span></div>`}
+      </li>`).join('')}</ol>
   </div>`;
 }
 
 function compete(tab) {
-  const tabs = seg('tab', [['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['events', 'Events']], tab);
   let body = '';
   if (tab === 'leaderboard') {
     const rows = state.scope === 'global' ? BOARD : BOARD.filter((_, i) => i % 3 === 1).map((r, i) => ({ ...r, rank: i + 1 }));
     body = `
-    <div class="card card-tint row wrapf g3" style="padding:12px 16px">${av(USER.name, 'lg')}
-      <div class="min0 flex1"><p class="t-base semi ink8">You are #${USER.rank}</p><p class="t-sm ink5">${USER.xp} XP · 1,144 XP behind the top 50</p></div>
-      <a class="btn" href="#/practice">Earn XP ${ic('arrow-right', 'i-sm')}</a></div>
-    <div class="row between wrapf g2"><h2 class="t-lg semi ink8">Top players</h2>${seg('scope', [['global', 'Global'], ['college', 'My college']], state.scope)}</div>
-    <div class="tbl lb" role="table">
-      <div class="tr head" role="row"><span>#</span><span>Player</span><span class="wide right">Solved</span><span class="right">XP</span></div>
-      ${rows.map((r) => `<div class="tr" role="row"><span class="t-sm ink5 num">${r.rank}</span>
-        <span class="row g2 min0">${av(r.handle, 'sm')}<span class="t-base ink8 trunc">${r.handle}</span>${r.rank <= 3 ? `<span class="amber" title="Top 3">${ic('award', 'i-sm')}</span>` : ''}</span>
-        <span class="wide right t-sm ink5 num">${r.solved}</span><span class="right t-sm ink8 num">${fmt.format(r.xp)}</span></div>`).join('')}
-    </div>`;
+      <div class="row wrap gap-3 mt-3"><p class="sentence grow" style="font-size:17px">You are <b>#${USER.rank}</b> with ${USER.xp} XP. The top 50 starts at 1,194 XP.</p><a class="btn" href="#/practice">Find something to solve</a></div>
+      <div class="row wrap gap-2 mt-4" style="align-items:baseline"><h2 class="display d-2">Top players</h2><div class="push">${chips('scope', [['global', 'Worldwide'], ['college', 'My college']], state.scope)}</div></div>
+      <div class="table lb mt-2" role="table" aria-label="Top players">
+        <div class="tr th" role="row"><span>Rank</span><span>Player</span><span class="w r">Solved</span><span class="r">XP</span></div>
+        ${rows.map((r) => `<div class="tr" role="row"><span class="display d-3 num ${r.rank > 3 ? 'c3' : ''}">${r.rank}</span>
+          <span class="row gap-2" style="min-width:0">${av(r.handle, 's')}<span class="trunc" style="font-weight:600">${r.handle}</span></span>
+          <span class="w r c3 num">${r.solved}</span><span class="r num c2">${fmt.format(r.xp)}</span></div>`).join('')}
+        <div class="tr you" role="row" style="margin-top:6px"><span class="display d-3 num">${USER.rank}</span>
+          <span class="row gap-2">${av(USER.handle, 's')}<span style="font-weight:600">${USER.handle} (you)</span></span>
+          <span class="w r c3 num">${USER.solved}</span><span class="r num c2">${USER.xp}</span></div>
+      </div>`;
   } else if (tab === 'teams') {
     body = `
-    <div class="card dashed empty" style="padding:40px 16px"><div class="circ">${ic('users', 'i-xl')}</div>
-      <p class="t-base ink7">You are not on a team yet</p>
-      <p class="t-sm p ink5" style="max-width:360px">Teams pool XP, compete in team events and get their own leaderboard.</p>
-      <div class="row g2 mt1"><button class="btn solid" data-toast="The team form opens here">${ic('plus', 'i-sm')} Create a team</button><button class="btn" data-act="join-team">Join with a code</button></div></div>
-    <h2 class="t-lg semi ink8">Top teams</h2>
-    <div class="list">${TEAMS.map(([n, mem, xp], i) => `<div class="li"><span class="t-sm ink5 num" style="width:20px">${i + 1}</span>${av(n)}
-      <span class="min0 flex1"><span class="t-base ink8 trunc" style="display:block">${n}</span><span class="t-xs ink5">${mem} members</span></span>
-      <span class="t-sm ink8 num">${fmt.format(xp)} XP</span></div>`).join('')}</div>`;
+      <div class="empty">
+        <p class="display d-2">You are not on a team yet</p>
+        <p class="body mt-1">Teams pool their XP, enter team events and get their own leaderboard. Start one, or join with a code from a teammate.</p>
+        <div class="row wrap gap-2 mt-3"><button class="btn primary" data-toast="The new team form opens here">${ic('plus', 'i-s')}Start a team</button><button class="btn" data-act="join-team">Join with a code</button></div>
+      </div>
+      <h2 class="display d-2">Top teams</h2>
+      <div class="ruled mt-2">${TEAMS.map(([n, mem, xp], i) => `<div class="rowlink"><span class="display d-3 num ${i > 2 ? 'c3' : ''}" style="width:28px">${i + 1}</span>
+        <span class="grow"><span class="t">${n}</span><span class="small c3" style="display:block">${mem} members</span></span><span class="num c2">${fmt.format(xp)} XP</span></div>`).join('')}</div>`;
   } else {
-    body = `<p class="t-sm ink6">Events run inside the app with the same sign-in. No second login.</p>
-    <div class="list">${EVENTS.map((e) => {
-      const open = e.status === 'Registration open';
-      return `<div class="li wrapf" style="padding:16px;gap:8px 16px">
-        <div class="calbox"><span class="t-xs ink5">${fmtDate(e.date, { month: 'short' })}</span><span class="t-xl semi ink8">${fmtDate(e.date, { day: 'numeric' })}</span></div>
-        <div class="min0 flex1"><div class="row wrapf g2"><span class="t-base semi ink8">${e.title}</span>${badge(e.status, open ? 'green' : '')}</div>
-          <p class="t-sm ink5 mt1">${e.duration} · ${e.format}</p></div>
-        <button class="btn ${open ? 'solid' : ''}" data-toast="${open ? 'You are registered (demo)' : 'We will remind you (demo)'}">${open ? 'Register' : 'Remind me'}</button>
-      </div>`; }).join('')}</div>`;
+    body = `<p class="body mt-3">Events run here, with the same sign-in as the rest of CSEMA.</p>
+      <div class="ruled mt-3">${EVENTS.map((e) => `
+        <div class="rowlink wrap" style="padding:18px 4px;gap:12px 20px">
+          <div class="daybox"><span class="d">${fmtDate(e.date, { day: 'numeric' })}</span><span class="m">${fmtDate(e.date, { month: 'short' })}</span></div>
+          <div class="grow"><p class="t">${e.title}</p><p class="small c3 mt-1">${e.duration}. ${e.format}.</p><p class="small mt-1 ${e.open ? 'ok' : 'c3'}">${e.status}</p></div>
+          <button class="btn ${e.open ? 'primary' : ''}" data-toast="${e.open ? 'Registered for ' + e.title : 'We will remind you when registration opens'}">${e.open ? 'Register' : 'Remind me'}</button>
+        </div>`).join('')}</div>`;
   }
-  return header('<h1>Compete</h1>') + `<div class="wrap w9" style="display:flex;flex-direction:column;gap:20px">${tabs}${body}</div>`;
+  return `<div class="page narrow">
+    <h1 class="display d-1">Compete</h1>
+    <div class="mt-4">${tabs('tab', [['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['events', 'Events']], tab)}</div>
+    ${body}
+  </div>`;
 }
 
 function profile() {
-  const badges = [['First day', 'sun', true], ['First flag', 'flag'], ['First root', 'terminal'], ['7-day streak', 'flame'], ['Path finished', 'graduation-cap'], ['Season 1', 'radio']];
-  return header(`<h1>Profile</h1><button class="btn ml-auto" data-toast="The profile editor opens here">${ic('pencil', 'i-sm')} Edit profile</button>`) + `
-  <div class="wrap w4 stack">
-    <div class="row wrapf g4">${av(USER.name, 'xl')}
-      <div class="min0 flex1"><div class="row g2"><h2 class="t-4xl semi ink9">${USER.handle}</h2>${badge(USER.plan + ' plan', '', true)}</div>
-        <p class="t-sm ink5 mt1">Level ${USER.level} · ${USER.levelName} · member since ${fmtDate(USER.joined, { month: 'short', year: 'numeric' })}</p></div>
+  const honours = [['First day', 'sun', true], ['First flag', 'flag'], ['First root shell', 'terminal'], ['Seven-day streak', 'flame'], ['First path finished', 'graduation-cap'], ['Season 1', 'radio']];
+  return `<div class="page narrow">
+    <div class="row wrap gap-3">${av(USER.name, 'l')}
+      <div class="grow"><h1 class="display d-1">${USER.handle}</h1><p class="small c3 mt-1">Level ${USER.level}, ${USER.levelName}. ${USER.plan} plan. Member since ${fmtDate(USER.joined, { month: 'long', year: 'numeric' })}.</p></div>
+      <button class="btn" data-toast="The profile editor opens here">${ic('pencil', 'i-s')}Edit profile</button>
     </div>
-    <section class="card card-pad">
-      <div class="row between t-sm"><span class="ink7">Level ${USER.level} → Level ${USER.level + 1}, ${USER.nextLevelName}</span><span class="ink5 num">${USER.xp} / ${USER.nextLevelXp} XP</span></div>
-      <div class="mt2">${prog(USER.xp / USER.nextLevelXp * 100)}</div>
-    </section>
-    ${stats([['XP', USER.xp], ['Global rank', '#' + USER.rank], ['Solved', USER.solved], ['Lessons done', USER.lessonsDone]])}
-    <div class="grid2">
-      <section class="card card-pad"><h3 class="t-lg semi ink8">Skills</h3><p class="t-sm ink5">Share of each area you have completed.</p>
-        <div class="stack-s mt4">${SKILLS.map((s) => `<div><div class="row between t-sm"><span class="ink7">${s}</span><span class="ink5 num">0%</span></div><div class="mt2">${prog(0)}</div></div>`).join('')}</div></section>
-      <section class="card card-pad"><h3 class="t-lg semi ink8">Badges</h3><p class="t-sm ink5">1 of ${badges.length} earned</p>
-        <div class="badgegrid mt4">${badges.map(([l, i, e]) => `<div class="${e ? '' : 'off'}">${ic(i, 'i-lg ' + (e ? 'amber' : 'ink4'))}<span>${l}</span></div>`).join('')}</div></section>
+    <div class="mt-4" style="max-width:560px">
+      <div class="row small"><span class="c2">Level ${USER.level + 1}, ${USER.nextLevelName}</span><span class="push c3 num">${USER.xp} of ${USER.nextLevelXp} XP</span></div>
+      <div class="mt-1">${bar(USER.xp / USER.nextLevelXp * 100)}</div>
     </div>
-    <section class="card card-pad"><h3 class="t-lg semi ink8">Activity</h3>
-      <div class="empty" style="padding:32px 0">${ic('activity', 'i-xl ink4')}<p class="t-base ink7">No activity in the last 12 weeks</p>
-        <p class="t-sm ink5">Solve something or finish a lesson and it shows up here.</p><a class="btn mt1" href="#/practice">Go to practice</a></div></section>
+    <hr class="hr">
+    <p class="sentence">You rank <b>#${USER.rank}</b> worldwide with <b>${USER.xp} XP</b>. You have finished <b>${USER.lessonsDone}</b> lesson and solved <b>${USER.solved}</b> challenges.</p>
+    <hr class="hr">
+    <div class="split">
+      <section><h2 class="display d-2">Skills</h2><p class="small c3 mt-1">The share of each area you have completed.</p>
+        <ul class="mt-3" style="display:flex;flex-direction:column;gap:14px">${SKILLS.map((s) => `<li><div class="row small"><span class="c2">${s}</span><span class="push c3 num">0%</span></div><div class="mt-1">${bar(0)}</div></li>`).join('')}</ul></section>
+      <section><h2 class="display d-2">Honours</h2><p class="small c3 mt-1">1 of ${honours.length} earned.</p>
+        <div class="honours mt-3">${honours.map(([l, i, e]) => `<div class="${e ? '' : 'off'}">${ic(i, 'i-l')}<span>${l}</span></div>`).join('')}</div></section>
+    </div>
+    <section class="mt-5"><h2 class="display d-2">Activity</h2>
+      <div class="empty" style="padding-top:12px"><p class="body">Nothing in the last 12 weeks. Solve a challenge or finish a lesson, and it shows here.</p><a class="btn mt-3" href="#/practice">Go to Practice</a></div></section>
   </div>`;
 }
 
 function plans() {
   const y = state.billing === 'yearly';
   const price = (n) => (y ? Math.round(n * 0.8) : n);
-  const note = y ? 'per month, billed yearly' : 'per month';
+  const per = y ? 'a month, billed yearly' : 'a month';
   const P = [
-    { name: 'Free', price: 0, note: 'Forever', cta: 'Current plan', current: true,
+    { name: 'Free', price: 0, per: 'for as long as you like', cta: 'Your current plan', current: true,
       f: ['Every free challenge and free machine', `All ${PATHS.length} learning paths`, '5 hours of machine time a month', 'Free events and the current season'] },
-    { name: 'Prime', price: price(349), note, cta: 'Upgrade to Prime', featured: true,
-      f: ['Everything in Free', 'Every challenge and every machine', '60 hours of machine time a month, with VPN', 'Personal attack box with tools installed', 'All seasons, exclusive events and official write-ups'] },
-    { name: 'Prime + Labs', price: price(549), note, cta: 'Upgrade to Prime + Labs',
-      f: ['Everything in Prime', 'Every red team lab, new ones every week', 'Your own persistent cloud range for the month', 'Per-lab badges and a completion certificate'] },
+    { name: 'Prime', price: price(349), per, cta: 'Upgrade to Prime', rec: true,
+      f: ['Everything in Free', 'Every challenge and every machine', '60 hours of machine time a month, with VPN', 'A personal attack box with tools installed', 'Every season, member events and official write-ups'] },
+    { name: 'Prime + Labs', price: price(549), per, cta: 'Upgrade to Prime + Labs',
+      f: ['Everything in Prime', 'Every red team lab, with new ones each week', 'Your own cloud range for the month', 'A badge for each lab and a completion certificate'] },
   ];
-  return header('<h1>Plans</h1>') + `
-  <div class="wrap w10 stack">
-    <div class="row wrapf between g3"><p class="t-base p ink7">Start free. Upgrade when you want more practice. Cancel any time.</p>
-      ${seg('billing', [['monthly', 'Monthly'], ['yearly', 'Yearly · save 20%']], state.billing)}</div>
-    <div class="grid3">${P.map((p) => `
-      <div class="card" style="padding:20px;display:flex;flex-direction:column;${p.featured ? 'border-color:var(--line4);box-shadow:var(--shadow)' : ''}">
-        <div class="row between"><h2 class="t-xl semi ink9">${p.name}</h2>${p.featured ? badge('Most popular') : ''}</div>
-        <p class="mt3"><span class="semi ink9" style="font-size:24px">${p.price ? inr.format(p.price) : 'Free'}</span> <span class="t-sm ink5">${p.note}</span></p>
-        <ul class="feat flex1 mt5">${p.f.map((x) => `<li>${ic('check')}<span>${x}</span></li>`).join('')}</ul>
-        <button class="btn ${p.featured ? 'solid' : ''} full mt5" style="height:32px" ${p.current ? 'disabled' : `data-toast="Checkout opens here (demo)"`}>${p.cta}</button>
+  return `<div class="page">
+    <h1 class="display d-1">Plans</h1>
+    <p class="lead mt-2">Start free. Upgrade when you want more practice. Cancel at any time.</p>
+    <div class="mt-3">${chips('billing', [['monthly', 'Pay monthly'], ['yearly', 'Pay yearly and save 20%']], state.billing)}</div>
+    <div class="plans mt-4">${P.map((p) => `
+      <div class="${p.rec ? 'rec' : ''}">
+        <div class="row" style="align-items:baseline"><h2 class="display d-2">${p.name}</h2>${p.rec ? '<span class="here-tag" style="margin:0 0 0 auto">Recommended</span>' : ''}</div>
+        <p class="mt-2"><span class="display" style="font-size:44px">${p.price ? inr.format(p.price) : '₹0'}</span></p>
+        <p class="small c3">${p.per}</p>
+        <ul class="ticks mt-3" style="flex:1">${p.f.map((x) => `<li>${ic('check')}<span>${x}</span></li>`).join('')}</ul>
+        <button class="btn ${p.rec ? 'primary' : ''} mt-4" style="width:100%" ${p.current ? 'disabled' : `data-toast="Checkout opens here (demo)"`}>${p.cta}</button>
       </div>`).join('')}</div>
-    <div class="row wrapf g2">
-      <input class="input" id="coupon" placeholder="Coupon code" aria-label="Coupon code" style="width:224px">
+    <div class="row wrap gap-2 mt-5">
+      <label class="sr" for="coupon">Coupon code</label>
+      <input class="field mono" id="coupon" placeholder="Coupon code" style="width:220px">
       <button class="btn" data-act="coupon">Apply</button>
-      <p class="t-xs ink5 ml-auto">Payments through Razorpay. Prices include GST.</p>
+      <p class="small c3 push">Payments go through Razorpay. Prices include GST.</p>
     </div>
   </div>`;
 }
 
 function about() {
   const items = [
-    ['Four sections instead of nine menu entries.', 'Home, Learn, Practice and Compete. Profile, plans, ambassador and sign-out move to the account menu.'],
+    ['Four sections instead of nine menu entries.', 'Home, Learn, Practice and Compete. Profile, plans, the ambassador form and sign-out move to the account menu.'],
     ['One name for each concept.', 'Learning is Path, Unit and Lesson. Practice is Challenge, Machine, Lab and Scenario. Story content is Season and Chapter. The only score is XP.'],
-    ['Home shows one next step.', 'A single Continue card is at the top. Today’s challenge and the weekly goal sit in one row. The season is a slim strip, not a full banner.'],
-    ['One practice catalog.', 'Challenges, machines, labs and SOC scenarios share one page with tabs, one filter row and one table. A lock icon marks paid items.'],
-    ['Locked content says why, once.', 'A locked item shows the plan that includes it and one button. Lab descriptions are player-facing, not author notes.'],
+    ['Home shows one next step.', 'The current lesson fills the top of the page, with the unit drawn as a route. Today’s machine and the weekly goal follow. The season is one line, not a banner.'],
+    ['Progress looks like a network.', 'Paths, units and season chapters are routes. A filled node is done. The red node is where you are. A hollow node is ahead.'],
+    ['One practice catalog.', 'Challenges, machines, labs and SOC scenarios share one page, one filter row and one table. Difficulty is a four-step signal meter.'],
+    ['Locked content says why, once.', 'A locked item shows redacted lines, the plan that includes it, and one button. Lab descriptions are written for players, not for lab authors.'],
     ['Events stay inside the app.', 'Events are a tab under Compete. There is no second sign-in on another domain.'],
-    ['Three honest plans.', 'Free, Prime and Prime + Labs are shown side by side. The labs tier is a plan, not an add-on.'],
-    ['Calm visual system.', 'Gray first, one accent for the brand mark, readable 12–14 px text, light and dark themes, and a mobile bottom bar with the same four sections.'],
+    ['Three plain plans.', 'Free, Prime and Prime + Labs sit side by side. The labs tier is a plan, not an add-on.'],
   ];
-  return header('<h1>About this concept</h1>') + `
-  <div class="wrap" style="max-width:770px">
-    <p class="t-base p ink7">This page is a clickable concept for a simpler CSEMA. It uses demo data. Usernames, numbers and events are examples, not live records.</p>
-    <h2 class="t-lg semi ink8 mt8">What changed and why</h2>
-    <ul class="about mt3">${items.map(([a, b]) => `<li>${ic('check', 'ink5')}<span><b>${a}</b> ${b}</span></li>`).join('')}</ul>
-    <h2 class="t-lg semi ink8 mt8">Try these flows</h2>
-    <ul class="about mt3">
-      <li>${ic('arrow-right', 'ink5')}<span><a class="ink9" style="text-decoration:underline" href="#/">Home</a>: continue the current lesson, then use the arrow keys in the player.</span></li>
-      <li>${ic('arrow-right', 'ink5')}<span><a class="ink9" style="text-decoration:underline" href="#/practice?type=machine">Practice → Machines</a>: start a machine and submit <code>CSEMA{demo}</code> as a flag.</span></li>
-      <li>${ic('arrow-right', 'ink5')}<span>Press <span class="kbd">/</span> to search lessons and practice items together.</span></li>
+  return `<div class="page narrow">
+    <h1 class="display d-1">About this concept</h1>
+    <p class="lead mt-2">This is a clickable concept for a simpler CSEMA. It uses demo data. Usernames, numbers and events are examples, not live records.</p>
+    <h2 class="display d-2 mt-5">What changed, and why</h2>
+    <ol class="vroute mt-2">${items.map(([a, b]) => `<li class="done"><div class="stop"><span class="node"></span><span class="grow"><span class="t">${a}</span><span class="d" style="display:block;color:var(--ink-2)">${b}</span></span></div></li>`).join('')}</ol>
+    <h2 class="display d-2 mt-5">Try these</h2>
+    <ul class="ticks mt-3">
+      <li>${ic('book-open')}<span><a class="strong" style="text-decoration:underline;text-underline-offset:3px" href="#/">Home</a>: continue the lesson, then use the arrow keys in the player.</span></li>
+      <li>${ic('server')}<span><a class="strong" style="text-decoration:underline;text-underline-offset:3px" href="#/practice?type=machine">Machines</a>: start one and submit <span class="mono">CSEMA{demo}</span> as a flag.</span></li>
+      <li>${ic('search')}<span>Press <span class="key" style="margin:0">/</span> to search lessons and practice at the same time.</span></li>
     </ul>
   </div>`;
 }
 
-/* ---------- Overlays: search, account menu, join-team prompt ---------- */
-function closeLayer() { $('#layer').innerHTML = ''; }
+/* ---------- Overlays ---------- */
+const closeLayer = () => { $('#layer').innerHTML = ''; };
 function openSearch() {
-  $('#layer').innerHTML = `<div class="overlay" data-close><div class="dialog" role="dialog" aria-modal="true" aria-label="Search">
-    <label class="inputwrap" style="display:block;padding:8px">${ic('search')}<input class="input" id="sq" placeholder="Search lessons, challenges, machines, labs" aria-label="Search" style="height:36px;font-size:14px;background:transparent;padding-left:32px" autocomplete="off"></label>
-    <div id="sres" style="max-height:60vh;overflow-y:auto;border-top:1px solid var(--line1);padding:8px"></div></div></div>`;
-  $('#layer .inputwrap .i').style.cssText = 'left:16px;top:18px';
+  $('#layer').innerHTML = `<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true" aria-label="Search">
+    <div class="q">${ic('search', 'i-l c3')}<input id="sq" placeholder="Search lessons, challenges, machines and labs" aria-label="Search" autocomplete="off"><span class="key">Esc</span></div>
+    <div id="sres" style="max-height:60vh;overflow-y:auto;padding:8px"></div></div></div>`;
   const draw = () => {
     const q = $('#sq').value.trim().toLowerCase();
-    if (!q) { $('#sres').innerHTML = `<p class="t-sm ink5 center" style="padding:24px 8px">Try “sql”, “forensics” or “osi”.</p>`; return; }
+    if (!q) { $('#sres').innerHTML = `<p class="small c3" style="padding:18px 12px">Try sql, forensics or osi.</p>`; return; }
     const hit = (s) => s.toLowerCase().includes(q);
-    const learnRows = [...PATHS.filter((p) => hit(p.title)).map((p) => [p.title, 'Path · ' + p.track, p.icon, `#/learn/${p.id}`]),
-      ...FLAT.filter((l) => hit(l.title)).map((l) => [l.title, 'Lesson · Networking deep dive, part 1', 'book-open', `#/learn/networking-1/${l.id}`])].slice(0, 5);
+    const learnRows = [...PATHS.filter((p) => hit(p.title)).map((p) => [p.title, `Path in the ${p.track} track`, 'book-open', `#/learn/${p.id}`]),
+      ...FLAT.filter((l) => hit(l.title)).map((l) => [l.title, `Lesson ${l.n} of Networking deep dive, part 1`, 'book-open', `#/learn/networking-1/${l.id}`])].slice(0, 5);
     const pr = ITEMS.filter((i) => hit(i.title) || hit(i.category)).slice(0, 6)
-      .map((i) => [i.title, `${TYPE[i.type].label} · ${i.category} · ${i.difficulty}`, TYPE[i.type].icon, `#/practice/${i.id}`]);
+      .map((i) => [i.title, `${TYPE[i.type].label} in ${i.category}, ${i.difficulty.toLowerCase()}`, TYPE[i.type].icon, `#/practice/${i.id}`]);
     const groups = [['Learn', learnRows], ['Practice', pr]].filter(([, r]) => r.length);
-    $('#sres').innerHTML = groups.length ? groups.map(([g, rows]) => `<p class="t-xs ink5" style="padding:6px 8px">${g}</p>${rows.map(([t, m, i, h]) =>
-      `<a class="res" href="${h}">${ic(i, 'ink5')}<span class="min0 flex1"><span class="t-base ink8 trunc" style="display:block">${esc(t)}</span><span class="t-xs ink5 trunc" style="display:block">${esc(m)}</span></span></a>`).join('')}`).join('')
-      : `<p class="t-sm ink5 center" style="padding:24px 8px">No results for “${esc(q)}”.</p>`;
+    $('#sres').innerHTML = groups.length ? groups.map(([g, rows]) => `<p class="tiny c3" style="padding:10px 12px 4px">${g}</p>${rows.map(([t, m, i, h]) =>
+      `<a class="hit" href="${h}"><span class="c3" style="margin-top:2px">${ic(i)}</span><span style="min-width:0"><span class="strong trunc" style="display:block">${esc(t)}</span><span class="small c3">${esc(m)}</span></span></a>`).join('')}`).join('')
+      : `<p class="small c3" style="padding:18px 12px">Nothing matches “${esc(q)}”. Try a shorter word.</p>`;
   };
   $('#sq').oninput = draw;
   $('#sq').onkeydown = (e) => { if (e.key === 'Enter') { const a = $('#sres a'); if (a) go(a.getAttribute('href')); } };
@@ -1098,32 +1075,31 @@ function openSearch() {
 function openAccount(anchor) {
   const r = anchor.getBoundingClientRect();
   const below = r.top < window.innerHeight / 2;
-  const items = [['Profile', 'user', '#/profile'], ['Plans and billing', 'credit-card', '#/plans'], ['About this concept', 'info', '#/about'],
+  const items = [['Profile', 'user', '#/profile'], ['Plans and billing', 'credit-card', '#/plans'], ['About this concept', 'info', '#/about'], null,
     ['Become an ambassador', 'megaphone', null, 'The ambassador form opens here'], ['Sign out', 'log-out', null, 'Signed out (demo)']];
   $('#layer').innerHTML = `<div style="position:fixed;inset:0;z-index:29" data-close></div>
     <div class="menu" role="menu" style="${below ? `top:${r.bottom + 6}px;right:${Math.max(8, window.innerWidth - r.right)}px` : `bottom:${window.innerHeight - r.top + 6}px;left:${r.left}px`}">
-    ${items.map(([l, i, h, t]) => `<button role="menuitem" ${h ? `data-href="${h}"` : `data-toast="${t}"`}>${ic(i, 'ink6')}${l}</button>`).join('')}</div>`;
+    ${items.map((x) => x ? `<button role="menuitem" ${x[2] ? `data-href="${x[2]}"` : `data-toast="${x[3]}"`}><span class="c3">${ic(x[1])}</span>${x[0]}</button>` : '<hr>').join('')}</div>`;
   $('#layer .menu button').focus();
 }
 function joinTeam() {
-  $('#layer').innerHTML = `<div class="overlay" data-close><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="jt" style="max-width:420px;padding:20px">
-    <h2 id="jt" class="t-xl semi ink9">Join a team</h2><p class="t-sm p ink6 mt1">Paste the invite code a teammate shared with you.</p>
-    <label class="label mt4" for="code">Invite code</label><input class="input" id="code" placeholder="HEX-4821">
-    <div class="row g2 mt5" style="justify-content:flex-end"><button class="btn" data-act="close">Cancel</button><button class="btn solid" data-act="join-confirm">Send request</button></div>
+  $('#layer').innerHTML = `<div class="scrim" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="jt" style="max-width:440px;padding:24px">
+    <h2 id="jt" class="display d-2">Join a team</h2><p class="body mt-1">Paste the invite code a teammate shared with you.</p>
+    <label class="flabel mt-3" for="code">Invite code</label><input class="field mono" id="code" placeholder="HEX-4821">
+    <div class="row gap-2 mt-3" style="justify-content:flex-end"><button class="btn quiet" data-act="close">Cancel</button><button class="btn primary" data-act="join-confirm">Send request</button></div>
   </div></div>`;
   $('#code').focus();
 }
 
 /* ---------- Events ---------- */
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-act],[data-seg],[data-toast],[data-href],[data-close]');
+  const t = e.target.closest('[data-act],[data-tab],[data-toast],[data-href],[data-close]');
   if (!t) return;
-  if (t.dataset.close !== undefined && e.target !== t) return;
-  if (t.dataset.close !== undefined) return closeLayer();
+  if (t.dataset.close !== undefined) { if (e.target === t) closeLayer(); return; }
   if (t.dataset.href) { closeLayer(); return go(t.dataset.href); }
-  if (t.dataset.toast) { closeLayer(); return toast(t.dataset.toast, t.dataset.iconToast || 'info'); }
-  if (t.dataset.seg) {
-    const v = t.dataset.val, n = t.dataset.seg;
+  if (t.dataset.toast) { closeLayer(); return toast(t.dataset.toast, t.dataset.toastIcon || 'info'); }
+  if (t.dataset.tab) {
+    const v = t.dataset.val, n = t.dataset.tab;
     if (n === 'type') { setQuery('type', v); state.filters.category = ''; }
     if (n === 'tab') setQuery('tab', v);
     if (n === 'track') state.track = v;
@@ -1138,23 +1114,23 @@ document.addEventListener('click', (e) => {
   else if (a === 'prev') lessonStep(-1);
   else if (a === 'next') lessonStep(1);
   else if (a === 'toggle-upcoming') { state.upcomingOpen = !state.upcomingOpen; render(); }
-  else if (a === 'toggle-chapter') { state.seasonOpen = state.seasonOpen === 0 ? -1 : 0; render(); }
+  else if (a === 'toggle-chapter') { state.seasonOpen = !state.seasonOpen; render(); }
   else if (a === 'clear-filters') { state.filters = { q: '', category: '', difficulty: '', free: false }; render(); }
   else if (a === 'copy-link') { navigator.clipboard?.writeText(location.href).catch(() => {}); toast('Link copied'); }
   else if (a === 'start-machine') {
     const id = t.dataset.id;
     state.machine[id] = 'starting'; render();
-    setTimeout(() => { state.machine[id] = 'running'; machineEnds[id] = Date.now() + 3600e3; if (parse().parts[1] === id) render(); }, 1600);
-  } else if (a === 'stop-machine') { state.machine[t.dataset.id] = 'off'; render(); toast('Machine stopped', 'info'); }
+    setTimeout(() => { state.machine[id] = 'running'; machineEnds[id] = Date.now() + 3600e3; if (parse().parts[1] === id) render(); toast('The machine is running'); }, 1600);
+  } else if (a === 'stop-machine') { state.machine[t.dataset.id] = 'off'; render(); toast('The machine is stopped', 'info'); }
   else if (a === 'submit-flag') {
     const { id, k, xp } = t.dataset;
     const v = $('#flag-' + k).value.trim();
-    if (!/^CSEMA\{.+\}$/.test(v)) return toast('Flags look like CSEMA{...}', 'info');
-    if (v !== 'CSEMA{demo}') return toast('Not quite. Check spelling and case.', 'info');
-    state.solved[id + k] = true; render(); toast(`Correct · +${xp} XP`);
+    if (!/^CSEMA\{.+\}$/.test(v)) return toast('A flag looks like CSEMA{...}. Check the format.', 'info');
+    if (v !== 'CSEMA{demo}') return toast('That flag is not correct. Check spelling and case.', 'info');
+    state.solved[id + k] = true; render(); toast(`Flag accepted. You earned ${xp} XP.`);
   } else if (a === 'join-team') joinTeam();
   else if (a === 'join-confirm') { closeLayer(); toast('Request sent to the team captain'); }
-  else if (a === 'coupon') toast($('#coupon').value ? 'That code is not valid' : 'Enter a code first', 'info');
+  else if (a === 'coupon') toast($('#coupon').value ? 'That code is not valid. Check it and try again.' : 'Enter a coupon code first', 'info');
 });
 
 document.addEventListener('keydown', (e) => {
@@ -1168,13 +1144,15 @@ document.addEventListener('keydown', (e) => {
 });
 
 function hydrateIcons() {
-  document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = ic(el.dataset.icon); el.removeAttribute('data-icon'); });
+  document.querySelectorAll('[data-icon]').forEach((el) => {
+    el.outerHTML = ic(el.dataset.icon, el.className);
+  });
 }
 
 $('#me-av').outerHTML = av(USER.name);
-$('#me-av-m').outerHTML = av(USER.name);
+$('#me-av-m').outerHTML = av(USER.name, 's');
 $('#me-name').textContent = USER.name;
-$('#me-meta').textContent = `Level ${USER.level} · ${USER.xp} XP`;
+$('#me-meta').textContent = `Level ${USER.level}, ${USER.xp} XP`;
 window.addEventListener('hashchange', render);
 render();
 </script>
