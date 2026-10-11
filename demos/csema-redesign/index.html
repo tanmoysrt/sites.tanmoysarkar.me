@@ -166,6 +166,8 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
 .cards.fit { grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); }
 .cards.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 820px) { .cards.three { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .cards.two { grid-template-columns: 1fr; } }
 .ring { position: relative; width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; }
 .ring svg.track { position: absolute; inset: 0; width: 44px; height: 44px; }
@@ -234,6 +236,8 @@ a.li:hover { background: var(--s1); }
 .btn.md { height: 32px; padding: 0 12px; }
 .btn.icon { width: 28px; padding: 0; } .btn.lg.icon { width: 36px; }
 .btn.full { width: 100%; }
+/* A ghost button that keeps its text aligned with the content above it */
+.btn.flush { margin-left: -12px; }
 .btn.danger { color: var(--brand); }
 .btn[disabled] { opacity: .5; cursor: default; }
 .btn.soft { background: var(--brand-soft2); color: var(--brand-ink); } .btn.soft:hover { background: var(--brand-soft2); filter: brightness(.97); }
@@ -880,23 +884,19 @@ function home() {
       </aside>
     </section>
 
-    <div class="grid2">
-      <section class="card pad" style="display:flex;flex-direction:column">
-        <div class="row between"><h3 class="t-lg semi ink9">Today’s challenge</h3><span class="t-xs ink5">New in ${24 - h} h</span></div>
-        <div class="row g3 mt4">
-          <div class="ti ti-${dTint}">${ic(dIcon)}</div>
-          <div class="min0 flex1"><p class="t-base semi ink9 trunc">${daily.title}</p><p class="t-sm ink5 mt1">Machine · ${daily.difficulty} · ${daily.xp} XP</p></div>
-        </div>
-        <p class="t-sm p ink6 mt3 clamp2">${daily.summary}</p>
-        <div class="row" style="margin-top:auto;padding-top:16px;justify-content:flex-end"><a class="btn outline md" href="#/practice/${daily.id}">Start machine</a></div>
-      </section>
-      <section class="card pad" style="display:flex;flex-direction:column">
-        <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="chip">+250 XP bonus</span></div>
-        <div class="mt4" style="display:flex;flex-direction:column;gap:14px">${WEEKLY.map(([l, v, t]) =>
-          `<div><div class="row between t-sm"><span class="ink7">${l}</span><span class="ink5 num">${v} / ${t}</span></div><div class="mt2">${prog(v / t * 100, true)}</div></div>`).join('')}</div>
-        <p class="t-xs ink5" style="margin-top:auto;padding-top:16px">Do all three by Monday to get the bonus.</p>
-      </section>
-    </div>
+    ${sec('Today’s challenge', '', `<span class="t-sm ink5">New in ${24 - h} h</span>`, `
+      <div class="card pad row wrapf g4">
+        <div class="ti ti-${dTint}">${ic(dIcon)}</div>
+        <div class="min0 flex1"><p class="t-base semi ink9 trunc">${daily.title}</p><p class="t-sm ink5 mt1 trunc">Machine · ${daily.difficulty} · ${daily.xp} XP</p></div>
+        <a class="btn outline md" href="#/practice/${daily.id}">Start machine</a>
+      </div>`)}
+
+    ${sec('This week', 'Do all three by Monday to get 250 bonus XP.', '', `
+      <div class="cards three">${WEEKLY.map(([label, v, t], n) => `
+        <div class="card pad" style="flex-direction:row;align-items:center;gap:14px;display:flex">
+          ${ring(v / t * 100, ['flag', 'zap', 'book-open'][n], 'gray')}
+          <div class="min0 flex1"><p class="t-base semi ink9 trunc">${label}</p><p class="t-sm ink5 mt1 num">${v} of ${t}</p></div>
+        </div>`).join('')}</div>`)}
 
     ${seasonBanner()}
 
@@ -1079,7 +1079,7 @@ function practiceItem(id) {
         <button class="btn md ${primary ? 'solid' : 'outline'}" data-act="submit-flag" data-id="${id}" data-k="${k}" data-xp="${k === 'user' ? Math.round(it.xp * 0.4) : k === 'root' ? Math.round(it.xp * 0.6) : it.xp}">Submit</button></div>`;
   const hintBlock = hints.length ? `
     ${hints.slice(0, shown).map((h, n) => `<div class="inset hint mt3">${ic('help-circle', 'brand')}<span><b class="ink9">Hint ${n + 1}.</b> ${h}</span></div>`).join('')}
-    ${shown < hints.length ? `<button class="btn ghost md mt2" style="padding-left:0" data-act="hint" data-id="${id}">Show hint ${shown + 1} of ${hints.length}</button>` : ''}` : '';
+    ${shown < hints.length ? `<button class="btn ghost md mt2 flush" data-act="hint" data-id="${id}">Show hint ${shown + 1} of ${hints.length}</button>` : ''}` : '';
   const task = (state, n, title, body) =>
     `<li class="task ${state}"><span class="task-n">${state === 'done' ? ic('check', 'i-sm') : n}</span><div class="task-body"><p class="t-base">${title}</p>${body}</div></li>`;
 
