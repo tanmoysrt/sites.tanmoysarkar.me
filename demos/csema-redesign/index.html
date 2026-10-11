@@ -114,6 +114,21 @@ code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; 
 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .mtop { display: none; height: 52px; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line1); flex-shrink: 0; }
 main { flex: 1; min-height: 0; overflow-y: auto; }
+main.split { overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) minmax(440px, 46%); }
+main.split > .splitleft { overflow-y: auto; min-width: 0; }
+main.split .body { max-width: 760px; }
+main.split aside { display: none !important; }
+main.term-only { overflow: hidden; display: flex; }
+body.term-only .side, body.term-only .mtop, body.term-only .bnav { display: none !important; }
+body.has-split .toasts { right: auto; left: calc(15rem + 16px); }
+.term { display: flex; flex-direction: column; min-height: 0; height: 100%; width: 100%; background: #0c0c0c; color: #e5e5e5; border-left: 1px solid var(--line2); }
+.term-bar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 12px 0 16px; border-bottom: 1px solid #262626; font-size: 13px; color: #d4d4d4; flex-shrink: 0; }
+.term-bar .btn { background: transparent; color: #d4d4d4; } .term-bar .btn:hover { background: #262626; }
+.term-out { flex: 1; overflow-y: auto; padding: 14px 16px; font: 13px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.term-out .ps { color: #4ade80; } .term-out .dim { color: #8a8a8a; } .term-out .err { color: #f87171; }
+.term-in { display: flex; align-items: center; gap: 8px; padding: 10px 16px 14px; font: 13px ui-monospace, "SF Mono", Menlo, Consolas, monospace; flex-shrink: 0; }
+.term-in .ps { color: #4ade80; white-space: nowrap; }
+.term-in input { flex: 1; border: 0; outline: none; background: transparent; color: #f5f5f5; font: inherit; caret-color: #ef4444; }
 .bnav { display: none; }
 @media (max-width: 767px) {
   .side { display: none; }
@@ -314,7 +329,7 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 
 /* Home */
 .home-hero { display: grid; grid-template-columns: minmax(0, 1fr) 344px; }
-.home-hero .hh-main { padding: 32px; display: flex; flex-direction: column; }
+.home-hero .hh-main { padding: 32px; display: flex; flex-direction: column; justify-content: center; }
 .home-hero .hh-side {
   padding: 20px; border-left: 1px solid var(--line1); border-radius: 0 11px 11px 0; display: flex; flex-direction: column;
   background: var(--s1);
@@ -445,6 +460,8 @@ const ICONS = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   'graduation-cap': '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  'external-link': '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   crown: '<path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/>',
   globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
   smartphone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
@@ -706,6 +723,9 @@ function render() {
   closeLayer();
   const { parts, query } = parse();
   const [a, b, c] = parts;
+  // Decide on the split view before drawing, so the page text matches it.
+  if (state.term && !(a === 'practice' && b === state.term && state.machine[b] === 'running' && innerWidth >= 1024)) state.term = null;
+  const split = !!state.term;
   let html;
   if (!a) html = home();
   else if (a === 'learn' && c) html = lesson(b, c);
@@ -718,14 +738,62 @@ function render() {
   else if (a === 'profile') html = profile();
   else if (a === 'plans') html = plans();
   else if (a === 'about') html = about();
+  else if (a === 'terminal') html = terminalPane(b || 'devops-leftovers', true);
   else html = page('<h1>Not found</h1>', `<div class="card empty"><div class="circ">${ic('search-x', 'i-xl')}</div><p class="t-base ink8">This page does not exist</p><p class="t-sm ink5">The link is old or incorrect.</p><a class="btn solid mt2" href="#/">Go to Home</a></div>`, 'narrow');
-  $('#main').innerHTML = html;
+  $('#main').className = split ? 'split' : a === 'terminal' ? 'term-only' : '';
+  document.body.classList.toggle('term-only', a === 'terminal');
+  document.body.classList.toggle('has-split', split);
+  $('#main').innerHTML = split ? `<div class="splitleft">${html}</div>${terminalPane(b, false)}` : html;
   $('#main').scrollTop = 0;
+  if (split || a === 'terminal') mountTerminal();
   renderNav();
   hydrateIcons();
-  document.title = (document.querySelector('.ph h1, .ph .cur')?.textContent.trim() || 'Home') + ' · CSEMA';
+  document.title = (a === 'terminal' ? 'Terminal' : document.querySelector('.ph h1, .ph .cur')?.textContent.trim() || 'Home') + ' · CSEMA';
   if (a === 'practice' && !b) mountPractice();
   if (a === 'practice' && b) mountMachineClock(b);
+}
+
+/* ---------- Terminal (demo shell) ---------- */
+const TERM = { lines: [] };
+function terminalPane(id, full) {
+  const it = ITEMS.find((i) => i.id === id) || ITEMS[0];
+  if (!TERM.lines.length) TERM.lines = [
+    `<span class="dim">Connected to ${esc(it.title)} at 10.10.4.17. Type "help" for commands.</span>`, ''];
+  return `<section class="term" aria-label="Terminal">
+    <div class="term-bar"><span class="dot green"></span><span class="min0 flex1 trunc">attacker@csema · target 10.10.4.17</span>
+      ${full ? '' : `<button class="btn ghost md" data-act="term-tab" data-id="${id}" title="Open in a new tab">${ic('external-link', 'i-sm')}</button>
+      <button class="btn ghost md" data-act="close-term" title="Close terminal" aria-label="Close terminal">${ic('x', 'i-sm')}</button>`}</div>
+    <div class="term-out" id="term-out">${TERM.lines.join('\n')}</div>
+    <label class="term-in"><span class="ps">attacker@csema:~$</span><input id="term-in" autocomplete="off" spellcheck="false" aria-label="Terminal input"></label>
+  </section>`;
+}
+function runCommand(cmd) {
+  const ps = `<span class="ps">attacker@csema:~$</span> ${esc(cmd)}`;
+  const [c, ...args] = cmd.trim().split(/\s+/);
+  const out = {
+    '': '',
+    help: 'Commands: help, whoami, pwd, ls, nmap &lt;ip&gt;, curl &lt;url&gt;, clear',
+    whoami: 'attacker',
+    pwd: '/home/attacker',
+    ls: 'notes.txt  wordlists  tools',
+    nmap: `Starting Nmap on ${esc(args[0] || '10.10.4.17')}
+PORT     STATE SERVICE
+22/tcp   open  ssh
+80/tcp   open  http
+5004/tcp open  debug-console`,
+    curl: args[0] ? `<span class="dim">HTTP/1.1 200 OK</span>\n&lt;title&gt;Staging dashboard&lt;/title&gt;` : '<span class="err">curl: no URL given</span>',
+  }[c];
+  if (c === 'clear') { TERM.lines = []; }
+  else TERM.lines.push(ps, out === undefined ? `<span class="err">${esc(c)}: command not found</span>` : out);
+  const el = $('#term-out');
+  if (el) { el.innerHTML = TERM.lines.filter((l) => l !== '').join('\n'); el.scrollTop = el.scrollHeight; }
+}
+function mountTerminal() {
+  const input = $('#term-in');
+  if (!input) return;
+  input.onkeydown = (e) => { if (e.key === 'Enter') { runCommand(input.value); input.value = ''; } };
+  const el = $('#term-out'); el.scrollTop = el.scrollHeight;
+  input.focus();
 }
 
 /* ---------- Pages ---------- */
@@ -760,7 +828,7 @@ function home() {
         <h2 class="t-4xl semi ink9">${cur.title}</h2>
         <p class="t-sm ink5 mt1">${path.title}</p>
         <p class="t-base p ink7 mt2" style="max-width:520px">${cur.description}</p>
-        <div class="row wrapf g4" style="margin-top:auto;padding-top:24px">
+        <div class="row wrapf g4" style="padding-top:24px">
           <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">Continue lesson</a>
           <span class="t-sm ink5">${cur.minutes} min · ${cur.xp} XP</span>
         </div>
@@ -781,15 +849,15 @@ function home() {
         <div class="row g3 mt4">
           <div class="ti ti-${dTint}">${ic(dIcon)}</div>
           <div class="min0 flex1"><p class="t-base semi ink9 trunc">${daily.title}</p><p class="t-sm ink5 mt1">Machine · ${daily.xp} XP</p></div>
-          ${diff(daily.difficulty)}
         </div>
-        <div style="margin-top:auto;padding-top:20px"><a class="btn outline md full" href="#/practice/${daily.id}">Start machine</a></div>
+        <p class="t-sm p ink6 mt3 clamp2">${daily.summary}</p>
+        <div class="row between" style="margin-top:auto;padding-top:16px">${diff(daily.difficulty)}<a class="btn outline md" href="#/practice/${daily.id}">Start machine</a></div>
       </section>
       <section class="card pad" style="display:flex;flex-direction:column">
-        <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="t-xs ink5">Resets Monday</span></div>
+        <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="chip">+250 XP bonus</span></div>
         <div class="mt4" style="display:flex;flex-direction:column;gap:14px">${WEEKLY.map(([l, v, t]) =>
           `<div><div class="row between t-sm"><span class="ink7">${l}</span><span class="ink5 num">${v} / ${t}</span></div><div class="mt2">${prog(v / t * 100, true)}</div></div>`).join('')}</div>
-        <div style="margin-top:auto;padding-top:16px"><span class="chip">${ic('gift', 'i-sm')}Do all three to get 250 bonus XP</span></div>
+        <p class="t-xs ink5" style="margin-top:auto;padding-top:16px">Do all three by Monday to get the bonus.</p>
       </section>
     </div>
 
@@ -983,13 +1051,15 @@ function practiceItem(id) {
     const run = ms === 'running';
     tasks = [
       task(run ? 'done' : 'current', 1, 'Start the machine', `
-        <div class="inset row wrapf g3 mt3"><span class="dot ${ms === 'starting' ? 'amber' : run ? 'green' : ''}"></span>
+        <div class="inset row wrapf g3 mt3">
           <p class="t-sm ink7 min0 flex1">${run ? `Running at <code class="ink9">10.10.4.17</code> · <span id="clock" class="num">60:00</span> left`
             : ms === 'starting' ? 'Starting. This takes about one minute.' : `It runs for 60 minutes. You have ${Math.floor(USER.machineMinutesLeft / 60)} h of machine time.`}</p>
           ${ms === 'off' ? `<button class="btn solid md" data-act="start-machine" data-id="${id}">Start</button>`
             : ms === 'starting' ? `<button class="btn md" disabled>Starting…</button>` : `<button class="btn ghost md danger" data-act="stop-machine" data-id="${id}">Stop</button>`}</div>`),
       task(run ? 'current' : 'todo', 2, 'Connect', `<p class="t-sm p ink6 mt1">Use the browser terminal or the VPN.</p>
-        ${run ? `<button class="btn solid md mt3" data-toast="The terminal opens in a new tab">Open terminal</button>` : ''}`),
+        ${run ? (state.term === id
+          ? `<p class="t-sm ink5 mt2">The terminal is open on the right.</p>`
+          : `<button class="btn solid md mt3" data-act="open-term" data-id="${id}">Open terminal</button>`) : ''}`),
       task(solved('user') ? 'done' : 'todo', 3, 'Get the user flag', `<p class="t-sm p ink6 mt1">It is in <code>/home/&lt;user&gt;/user.txt</code>.</p>${flagForm('user', 'User flag', false)}${hintBlock}`),
       task(solved('root') ? 'done' : 'todo', 4, 'Get the root flag', `<p class="t-sm p ink6 mt1">It is in <code>/root/root.txt</code>.</p>${flagForm('root', 'Root flag', false)}`),
     ].join('');
@@ -1306,7 +1376,14 @@ document.addEventListener('click', (e) => {
     const id = t.dataset.id;
     state.machine[id] = 'starting'; render();
     setTimeout(() => { state.machine[id] = 'running'; machineEnds[id] = Date.now() + 3600e3; if (parse().parts[1] === id) render(); toast('Machine is running'); }, 1600);
-  } else if (a === 'stop-machine') { state.machine[t.dataset.id] = 'off'; render(); toast('Machine stopped', 'info'); }
+  } else if (a === 'stop-machine') { state.machine[t.dataset.id] = 'off'; state.term = null; render(); toast('Machine stopped', 'info'); }
+  else if (a === 'open-term') {
+    const id = t.dataset.id;
+    if (innerWidth >= 1024) { state.term = id; render(); }
+    else window.open(`${location.pathname}#/terminal/${id}`, '_blank', 'noopener');
+  }
+  else if (a === 'close-term') { state.term = null; render(); }
+  else if (a === 'term-tab') { window.open(`${location.pathname}#/terminal/${t.dataset.id}`, '_blank', 'noopener'); state.term = null; render(); }
   else if (a === 'submit-flag') {
     const { id, k, xp } = t.dataset;
     const v = $('#flag-' + k).value.trim();
@@ -1338,6 +1415,7 @@ $('#me-av-m').outerHTML = av(USER.name, 'md', 'brand');
 $('#me-name').textContent = USER.name;
 $('#me-meta').textContent = `Level ${USER.level} · ${USER.xp} XP`;
 window.addEventListener('hashchange', render);
+matchMedia('(min-width: 1024px)').addEventListener('change', (e) => { if (!e.matches && state.term) render(); });
 render();
 </script>
 </body>
