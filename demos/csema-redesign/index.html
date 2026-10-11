@@ -1810,7 +1810,7 @@ function pathDetail(id) {
   const p = PATHS.find((x) => x.id === id) || PATHS[1];
   const cur = FLAT.find((l) => l.status === 'current');
   const pct = Math.max(1, Math.round(p.done / p.lessons * 100));
-  const action = `<a class="btn solid md ml-auto" href="#/learn/${p.id}/${cur.id}">${p.done ? 'Continue' : 'Start path'}</a>`;
+  const action = `<a class="btn solid md ml-auto mob-only" href="#/learn/${p.id}/${cur.id}">${p.done ? 'Continue' : 'Start path'}</a>`;
   return page(crumbs([['Learn', '#/learn'], [p.title]]) + action, `
     <section class="dhead">
       <h2>${p.title}</h2>
