@@ -167,6 +167,9 @@ a.card:hover { border-color: var(--line3); box-shadow: var(--shadow-md); transfo
 .cards.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 720px) { .cards.two { grid-template-columns: 1fr; } }
+.ring { position: relative; width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; }
+.ring svg.track { position: absolute; inset: 0; width: 44px; height: 44px; }
+.ring .i { width: 18px; height: 18px; }
 .ti { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
 .ti-sm { width: 32px; height: 32px; border-radius: 8px; }
 .ti-brand { background: var(--brand-soft2); color: var(--brand); } .ti-blue { background: var(--blue-bg); color: var(--blue-ink); }
@@ -285,8 +288,24 @@ select.input { appearance: none; padding-right: 28px; background-image: linear-g
 .heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 12px); grid-auto-columns: 12px; gap: 4px; justify-content: start; overflow-x: auto; padding-bottom: 2px; }
 .heat i { width: 12px; height: 12px; border-radius: 3px; background: var(--s3); }
 .heat i.l1 { background: #fca5a5; } .heat i.l2 { background: #ef4444; } .heat i.l3 { background: #b91c1c; }
-.slide { aspect-ratio: 16/9; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; border-radius: 11px 11px 0 0; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 16px 16px, var(--s1); }
-@media (max-width: 640px) { .slide { padding: 24px; aspect-ratio: 4/3; } }
+.slide { min-height: 380px; display: flex; flex-direction: column; justify-content: center; padding: 32px 48px; border-radius: 11px 11px 0 0; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 16px 16px, var(--s1); }
+@media (max-width: 640px) { .slide { padding: 24px; min-height: 320px; } }
+.slide h3 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink9); }
+.slide .lead { margin-top: 12px; max-width: 560px; font-size: 16px; line-height: 1.6; color: var(--ink7); }
+.player-foot { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line1); }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 24px; max-width: 640px; }
+@media (max-width: 640px) { .opts { grid-template-columns: 1fr; } }
+.opt { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; border: 1px solid var(--line3); border-radius: 10px; background: var(--card); font-size: 14px; color: var(--ink8); text-align: left; }
+.opt:hover { background: var(--s1); }
+.opt .mk { width: 18px; height: 18px; flex-shrink: 0; border: 1.5px solid var(--ink4); border-radius: 99px; display: grid; place-items: center; color: #fff; }
+.opt.sq .mk { border-radius: 5px; }
+.opt.on { border-color: var(--brand); background: var(--brand-soft); color: var(--ink9); }
+.opt.on .mk { border-color: var(--brand); background: var(--brand); }
+.opt.right { border-color: var(--green-ink); background: var(--green-bg); color: var(--ink9); }
+.opt.right .mk { border-color: var(--green-ink); background: var(--green-ink); }
+.opt.wrong { border-color: var(--brand); background: var(--brand-soft); }
+.opt[disabled] { cursor: default; }
+.fb { margin-top: 16px; font-size: 13px; display: flex; align-items: center; gap: 8px; min-height: 20px; }
 .lesson-grid { display: grid; gap: 20px; } @media (min-width: 1080px) { .lesson-grid { grid-template-columns: minmax(0, 1fr) 300px; } }
 .outline a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
 .outline a:hover { background: var(--s2); } .outline a.on { background: var(--brand-soft); color: var(--ink9); font-weight: 500; }
@@ -551,7 +570,13 @@ const SLIDES = [
   ['Firewalls', 'A firewall inspects traffic against rules and drops what is not allowed. It is the first device an attacker has to get past.'],
   ['Servers', 'A server provides a service to other devices: files, web pages, email, names. Most attacks are aimed at one.'],
 ];
-const QUESTION = { lesson: 'components', q: 'Which device sends a frame only to the port where the destination device is connected?', answer: 'switch', hint: 'Type one word.', xp: 10 };
+// A lesson is one list of steps. A question step replaces the slide in the same frame.
+const STEPS = [
+  ...SLIDES.slice(0, 3).map(([title, body]) => ({ type: 'slide', title, body })),
+  { type: 'question', q: 'Which device sends a frame only to the port where the destination is connected?', options: ['Hub', 'Switch', 'Router', 'Access point'], answer: [1], xp: 10 },
+  ...SLIDES.slice(3).map(([title, body]) => ({ type: 'slide', title, body })),
+  { type: 'question', q: 'Which two devices can control traffic between networks?', options: ['Router', 'Hub', 'Firewall', 'Access point'], answer: [0, 2], multi: true, xp: 10 },
+];
 
 const C = (id, title, category, difficulty, xp, solves, access, summary, status = 'new') => ({ id, type: 'challenge', title, category, difficulty, xp, solves, access, summary, status });
 const M = (id, title, difficulty, xp, solves, access, summary, icon) => ({ id, type: 'machine', title, category: 'Boot2Root', difficulty, xp, solves, access, summary, status: 'new', icon });
@@ -662,35 +687,41 @@ function toast(msg, icon = 'check') {
   setTimeout(() => el.remove(), 2600);
 }
 
-/* One card for every practice item: cover with category emblem, then title, summary and stats */
+/* One card for every practice item: tinted icon, title, one plain meta line. No pills. */
+function rowCard(href, icon, tint, title, meta, locked) {
+  return `<a class="card pad" href="${href}" style="flex-direction:row;align-items:center;gap:14px">
+    <div class="ti ti-${tint}">${ic(icon)}</div>
+    <div class="min0 flex1">
+      <h3 class="row g2 t-base semi ink9"><span class="trunc">${title}</span>${locked ? `<span class="ink5" title="Locked">${ic('lock', 'i-sm')}</span>` : ''}</h3>
+      <p class="t-sm ink5 mt1 trunc">${meta}</p>
+    </div>
+  </a>`;
+}
 function itemCard(i) {
   const [catIcon, tint] = CATEGORY[i.category] || [TYPE[i.type].icon, 'gray'];
   const locked = !canOpen(i.access);
-  const tag = locked ? badge(`${ic('lock', 'i-sm')}${ACCESS[i.access]}`, '', 'outline')
-    : i.status === 'started' ? badge('In progress', 'brand') : i.status === 'solved' ? badge('Solved', 'green') : '';
-  return `<a class="card pad" href="#/practice/${i.id}" style="gap:16px">
-    <div class="row g3">
-      <div class="ti ti-${tint}">${ic(i.icon || catIcon)}</div>
-      <div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${i.title}</h3><p class="t-sm ink5 mt1 trunc">${i.category}</p></div>
-    </div>
-    <div class="row between" style="margin-top:auto">${diff(i.difficulty)}${tag || `<span class="t-sm ink5">${i.xp} XP</span>`}</div>
-  </a>`;
+  const status = !locked && i.status === 'started' ? '<span class="brand med">In progress</span> · ' : !locked && i.status === 'solved' ? '<span class="green med">Solved</span> · ' : '';
+  const meta = `${status}${i.category} · ${i.difficulty} · ${locked ? ACCESS[i.access] : i.xp + ' XP'}`;
+  return rowCard(`#/practice/${i.id}`, i.icon || catIcon, tint, i.title, meta, locked);
+}
+function ring(pct, icon, tint) {
+  const r = 19, c = 2 * Math.PI * r, shown = pct > 0 ? Math.max(pct, 4) : 0;
+  return `<span class="ring tint-${tint}" role="img" aria-label="${Math.round(pct)}% done">
+    <svg class="track" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="${r}" fill="none" stroke="var(--s3)" stroke-width="3"/>
+    ${shown ? `<circle cx="22" cy="22" r="${r}" fill="none" stroke="var(--brand)" stroke-width="3" stroke-linecap="round" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${(c * (1 - shown / 100)).toFixed(2)}" transform="rotate(-90 22 22)"/>` : ''}</svg>
+    ${ic(icon)}</span>`;
 }
 function pathCard(p) {
   const tint = TRACK_META[p.track][1];
   const pct = p.done / p.lessons * 100;
-  return `<a class="card pad" href="#/learn/${p.id}" style="gap:16px">
-    <div class="row g3">
-      <div class="ti ti-${tint}">${ic(p.icon)}</div>
-      <div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${p.title}</h3><p class="t-sm ink5 mt1">${p.lessons} lessons · ${p.hours} h</p></div>
-      ${p.done ? `<span class="t-sm med brand">${Math.max(1, Math.round(pct))}%</span>` : ''}
-    </div>
-    ${prog(pct, true)}
+  return `<a class="card pad" href="#/learn/${p.id}" style="flex-direction:row;align-items:center;gap:14px">
+    ${ring(pct, p.icon, tint)}
+    <div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${p.title}</h3><p class="t-sm ink5 mt1">${p.lessons} lessons · ${p.hours} h${p.done ? ` · ${Math.max(1, Math.round(pct))}% done` : ''}</p></div>
   </a>`;
 }
 
 /* ---------- Router ---------- */
-const state = { slide: 0, practiceLoaded: false, seasonOpen: true, machine: {}, solved: {}, got: {}, hints: {}, answered: false, billing: 'monthly', scope: 'global',
+const state = { slide: 0, qsel: {}, qdone: {}, qwrong: null, practiceLoaded: false, seasonOpen: true, machine: {}, solved: {}, got: {}, hints: {}, answered: false, billing: 'monthly', scope: 'global',
   filters: { q: '', category: '', difficulty: '', free: false }, upcomingOpen: false, track: 'All' };
 let timer = null;
 const machineEnds = {};
@@ -818,7 +849,7 @@ function home() {
   const unit = UNITS[cur.unitIndex];
   const daily = ITEMS.find((i) => i.id === 'devops-leftovers');
   const [dIcon, dTint] = [daily.icon || 'server', (CATEGORY[daily.category] || [])[1] || 'blue'];
-  const recs = ['disk-of-secrets', 'serv-u', 'backup-portal'].map((id) => ITEMS.find((i) => i.id === id));
+  const recs = ['disk-of-secrets', 'serv-u', 'backup-portal', 'lost-phone'].map((id) => ITEMS.find((i) => i.id === id));
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   const pct = Math.round(path.done / path.lessons * 100);
@@ -826,7 +857,7 @@ function home() {
     <section class="card hero home-hero">
       <div class="hh-main">
         <h2 class="t-4xl semi ink9">${cur.title}</h2>
-        <p class="t-sm ink5 mt1">${path.title}</p>
+        <p class="t-sm ink5 mt1">${path.title} · ${pct}% done</p>
         <p class="t-base p ink7 mt2" style="max-width:520px">${cur.description}</p>
         <div class="row wrapf g4" style="padding-top:24px">
           <a class="btn solid lg" href="#/learn/${path.id}/${cur.id}">Continue lesson</a>
@@ -834,12 +865,11 @@ function home() {
         </div>
       </div>
       <aside class="hh-side" aria-label="Lessons in this unit">
-        <p class="t-base semi ink9">Unit ${cur.unitIndex + 1}: ${unit.title}</p>
+        <div class="row between g3"><p class="t-base semi ink9 trunc">Unit ${cur.unitIndex + 1}: ${unit.title}</p><span class="t-sm ink5 num">${unit.lessons.filter((x) => x.status === 'done').length} / ${unit.lessons.length}</span></div>
         <div class="steps">${unit.lessons.map((l) => {
           const here = l.id === cur.id;
           return `<a class="${here ? 'on' : ''}" href="#/learn/${path.id}/${l.id}" ${here ? 'aria-current="step"' : ''}>${lessonIcon(l.status, here)}<span class="min0 flex1 trunc">${l.title}</span><span class="t-xs ink5">${l.minutes}m</span></a>`;
         }).join('')}</div>
-        <div style="margin-top:auto;padding-top:16px">${prog(pct, true)}<p class="row between t-xs ink5 mt2"><span>${path.done} of ${path.lessons} lessons</span><span>${pct}%</span></p></div>
       </aside>
     </section>
 
@@ -848,10 +878,10 @@ function home() {
         <div class="row between"><h3 class="t-lg semi ink9">Today’s challenge</h3><span class="t-xs ink5">New in ${24 - h} h</span></div>
         <div class="row g3 mt4">
           <div class="ti ti-${dTint}">${ic(dIcon)}</div>
-          <div class="min0 flex1"><p class="t-base semi ink9 trunc">${daily.title}</p><p class="t-sm ink5 mt1">Machine · ${daily.xp} XP</p></div>
+          <div class="min0 flex1"><p class="t-base semi ink9 trunc">${daily.title}</p><p class="t-sm ink5 mt1">Machine · ${daily.difficulty} · ${daily.xp} XP</p></div>
         </div>
         <p class="t-sm p ink6 mt3 clamp2">${daily.summary}</p>
-        <div class="row between" style="margin-top:auto;padding-top:16px">${diff(daily.difficulty)}<a class="btn outline md" href="#/practice/${daily.id}">Start machine</a></div>
+        <div class="row" style="margin-top:auto;padding-top:16px;justify-content:flex-end"><a class="btn outline md" href="#/practice/${daily.id}">Start machine</a></div>
       </section>
       <section class="card pad" style="display:flex;flex-direction:column">
         <div class="row between"><h3 class="t-lg semi ink9">This week</h3><span class="chip">+250 XP bonus</span></div>
@@ -863,7 +893,7 @@ function home() {
 
     ${seasonBanner()}
 
-    ${sec('Recommended for you', 'Based on your current path.', `<a class="btn ghost" href="#/practice">See all</a>`, `<div class="cards fit">${recs.map(itemCard).join('')}</div>`)}
+    ${sec('Recommended for you', 'Based on your current path.', `<a class="btn ghost" href="#/practice">See all</a>`, `<div class="cards two">${recs.map(itemCard).join('')}</div>`)}
   `);
 }
 
@@ -898,7 +928,7 @@ function pathDetail(id) {
         <span>${p.lessons} lessons</span>
         <span>${p.hours} hours</span>
         <span>Beginner</span>
-        ${p.done ? `<span><span style="width:96px">${prog(pct, true)}</span>${pct}% done</span>` : ''}
+        ${p.done ? `<span>${pct}% done</span>` : ''}
       </div>
     </section>
     ${UNITS.map((u, ui) => sec(`Unit ${ui + 1}: ${u.title}`, '', `<span class="t-sm ink5 num">${u.lessons.filter((l) => l.status === 'done').length} / ${u.lessons.length}</span>`, `
@@ -914,37 +944,46 @@ function pathDetail(id) {
 }
 
 let lessonKey = '';
+function stepView(st, i) {
+  if (st.type === 'slide') return `<div class="slide" aria-live="polite"><h3>${st.title}</h3><p class="lead">${st.body}</p></div>`;
+  const sel = state.qsel[i] || [];
+  const done = !!state.qdone[i];
+  const wrong = state.qwrong === i;
+  return `<div class="slide" aria-live="polite">
+    <h3>${st.q}</h3>
+    <p class="t-sm ink5 mt2">${st.multi ? `Select ${st.answer.length} answers.` : 'Select one answer.'}</p>
+    <div class="opts" role="${st.multi ? 'group' : 'radiogroup'}" aria-label="Answers">${st.options.map((o, k) => {
+      const on = sel.includes(k);
+      const cls = done ? (st.answer.includes(k) ? 'right' : '') : wrong && on && !st.answer.includes(k) ? 'wrong' : on ? 'on' : '';
+      return `<button class="opt ${st.multi ? 'sq' : ''} ${cls}" role="${st.multi ? 'checkbox' : 'radio'}" aria-checked="${on}" data-act="opt" data-step="${i}" data-k="${k}" ${done ? 'disabled' : ''}>
+        <span class="mk">${on || (done && st.answer.includes(k)) ? ic('check', 'i-sm') : ''}</span><span>${o}</span></button>`;
+    }).join('')}</div>
+    <p class="fb ${done ? 'green' : wrong ? 'brand' : ''}">${done ? `${ic('circle-check', 'i-sm')}Correct. You earned ${st.xp} XP.` : wrong ? 'Not correct. Try again.' : ''}</p>
+  </div>`;
+}
 function lesson(pid, lid) {
   const p = PATHS.find((x) => x.id === pid) || PATHS[1];
   const idx = Math.max(0, FLAT.findIndex((l) => l.id === lid));
   const l = FLAT[idx];
-  if (lessonKey !== lid) { state.slide = 0; lessonKey = lid; state.answered = false; }
+  if (lessonKey !== lid) { state.slide = 0; lessonKey = lid; state.qsel = {}; state.qdone = {}; state.qwrong = null; }
   const unit = UNITS[l.unitIndex];
-  const s = state.slide, last = s === SLIDES.length - 1;
-  const q = QUESTION.lesson === lid ? QUESTION : null;
+  const s = state.slide, st = STEPS[s], last = s === STEPS.length - 1;
+  const blocked = st.type === 'question' && !state.qdone[s];
+  const action = blocked
+    ? `<button class="btn solid md" data-act="check" ${(state.qsel[s] || []).length ? '' : 'disabled'}>Check</button>`
+    : `<button class="btn md ${last ? 'solid' : 'outline'}" data-act="next">${last ? 'Complete lesson' : 'Next'}</button>`;
   return page(crumbs([['Learn', '#/learn'], [p.title, `#/learn/${p.id}`], [l.title]]) + `<span class="t-sm ink5 hide-sm ml-auto shrink0">Lesson ${idx + 1} of ${p.lessons}</span>`, `
     <div class="lesson-grid">
       <div class="min0" style="display:flex;flex-direction:column;gap:16px">
         <div><h2 class="t-4xl semi ink9">${l.title}</h2><p class="t-sm ink5 mt1">${l.minutes} min · ${l.xp} XP</p></div>
         <div class="card">
-          <div class="slide" aria-live="polite">
-            <p class="t-sm brand semi">Slide ${s + 1} of ${SLIDES.length}</p>
-            <h3 class="semi ink9 mt2" style="font-size:28px">${SLIDES[s][0]}</h3>
-            <p class="t-lg p ink7 mt3" style="max-width:540px">${SLIDES[s][1]}</p>
-          </div>
-          <div class="row g3" style="padding:12px 16px;border-top:1px solid var(--line1)">
-            <button class="btn icon md" style="width:32px" data-act="prev" aria-label="Previous slide" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
-            <div class="flex1">${prog((s + 1) / SLIDES.length * 100, true)}</div>
-            <button class="btn md ${last ? 'solid' : 'outline'}" data-act="next">${last ? 'Complete lesson' : 'Next'}</button>
+          ${stepView(st, s)}
+          <div class="player-foot">
+            <button class="btn icon md" style="width:32px" data-act="prev" aria-label="Previous step" ${s === 0 ? 'disabled' : ''}>${ic('arrow-left')}</button>
+            <span class="flex1 center t-sm ink5 num">${s + 1} / ${STEPS.length}</span>
+            ${action}
           </div>
         </div>
-        <p class="t-xs ink5 center">Use the <span class="kbd">←</span> and <span class="kbd">→</span> keys to change slides.</p>
-        ${q ? `<div class="card pad">
-          <div class="row g2">${ic('help-circle', 'brand')}<p class="t-base semi ink9">Check your understanding</p><span class="t-xs ink5 ml-auto">+${q.xp} XP</span></div>
-          <p class="t-base p ink7 mt2">${q.q}</p>
-          ${state.answered ? `<p class="row g2 t-sm green mt3">${ic('circle-check')}Correct. The answer is “${q.answer}”.</p>` :
-          `<div class="row g2 mt3"><input class="input" id="qa" placeholder="Your answer" aria-label="Your answer" style="max-width:320px"><button class="btn outline md" data-act="answer">Check answer</button></div><p class="help">${q.hint}</p>`}
-        </div>` : ''}
       </div>
       <aside class="card pad outline" style="align-self:start" aria-label="Lessons in this unit">
         <p class="t-base semi ink9">Unit ${l.unitIndex + 1}: ${unit.title}</p>
@@ -957,8 +996,10 @@ function lesson(pid, lid) {
 function lessonStep(dir) {
   const { parts } = parse();
   if (parts[0] !== 'learn' || !parts[2]) return;
-  if (dir < 0) { if (state.slide > 0) { state.slide--; render(); } return; }
-  if (state.slide < SLIDES.length - 1) { state.slide++; render(); return; }
+  if (dir < 0) { if (state.slide > 0) { state.slide--; state.qwrong = null; render(); } return; }
+  const st = STEPS[state.slide];
+  if (st.type === 'question' && !state.qdone[state.slide]) return;
+  if (state.slide < STEPS.length - 1) { state.slide++; render(); return; }
   const idx = FLAT.findIndex((l) => l.id === parts[2]);
   toast(`Lesson complete · +${FLAT[idx].xp} XP`);
   const nx = FLAT[idx + 1];
@@ -997,12 +1038,12 @@ function mountPractice() {
       && (!f.category || i.category === f.category) && (!f.difficulty || i.difficulty === f.difficulty) && (!f.free || canOpen(i.access)));
     $('#f-clear').style.visibility = (f.q || f.category || f.difficulty || f.free) ? 'visible' : 'hidden';
     if (!state.practiceLoaded) {
-      $('#plist').innerHTML = `<div class="cards" aria-busy="true">${Array.from({ length: 8 }, () =>
-        `<div class="card"><div class="skel" style="height:104px;border-radius:11px 11px 0 0"></div><div class="pad"><div class="skel" style="height:10px;width:40%"></div><div class="skel mt3" style="height:14px;width:70%"></div><div class="skel mt3" style="height:10px;width:90%"></div><div class="skel mt2" style="height:10px;width:60%"></div></div></div>`).join('')}</div>`;
+      $('#plist').innerHTML = `<div class="cards two" aria-busy="true">${Array.from({ length: 8 }, () =>
+        `<div class="card pad row g3"><div class="skel" style="width:40px;height:40px;border-radius:10px"></div><div class="flex1"><div class="skel" style="height:12px;width:55%"></div><div class="skel mt2" style="height:10px;width:75%"></div></div></div>`).join('')}</div>`;
       return;
     }
     $('#plist').innerHTML = rows.length
-      ? `<div class="cards">${rows.map(itemCard).join('')}</div>`
+      ? `<div class="cards two">${rows.map(itemCard).join('')}</div>`
       : `<div class="card empty"><div class="circ">${ic('search-x', 'i-xl')}</div><p class="t-base ink8">No items match the filters</p><p class="t-sm ink5">Clear the filters to see all items.</p><button class="btn outline md mt2" data-act="clear-filters">Clear filters</button></div>`;
     hydrateIcons();
   };
@@ -1094,7 +1135,7 @@ function practiceItem(id) {
       <section class="dhead">
         <div class="row wrapf g2"><h2>${it.title}</h2>${it.status === 'started' && !locked ? badge('In progress', 'brand') : ''}</div>
         <p class="desc">${it.summary}</p>
-        <div class="dmeta"><span>${diff(it.difficulty)}</span><span>${it.category}</span><span>${it.xp} XP</span></div>
+        <div class="dmeta"><span>${it.category}</span><span>${it.difficulty}</span><span>${it.xp} XP</span></div>
       </section>
       <section class="card">
         <div class="pad-lg">${locked ? lockedBlock : `<ol class="tasks">${tasks}</ol>`}</div>
@@ -1151,11 +1192,9 @@ function season() {
           <p class="t-xs ink5 mt1">${ch.challenges.length} challenges</p>
         </div>`).join('')}</div>`)}
     ${sec(`Chapter 1: ${ch1.title}`, ch1.story, '', `
-      <div class="cards four">${ch1.challenges.map(([t, cat, d]) => {
+      <div class="cards two">${ch1.challenges.map(([t, cat, d]) => {
         const [icon, tint] = CATEGORY[cat];
-        return `<a class="card pad" href="#/practice/disk-of-secrets" style="gap:16px">
-          <div class="row g3"><div class="ti ti-${tint}">${ic(icon)}</div><div class="min0 flex1"><h3 class="t-base semi ink9 trunc">${t}</h3><p class="t-sm ink5 mt1 trunc">${cat}</p></div></div>
-          <div class="row between" style="margin-top:auto">${diff(d)}</div></a>`; }).join('')}</div>`)}
+        return rowCard('#/practice/disk-of-secrets', icon, tint, t, `${cat} · ${d}`, false); }).join('')}</div>`)}
   `);
 }
 
@@ -1361,11 +1400,17 @@ document.addEventListener('click', (e) => {
   else if (a === 'close') closeLayer();
   else if (a === 'prev') lessonStep(-1);
   else if (a === 'next') lessonStep(1);
-  else if (a === 'answer') {
-    const v = ($('#qa').value || '').trim().toLowerCase();
-    if (!v) return toast('Type an answer.', 'info');
-    if (v.replace(/^a /, '') !== QUESTION.answer) return toast('Incorrect. Read slide 3 again.', 'info');
-    state.answered = true; render(); toast(`Correct · +${QUESTION.xp} XP`);
+  else if (a === 'opt') {
+    const i = +t.dataset.step, k = +t.dataset.k, st = STEPS[i];
+    const sel = state.qsel[i] || [];
+    state.qsel[i] = st.multi ? (sel.includes(k) ? sel.filter((x) => x !== k) : [...sel, k]) : [k];
+    state.qwrong = null; render();
+  }
+  else if (a === 'check') {
+    const i = state.slide, st = STEPS[i];
+    const sel = [...(state.qsel[i] || [])].sort().join(',');
+    if (sel === [...st.answer].sort().join(',')) { state.qdone[i] = true; state.qwrong = null; render(); toast(`Correct · +${st.xp} XP`); }
+    else { state.qwrong = i; render(); }
   }
   else if (a === 'toggle-upcoming') { state.upcomingOpen = !state.upcomingOpen; render(); }
   else if (a === 'clear-filters') { state.filters = { q: '', category: '', difficulty: '', free: false }; render(); }
@@ -1398,7 +1443,6 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName);
   if (e.key === 'Escape' && $('#layer').innerHTML) { closeLayer(); return; }
-  if (e.key === 'Enter' && document.activeElement?.id === 'qa') { $('[data-act="answer"]')?.click(); return; }
   if (typing) return;
   if (e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); openSearch(); return; }
   if ($('#layer').innerHTML) return;
