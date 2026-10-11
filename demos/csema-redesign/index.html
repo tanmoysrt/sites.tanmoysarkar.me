@@ -121,14 +121,15 @@ main.split aside { display: none !important; }
 main.term-only { overflow: hidden; display: flex; }
 body.term-only .side, body.term-only .mtop, body.term-only .bnav { display: none !important; }
 body.has-split .toasts { right: auto; left: calc(15rem + 16px); }
-.term { display: flex; flex-direction: column; min-height: 0; height: 100%; width: 100%; background: #0c0c0c; color: #e5e5e5; border-left: 1px solid var(--line2); }
-.term-bar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 12px 0 16px; border-bottom: 1px solid #262626; font-size: 13px; color: #d4d4d4; flex-shrink: 0; }
-.term-bar .btn { background: transparent; color: #d4d4d4; } .term-bar .btn:hover { background: #262626; }
-.term-out { flex: 1; overflow-y: auto; padding: 14px 16px; font: 13px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
-.term-out .ps { color: #4ade80; } .term-out .dim { color: #8a8a8a; } .term-out .err { color: #f87171; }
-.term-in { display: flex; align-items: center; gap: 8px; padding: 10px 16px 14px; font: 13px ui-monospace, "SF Mono", Menlo, Consolas, monospace; flex-shrink: 0; }
-.term-in .ps { color: #4ade80; white-space: nowrap; }
-.term-in input { flex: 1; border: 0; outline: none; background: transparent; color: #f5f5f5; font: inherit; caret-color: #ef4444; }
+.term { display: flex; flex-direction: column; min-height: 0; height: 100%; width: 100%; background: var(--sidebar); border-left: 1px solid var(--line1); }
+.term > .ph { position: static; background: var(--sidebar); padding: 0 12px 0 16px; }
+.term > .ph h2 { font-size: 14px; font-weight: 600; color: var(--ink9); }
+.term-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; font: 13px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--ink8); }
+.term-out { white-space: pre-wrap; word-break: break-word; }
+.term-out .ps, .term-in .ps { color: var(--green-ink); } .term-out .dim { color: var(--ink5); } .term-out .err { color: var(--brand); }
+.term-in { display: flex; align-items: center; gap: 8px; }
+.term-in .ps { white-space: nowrap; }
+.term-in input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink9); font: inherit; caret-color: var(--brand); }
 .bnav { display: none; }
 @media (max-width: 767px) {
   .side { display: none; }
@@ -851,11 +852,13 @@ function terminalPane(id, full) {
   if (!TERM.lines.length) TERM.lines = [
     `<span class="dim">Connected to ${esc(it.title)} at 10.10.4.17. Type "help" for commands.</span>`, ''];
   return `<section class="term" data-anim="term" aria-label="Terminal">
-    <div class="term-bar"><span class="dot green"></span><span class="min0 flex1 trunc">attacker@csema · target 10.10.4.17</span>
-      ${full ? '' : `<button class="btn ghost md" data-act="term-tab" data-id="${id}" title="Open in a new tab">${ic('external-link', 'i-sm')}</button>
-      <button class="btn ghost md" data-act="close-term" title="Close terminal" aria-label="Close terminal">${ic('x', 'i-sm')}</button>`}</div>
-    <div class="term-out" id="term-out">${TERM.lines.join('\n')}</div>
-    <label class="term-in"><span class="ps">attacker@csema:~$</span><input id="term-in" autocomplete="off" spellcheck="false" aria-label="Terminal input"></label>
+    <div class="ph"><span class="dot green"></span><h2>Terminal</h2><span class="t-sm ink5 trunc">attacker@csema to 10.10.4.17</span>
+      ${full ? '' : `<span class="row g1 ml-auto"><button class="btn ghost icon md" style="width:32px" data-act="term-tab" data-id="${id}" title="Open in a new tab" aria-label="Open in a new tab">${ic('external-link', 'i-sm')}</button>
+      <button class="btn ghost icon md" style="width:32px" data-act="close-term" title="Close terminal" aria-label="Close terminal">${ic('x', 'i-sm')}</button></span>`}</div>
+    <div class="term-body" id="term-body">
+      <div class="term-out" id="term-out">${TERM.lines.filter((l) => l !== '').join('\n')}</div>
+      <label class="term-in"><span class="ps">attacker@csema:~$</span><input id="term-in" autocomplete="off" spellcheck="false" aria-label="Terminal input"></label>
+    </div>
   </section>`;
 }
 function runCommand(cmd) {
@@ -877,13 +880,14 @@ PORT     STATE SERVICE
   if (c === 'clear') { TERM.lines = []; }
   else TERM.lines.push(ps, out === undefined ? `<span class="err">${esc(c)}: command not found</span>` : out);
   const el = $('#term-out');
-  if (el) { el.innerHTML = TERM.lines.filter((l) => l !== '').join('\n'); el.scrollTop = el.scrollHeight; }
+  if (el) { el.innerHTML = TERM.lines.filter((l) => l !== '').join('\n'); const b = $('#term-body'); b.scrollTop = b.scrollHeight; }
 }
 function mountTerminal() {
   const input = $('#term-in');
   if (!input) return;
   input.onkeydown = (e) => { if (e.key === 'Enter') { runCommand(input.value); input.value = ''; } };
-  const el = $('#term-out'); el.scrollTop = el.scrollHeight;
+  const b = $('#term-body'); b.scrollTop = b.scrollHeight;
+  b.onclick = () => input.focus();
   input.focus();
 }
 
