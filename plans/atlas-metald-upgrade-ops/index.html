@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas Metald Upgrade Ops</title>
+<meta name="description" content="Plan for safe, phased metald upgrades in Atlas: build versions, the Metald Update rollout doctype, host self-rollback, restart without refused connections, and BPF map rules.">
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<style>
+  :root {
+    --text: #1f2328;
+    --muted: #5d6670;
+    --line: #d6dbe0;
+    --soft: #f5f6f8;
+    --accent: #2b62d9;
+    --warn: #b4441f;
+    --ok: #2f7d4f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--text); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 48px 16px 96px; }
+  header p { color: var(--muted); margin: 4px 0; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 22px; margin: 56px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 17px; margin: 28px 0 8px; }
+  p, li { max-width: 72ch; }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  pre { font-family: var(--mono); font-size: 13px; background: var(--soft); padding: 12px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 12px 0; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; }
+  td code { white-space: nowrap; }
+  .table-wrap { overflow-x: auto; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
+  .new { color: var(--accent); font-weight: 600; }
+  .note { border-left: 3px solid var(--line); padding: 2px 0 2px 14px; color: var(--muted); }
+  figure { margin: 20px 0 28px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  nav ol { columns: 2; font-size: 14px; padding-left: 20px; }
+  @media (max-width: 640px) { nav ol { columns: 1; } }
+
+  /* Desk form mockup */
+  .desk { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 13px; margin: 16px 0; }
+  .desk-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .desk-title { font-size: 16px; font-weight: 600; }
+  .desk-title .tag { margin-left: 8px; vertical-align: middle; }
+  .desk-actions { display: flex; gap: 6px; }
+  .btn { border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; background: #fff; font-size: 12px; }
+  .btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
+  .desk-section { padding: 12px 16px 14px; border-bottom: 1px solid var(--line); }
+  .desk-section:last-child { border-bottom: 0; }
+  .desk-section h4 { margin: 0 0 10px; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 16px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+  .field div { background: var(--soft); border-radius: 5px; padding: 4px 8px; min-height: 26px; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+  .field.editable div { background: #fff; border: 1px solid var(--line); }
+  .desk table { font-size: 12px; margin: 0; }
+  .desk td, .desk th { padding: 5px 8px; }
+  .collapsed { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Atlas and Metal upgrade ops: metald rollout plan</h1>
+  <p>This is the plan for <a href="https://github.com/frappe/atlas/issues/262">frappe/atlas#262</a>. It is a proposal that waits for approval. Nothing in it is implemented yet.</p>
+  <p>Last updated 13 October 2026</p>
+</header>
+
+<nav>
+  <ol>
+    <li><a href="#situation">Situation</a></li>
+    <li><a href="#scope">Scope</a></li>
+    <li><a href="#version">Build version</a></li>
+    <li><a href="#host-version">Version on each host</a></li>
+    <li><a href="#doctype">Metald Update doctype</a></li>
+    <li><a href="#host-upgrade">Upgrade on one host</a></li>
+    <li><a href="#listeners">Restart without refused connections</a></li>
+    <li><a href="#bpf">BPF maps</a></li>
+    <li><a href="#compatibility">Compatibility</a></li>
+    <li><a href="#premortem">Failure cases</a></li>
+    <li><a href="#verification">Verification</a></li>
+    <li><a href="#commits">Commits</a></li>
+    <li><a href="#decisions">Decisions needed</a></li>
+  </ol>
+</nav>
+
+<h2 id="situation">1. Situation</h2>
+<p><code>metald</code> is the daemon on each Metal host. It runs the Firecracker VMs, their network, and their consoles. Atlas builds it from the monorepo and gives it to the hosts. These are the problems with that process today:</p>
+<ul>
+  <li><strong>The binary changes without notice.</strong> Each Atlas deploy that changes <code>metal/</code> builds a new <code>metald</code> and links it in Atlas Settings. A new host install then gets that binary at once.</li>
+  <li><strong>No version on a host.</strong> Atlas does not know which <code>metald</code> runs on which host.</li>
+  <li><strong>No phased rollout.</strong> The bulk "Upgrade Metald" action in the Metal Server list upgrades all selected hosts at the same time. It has no batches, no wait time and no stop on failure.</li>
+  <li><strong>A weak health check.</strong> <code>upgrade-metald.sh</code> rolls back only when systemd reports the unit inactive in the first 5 seconds. A crash one minute later stays in place.</li>
+  <li><strong>Refused connections during a restart.</strong> A restart closes the API listeners. Atlas calls fail with "connection refused" until the new process listens again.</li>
+  <li><strong>No wg-mesh upgrade.</strong> Only the install path delivers <code>atlas-wg-mesh</code>. After that, nothing updates it.</li>
+</ul>
+
+<h2 id="scope">2. Scope</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>In this change set</th><th>Later, as separate work</th></tr>
+  <tr>
+    <td>
+      <ol>
+        <li>The operator can set a build version. Without one, the version is a development timestamp.</li>
+        <li>Each host reports its <code>metald</code> and <code>wg-mesh</code> versions, and Atlas shows them.</li>
+        <li>A new <code>Operations</code> module with the <code>Metald Update</code> doctype: batches, wait and watch, health gate, pause, resume and cancel.</li>
+        <li>A safer upgrade on each host: a readiness check, a VM unit check, and self-rollback after a late crash.</li>
+        <li>No refused connections during a restart: the listening sockets stay in the systemd file descriptor store.</li>
+        <li><code>wg-mesh</code> ships in the same update, with a CI check for BPF map compatibility.</li>
+      </ol>
+    </td>
+    <td>
+      <ul>
+        <li>An Atlas maintenance mode (writes return <code>503</code> with <code>Retry-After</code>), and a deploy that does not restart socket.io. This needs the production process layout first.</li>
+        <li>The console page reconnects after a <code>metald</code> restart.</li>
+        <li>A Metal API breaking-change check in CI (<code>oasdiff</code>), and feature flags so a new Atlas can call an old <code>metald</code>.</li>
+        <li>An idempotent patch runner in <code>metald</code> for state on the host. No current change needs it.</li>
+        <li>A phased <code>http-proxy</code> rollout that uses the same rollout code.</li>
+        <li>An end-to-end test on bare metal (<a href="https://github.com/frappe/atlas/issues/194">#194</a>), a release branch, and release reports.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+</div>
+<p class="note">tableflip is not needed. <a href="#listeners">Section 7</a> explains why.</p>
+
+<h2 id="version">3. Build version</h2>
+<p>There is no release system yet. So the version is optional input to the build:</p>
+<pre>pilot --site atlas.localhost build-metald --version 1.4.0   # metald 1.4.0
+pilot --site atlas.localhost build-metald                   # metald dev-20261013T101500Z
+pilot --site atlas.localhost build-wg-mesh --version 1.4.0  # same rule for wg-mesh</pre>
+<ul>
+  <li>Atlas runs <code>make build VERSION=&lt;version&gt;</code>. Without <code>--version</code>, the version is <code>dev-</code> followed by the UTC build time.</li>
+  <li>The default in <code>metal/Makefile</code> and <code>services/wg-mesh/Makefile</code> changes from <code>git describe</code> to the same development timestamp. This keeps one rule for each build path.</li>
+  <li>The <code>after_migrate</code> build uses the development timestamp. It still builds only when the source digest changes.</li>
+  <li>A <code>--version</code> that is different from the stored version builds again, even when the source is unchanged.</li>
+  <li><span class="new">New fields</span> in the Atlas Settings "Metal Daemon" section: <code>metald_version</code> and <code>wg_mesh_version</code> (read only), next to the existing file and hash fields.</li>
+</ul>
+
+<h2 id="host-version">4. Version on each host</h2>
+<ul>
+  <li><code>POST /v1/sync</code> already runs every 10 seconds for each host. Its response gets two <span class="new">optional</span> fields: <code>metald_version</code> and <code>wg_mesh_version</code>. <code>metald</code> reads the <code>wg-mesh</code> version once at startup.</li>
+  <li>Host sync writes the values to the Metal Server only when they change. This is the same pattern as <code>private_network_mac_address</code>.</li>
+  <li>An old <code>metald</code> does not send the fields. The Metal Server then shows no version.</li>
+  <li>The Metal Server list shows a "Metald Version" column, so an operator can filter the hosts that are not on a version.</li>
+</ul>
+
+<h2 id="doctype">5. Metald Update doctype</h2>
+<p>An operator uses one <code>Metald Update</code> record to move a set of hosts to one pinned build. The record upgrades the hosts in batches. After each batch it waits, checks the health of the hosts, and then continues. On any failure it pauses.</p>
+
+<h3>Structure</h3>
+<figure>
+  <svg id="structure" role="img" aria-label="Doctype structure. Atlas Settings holds the latest build. A new Metald Update copies the version, files and hashes from Atlas Settings. A Metald Update has many Metald Update Server rows. Each row links a Metal Server and an SSH Task. metald reports its version through host sync to the Metal Server."></svg>
+  <figcaption>The pinned build is copied once, when the record is created. Later builds do not change a record in progress.</figcaption>
+</figure>
+
+<h3>Fields</h3>
+<p><strong>Metald Update</strong> (module <code>Operations</code>, name <code>METALD-UPDATE-.#####</code>)</p>
+<div class="table-wrap">
+<table>
+  <tr><th>Field</th><th>Type</th><th>Owner and rule</th></tr>
+  <tr><td><code>status</code></td><td>Select: Draft, Running, Paused, Completed, Cancelled</td><td>Changed by the rollout job and the Desk actions</td></tr>
+  <tr><td><code>version</code></td><td>Data, read only</td><td>Copied from Atlas Settings when the record is created</td></tr>
+  <tr><td><code>metald_binary_file</code>, <code>metald_binary_hash</code></td><td>Link File, Data, read only</td><td>Copied when the record is created</td></tr>
+  <tr><td><code>wg_mesh_binary_file</code>, <code>wg_mesh_binary_hash</code></td><td>Link File, Data, read only</td><td>Copied when the record is created</td></tr>
+  <tr><td><code>canary_size</code></td><td>Int, default 1</td><td>Number of hosts in the first batch. Edit only in Draft.</td></tr>
+  <tr><td><code>batch_size</code></td><td>Int, default 5</td><td>Number of hosts in each later batch. Edit in Draft or Paused.</td></tr>
+  <tr><td><code>wait_minutes</code></td><td>Int, default 10</td><td>Time to watch a batch before the health gate. Edit in Draft or Paused.</td></tr>
+  <tr><td><code>current_batch</code></td><td>Int, read only</td><td>Set by the rollout job</td></tr>
+  <tr><td><code>wait_until</code></td><td>Datetime, read only</td><td>The end of the watch time for the current batch</td></tr>
+  <tr><td><code>failure_message</code></td><td>Small Text, read only</td><td>Why the update paused</td></tr>
+  <tr><td><code>servers</code></td><td>Table: Metald Update Server</td><td>Rows can be added, removed and reordered only in Draft</td></tr>
+</table>
+</div>
+<p><strong>Metald Update Server</strong> (child table)</p>
+<div class="table-wrap">
+<table>
+  <tr><th>Field</th><th>Type</th><th>Owner and rule</th></tr>
+  <tr><td><code>server</code></td><td>Link Metal Server</td><td>Unique in the table</td></tr>
+  <tr><td><code>batch</code></td><td>Int, read only</td><td>Set on Start from the row order</td></tr>
+  <tr><td><code>status</code></td><td>Select: Pending, Upgrading, Upgraded, Failed, Skipped</td><td>The rollout job sets Upgrading. The host job sets Upgraded or Failed.</td></tr>
+  <tr><td><code>previous_version</code></td><td>Data, read only</td><td>The version that the host reported before its upgrade</td></tr>
+  <tr><td><code>ssh_task</code></td><td>Link SSH Task, read only</td><td>The script output</td></tr>
+  <tr><td><code>failure_message</code></td><td>Small Text, read only</td><td>Why this host failed</td></tr>
+</table>
+</div>
+<p>The update does not store counts, because the rows give them. The Metal Server gets <span class="new">two read-only fields</span>: <code>metald_version</code> and <code>wg_mesh_version</code>. They go next to <code>metald_tls_expires_on</code>.</p>
+
+<h3>Form mockup</h3>
+<div class="desk" aria-label="Metald Update form mockup">
+  <div class="desk-head">
+    <div class="desk-title">METALD-UPDATE-00003 <span class="tag">Running</span></div>
+    <div class="desk-actions"><span class="btn">Pause</span><span class="btn">Cancel</span></div>
+  </div>
+  <div class="desk-section">
+    <h4>Build</h4>
+    <div class="grid">
+      <div class="field"><label>Version</label><div>1.4.0</div></div>
+      <div class="field"><label>Status</label><div>Running</div></div>
+      <div class="field"><label>Failure Message</label><div></div></div>
+    </div>
+    <p class="collapsed">▸ Binaries (Metald Binary, Metald Binary SHA-256, WG Mesh Binary, WG Mesh Binary SHA-256)</p>
+  </div>
+  <div class="desk-section">
+    <h4>Rollout</h4>
+    <div class="grid">
+      <div class="field"><label>Canary Size</label><div>1</div></div>
+      <div class="field editable"><label>Batch Size</label><div>5</div></div>
+      <div class="field editable"><label>Wait Minutes</label><div>10</div></div>
+      <div class="field"><label>Current Batch</label><div>2 of 3</div></div>
+      <div class="field"><label>Wait Until</label><div>13-10-2026 11:42</div></div>
+    </div>
+  </div>
+  <div class="desk-section">
+    <h4>Servers</h4>
+    <div class="table-wrap">
+    <table>
+      <tr><th>Server</th><th>Batch</th><th>Status</th><th>Previous Version</th><th>SSH Task</th></tr>
+      <tr><td>metal-waw-1</td><td>1</td><td>Upgraded</td><td>dev-20261002T0814Z</td><td>SSH-TASK-0412</td></tr>
+      <tr><td>metal-waw-2</td><td>2</td><td>Upgraded</td><td>dev-20261002T0814Z</td><td>SSH-TASK-0418</td></tr>
+      <tr><td>metal-waw-3</td><td>2</td><td>Upgrading</td><td>dev-20261002T0814Z</td><td></td></tr>
+      <tr><td>metal-waw-4</td><td>3</td><td>Pending</td><td></td><td></td></tr>
+    </table>
+    </div>
+  </div>
+</div>
+<p>The buttons depend on the status. Draft shows <strong>Start</strong>. Running shows <strong>Pause</strong> and <strong>Cancel</strong>. Paused shows <strong>Resume</strong> and <strong>Cancel</strong>. Cancel asks for confirmation.</p>
+
+<h3>States</h3>
+<figure>
+  <svg id="states" role="img" aria-label="State diagram. Draft goes to Running on Start. Running goes to Completed when no rows are left, to Paused on a host failure, a failed health gate or the Pause action, and to Cancelled on Cancel. Paused goes back to Running on Resume and to Cancelled on Cancel."></svg>
+</figure>
+
+<h3>Rollout example</h3>
+<p>Twelve hosts, with a canary size of 1, a batch size of 5 and a wait of 10 minutes:</p>
+<figure>
+  <svg id="timeline" role="img" aria-label="Timeline. Batch 1 upgrades 1 host, waits 10 minutes, then checks health. Batch 2 upgrades 5 hosts, waits, then checks. Batch 3 upgrades 5 hosts. Batch 4 upgrades the last host. The total is about 45 minutes."></svg>
+  <figcaption>Each host upgrade takes about one minute. The wait time controls the total time.</figcaption>
+</figure>
+
+<h3>How it works</h3>
+<ol>
+  <li><strong>Create.</strong> The record copies the version, the files and the hashes from Atlas Settings. It adds each Running Metal Server whose <code>metald_version</code> is different. The operator can remove or reorder rows. The Metal Server list action "Upgrade Metald" changes to "Create Metald Update", which uses the selected servers.</li>
+  <li><strong>Start.</strong> This assigns batch numbers from the row order. It fails when another update is Running or Paused, or when a server is in another open update.</li>
+  <li><strong>Rollout job.</strong> It runs every minute with one job ID, so only one copy runs. For the current batch, it locks the record and sets each Pending row to Upgrading. It commits, and then it queues one host job for each row. A server that is not Running gets the Skipped status, which does not count as a failure.</li>
+  <li><strong>Host job.</strong> It uses the Metal Server <code>metald_job_id</code>, so it never runs next to another <code>metald</code> operation on that host. It runs <code>upgrade-metald.sh</code> with the pinned URLs and hashes. Then it writes only its own row: Upgraded or Failed, the SSH Task, and the message.</li>
+  <li><strong>Watch.</strong> When all rows in the batch are done, any Failed row pauses the update. If no row failed, the job sets <code>wait_until</code> to now plus <code>wait_minutes</code>.</li>
+  <li><strong>Health gate.</strong> After the wait, each upgraded host must meet two conditions. It must report the target version, and its last sync must be less than 2 minutes old. If a host fails the gate, its row becomes Failed and the update pauses.</li>
+  <li><strong>Next batch</strong> or, when no rows are left, Completed.</li>
+  <li><strong>Pause</strong> stops new batches. Host jobs that are running finish. <strong>Resume</strong> sets Failed rows back to Pending and continues. <strong>Cancel</strong> is final.</li>
+  <li><strong>Stale row.</strong> If a row is Upgrading for longer than the script timeout plus 5 minutes, and its job is gone, the row becomes Failed with the message "upgrade job stopped".</li>
+  <li><strong>Roll back the fleet.</strong> Duplicate an older Metald Update. A duplicate keeps its pinned files. The cleanup of unlinked files, which runs every 15 minutes, keeps every file that a Metald Update links.</li>
+</ol>
+<p>The "Upgrade Metald" button on a single Metal Server form stays. It is the quick path for one host, and it uses the latest build.</p>
+
+<h2 id="host-upgrade">6. Upgrade on one host</h2>
+<figure>
+  <svg id="sequence" role="img" aria-label="Sequence on one host. The Atlas host job runs upgrade-metald.sh over SSH. The script downloads and verifies both binaries, counts running VM units, backs up the current binaries, writes a rollback marker, installs the new binaries and restarts metal.service. metald starts, adopts consoles and listeners, and sends STATUS ready with its version. The script waits for that status, checks that the VM unit count did not drop, and reports success. On any failure it restores the previous binaries and restarts."></svg>
+</figure>
+<p>These steps are added to <code>upgrade-metald.sh</code>. The download, the hash check, the <code>version</code> smoke test and the backup already exist.</p>
+<ul>
+  <li><strong>Both binaries.</strong> The script installs <code>metald</code> and <code>atlas-wg-mesh</code>, and keeps a <code>.previous</code> copy of each. <code>metald</code> runs <code>EnsureHost</code> on each start, so the restart applies the new BPF release (<a href="#bpf">section 8</a>).</li>
+  <li><strong>Readiness.</strong> When startup is complete (mesh set up, consoles and listeners adopted, servers serving), <code>metald</code> sends <code>STATUS=ready &lt;version&gt;</code> to systemd. The script waits up to 60 seconds until <code>systemctl show -p StatusText</code> shows that value.</li>
+  <li><strong>VM check.</strong> The script compares the number of active <code>metal-vm@</code> units before and after the restart. If the number drops, the host fails. The rollout stops before the next host.</li>
+  <li><strong>Self-rollback after the script ends.</strong> The script installs a drop-in, <code>metal.service.d/rollback.conf</code>, with <code>OnFailure=metal-rollback.service</code>. It also writes <code>/var/lib/metal/upgrade.json</code>, which records an expiry time of 30 minutes. Assume that the new <code>metald</code> crash-loops until systemd stops it, inside that window. The rollback unit then restores the <code>.previous</code> binaries and starts <code>metal.service</code> again. After the window, the marker has no effect.</li>
+</ul>
+<p class="note">Why <code>STATUS</code> and not <code>Type=notify</code>: with <code>Type=notify</code>, a rollback to an old binary that never sends <code>READY=1</code> would hang until the start timeout, and then fail. <code>STATUS</code> works with the current unit, which already has <code>NotifyAccess=main</code>. If a very old unit does not have that setting, the script checks only <code>is-active</code> and prints a warning.</p>
+
+<h2 id="listeners">7. Restart without refused connections</h2>
+<figure>
+  <svg id="listeners-diagram" role="img" aria-label="Before and after. Before: metald owns its listening socket, so during a restart Atlas gets connection refused. After: systemd keeps the listening socket in its file descriptor store, so new connections wait in the kernel accept queue, and the new metald accepts them."></svg>
+</figure>
+<ul>
+  <li><code>metald</code> stores its three listening sockets in the systemd file descriptor store. The sockets are the API (9000), coordination (9001) and migration transfer (9002) listeners. The PTY masters of the VM consoles already use this store.</li>
+  <li>At startup, <code>metald</code> takes the stored socket that has the configured address. If there is none, it listens and stores the new socket. If the address changed, it removes the old socket from the store.</li>
+  <li>During a restart, the kernel keeps the socket open. New connections wait in the accept queue. Atlas sees a slower response, not "connection refused". The Atlas Metal client allows 5 seconds to connect and 30 to 60 seconds to read, so a restart of a few seconds fits in that time. We will measure the restart time on the development hosts.</li>
+  <li>The current graceful shutdown already lets requests in progress finish, with a limit of 30 seconds.</li>
+  <li>Open console WebSockets and running migration streams still close. Migrations continue from their resume token, as today. Console reconnect is later work.</li>
+  <li>The first upgrade from an old <code>metald</code> still refuses connections for a short time, because the old process did not store its sockets. Later upgrades do not.</li>
+</ul>
+<h3>Why not tableflip</h3>
+<p>tableflip runs the old and new processes at the same time and passes the listeners from one to the other. <code>metald</code> owns resources that only one process can own at a time: PTY readers, VM units through D-Bus, BPF attachments, reconcilers and migration records. The old process must release all of them before the new one starts. So the overlap gives nothing that the descriptor store does not already give. tableflip would also add a dependency. The descriptor store is already in use.</p>
+
+<h2 id="bpf">8. BPF maps</h2>
+<p>A BPF map is kernel memory that a BPF program reads and writes. A map is "pinned" when a file under <code>/sys/fs/bpf</code> keeps it alive after the process that made it exits. Two components use BPF, and they follow different rules.</p>
+
+<h3>metald traffic monitor (not pinned)</h3>
+<ul>
+  <li><code>track_traffic.o</code> counts packets on each VM TAP device. Its maps and links belong to the <code>metald</code> process.</li>
+  <li>When <code>metald</code> exits, the kernel removes the links and the maps. The new process loads new maps and attaches them in its first reconcile pass.</li>
+  <li>The counters start again at 0. The idle baseline is the time of attachment, which is the current contract.</li>
+  <li>While <code>metald</code> is down, no packet events arrive. A sleeping VM wakes on the next client retry after the restart.</li>
+  <li>No state goes from one version to the next, so no compatibility rule is needed. This stays as it is.</li>
+</ul>
+
+<h3>wg-mesh datapath (pinned)</h3>
+<p>The mesh programs stay attached when no process runs. So packets continue to flow during a <code>metald</code> restart. An upgrade replaces the programs in this sequence (this logic already exists in <code>services/wg-mesh/cli</code>):</p>
+<figure>
+  <svg id="bpf-diagram" role="img" aria-label="wg-mesh BPF upgrade. Pinned maps under /sys/fs/bpf/atlas-wg-mesh are shared. The old release holds the old programs, attached to the uplink, wg0 and VM devices. The new atlas-wg-mesh checks each pinned map layout, reuses compatible maps, pins its programs under releases/new-hash, swaps each hook with tc filter replace, writes build_hash, and removes the old release. If a map layout changed, it stops before the swap, and the old programs stay attached."></svg>
+</figure>
+<ol>
+  <li>The new <code>atlas-wg-mesh</code> opens each pinned map that has a name in its object file. It checks the type, key size, value size, maximum entries and flags with <code>MapSpec.Compatible</code>.</li>
+  <li>It reuses the compatible maps, creates the new maps, and pins its programs under <code>releases/&lt;build hash&gt;</code>.</li>
+  <li>It fills new maps from the VM interfaces on the host.</li>
+  <li><code>tc filter replace</code> swaps each hook atomically. If a step fails, the hooks go back to the old release.</li>
+  <li>It writes <code>build_hash</code>, and removes the old release and the maps that no program uses.</li>
+</ol>
+<p>If a map layout changed, step 1 fails with "reset is required". <code>EnsureHost</code> fails, so <code>metald</code> does not start. The script restores both old binaries. The old programs stay attached the whole time, so packets do not stop. The rollout pauses at the canary.</p>
+
+<h3>Rules</h3>
+<ul>
+  <li>Do not change the type, key, value or maximum entries of an existing pinned map. Add a map with a new name. Old programs ignore it.</li>
+  <li>The content of each pinned map must be possible to rebuild from <code>metald</code> sync (peers, VMs and host config). A downgrade removes maps that the old object does not know.</li>
+  <li><span class="new">New CI job</span>: build the BPF object at the merge base and at the pull request head. Then compare all maps that have the same name with <code>Compatible</code>. A layout change fails the pull request and names the map. No <code>.o</code> file goes into Git.</li>
+</ul>
+
+<h2 id="compatibility">9. Compatibility</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>Surface</th><th>Effect</th></tr>
+  <tr><td><code>POST /v1/sync</code></td><td>Two optional response fields. An old Atlas ignores them, and an old <code>metald</code> does not send them.</td></tr>
+  <tr><td>Metal Server, Atlas Settings</td><td>New read-only fields. They are empty until the next build or sync. No patch is needed.</td></tr>
+  <tr><td>Metal Server list action</td><td>The bulk "Upgrade Metald" changes to "Create Metald Update". This is a Desk change only, with no API change.</td></tr>
+  <tr><td>systemd unit</td><td>A drop-in only. The base unit does not change. Without a descriptor store, <code>metald</code> listens as it does today.</td></tr>
+  <tr><td>BPF</td><td>No map change.</td></tr>
+  <tr><td>Files</td><td>Files that a Metald Update links stay. Other unlinked files are deleted as today.</td></tr>
+</table>
+</div>
+
+<h2 id="premortem">10. Failure cases</h2>
+<div class="table-wrap">
+<table>
+  <tr><th>Case</th><th>Behavior</th></tr>
+  <tr><td>The rollout job runs twice</td><td>Its job ID prevents a second copy. A Pending row becomes Upgrading only under the record lock.</td></tr>
+  <tr><td>A worker is killed during a host job</td><td>The script on the host finishes or rolls back by itself. The row becomes stale, then Failed, and the update pauses.</td></tr>
+  <tr><td>Atlas is down during a rollout</td><td>Host scripts finish. The rollout job continues on the next tick, and the health gate uses the sync time.</td></tr>
+  <tr><td>A bad binary passes the canary and crashes later</td><td>Self-rollback inside 30 minutes. Sync shows the old version, so the gate fails and the update pauses.</td></tr>
+  <tr><td>The <code>metald</code> restart stops VMs</td><td>The VM count check fails on the canary, and the rollout stops.</td></tr>
+  <tr><td>BPF map layout changed</td><td><code>metald</code> does not start. The script rolls back, and the datapath has no gap. CI catches this before merge.</td></tr>
+  <tr><td>200 hosts</td><td>The batch size limits how many hosts upgrade at once. Each host job is one SSH job on the long queue.</td></tr>
+  <tr><td>Who writes what</td><td>The rollout job owns the update status, the batch fields, and the change from Pending to Upgrading. A host job owns its row result. Desk actions change the status under the record lock. The rollout job reads the status again under that lock before each change.</td></tr>
+  <tr><td>Operator view</td><td>The status, current batch, wait end time, row status, SSH Task and failure message, without SQL.</td></tr>
+</table>
+</div>
+
+<h2 id="verification">11. Verification</h2>
+<ul>
+  <li><strong>Go:</strong> tests for listener reuse (matched by name and address) and for the readiness status. Run <code>go test -race</code> on the changed packages.</li>
+  <li><strong>wg-mesh CI check:</strong> a change to a map layout must make the check fail.</li>
+  <li><strong>Atlas, on <code>test.local</code>:</strong> tests for batch assignment, the health gate, stale rows, and pause and resume, with real doctypes.</li>
+  <li><strong>Live, on <code>atlas.localhost</code> with the waw Scaleway development hosts:</strong>
+    <ol>
+      <li>Canary of 1 host. During the upgrade, a loop calls <code>GET /v1/vms</code> every 100 ms. Expect 0 connection errors, all VMs still running, and consoles that open after the restart.</li>
+      <li>A bad build that exits after 30 seconds. Expect the self-rollback to restore the previous binaries and the update to pause.</li>
+      <li>A full rollout over all development hosts, with a batch size of 1 and a wait of 2 minutes.</li>
+      <li>A ping between VMs on two hosts during the <code>wg-mesh</code> upgrade. Expect no packet loss.</li>
+    </ol>
+  </li>
+</ul>
+
+<h2 id="commits">12. Commits</h2>
+<ol>
+  <li><code>build(metal): Default the build version to a development timestamp</code>: the Makefiles, <code>--version</code>, and the Atlas Settings version fields.</li>
+  <li><code>feat(metal): Report the metald and wg-mesh versions in host sync</code>: the sync response, and the Metal Server fields and list column.</li>
+  <li><code>feat(metal): Keep the listening sockets across a metald restart</code>: listeners in the descriptor store, and the readiness status.</li>
+  <li><code>feat(atlas): Check readiness and roll back a failed metald upgrade</code>: the script, the rollback drop-in, and the <code>wg-mesh</code> install.</li>
+  <li><code>feat(atlas): Add the Metald Update rollout</code>: the Operations module, the doctypes, the rollout job, and the list action.</li>
+  <li><code>build(wg-mesh): Check BPF map compatibility in CI</code></li>
+  <li><code>docs(atlas): Document the metald rollout</code>: the operator runbook and the <code>SPEC.md</code> updates.</li>
+</ol>
+
+<h2 id="decisions">13. Decisions needed</h2>
+<ol>
+  <li>Is the doctype structure and form layout above good?</li>
+  <li>Are the defaults good: a canary of 1, a batch size of 5, and a wait of 10 minutes?</li>
+  <li>Does <code>wg-mesh</code> ship in the same Metald Update as <code>metald</code>? I recommend yes.</li>
+  <li>Is a self-rollback window of 30 minutes good?</li>
+  <li>Do we replace the bulk "Upgrade Metald" list action with "Create Metald Update"? I recommend yes, so there is only one way to roll out to the fleet.</li>
+</ol>
+</main>
+
+<script>
+(function () {
+  const ink = "#1f2328", muted = "#5d6670", accent = "#2b62d9", warn = "#b4441f", ok = "#2f7d4f";
+  const ns = "http://www.w3.org/2000/svg";
+  let seed = 7;
+
+  function setup(id, width, height) {
+    const svg = document.getElementById(id);
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    return { svg, rc: rough.svg(svg) };
+  }
+  function text(svg, x, y, value, options = {}) {
+    const node = document.createElementNS(ns, "text");
+    node.setAttribute("x", x);
+    node.setAttribute("y", y);
+    node.setAttribute("fill", options.color || ink);
+    node.setAttribute("font-size", options.size || 13);
+    node.setAttribute("font-family", options.mono ? "ui-monospace, Menlo, monospace" : "-apple-system, Segoe UI, sans-serif");
+    node.setAttribute("text-anchor", options.anchor || "start");
+    if (options.weight) node.setAttribute("font-weight", options.weight);
+    node.textContent = value;
+    svg.appendChild(node);
+  }
+  function box(d, x, y, width, height, title, lines = [], options = {}) {
+    d.svg.appendChild(d.rc.rectangle(x, y, width, height, { stroke: options.stroke || ink, strokeWidth: 1.2, roughness: 1.1, seed: seed++ }));
+    if (title) text(d.svg, x + 12, y + 22, title, { weight: 600, size: 14, color: options.stroke || ink });
+    lines.forEach((line, index) => text(d.svg, x + 12, y + 44 + index * 17, line, { mono: true, size: 11.5, color: line.startsWith("+") ? accent : muted }));
+  }
+  function arrow(d, x1, y1, x2, y2, label, options = {}) {
+    const color = options.color || ink;
+    d.svg.appendChild(d.rc.line(x1, y1, x2, y2, { stroke: color, strokeWidth: 1.2, roughness: 0.8, seed: seed++ }));
+    const angle = Math.atan2(y2 - y1, x2 - x1), size = 9;
+    const left = [x2 - size * Math.cos(angle - 0.4), y2 - size * Math.sin(angle - 0.4)];
+    const right = [x2 - size * Math.cos(angle + 0.4), y2 - size * Math.sin(angle + 0.4)];
+    d.svg.appendChild(d.rc.linearPath([left, [x2, y2], right], { stroke: color, strokeWidth: 1.2, roughness: 0.5, seed: seed++ }));
+    if (label) text(d.svg, options.labelX ?? (x1 + x2) / 2, options.labelY ?? (y1 + y2) / 2 - 6, label, { size: 12, color: options.labelColor || muted, anchor: options.anchor || "middle" });
+  }
+
+  // Doctype structure
+  {
+    const d = setup("structure", 860, 470);
+    box(d, 10, 20, 220, 125, "Atlas Settings", ["metald_binary_x86_64_file", "metald_binary_hash", "+ metald_version", "wg_mesh_binary_x86_64_file …", "+ wg_mesh_version"]);
+    box(d, 330, 20, 270, 230, "Metald Update", ["status", "version", "metald_binary_file, _hash", "wg_mesh_binary_file, _hash", "canary_size, batch_size", "wait_minutes", "current_batch, wait_until", "failure_message", "servers  (table)"], { stroke: accent });
+    box(d, 330, 300, 270, 140, "Metald Update Server", ["server", "batch", "status", "previous_version", "ssh_task", "failure_message"], { stroke: accent });
+    box(d, 670, 20, 180, 85, "metald on host", ["POST /v1/sync", "→ metald_version", "→ wg_mesh_version"]);
+    box(d, 670, 150, 180, 110, "Metal Server", ["status", "+ metald_version", "+ wg_mesh_version", "metald_job_id"]);
+    box(d, 670, 330, 180, 60, "SSH Task", ["script output"]);
+    box(d, 10, 220, 220, 70, "File", ["pinned binaries, kept while", "a Metald Update links them"]);
+    arrow(d, 230, 80, 328, 80, "copy on create", { labelY: 72 });
+    arrow(d, 465, 250, 465, 298, "1 : N", { labelX: 475, labelY: 280, anchor: "start" });
+    arrow(d, 600, 330, 668, 230, "server", { labelX: 645, labelY: 270 });
+    arrow(d, 600, 365, 668, 365, "ssh_task", { labelY: 357 });
+    arrow(d, 760, 105, 760, 148, "host sync", { labelX: 770, labelY: 132, anchor: "start" });
+    arrow(d, 328, 200, 232, 250, "links", { labelX: 290, labelY: 212 });
+  }
+
+  // States
+  {
+    const d = setup("states", 860, 250);
+    const state = (x, y, label, color) => {
+      d.svg.appendChild(d.rc.rectangle(x, y, 130, 46, { stroke: color || ink, strokeWidth: 1.3, roughness: 1, seed: seed++ }));
+      text(d.svg, x + 65, y + 28, label, { anchor: "middle", weight: 600, color: color || ink });
+    };
+    state(20, 100, "Draft");
+    state(250, 100, "Running", accent);
+    state(500, 20, "Completed", ok);
+    state(500, 180, "Paused", warn);
+    state(720, 100, "Cancelled");
+    arrow(d, 150, 123, 248, 123, "Start");
+    arrow(d, 380, 108, 498, 50, "no rows left", { labelX: 430, labelY: 68 });
+    arrow(d, 380, 140, 498, 195, "failure or Pause", { labelX: 420, labelY: 190, anchor: "end" });
+    arrow(d, 498, 210, 382, 152, "Resume", { labelX: 470, labelY: 236 });
+    arrow(d, 380, 123, 718, 123, "Cancel", { labelX: 650 });
+    arrow(d, 630, 200, 740, 148, "Cancel", { labelX: 700, labelY: 192 });
+  }
+
+  // Timeline
+  {
+    const d = setup("timeline", 860, 160);
+    const scale = 16, start = 20;
+    const batches = [["Batch 1", 1], ["Batch 2", 5], ["Batch 3", 5], ["Batch 4", 1]];
+    let x = start;
+    batches.forEach(([label, hosts], index) => {
+      d.svg.appendChild(d.rc.rectangle(x, 40, scale * 1.2, 40, { fill: accent, fillStyle: "solid", stroke: accent, roughness: 0.6, seed: seed++ }));
+      text(d.svg, x, 30, `${label}: ${hosts} host${hosts > 1 ? "s" : ""}`, { size: 12, weight: 600 });
+      x += scale * 1.2;
+      if (index < batches.length - 1) {
+        d.svg.appendChild(d.rc.rectangle(x, 40, scale * 10, 40, { stroke: muted, strokeWidth: 1, roughness: 1, seed: seed++ }));
+        text(d.svg, x + scale * 5, 65, "watch 10 min", { anchor: "middle", size: 12, color: muted });
+        x += scale * 10;
+        d.svg.appendChild(d.rc.line(x, 32, x, 90, { stroke: ok, strokeWidth: 1.5, roughness: 0.6, seed: seed++ }));
+        text(d.svg, x, 106, "health gate", { anchor: "middle", size: 11, color: ok });
+      }
+    });
+    arrow(d, start, 135, x + 20, 135, "about 45 minutes in total", { labelY: 128 });
+  }
+
+  // Host sequence
+  {
+    const d = setup("sequence", 860, 560);
+    const lanes = [["Atlas host job", 90], ["upgrade-metald.sh", 320], ["systemd", 550], ["new metald", 770]];
+    lanes.forEach(([label, x]) => {
+      d.svg.appendChild(d.rc.rectangle(x - 80, 10, 160, 34, { stroke: ink, roughness: 1, seed: seed++ }));
+      text(d.svg, x, 32, label, { anchor: "middle", weight: 600 });
+      d.svg.appendChild(d.rc.line(x, 44, x, 545, { stroke: "#c2c8cf", strokeWidth: 1, roughness: 0.4, seed: seed++ }));
+    });
+    const step = (y, x, value, color, anchor) => text(d.svg, x, y, value, { size: 12, color: color || ink, anchor });
+    arrow(d, 90, 70, 318, 70, "SSH: pinned URLs and hashes");
+    step(100, 330, "download both, check sha256, run version");
+    step(122, 330, "count active metal-vm@ units = N");
+    step(144, 330, "back up to .previous, write upgrade.json (30 min)", accent);
+    step(166, 330, "install both binaries and rollback drop-in", accent);
+    arrow(d, 320, 202, 548, 202, "systemctl restart metal.service");
+    arrow(d, 550, 228, 768, 228, "start (stored listeners, PTYs)");
+    step(252, 760, "EnsureHost (wg-mesh BPF)", ink, "end");
+    step(272, 760, "adopt consoles and listeners", ink, "end");
+    step(292, 760, "serve API", ink, "end");
+    arrow(d, 770, 322, 552, 322, "STATUS=ready <version>", { color: accent, labelColor: accent });
+    arrow(d, 550, 340, 322, 340, "StatusText within 60 s");
+    step(372, 330, "active metal-vm@ units ≥ N", ok);
+    arrow(d, 318, 400, 92, 400, "success: row Upgraded", { color: ok, labelColor: ok });
+    step(440, 330, "any failure: restore .previous, restart", warn);
+    arrow(d, 318, 462, 92, 462, "exit 1: row Failed, update pauses", { color: warn, labelColor: warn });
+    step(505, 330, "later crash loop inside 30 min:", warn);
+    step(525, 330, "OnFailure=metal-rollback.service restores .previous", warn);
+  }
+
+  // Listeners before and after
+  {
+    const d = setup("listeners-diagram", 860, 250);
+    text(d.svg, 20, 24, "Before", { weight: 600, size: 14 });
+    box(d, 20, 40, 120, 50, "Atlas");
+    box(d, 260, 40, 170, 50, "metald (restarting)", [], { stroke: warn });
+    arrow(d, 140, 65, 258, 65, "connection refused", { color: warn, labelColor: warn });
+    text(d.svg, 20, 120, "The socket closes with the process.", { size: 12, color: muted });
+
+    text(d.svg, 460, 24, "After", { weight: 600, size: 14 });
+    box(d, 460, 40, 110, 50, "Atlas");
+    box(d, 620, 40, 220, 80, "systemd descriptor store", ["listening socket :9000", "accept queue keeps SYNs"], { stroke: accent });
+    box(d, 620, 170, 220, 50, "new metald", [], { stroke: ok });
+    arrow(d, 570, 65, 618, 65, "", {});
+    arrow(d, 730, 120, 730, 168, "accepts queued", { labelX: 740, labelY: 150, anchor: "start" });
+    text(d.svg, 460, 120, "Atlas waits a few seconds.", { size: 12, color: muted });
+    text(d.svg, 460, 138, "It does not see an error.", { size: 12, color: muted });
+  }
+
+  // wg-mesh BPF upgrade
+  {
+    const d = setup("bpf-diagram", 860, 330);
+    box(d, 20, 20, 820, 120, "/sys/fs/bpf/atlas-wg-mesh", [], { stroke: muted });
+    box(d, 40, 55, 240, 70, "pinned maps (shared)", ["config, peers, local_vms, …", "build_hash"]);
+    box(d, 310, 55, 240, 70, "releases/<old hash>", ["old programs"], { stroke: muted });
+    box(d, 580, 55, 240, 70, "releases/<new hash>", ["+ new programs"], { stroke: accent });
+    box(d, 310, 220, 240, 60, "tc hooks", ["uplink, wg0, VM devices"]);
+    box(d, 20, 220, 250, 90, "new atlas-wg-mesh", ["1 check map layouts", "2 reuse maps, pin programs", "3 refill new maps"], { stroke: accent });
+    box(d, 590, 220, 250, 90, "on success", ["4 tc filter replace (atomic)", "5 write build_hash", "  remove old release"], { stroke: ok });
+    arrow(d, 430, 125, 430, 218, "attached now", { labelX: 440, labelY: 185, anchor: "start" });
+    arrow(d, 700, 125, 560, 225, "swap", { color: accent, labelColor: accent, labelX: 650, labelY: 185 });
+    arrow(d, 160, 220, 160, 127, "Compatible?", { labelX: 170, labelY: 185, anchor: "start" });
+    text(d.svg, 20, 325, "A changed layout stops at step 1. The old programs stay attached.", { size: 12, color: warn });
+  }
+})();
+</script>
+</body>
+</html>
