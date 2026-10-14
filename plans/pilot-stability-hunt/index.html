@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pilot stability hunt</title>
+<style>
+:root { --fg:#1f2328; --muted:#59636e; --line:#e3e6ea; --bg:#fff; --code:#f4f5f7; --accent:#0b6bcb; }
+@media (prefers-color-scheme: dark) { :root { --fg:#e6e8eb; --muted:#9aa3ad; --line:#30363d; --bg:#0f1115; --code:#1b1f26; --accent:#5aa9f5; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 19px; margin: 36px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.meta { color: var(--muted); font-size: 13px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+th { font-weight: 600; }
+code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 13px; word-break: break-word; }
+#log ul { list-style: none; padding: 0; }
+#log li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+a { color: var(--accent); }
+nav a { margin-right: 14px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Pilot stability hunt</h1>
+<p class="meta">Live status of a bug hunt on Pilot. Updated 2026-10-14 23:10 UTC. 2 log entries, newest first.</p>
+<nav><a href="#plan">Plan</a><a href="#log">Log</a></nav>
+<section id="plan"><h2>Goal</h2>
+<p>Make Pilot stable, correct and light on resources for production use. Find bugs on a real VM, fix the small ones, and record every finding. Test with Frappe <code>version-16</code> and <code>develop</code>. Bug fixes only: no new features unless a bug needs one.</p>
+<h2>Ground rules</h2>
+<ul>
+<li>Base: latest <code>develop</code>, local branch <code>fix/bughunt</code>. Nothing is committed or pushed.</li>
+<li>Test host: one Ubuntu 24.04 VM (1 vCPU, 4 GB RAM, no swap at start). It may be resized up and down to test tuning. Disk stays the same.</li>
+<li>Domains: <code>*.ip-&lt;a-b-c-d&gt;.swiftwave.xyz</code> wildcard DNS, plus the Atlas auto router for the domain-provider TLS tests.</li>
+<li>Every finding gets a log entry: what failed, the root cause, the fix (or proposal) and how it was checked.</li>
+</ul>
+<h2>Workstreams</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Area</th>
+<th>Work</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Setup</td>
+<td>Install the released Pilot on the VM as a user would. Note every install error.</td>
+<td>in progress</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Database tuning</td>
+<td>MariaDB settings must follow the host size after a resize. Find why they do not.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Database tuning</td>
+<td>RAM split between app and database (a slider in the UI). Investigate and propose.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>4</td>
+<td>TLS</td>
+<td>Ask for the Let's Encrypt email in the UI instead of failing. Ask before a custom domain is added.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>5</td>
+<td>TLS</td>
+<td>A wildcard domain that a proxy serves must not go into certificate renewal.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Proxy</td>
+<td>Cloudflare proxy (orange cloud): issuance, renewal, real client IP, redirect loops.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Domains</td>
+<td>After a site rename, the new domain must be primary, not the random one (Central and Atlas auto routing).</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Restore</td>
+<td>Restoring site config must not add back old custom domains.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Apps</td>
+<td>Apps in Installed Applications but not on the bench show in the app list (after a restore). Issue #639.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Apps</td>
+<td>Marketplace app escape hatch: update from a git branch. Investigate only.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Parity</td>
+<td>Compare every <code>frappe/bench</code> command with Pilot. List what is missing and not left out by design.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Resources</td>
+<td>Measure memory at idle and during build, migrate, backup. Check build limits.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Versions</td>
+<td>Full flow with Frappe <code>version-16</code> and <code>develop</code>.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Issues</td>
+<td>Fix small reported bugs from frappe/pilot issues.</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>15</td>
+<td>UI</td>
+<td>Walk every Admin UI page in Chrome. Note inconsistencies.</td>
+<td>todo</td>
+</tr>
+</tbody>
+</table>
+<h2>Reported issues in scope</h2>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Title</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>#639</td>
+<td>App lists out of sync (site lists apps the bench does not have)</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>#640</td>
+<td>Forked app shows upstream repository and links</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>#567</td>
+<td>Uninstall from a site also removes the app from the bench</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>#579</td>
+<td>Validator crashes on syntax errors instead of reporting them</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>#596</td>
+<td>Killed backup during update leaves a "backing up" loader</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>#638</td>
+<td>version-16 bench install fails with the <code>dev</code> extra</td>
+<td>todo</td>
+</tr>
+<tr>
+<td>#621</td>
+<td>No <code>pilot --version</code></td>
+<td>todo</td>
+</tr>
+<tr>
+<td>#408</td>
+<td>Init fails without passwordless sudo when redis is missing</td>
+<td>todo</td>
+</tr>
+</tbody>
+</table></section>
+<h2>Log (newest first)</h2>
+<section id="log"><ul>
+<li>2026-10-15 SETUP Started the released install (<code>install.sh</code> as root) on the VM.</li>
+<li>2026-10-15 START Read CLAUDE.md, playbook, SPEC.md. Switched the checkout from <code>feat/pilot-mailbox</code> (no own commits, behind develop) to new branch <code>fix/bughunt</code> on origin/develop. Read open bug issues #640 #639 #638 #596 #579 #571 #567 #437 #408 #528 #572 #627 #621.</li>
+</ul></section>
+</main>
+</body>
+</html>
