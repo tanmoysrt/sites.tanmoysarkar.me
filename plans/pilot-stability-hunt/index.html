@@ -26,7 +26,7 @@ nav a { margin-right: 14px; }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">Live status of a bug hunt on Pilot. Updated 2026-10-14 23:10 UTC. 2 log entries, newest first.</p>
+<p class="meta">Live status of a bug hunt on Pilot. Updated 2026-10-14 23:17 UTC. 12 log entries, newest first.</p>
 <nav><a href="#plan">Plan</a><a href="#log">Log</a></nav>
 <section id="plan"><h2>Goal</h2>
 <p>Make Pilot stable, correct and light on resources for production use. Find bugs on a real VM, fix the small ones, and record every finding. Test with Frappe <code>version-16</code> and <code>develop</code>. Bug fixes only: no new features unless a bug needs one.</p>
@@ -51,38 +51,38 @@ nav a { margin-right: 14px; }
 <tr>
 <td>1</td>
 <td>Setup</td>
-<td>Install the released Pilot on the VM as a user would. Note every install error.</td>
-<td>in progress</td>
+<td>Install develop Pilot on the VM (<code>--dev</code>), wizard init on version-16.</td>
+<td>done (install), init running</td>
 </tr>
 <tr>
 <td>2</td>
 <td>Database tuning</td>
 <td>MariaDB settings must follow the host size after a resize. Find why they do not.</td>
-<td>todo</td>
+<td>root cause found, fixing</td>
 </tr>
 <tr>
 <td>3</td>
 <td>Database tuning</td>
 <td>RAM split between app and database (a slider in the UI). Investigate and propose.</td>
-<td>todo</td>
+<td>investigated, proposal pending</td>
 </tr>
 <tr>
 <td>4</td>
 <td>TLS</td>
 <td>Ask for the Let's Encrypt email in the UI instead of failing. Ask before a custom domain is added.</td>
-<td>todo</td>
+<td>root cause found, fixing</td>
 </tr>
 <tr>
 <td>5</td>
 <td>TLS</td>
 <td>A wildcard domain that a proxy serves must not go into certificate renewal.</td>
-<td>todo</td>
+<td>mostly correct already; 2 gaps found</td>
 </tr>
 <tr>
 <td>6</td>
 <td>Proxy</td>
 <td>Cloudflare proxy (orange cloud): issuance, renewal, real client IP, redirect loops.</td>
-<td>todo</td>
+<td>2 bugs found, fixing</td>
 </tr>
 <tr>
 <td>7</td>
@@ -112,7 +112,7 @@ nav a { margin-right: 14px; }
 <td>11</td>
 <td>Parity</td>
 <td>Compare every <code>frappe/bench</code> command with Pilot. List what is missing and not left out by design.</td>
-<td>todo</td>
+<td>table done, CLI bugs being fixed</td>
 </tr>
 <tr>
 <td>12</td>
@@ -153,37 +153,37 @@ nav a { margin-right: 14px; }
 <tr>
 <td>#639</td>
 <td>App lists out of sync (site lists apps the bench does not have)</td>
-<td>todo</td>
+<td>fixing</td>
 </tr>
 <tr>
 <td>#640</td>
 <td>Forked app shows upstream repository and links</td>
-<td>todo</td>
+<td>fixing</td>
 </tr>
 <tr>
 <td>#567</td>
 <td>Uninstall from a site also removes the app from the bench</td>
-<td>todo</td>
+<td>by design today, proposal</td>
 </tr>
 <tr>
 <td>#579</td>
 <td>Validator crashes on syntax errors instead of reporting them</td>
-<td>todo</td>
+<td>already fixed on develop (f5c9308b)</td>
 </tr>
 <tr>
 <td>#596</td>
 <td>Killed backup during update leaves a "backing up" loader</td>
-<td>todo</td>
+<td>fixing</td>
 </tr>
 <tr>
 <td>#638</td>
 <td>version-16 bench install fails with the <code>dev</code> extra</td>
-<td>todo</td>
+<td>fixing</td>
 </tr>
 <tr>
 <td>#621</td>
 <td>No <code>pilot --version</code></td>
-<td>todo</td>
+<td>fixing</td>
 </tr>
 <tr>
 <td>#408</td>
@@ -194,6 +194,16 @@ nav a { margin-right: 14px; }
 </table></section>
 <h2>Log (newest first)</h2>
 <section id="log"><ul>
+<li>2026-10-15 FINDING (parity) All frappe site commands pass through (<code>pilot --site S &lt;cmd&gt;</code>). Gaps vs bench: no <code>update</code> CLI, no <code>drop-site</code>/domain CLI, no <code>switch-to-branch</code> CLI, no <code>pip</code>, no backup schedule CLI, no <code>renew-lets-encrypt</code>, no wkhtmltopdf. CLI bugs: <code>-y</code> before passthrough args is forwarded to Frappe; <code>pilot remove logs</code> unreachable (no <code>__init__.py</code> in <code>pilot/commands/remove</code>); <code>pilot restart</code> exits 0 when it restarts nothing; docs disagree with argparse in a few places.</li>
+<li>2026-10-15 FINDING (apps) #639: site app list is read straight from Frappe; an app missing from the bench shows as a blank row and cannot be uninstalled ("App X not found in bench"); site build fails "App(s) not found in bench". #640: the UI matches registry metadata by app name only (backend already compares repo URLs). #567: uninstall removes the app from the bench when no site uses it (documented, surprising). #579: already fixed on develop (<code>f5c9308b</code>). #596: chain tasks have no on_cancel; a killed backup leaves the operation in <code>backing_up</code> with no retry/revert and blocks later updates. #638: <code>[dev]</code> extra install has no fallback. #621: no <code>pilot --version</code>.</li>
+<li>2026-10-15 FINDING (TLS) Provider routes with <code>origin_scheme=http</code> (wildcard served upstream) are already left out of certificates. Gaps: <code>letsencrypt_email_required</code> counts all public domains, so production setup asks for an email on a fully provider-routed bench; plain custom domains on a routed site inherit <code>ssl</code>.</li>
+<li>2026-10-15 FINDING (TLS) (B1) A certbot failure or empty email at the end of <code>new-site</code> fails the task, and the <code>remove_failed_site</code> callback drops the new site. (B2) Add/remove/set-primary domain writes site_config, then the Let's Encrypt task fails on a missing email before nginx is regenerated: the domain is listed but not served, a removed domain is still served, the API said 202. (B3) <code>obtain_all</code> only prints per-site failures, the task reports success, <code>ssl=true</code> stays, and the UI hides "Enable SSL" (409 <code>tls_already_enabled</code>). (B4) domain rows report <code>tls:true</code> with no certificate. (B5) A removed domain stays in the SAN certificate (subset check), so renewal later fails for the whole site. (B7) Pilot never calls <code>renew()</code>; Fedora/Arch have no certbot timer by default. (B8) Cloudflare-proxied domains fail the A-record check (409). (B9) Cloudflare Flexible SSL loops on the http-&gt;https redirect.</li>
+<li>2026-10-15 FINDING (db tuning) Postgres has no memory tuning or cgroup limit. Redis has no <code>maxmemory</code>. App side (2 gunicorn workers x 8 threads, worker, scheduler, socketio, admin) is fixed for every host size. No setting exists for the app/DB RAM split (hardcoded <code>/2</code> and <code>_MAX_HOST_MEMORY_SHARE = 0.5</code> in <code>pilot/core/mariadb_memory.py</code>).</li>
+<li>2026-10-15 FINDING (db tuning) MariaDB is sized only when it is first provisioned and on a Central host's first boot (<code>admin/backend/central_bootstrap.py</code> <code>main</code> -&gt; <code>tune_database</code>). A VM resize keeps the old my.cnf and unit MemoryHigh/MemoryMax. Downsize 8 -&gt; 4 GB keeps MemoryMax 3027M (75% of RAM) and a 1.5 GB pool. Upsize keeps the small pool, and the Admin UI then accepts a pool larger than the stale cgroup MemoryMax (UI limits read live RAM). Press re-sizes after its resize job (<code>adjust_memory_config</code> from <code>resize_server.py</code>); Pilot runs inside the VM and must detect the change at boot.</li>
+<li>2026-10-15 UI Wizard log view still shows the raw protocol line <code>STEP init,&lt;unix ts&gt; Initialize bench</code> (seen in an earlier session too).</li>
+<li>2026-10-15 SETUP Root install PASS (only noise: MariaDB package <code>update-alternatives: error: no alternatives for my.cnf</code>, harmless). <code>install.sh --dev</code> as frappe PASS. <code>pilot new main</code> + <code>pilot start</code>: the first start builds 3 frontends on 1 vCPU (dashboard 11 s build after npm install; total about 12 min with npm installs). Wizard reachable on the public IP; version-16 init started from the wizard.</li>
+<li>2026-10-15 AUDIT Started 5 read-only code audits in parallel: (1) database tuning and RAM split, (2) TLS, Let's Encrypt email, wildcard renewal, Cloudflare, (3) rename primary domain and restore of custom domains, (4) app list sync and issues #639 #640 #567 #579 #596 #638 #621, (5) <code>frappe/bench</code> command parity.</li>
+<li>2026-10-15 SCOPE (user) Run develop Pilot on the VM (<code>--dev</code> checkout, synced with local <code>fix/bughunt</code>). Clean up inconsistent or tangled code only where a fix already touches it. Review with the Atlas engineering playbook (<code>benches/atlas-bench/apps/atlas/llm/engineering-playbook</code>).</li>
 <li>2026-10-15 SETUP Started the released install (<code>install.sh</code> as root) on the VM.</li>
 <li>2026-10-15 START Read CLAUDE.md, playbook, SPEC.md. Switched the checkout from <code>feat/pilot-mailbox</code> (no own commits, behind develop) to new branch <code>fix/bughunt</code> on origin/develop. Read open bug issues #640 #639 #638 #596 #579 #571 #567 #437 #408 #528 #572 #627 #621.</li>
 </ul></section>
