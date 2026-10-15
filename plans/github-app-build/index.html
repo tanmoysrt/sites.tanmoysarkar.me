@@ -19,7 +19,7 @@ code{font:.9em ui-monospace,monospace}
 <body>
 <main>
 <h1>Pilot GitHub App Build</h1>
-<p class="muted">Status page. Last update: 2026-10-16 04:15. Design source: <a href="../../research/pilot-github-app/">Pilot GitHub App proposal</a>.</p>
+<p class="muted">Status page. Last update: 2026-10-16 04:45. Status: ready for review. Nothing is committed. Design source: <a href="../../research/pilot-github-app/">Pilot GitHub App proposal</a>.</p>
 
 <h2>Goal</h2>
 <p>Pilot reads its Central settings from instance metadata. If Central is available, Pilot replaces PAT-based Git access with GitHub App access. If Central is not available, Pilot shows only the PAT form. If Central is available, Pilot also shows a "Connect via Frappe Central" option.</p>
@@ -50,8 +50,9 @@ code{font:.9em ui-monospace,monospace}
 <tr><td><code>CentralClient</code> GitHub methods and one token resolver for clone, fetch, branches and app lookup</td><td>Pilot</td><td class="s done">Tested live</td></tr>
 <tr><td>Admin API: connection-attempts, connection, repositories, disconnect</td><td>Pilot</td><td class="s done">Tested live</td></tr>
 <tr><td><code>settings/Git.vue</code>: PAT only, or PAT plus Connect through Frappe Central</td><td>Pilot</td><td class="s done">Tested live</td></tr>
-<tr><td>Disconnect from Pilot</td><td>Both</td><td class="s todo">Next</td></tr>
-<tr><td>Minimal unit tests, docs</td><td>Both</td><td class="s todo">Next</td></tr>
+<tr><td>Disconnect from Pilot (disables the Central grant, clears the host)</td><td>Both</td><td class="s done">Tested live</td></tr>
+<tr><td>Minimal tests: Pilot 4 new (182 pass in the git and integration suites), Central 3 new (pass on <code>central-test.local</code>)</td><td>Both</td><td class="s done">Done</td></tr>
+<tr><td>Docs: Pilot <code>docs/admin-api.md</code>, Central <code>spec/INTEGRATIONS.md</code></td><td>Both</td><td class="s done">Done</td></tr>
 </table>
 
 <h2>Live checks passed</h2>
@@ -61,13 +62,25 @@ code{font:.9em ui-monospace,monospace}
 <li>Private repository clone with a Central-minted token. Public repository clone with no token. No token in <code>.git/config</code>.</li>
 <li>Import dialog lists only granted repositories. Branch list and app lookup use the App token.</li>
 <li>GitHub webhook delivery returns 200. A removed repository is removed from the grant, and Central then refuses a token for it (403). A bad signature gets 401.</li>
+<li>Manage repositories: a second pass reuses the same grant, bumps its version, and shows a success toast.</li>
+<li>Disconnect: Central disables the grant, and Pilot shows the Connect card again.</li>
 <li>Refused: a user of another team, a second user on a bound link, a callback with no session, a replayed callback, an expired link.</li>
 </ul>
 
 <h2>Screens</h2>
+<figure><img src="pilot-connect.jpg" alt="Pilot Git settings with the recommended Connect GitHub through Frappe Central card and a link to use a personal access token instead" style="max-width:100%;border:1px solid var(--line)"><figcaption class="muted">Pilot on a Central-managed host: Central is the recommended option. A host without Central shows only the token form.</figcaption></figure>
 <figure><img src="central-select.jpg" alt="Central page where the user selects repositories to grant to the server" style="max-width:100%;border:1px solid var(--line)"><figcaption class="muted">Central: select repositories. Only repositories where the user is an admin can be selected.</figcaption></figure>
 <figure><img src="pilot-connected.jpg" alt="Pilot Git settings showing the Frappe Central connection and the granted repository" style="max-width:100%;border:1px solid var(--line)"><figcaption class="muted">Pilot: connected through Frappe Central.</figcaption></figure>
 <figure><img src="pilot-import.jpg" alt="Pilot import app dialog with the granted private repository and its branch" style="max-width:100%;border:1px solid var(--line)"><figcaption class="muted">Pilot: import an app from a granted private repository.</figcaption></figure>
+
+<h2>Open points for review</h2>
+<ul>
+<li>"Create GitHub App" in Central Settings is built but not run end to end. Running it would replace the test App in the settings.</li>
+<li>Local test only: the OAuth callback must match the host the user signed in to. The App has two callback URLs: <code>central.localhost:8000</code> first, then the tunnel. Production needs one.</li>
+<li>A token already cached in a Pilot process stays valid until it expires (at most one hour) after disconnect or a removed repository.</li>
+<li>Central sends the browser back to the <code>return_url</code> that Pilot gave. A compromised Pilot could choose any URL.</li>
+<li>Repository rename is not handled: the grant keeps the old full name until the user selects the repository again.</li>
+</ul>
 
 <h2>Assumptions</h2>
 <ul>
