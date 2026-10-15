@@ -53,7 +53,7 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 19:31 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 19:49 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>50</b><span>fixes, with tests</span></div>
@@ -824,7 +824,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 78 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 78 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, F43 to F49, and the fixes for Greptile reviews 12 to 21, and F50. Greptile review 22 is 5/5. The branch also merges <code>develop</code>. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 81 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 81 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, F43 to F49, and the fixes for Greptile reviews 12 to 23, and F50. Greptile review 24 is 5/5, every CI check passes, and GitHub reports the pull request as mergeable. The branch also merges <code>develop</code>. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -1223,6 +1223,21 @@ a { color: var(--accent); }
 <td>78</td>
 <td><code>d6e314a5</code></td>
 <td><code>fix(apps): Put back the committed app list after an uninstall</code></td>
+</tr>
+<tr>
+<td>79</td>
+<td><code>1f9ce2aa</code></td>
+<td><code>fix(database): Save a memory share only after MariaDB is sized for it</code></td>
+</tr>
+<tr>
+<td>80</td>
+<td><code>2c854552</code></td>
+<td><code>fix(build): Warn when the swap helper cannot run</code></td>
+</tr>
+<tr>
+<td>81</td>
+<td><code>6fa219f3</code></td>
+<td><code>refactor(certificates): Check the renewal timer separately from installing it</code></td>
 </tr>
 </tbody>
 </table>
