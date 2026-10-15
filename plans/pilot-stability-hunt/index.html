@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:28 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:44 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>20</b><span>fixes, with tests</span></div>
-  <div class="stat"><b>10</b><span>decisions needed</span></div>
-  <div class="stat"><b>68</b><span>log entries</span></div>
+  <div class="stat"><b>24</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>12</b><span>decisions needed</span></div>
+  <div class="stat"><b>72</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -267,6 +267,42 @@ a { color: var(--accent); }
 <td>n/a</td>
 <td>No</td>
 </tr>
+<tr>
+<td>F22</td>
+<td>Site drop</td>
+<td>A drop with a backup still deleted the database when the backup failed (<code>--force</code> was always passed).</td>
+<td><code>--force</code> only with <code>--no-backup</code>.</td>
+<td><code>pilot/core/site/__init__.py</code></td>
+<td>+1</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>F23</td>
+<td>Backups</td>
+<td>A manual and a scheduled backup at the same time could return each other's files, and retention could delete the last complete run.</td>
+<td>Each backup writes into its own staging folder and moves only its files in.</td>
+<td><code>pilot/core/site/backups.py</code></td>
+<td>+1</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>F24</td>
+<td>nginx</td>
+<td>A config that <code>nginx -t</code> rejected stayed on disk, so the next nginx restart would fail for every bench.</td>
+<td>The previous files are put back when validation fails.</td>
+<td><code>pilot/managers/nginx/__init__.py</code></td>
+<td>+1</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>F25</td>
+<td>Backup schedule</td>
+<td>A backup schedule kept the old site name after a rename and stayed after a drop.</td>
+<td>Rename moves it, drop removes it; removing a missing entry no longer rewrites the user's crontab.</td>
+<td><code>pilot/core/site/backups.py</code>, <code>rename.py</code>, <code>pilot/managers/cron.py</code></td>
+<td>+3</td>
+<td>n/a</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -351,6 +387,20 @@ a { color: var(--accent); }
 <td><code>pilot restart</code> exit code</td>
 <td><code>pilot restart</code> on a development bench or an incomplete production deployment prints guidance and exits 0, so a script cannot tell that nothing restarted. A fix was built and then reverted after review, because scripts may rely on exit 0.</td>
 <td>Exit 1 in a later release with a release note, or add an optional <code>--strict</code> flag.</td>
+<td>Small</td>
+</tr>
+<tr>
+<td>D11</td>
+<td>Source build on small hosts</td>
+<td>A 2 GB host without swap cannot build Helpdesk from source: the build cap stops it cleanly. But the failed build's <code>yarn install</code> rewrote a tracked <code>yarn.lock</code>, and Pilot counts that as a source change, so it then refuses the prebuilt assets for that app too.</td>
+<td>Freeze the lockfile during Pilot's installs, or ignore a <code>yarn.lock</code> that only Pilot's install changed. Also #572 (swap during builds).</td>
+<td>Small to medium</td>
+</tr>
+<tr>
+<td>D12</td>
+<td>Stranded task</td>
+<td>A crash between the worker marking a task <code>running</code> and writing <code>process.json</code> leaves the task <code>running</code> forever and its resource keys blocked.</td>
+<td>Reconcile every <code>running</code> task, not only those with <code>process.json</code>.</td>
 <td>Small</td>
 </tr>
 </tbody>
@@ -517,10 +567,16 @@ a { color: var(--accent); }
 <td>0.94 GB</td>
 <td>52 s, no build</td>
 </tr>
+<tr>
+<td>Helpdesk forced source build</td>
+<td>0.5 vCPU, 2 GB</td>
+<td>stopped at the cap</td>
+<td>The kernel killed only the build cgroup; MariaDB and sites kept running; clear message to add swap</td>
+</tr>
 </tbody>
 </table>
 <h3>Unit tests</h3>
-<p>Full unit suite (<code>tests</code> without e2e and integration): 3296 passed, 1 skipped. Ruff clean. vue-tsc clean. A second-opinion review (Codex, read-only) found 7 issues in the diff; all are fixed or reverted (see the log).</p></div>
+<p>Full unit suite (<code>tests</code> without e2e and integration): 3303 passed, 1 skipped. Ruff clean. vue-tsc clean. Two second-opinion passes (Codex, read-only): 7 issues in the diff, all fixed or reverted; 6 issues in untested areas, 5 fixed and 1 logged (D12).</p></div>
 
 <h2 id="parity">bench parity</h2>
 <div class="table-wrap"><p>Every Frappe site command works through Pilot: <code>pilot --site S &lt;command&gt;</code> or <code>pilot frappe --site S &lt;command&gt;</code>. The table lists the <code>bench</code> commands that are bench-level. "By design" means Pilot does the job another way; it is our reading of the architecture, because no Pilot document lists bench commands as out of scope.</p>
@@ -810,6 +866,10 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 FINDING (sticky source build, D11) The failed source build ran <code>yarn install</code> in <code>helpdesk/desk</code>, which rewrote the tracked <code>desk/yarn.lock</code>. <code>App.has_source_changes</code> counts yarn.lock as a change (a deliberate earlier choice for dependency drift), so the next plain <code>pilot build --apps helpdesk</code> also refused the prebuilt archive, tried a source build and hit the cap again. On a small host the app stays without a fresh build until someone runs <code>git checkout desk/yarn.lock</code> (done on the VM; the prebuilt archive then restored <code>public/desk</code> with 205 files and <code>www/helpdesk/index.html</code> in 8 s). PROPOSAL: run frontend installs with the lockfile frozen, or ignore a yarn.lock that only Pilot's own install changed, or restore it after a failed build. Needs an owner decision because yarn.lock drift was counted on purpose.</li>
+<li>2026-10-15 BUILD LIMIT (0.5 vCPU / 2 GB, no swap) <code>pilot build --apps helpdesk --force</code> (source build): after 5 min the build cgroup hit its cap and the kernel killed only the build (<code>oom_memcg=.../run-*.scope</code>); Pilot printed "Build ran out of memory: it may use 714MB of RAM and 0MB of swap on this machine. Add swap, free memory, or set memory_limit_mb under [build] in bench.toml, then retry." MariaDB (316 MB) and the sites kept running. The cap works as designed: a 2 GB host without swap cannot build Helpdesk from source.</li>
+<li>2026-10-15 HUNT 2 (Codex, read-only) over site drop, scheduled backups and retention, task runner, nginx regeneration. 6 findings, checked against the code; 5 fixed, 1 logged:</li>
+<li>2026-10-15 DOCS Updated for the behavior changes: docs/admin-api.md (domain <code>tls</code> meaning, <code>certificate_email_required</code>, optional <code>email</code> on add-domain, site app <code>is_marketplace</code> and <code>missing</code>, backup 409 while the site is busy, the restore's kept config keys), docs/configuration.md (MariaDB re-sizing after a resize, unit written last), docs/migration.md (stopped task -&gt; needs_attention), docs/commands.md (<code>--version</code>, <code>setup telemetry</code>, <code>remove logs</code>, <code>admin revoke-totp</code>, <code>list-site-apps</code> warning, <code>init</code> dev-extra fallback).</li>
 <li>2026-10-15 MEMORY (0.5 vCPU / 2 GB) <code>get-app helpdesk</code> used prebuilt assets for its commit: 52 s, peak 939 MB used (1.02 GB still available), MariaDB alive. Prebuilt assets remove the build peak entirely for apps that publish them. Next: forced source build (<code>pilot build --apps helpdesk --force</code>) to test the build memory cap.</li>
 <li>2026-10-15 FIX (gunicorn 26 control socket) Admin and web gunicorn configs set <code>control_socket_disable = True</code>. gunicorn 26 (already in the admin venv) opens <code>$XDG_RUNTIME_DIR/gunicorn.ctl</code> for every master, so all benches of a host share one path and a stopping master can unlink another's socket. Pilot never uses the socket. Older gunicorn ignores unknown config names (checked in gunicorn 23 <code>app/base.py</code>: "Ignore unknown names"). Changed: pilot/managers/gunicorn/<strong>init</strong>.py, templates/gunicorn.conf.py.template, tests/pilot/managers/test_gunicorn.py. Applies when the config is next written (restart or setup).</li>
 <li>2026-10-15 VM Resized to 0.5 vCPU / 2 GB for a build-limit test; monitor re-sized MariaDB to MemoryMax 512M within a minute. Two production benches idle: 793 MB used, 1.17 GB available. Started <code>get-app helpdesk</code> (Vite frontend build) with the memory sampler.</li>
