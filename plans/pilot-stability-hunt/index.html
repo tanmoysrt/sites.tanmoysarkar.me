@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:38 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:51 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>27</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>122</b><span>log entries</span></div>
+  <div class="stat"><b>127</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -433,7 +433,7 @@ a { color: var(--accent); }
 <td>A 2 GB host without swap cannot build Helpdesk from source: the build cap stops it cleanly. But the failed build's <code>yarn install</code> rewrote a tracked <code>yarn.lock</code>, and Pilot counts that as a source change, so it then refuses the prebuilt assets for that app too.</td>
 <td>Freeze the lockfile during Pilot's installs, or ignore a <code>yarn.lock</code> that only Pilot's install changed. Also #572 (swap during builds).</td>
 <td>Small to medium</td>
-<td>Done. Build swap helper adds 2 GB swap during builds on hosts with less than 3 GB free. Checked on VM: Helpdesk source build on 2 GB succeeded (40 min at 0.5 vCPU), swap removed after.</td>
+<td>Done. Build swap helper adds 2 GB swap during builds on hosts with less than 3 GB free. Checked on VM: Helpdesk source build on 2 GB succeeded (40 min at 0.5 vCPU), swap removed after. Owner follow-up: a failed build now puts back the lockfiles its installs changed.</td>
 </tr>
 <tr>
 <td>D12</td>
@@ -631,71 +631,81 @@ a { color: var(--accent); }
 </tr>
 <tr>
 <td>16</td>
+<td><code>fix(settings): Wait past systemd's stop timeout on restart</code></td>
+<td>restart timeout</td>
+</tr>
+<tr>
+<td>17</td>
 <td><code>fix(uptime): Record why a ping failed</code></td>
 <td>F27</td>
 </tr>
 <tr>
-<td>17</td>
+<td>18</td>
 <td><code>test(nginx): Let root-run nginx workers read the test directory</code></td>
 <td>integration test</td>
 </tr>
 <tr>
-<td>18</td>
+<td>19</td>
 <td><code>fix(cli): Exit 1 when pilot restart restarts nothing</code></td>
 <td>D10</td>
 </tr>
 <tr>
-<td>19</td>
+<td>20</td>
 <td><code>fix(database): Size MariaDB before each start after a memory change</code></td>
 <td>F12, D9</td>
 </tr>
 <tr>
-<td>20</td>
+<td>21</td>
 <td><code>feat(database): Add the apps and database memory split</code></td>
 <td>D1</td>
 </tr>
 <tr>
-<td>21</td>
+<td>22</td>
 <td><code>feat(apps): Keep the app on the bench after its last uninstall</code></td>
 <td>D6 (#567)</td>
 </tr>
 <tr>
-<td>22</td>
+<td>23</td>
 <td><code>feat(apps): Follow the branch tip when the registry has no release</code></td>
 <td>D7</td>
 </tr>
 <tr>
-<td>23</td>
+<td>24</td>
 <td><code>feat(tls): Renew certificates daily and alert before expiry</code></td>
 <td>D5</td>
 </tr>
 <tr>
-<td>24</td>
+<td>25</td>
 <td><code>feat(build): Add swap during builds on small hosts</code></td>
 <td>D11 (#572)</td>
 </tr>
 <tr>
-<td>25</td>
+<td>26</td>
+<td><code>fix(build): Restore lockfiles after a failed build</code></td>
+<td>D11 lockfile</td>
+</tr>
+<tr>
+<td>27</td>
 <td><code>fix(domains): Redirect renamed aliases to the primary domain</code></td>
 <td>D3 (Pilot)</td>
 </tr>
 <tr>
-<td>26</td>
+<td>28</td>
 <td><code>feat(proxy): Support domains behind Cloudflare's proxy</code></td>
 <td>D4</td>
 </tr>
 <tr>
-<td>27</td>
+<td>29</td>
 <td><code>fix(realtime): Serve socket.io on a Unix socket behind nginx</code></td>
 <td>D2</td>
 </tr>
 <tr>
-<td>28</td>
+<td>30</td>
 <td><code>fix(ui): Use the singular vCPU label</code></td>
 <td>F21</td>
 </tr>
 <tr>
-<td>29</td>
+<td>31</td>
 <td><code>fix(ui): Show the site of Enable SSL and revert tasks</code></td>
 <td>F28</td>
 </tr>
@@ -716,8 +726,8 @@ a { color: var(--accent); }
 <tbody>
 <tr>
 <td>Commits and pull requests</td>
-<td>All Pilot changes are uncommitted on <code>fix/bughunt</code>. The repository rules say to commit only when the owner asks.</td>
-<td>The owner says go; then commit in the order of the proposed commit list.</td>
+<td>The owner asked for commits one at a time, in the order of the commit list. In progress; nothing is pushed.</td>
+<td>Push and open pull requests when the owner asks.</td>
 </tr>
 <tr>
 <td>Central part of D3</td>
@@ -731,18 +741,8 @@ a { color: var(--accent); }
 </tr>
 <tr>
 <td>D4 setting in the UI</td>
-<td><code>[proxy] cloudflare</code> is config only.</td>
-<td>A UI toggle needs a mockup first.</td>
-</tr>
-<tr>
-<td>D11 <code>yarn.lock</code> drift</td>
-<td>Not built. The owner chose the build swap. A failed source build can still leave a changed <code>yarn.lock</code>, and Pilot then refuses the prebuilt assets for that app.</td>
-<td>Decide: freeze the lockfile during Pilot's installs, or ignore a <code>yarn.lock</code> that only Pilot changed.</td>
-</tr>
-<tr>
-<td>Restart timeout</td>
-<td><code>_restart_systemd</code> waits 60 s; systemd waits up to 90 s for a worker pool that drains a job. Settings can say "could not be restarted" while the restart completes. F26 keeps nginx correct in that case.</td>
-<td>Decide on a longer wait or an asynchronous restart task.</td>
+<td>Owner decision: config only.</td>
+<td>None.</td>
 </tr>
 <tr>
 <td>Setup wizard message</td>
@@ -758,6 +758,11 @@ a { color: var(--accent); }
 <td>Integration tests</td>
 <td>Fixed in the test: run as root, the throwaway nginx now uses <code>user root;</code>, because its <code>nobody</code> worker could not read pytest's private temp directory (that failure was also on clean <code>origin/develop</code>). On the VM as root: 4 of 4 pass. On a laptop without root, nginx cannot start.</td>
 <td>Run them in CI or on a test VM as root.</td>
+</tr>
+<tr>
+<td>Nested <code>node_modules</code></td>
+<td>Pilot reinstalls JS dependencies only when an app's root <code>node_modules</code> is missing. An app such as Helpdesk installs <code>desk/</code> from a root postinstall, so a missing <code>desk/node_modules</code> is not noticed and the build stops with "vite: not found".</td>
+<td>Small fix in <code>NodePackages</code>, or document <code>yarn install</code> in that directory.</td>
 </tr>
 </tbody>
 </table></div>
@@ -1342,6 +1347,11 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>VM: a forced failing build (512 MB cap, <code>desk/node_modules</code> removed) failed earlier than intended ("vite: not found": Helpdesk installs <code>desk/</code> from a root postinstall, and Pilot skips the install while the root <code>node_modules</code> exists), so it did not exercise the restore. Repo clean after; restored deps with <code>yarn install --frozen-lockfile</code> and prebuilt assets (5 s); bench.toml restored; site 200. Finding: Pilot does not notice a missing nested <code>node_modules</code> that a root postinstall owns.</li>
+<li>D11 lockfile: <code>App.restore_lockfiles_on_failure()</code> wraps the source build in <code>build_assets_for_app</code> (now split into <code>build_app_from_source</code>). On failure it discards lockfile changes (<code>yarn.lock</code>, <code>pnpm-lock.yaml</code>) that were not there before the build, with new <code>GitRepo.discard_changes</code> (checkout tracked, delete untracked). Developer edits made before the build stay. Tests +3 with a real git repo. docs/prebuilt-assets.md updated.</li>
+<li>Restart: <code>_restart_systemd</code> waits 120 s (above systemd's 90 s default stop timeout).</li>
+<li>Owner chose: restart wait 120 s; restore yarn.lock after a failed build; Cloudflare stays config only; commit one at a time.</li>
+<li>Status page: added "Upgrade notes" (patches that run on upgrade and their effect, operator actions: install.sh root phase for the build swap helper, Cloudflare setting, optional closing of port 9000; and every change to CLI, Admin API, config, tasks and logs). Checked against the diff: timer <code>OnCalendar=daily</code> with <code>RandomizedDelaySec=1h</code>; API fields <code>certificate_email_required</code>, <code>is_marketplace</code>, <code>missing</code>, <code>memory_share</code>.</li>
 <li>F28 task scope: the dashboard's <code>SITE_ARG_KEY</code> lacked <code>setup-letsencrypt</code> and <code>revert-site</code>, so Enable SSL and revert-site tasks showed "Server" as their target and were missing from the site filter. Added both; a bench-wide Let's Encrypt task (empty site) still shows Server. Dashboard tests 79 pass, vue-tsc and Biome clean. VM: rebuilt dashboard; the Enable SSL task for site2 now shows the site.</li>
 <li>Integration test env: <code>test_proxy_firewall_e2e</code> adds <code>user root;</code> to its throwaway nginx.conf when run as root, so workers can read pytest's 0700 temp dir. On the VM as root: 4/4 pass (was 3/4, also on clean develop).</li>
 <li>F27 uptime reason: <code>UptimeMonitor.ping_site</code> now records <code>error</code> (the URLError reason) when a ping fails without an HTTP status; the site-down alert context carries <code>error</code> (null for HTTP failures). Additive field. Tests +2 (and the payload test updated). VM: one pass logged <code>"error": "[SSL: CERTIFICATE_VERIFY_FAILED] ..."</code> for the staging-certificate sites.</li>
