@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:44 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:51 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>24</b><span>fixes, with tests</span></div>
   <div class="stat"><b>12</b><span>decisions needed</span></div>
-  <div class="stat"><b>72</b><span>log entries</span></div>
+  <div class="stat"><b>76</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -273,8 +273,8 @@ a { color: var(--accent); }
 <td>A drop with a backup still deleted the database when the backup failed (<code>--force</code> was always passed).</td>
 <td><code>--force</code> only with <code>--no-backup</code>.</td>
 <td><code>pilot/core/site/__init__.py</code></td>
-<td>+1</td>
-<td>n/a</td>
+<td>+2</td>
+<td>Yes: drop with backup</td>
 </tr>
 <tr>
 <td>F23</td>
@@ -283,7 +283,7 @@ a { color: var(--accent); }
 <td>Each backup writes into its own staging folder and moves only its files in.</td>
 <td><code>pilot/core/site/backups.py</code></td>
 <td>+1</td>
-<td>n/a</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>F24</td>
@@ -292,16 +292,16 @@ a { color: var(--accent); }
 <td>The previous files are put back when validation fails.</td>
 <td><code>pilot/managers/nginx/__init__.py</code></td>
 <td>+1</td>
-<td>n/a</td>
+<td>Regenerate checked; failure path by test</td>
 </tr>
 <tr>
 <td>F25</td>
 <td>Backup schedule</td>
-<td>A backup schedule kept the old site name after a rename and stayed after a drop.</td>
-<td>Rename moves it, drop removes it; removing a missing entry no longer rewrites the user's crontab.</td>
+<td>A backup schedule kept the old site name after a rename and stayed after a drop. Entries written from the CLI ran on the system Python, which cannot upload to S3.</td>
+<td>Rename moves it, drop removes it; cron jobs always run on the admin venv; removing a missing entry no longer rewrites the user's crontab.</td>
 <td><code>pilot/core/site/backups.py</code>, <code>rename.py</code>, <code>pilot/managers/cron.py</code></td>
-<td>+3</td>
-<td>n/a</td>
+<td>+4</td>
+<td>Yes: rename and drop on the VM</td>
 </tr>
 </tbody>
 </table></div>
@@ -866,6 +866,10 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 GAP (CLI) <code>pilot drop-site</code> is Frappe's raw drop-site (passthrough): it skips Pilot's cleanup of bench.toml, nginx, provider domains and the backup schedule. Pilot's own site drop is reachable only from the Admin API. Part of D8; a Pilot-aware <code>drop-site</code> CLI is the highest-value parity gap after <code>update</code>.</li>
+<li>2026-10-15 REGRESSION FOUND AND FIXED (F25 drop) First VM drop with the new code raised <code>FileNotFoundError</code> after Frappe had already archived the site: <code>clear_schedule</code> also clears the retention block in <code>site_config.json</code>, which takes a file lock in the (now moved) site directory. The drop stopped before the bench.toml, domain and nginx steps. FIX: drop removes only the cron entry (<code>CronManager.remove_schedule</code>). New test: the fake drop archives the directory and the drop must still finish. VM repaired (nginx vhost for site3 removed). Re-test on a fresh site4: backup taken (no <code>--force</code>), site dropped, cron entry gone, nginx clean, folder archived.</li>
+<li>2026-10-15 VERIFIED (F25 rename) Set a 03:00 schedule on site2, then <code>pilot rename-site site2 site3</code>: the cron entry moved to site3. FOUND: the moved entry used <code>/usr/bin/python3</code> instead of the admin venv, because the CLI runs on the system Python and <code>cron_module_command</code> used <code>sys.executable</code>. A scheduled backup with S3 configured would then crash on <code>import boto3</code> (<code>load_boto3</code> raises ModuleNotFoundError, which the upload step does not catch). FIX: <code>cron_module_command</code> always uses the admin venv interpreter (<code>AdminEnvManager(cli_root()).python</code>), as the monitor and storage timers already do. Existing entries keep their interpreter until rewritten. Test updated.</li>
+<li>2026-10-15 VERIFIED (F23 backups) On the VM, <code>SiteBackups.take</code> ran <code>frappe backup</code> into <code>backups/.backup-&lt;random&gt;/</code>; only that run's two files were moved into <code>backups/</code>, and the staging directory was removed.</li>
 <li>2026-10-15 FINDING (sticky source build, D11) The failed source build ran <code>yarn install</code> in <code>helpdesk/desk</code>, which rewrote the tracked <code>desk/yarn.lock</code>. <code>App.has_source_changes</code> counts yarn.lock as a change (a deliberate earlier choice for dependency drift), so the next plain <code>pilot build --apps helpdesk</code> also refused the prebuilt archive, tried a source build and hit the cap again. On a small host the app stays without a fresh build until someone runs <code>git checkout desk/yarn.lock</code> (done on the VM; the prebuilt archive then restored <code>public/desk</code> with 205 files and <code>www/helpdesk/index.html</code> in 8 s). PROPOSAL: run frontend installs with the lockfile frozen, or ignore a yarn.lock that only Pilot's own install changed, or restore it after a failed build. Needs an owner decision because yarn.lock drift was counted on purpose.</li>
 <li>2026-10-15 BUILD LIMIT (0.5 vCPU / 2 GB, no swap) <code>pilot build --apps helpdesk --force</code> (source build): after 5 min the build cgroup hit its cap and the kernel killed only the build (<code>oom_memcg=.../run-*.scope</code>); Pilot printed "Build ran out of memory: it may use 714MB of RAM and 0MB of swap on this machine. Add swap, free memory, or set memory_limit_mb under [build] in bench.toml, then retry." MariaDB (316 MB) and the sites kept running. The cap works as designed: a 2 GB host without swap cannot build Helpdesk from source.</li>
 <li>2026-10-15 HUNT 2 (Codex, read-only) over site drop, scheduled backups and retention, task runner, nginx regeneration. 6 findings, checked against the code; 5 fixed, 1 logged:</li>
