@@ -53,10 +53,10 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 07:09 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 08:07 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>28</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>29</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
   <div class="stat"><b>131</b><span>log entries</span></div>
 </div>
@@ -339,6 +339,15 @@ a { color: var(--accent); }
 <td>+1</td>
 <td>Yes: reproduced before, fixed after, with a failing init</td>
 </tr>
+<tr>
+<td>F30</td>
+<td>Bench drop</td>
+<td><code>pilot drop</code> deleted a development bench while its <code>pilot start</code> or setup wizard kept running against the deleted directory.</td>
+<td><code>drop</code> asks to stop the bench first.</td>
+<td><code>pilot/core/bench/production.py</code></td>
+<td>+1</td>
+<td>Found on the VM (the wizard server outlived its bench)</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -552,181 +561,200 @@ a { color: var(--accent); }
 </tr>
 </tbody>
 </table>
-<h3>Proposed commits</h3>
-<p>Progress: commit 1 is staged and checked alone (ruff clean, 1548 core and manager tests pass on the staged snapshot). It waits for the owner's "next". Commits 2 to 32 follow one at a time. Nothing is pushed.</p>
-<p>One purpose for each commit. Each commit passes ruff and its tests alone. The order keeps patches after the code that they need.</p>
+<h3>Commits</h3>
+<p>All changes are committed on the local branch <code>fix/bughunt</code>, one purpose for each commit, in this order. Nothing is pushed. Each commit was checked alone with ruff and its tests before it was made; a full-suite run of every commit runs after.</p>
 <table>
 <thead>
 <tr>
 <th>#</th>
+<th>Commit</th>
 <th>Subject</th>
-<th>Items</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>1</td>
+<td><code>f2cb1eb9</code></td>
 <td><code>fix(install): Install apps without the dev extra when it does not resolve</code></td>
-<td>F1 (#638)</td>
 </tr>
 <tr>
 <td>2</td>
+<td><code>f755394e</code></td>
 <td><code>fix(restore): Keep protected site config keys on a config restore</code></td>
-<td>F2</td>
 </tr>
 <tr>
 <td>3</td>
+<td><code>96aacbe1</code></td>
 <td><code>fix(sites): Lock and atomically write site config for domains and backups</code></td>
-<td>F3</td>
 </tr>
 <tr>
 <td>4</td>
+<td><code>d495397f</code></td>
 <td><code>fix(backups): Isolate backup runs and take the site resource key</code></td>
-<td>F4, F23</td>
 </tr>
 <tr>
 <td>5</td>
-<td><code>fix(tls): Keep a site on HTTP when its certificate fails</code></td>
-<td>F5, F6, F8, F9, F10</td>
+<td><code>2c2179e6</code></td>
+<td><code>docs(api): Describe backup conflicts and the keys a restore keeps</code></td>
 </tr>
 <tr>
 <td>6</td>
-<td><code>feat(ui): Ask for the Let's Encrypt email when a domain is added</code></td>
-<td>F7</td>
+<td><code>0d249b9c</code></td>
+<td><code>fix(config): Copy the default common config for each bench</code></td>
 </tr>
 <tr>
 <td>7</td>
-<td><code>fix(config): Copy the default common config for each bench</code></td>
-<td>F11</td>
+<td><code>6b32198c</code></td>
+<td><code>fix(tls): Keep a site on HTTP when its certificate fails</code></td>
 </tr>
 <tr>
 <td>8</td>
-<td><code>fix(tasks): Fail interrupted migration steps and reconcile stranded tasks</code></td>
-<td>F13 (#596), D12</td>
+<td><code>3d57414f</code></td>
+<td><code>feat(ui): Ask for the Let's Encrypt email when a domain is added</code></td>
 </tr>
 <tr>
 <td>9</td>
-<td><code>fix(cli): Add --version, keep leading Pilot flags, and fix remove logs</code></td>
-<td>F14, F15, F16 (#621)</td>
+<td><code>6cd63e22</code></td>
+<td><code>fix(tasks): Fail interrupted migration steps and reconcile stranded tasks</code></td>
 </tr>
 <tr>
 <td>10</td>
-<td><code>fix(apps): Show apps that the bench lacks and keep fork metadata</code></td>
-<td>F18, F19 (#639, #640)</td>
+<td><code>e5888e23</code></td>
+<td><code>docs(cli): Describe the dev extra fallback of pilot init</code></td>
 </tr>
 <tr>
 <td>11</td>
-<td><code>fix(gunicorn): Disable the per-user control socket</code></td>
-<td>F20</td>
+<td><code>48681e3d</code></td>
+<td><code>fix(cli): Add --version, keep leading Pilot flags, and fix remove logs</code></td>
 </tr>
 <tr>
 <td>12</td>
-<td><code>fix(sites): Pass --force to drop only with --no-backup</code></td>
-<td>F22</td>
+<td><code>a07245b8</code></td>
+<td><code>fix(apps): Show apps that the bench lacks and keep fork metadata</code></td>
 </tr>
 <tr>
 <td>13</td>
-<td><code>fix(nginx): Roll back a rejected config only when it is unchanged</code></td>
-<td>F24, D13</td>
+<td><code>2a013084</code></td>
+<td><code>fix(gunicorn): Disable the per-user control socket</code></td>
 </tr>
 <tr>
 <td>14</td>
-<td><code>fix(backups): Move backup schedules on rename and remove them on drop</code></td>
-<td>F25</td>
+<td><code>75e11159</code></td>
+<td><code>fix(apps): Build site assets only for the apps on the bench</code></td>
 </tr>
 <tr>
 <td>15</td>
-<td><code>fix(settings): Regenerate nginx after a port change</code></td>
-<td>F26</td>
+<td><code>388098bb</code></td>
+<td><code>fix(sites): Pass --force to drop only with --no-backup</code></td>
 </tr>
 <tr>
 <td>16</td>
-<td><code>fix(settings): Wait past systemd's stop timeout on restart</code></td>
-<td>restart timeout</td>
+<td><code>19787139</code></td>
+<td><code>fix(nginx): Roll back a rejected config only when it is unchanged</code></td>
 </tr>
 <tr>
 <td>17</td>
-<td><code>fix(uptime): Record why a ping failed</code></td>
-<td>F27</td>
+<td><code>ffed18a5</code></td>
+<td><code>fix(backups): Move backup schedules on rename and remove them on drop</code></td>
 </tr>
 <tr>
 <td>18</td>
-<td><code>test(nginx): Let root-run nginx workers read the test directory</code></td>
-<td>integration test</td>
+<td><code>2c5e72d4</code></td>
+<td><code>fix(settings): Regenerate nginx after a port change</code></td>
 </tr>
 <tr>
 <td>19</td>
-<td><code>fix(cli): Exit 1 when pilot restart restarts nothing</code></td>
-<td>D10</td>
+<td><code>53cebe95</code></td>
+<td><code>fix(settings): Wait past systemd's stop timeout on restart</code></td>
 </tr>
 <tr>
 <td>20</td>
-<td><code>fix(database): Size MariaDB before each start after a memory change</code></td>
-<td>F12, D9</td>
+<td><code>7085ac2b</code></td>
+<td><code>fix(uptime): Record why a ping failed</code></td>
 </tr>
 <tr>
 <td>21</td>
-<td><code>feat(database): Add the apps and database memory split</code></td>
-<td>D1</td>
+<td><code>bae6b41c</code></td>
+<td><code>test(nginx): Let root-run nginx workers read the test directory</code></td>
 </tr>
 <tr>
 <td>22</td>
-<td><code>feat(apps): Keep the app on the bench after its last uninstall</code></td>
-<td>D6 (#567)</td>
+<td><code>a6a312da</code></td>
+<td><code>fix(cli): Exit 1 when pilot restart restarts nothing</code></td>
 </tr>
 <tr>
 <td>23</td>
-<td><code>feat(apps): Follow the branch tip when the registry has no release</code></td>
-<td>D7</td>
+<td><code>b75cad82</code></td>
+<td><code>fix(database): Size MariaDB before each start after a memory change</code></td>
 </tr>
 <tr>
 <td>24</td>
-<td><code>feat(tls): Renew certificates daily and alert before expiry</code></td>
-<td>D5</td>
+<td><code>38cb44c3</code></td>
+<td><code>feat(database): Add the apps and database memory split</code></td>
 </tr>
 <tr>
 <td>25</td>
-<td><code>feat(build): Add swap during builds on small hosts</code></td>
-<td>D11 (#572)</td>
+<td><code>ac535395</code></td>
+<td><code>feat(apps): Keep the app on the bench after its last uninstall</code></td>
 </tr>
 <tr>
 <td>26</td>
-<td><code>fix(build): Restore lockfiles after a failed build</code></td>
-<td>D11 lockfile</td>
+<td><code>d901f099</code></td>
+<td><code>feat(apps): Follow the branch tip when the registry has no release</code></td>
 </tr>
 <tr>
 <td>27</td>
-<td><code>fix(domains): Redirect renamed aliases to the primary domain</code></td>
-<td>D3 (Pilot)</td>
+<td><code>28255d41</code></td>
+<td><code>feat(tls): Renew certificates daily and alert before expiry</code></td>
 </tr>
 <tr>
 <td>28</td>
-<td><code>feat(proxy): Support domains behind Cloudflare's proxy</code></td>
-<td>D4</td>
+<td><code>84f83c7e</code></td>
+<td><code>feat(build): Add swap during builds on small hosts</code></td>
 </tr>
 <tr>
 <td>29</td>
-<td><code>fix(realtime): Serve socket.io on a Unix socket behind nginx</code></td>
-<td>D2</td>
+<td><code>c4ef16b7</code></td>
+<td><code>fix(build): Restore lockfiles after a failed build</code></td>
 </tr>
 <tr>
 <td>30</td>
-<td><code>fix(ui): Use the singular vCPU label</code></td>
-<td>F21</td>
+<td><code>4964fdb8</code></td>
+<td><code>fix(domains): Redirect renamed aliases to the primary domain</code></td>
 </tr>
 <tr>
 <td>31</td>
-<td><code>fix(ui): Show the site of Enable SSL and revert tasks</code></td>
-<td>F28</td>
+<td><code>425d7449</code></td>
+<td><code>feat(proxy): Support domains behind Cloudflare's proxy</code></td>
 </tr>
 <tr>
 <td>32</td>
+<td><code>ce4b9b08</code></td>
+<td><code>fix(realtime): Serve socket.io on a Unix socket behind nginx</code></td>
+</tr>
+<tr>
+<td>33</td>
+<td><code>48fc6042</code></td>
+<td><code>fix(ui): Use the singular vCPU label</code></td>
+</tr>
+<tr>
+<td>34</td>
+<td><code>37c72488</code></td>
+<td><code>fix(ui): Show the site of Enable SSL and revert tasks</code></td>
+</tr>
+<tr>
+<td>35</td>
+<td><code>6ed6f6c1</code></td>
 <td><code>fix(init): Keep task records when a failed init rolls back</code></td>
-<td>F29</td>
+</tr>
+<tr>
+<td>36</td>
+<td><code>26ce73c4</code></td>
+<td><code>fix(bench): Refuse to drop a development bench that is running</code></td>
 </tr>
 </tbody>
 </table>
-<p>Central: one commit, <code>fix(sites): show the customer hostname after the rename lands</code> (D3), on its own branch.</p></div>
+<p>Central: <code>7b7ede6b fix(sites): show the customer hostname after the rename lands</code> on branch <code>fix/site-primary-url</code>.</p></div>
 
 <h2 id="open">Open items</h2>
 <div class="table-wrap"><p>These items are not done. Each row says why and what the next step is.</p>
@@ -740,14 +768,9 @@ a { color: var(--accent); }
 </thead>
 <tbody>
 <tr>
-<td>Commits and pull requests</td>
-<td>The owner asked for commits one at a time, in the order of the commit list. In progress; nothing is pushed.</td>
+<td>Push and pull requests</td>
+<td>All work is committed locally (Pilot <code>fix/bughunt</code>, Central <code>fix/site-primary-url</code>). Nothing is pushed.</td>
 <td>Push and open pull requests when the owner asks.</td>
-</tr>
-<tr>
-<td>Central part of D3</td>
-<td>Built and tested in a separate worktree, branch <code>fix/site-primary-url</code> (6 files, 70 Central site tests pass). Not committed.</td>
-<td>One Central commit and pull request. It does not depend on the Pilot release: Pilot already keeps <code>/api/method/ping</code> on the redirecting alias.</td>
 </tr>
 <tr>
 <td>D8 bench parity</td>
@@ -774,11 +797,6 @@ a { color: var(--accent); }
 <td>Pilot reinstalls JS dependencies only when an app's root <code>node_modules</code> is missing. An app such as Helpdesk installs <code>desk/</code> from a root postinstall, so a missing <code>desk/node_modules</code> is not noticed and the build stops with "vite: not found".</td>
 <td>Small fix in <code>NodePackages</code>, or document <code>yarn install</code> in that directory.</td>
 </tr>
-<tr>
-<td><code>pilot drop</code> and a running dev bench</td>
-<td>Dropping a bench left its <code>pilot start</code> wizard server running.</td>
-<td>Stop the bench's dev processes in <code>drop</code>, or refuse while they run.</td>
-</tr>
 </tbody>
 </table></div>
 
@@ -803,7 +821,7 @@ a { color: var(--accent); }
 <tr>
 <td><code>install_certificate_renewal_timer</code></td>
 <td>Installs the daily <code>pilot-certificates.timer</code> on hosts that use Let's Encrypt.</td>
-<td>None. It runs once a day, within an hour after midnight.</td>
+<td>None. It runs 15 minutes after boot, then daily.</td>
 </tr>
 <tr>
 <td><code>serve_realtime_on_unix_socket</code></td>
@@ -851,7 +869,7 @@ a { color: var(--accent); }
 <tbody>
 <tr>
 <td>CLI</td>
-<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --remove-from-bench</code>. Behavior: <code>uninstall-app</code> keeps the app on the bench (D6); <code>pilot restart</code> exits 1 when nothing restarted (D10).</td>
+<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --remove-from-bench</code>. Behavior: <code>uninstall-app</code> keeps the app on the bench (D6); <code>pilot restart</code> exits 1 when nothing restarted (D10); <code>pilot drop</code> refuses a running development bench (F30).</td>
 </tr>
 <tr>
 <td>Admin API</td>
