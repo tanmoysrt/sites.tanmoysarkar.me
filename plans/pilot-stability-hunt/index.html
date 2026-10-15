@@ -53,7 +53,7 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 14:42 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 14:54 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>48</b><span>fixes, with tests</span></div>
@@ -472,7 +472,7 @@ a { color: var(--accent); }
 <td>The Admin service starts at boot, waits up to 120 s for the bench's database, runs queued tasks and stops after its idle timeout. The <code>start_admin_at_boot</code> patch enables it on existing benches.</td>
 <td><code>pilot/managers/processes/systemd_render.py</code>, <code>pilot/patches/start_admin_at_boot.py</code></td>
 <td>+3</td>
-<td>Yes: patch ran; the Admin is wanted by <code>default.target</code>. A real reboot was not tested</td>
+<td>Yes: real reboot. A backup was queued with the Admin stopped. After boot the Admin started at 14:52:16, MariaDB at 14:52:19, and the worker ran the backup at 14:52:30 after its database wait; it succeeded</td>
 </tr>
 <tr>
 <td>F45</td>
@@ -806,7 +806,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 70 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 70 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, F43 to F49, and the fixes for Greptile review 12. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 71 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 71 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, F43 to F49, and the fixes for Greptile reviews 12 and 13. The branch also merges <code>develop</code>. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -1165,6 +1165,11 @@ a { color: var(--accent); }
 <td>70</td>
 <td><code>5f447ca9</code></td>
 <td><code>perf(backups): Read uploaded file sizes only for the listed runs</code></td>
+</tr>
+<tr>
+<td>71</td>
+<td><code>c1790a1d</code></td>
+<td><code>fix(tasks): Stop the database wait when the Admin drains</code></td>
 </tr>
 </tbody>
 </table>
