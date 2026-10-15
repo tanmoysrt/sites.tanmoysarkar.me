@@ -53,25 +53,25 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:58 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 05:07 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>24</b><span>fixes, with tests</span></div>
-  <div class="stat"><b>13</b><span>decisions needed</span></div>
-  <div class="stat"><b>78</b><span>log entries</span></div>
+  <div class="stat"><b>25</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
+  <div class="stat"><b>107</b><span>log entries</span></div>
 </div>
 
 <div class="note">
 <b>How to review</b>
 <ul>
 <li>All changes are uncommitted on the local branch <code>fix/bughunt</code>, based on <code>origin/develop</code> (6f142bc5). Nothing is pushed.</li>
-<li>Start with <a href="#fixes">Fixes</a>: one row per bug, with the files and tests. Then read <a href="#decisions">Decisions needed</a>: these change a feature or a public surface, so they wait for an owner.</li>
+<li>Start with <a href="#fixes">Fixes</a>: one row per bug, with the files and tests. Then read <a href="#decisions">Decisions</a>: these changed a feature or a public surface, so the owner approved each one first. <a href="#review">Test guide and commits</a> says how to check each change on a VM and how to split the work into commits.</li>
 <li>Every public surface stays compatible: new API fields are optional, no CLI flag was removed, no config key changed shape.</li>
 <li>Check a fix with <code>uv run pytest tests --ignore=tests/e2e --ignore=tests/integration</code> and <code>uv run ruff check admin pilot tests</code>.</li>
 </ul>
 </div>
 
-<nav><a href="#fixes">Fixes</a><a href="#decisions">Decisions needed</a><a href="#results">Test results</a><a href="#parity">bench parity</a><a href="#plan">Plan</a><a href="#log">Log</a></nav>
+<nav><a href="#fixes">Fixes</a><a href="#decisions">Decisions</a><a href="#review">Test guide and commits</a><a href="#results">Test results</a><a href="#parity">bench parity</a><a href="#plan">Plan</a><a href="#log">Log</a></nav>
 
 <h2 id="fixes">Fixes</h2>
 <div class="table-wrap"><table>
@@ -303,11 +303,20 @@ a { color: var(--accent); }
 <td>+4</td>
 <td>Yes: rename and drop on the VM</td>
 </tr>
+<tr>
+<td>F26</td>
+<td>Settings</td>
+<td>A change to <code>http_port</code> or <code>socketio_port</code> in Settings restarted the services on the new port, but nginx kept the old upstream, so every site answered 502.</td>
+<td>After a restart-triggering change on a production bench, Pilot regenerates nginx after the restart.</td>
+<td><code>pilot/core/bench/settings.py</code></td>
+<td>+1</td>
+<td>Pending</td>
+</tr>
 </tbody>
 </table></div>
 
-<h2 id="decisions">Decisions needed</h2>
-<div class="table-wrap"><p>These items need an owner's decision. Each one changes a feature, a deployment layout or a public surface, so nothing is built yet.</p>
+<h2 id="decisions">Decisions</h2>
+<div class="table-wrap"><p>The owner reviewed these items on 2026-10-15. D1 to D7 and D9 to D13 are approved and built. D8 is on hold.</p>
 <table>
 <thead>
 <tr>
@@ -316,6 +325,7 @@ a { color: var(--accent); }
 <th>What we found</th>
 <th>Proposal</th>
 <th>Cost</th>
+<th>Status</th>
 </tr>
 </thead>
 <tbody>
@@ -325,6 +335,7 @@ a { color: var(--accent); }
 <td>The split is hard-coded: MariaDB gets about half of the RAM (<code>/2</code> and <code>_MAX_HOST_MEMORY_SHARE = 0.5</code> in <code>pilot/core/mariadb_memory.py</code>). Gunicorn workers do not follow the host size.</td>
 <td>An optional <code>memory_share</code> (0.2 to 0.8, default 0.5) in <code>[mariadb]</code> of <code>common_config.toml</code>, used by the sizing and the Admin limits; a slider on the database settings page. See the mockup below.</td>
 <td>Small backend change, one UI control (needs mockup approval)</td>
+<td>Done. <code>[mariadb] memory_share</code> and a Memory split row in Settings, Database. Checked on VM at 65%.</td>
 </tr>
 <tr>
 <td>D2</td>
@@ -332,6 +343,7 @@ a { color: var(--accent); }
 <td>Frappe's socket.io listens on <code>*:9000</code> and answers from the internet. It bypasses nginx and the WAF. No host firewall is on by default.</td>
 <td>Use Frappe's <code>socketio_uds</code> (Unix socket) and proxy nginx to it, or bind to &lt;vm-ip&gt;.</td>
 <td>Unit and nginx template change, patch for existing benches</td>
+<td>Done. systemd benches serve Node realtime on <code>config/socketio.sock</code>; nginx proxies to it; patch <code>serve_realtime_on_unix_socket</code>. VM check pending.</td>
 </tr>
 <tr>
 <td>D3</td>
@@ -339,6 +351,7 @@ a { color: var(--accent); }
 <td>Pilot sets the new name as primary when Central asks (<code>make_primary</code>). Central keeps the auto-routed <code>site-xxxxx</code> host as the record name and its URL. The image runs <code>setup central --site-pattern</code> without <code>--redirect</code>, so the alias is served, not redirected.</td>
 <td>Central: switch the shown URL to <code>rename_target</code> after the rename task succeeds. Pilot: when <code>redirect</code> is on, redirect the alias to <code>site.primary</code>, except <code>/api/method/ping</code>, which Central probes.</td>
 <td>Central change plus a small nginx change</td>
+<td>Done. Pilot keeps <code>/api/method/ping</code> on redirecting aliases; Central records <code>renamed_at</code> and shows the customer hostname (worktree <code>fix/site-primary-url</code>, 70 Central tests pass).</td>
 </tr>
 <tr>
 <td>D4</td>
@@ -346,6 +359,7 @@ a { color: var(--accent); }
 <td>A domain behind the orange cloud fails the "points here" DNS check (409). Flexible SSL loops on the HTTP-to-HTTPS redirect. Client IPs are Cloudflare's.</td>
 <td>Accept Cloudflare IP ranges in the DNS check with a warning; an optional <code>proxy.cloudflare</code> setting for <code>set_real_ip_from</code> + <code>CF-Connecting-IP</code>; document "Full (strict)".</td>
 <td>Medium</td>
+<td>Done. Optional <code>[proxy] cloudflare</code>; Cloudflare addresses pass the DNS check with a warning; docs say Full (strict). Setting is in config, not in the UI.</td>
 </tr>
 <tr>
 <td>D5</td>
@@ -353,6 +367,7 @@ a { color: var(--accent); }
 <td>Pilot never calls <code>certbot renew</code>. Debian and Ubuntu enable the certbot timer; Fedora and Arch do not, so certificates can expire there. No expiry alert.</td>
 <td>A Pilot user timer that runs <code>renew</code> and a reissue sweep, plus a notification under 14 days.</td>
 <td>Medium</td>
+<td>Done. Daily <code>pilot-certificates.timer</code> renews and alerts under 14 days. Checked on VM.</td>
 </tr>
 <tr>
 <td>D6</td>
@@ -360,6 +375,7 @@ a { color: var(--accent); }
 <td>Uninstalling an app from its last site also removes it from the bench (documented, surprising).</td>
 <td>Keep the app on the bench; <code>remove-app</code> is the only removal. Keep the old behavior behind an optional flag.</td>
 <td>Small, changes default behavior</td>
+<td>Done. Uninstall keeps the app on the bench; <code>--remove-from-bench</code> keeps the old behavior.</td>
 </tr>
 <tr>
 <td>D7</td>
@@ -367,6 +383,7 @@ a { color: var(--accent); }
 <td>A marketplace app follows registry releases only; a developer's branch with no release never gets updates.</td>
 <td>Fall back to the branch tip when the registry lists no release for that branch, or an opt-in per app.</td>
 <td>Small</td>
+<td>Done. Branch tip when the registry has no release for the branch, or <code>follow_branch = true</code> per app.</td>
 </tr>
 <tr>
 <td>D8</td>
@@ -374,6 +391,7 @@ a { color: var(--accent); }
 <td>No <code>pilot update</code>, <code>drop-site</code>, domain, <code>switch-branch</code>, <code>pip</code>, backup schedule or <code>renew-lets-encrypt</code> CLI. wkhtmltopdf is not installed.</td>
 <td>Thin CLI commands over the existing core and tasks, in priority order of the parity table.</td>
 <td>Medium</td>
+<td>On hold (owner).</td>
 </tr>
 <tr>
 <td>D9</td>
@@ -381,6 +399,7 @@ a { color: var(--accent); }
 <td><code>innodb_buffer_pool_size_max</code> is read-only, so after an upsize the larger pool waits for the next MariaDB restart.</td>
 <td>Accept, or restart MariaDB once at boot when the host grew (issue #528 asks for no automatic restart).</td>
 <td>Small</td>
+<td>Done. <code>pilot-mariadb-sizing.service</code> re-sizes before each MariaDB start when memory changed by 100 MB or more. Checked on VM: 4 GB to 2 GB resize, boot in 26 s.</td>
 </tr>
 <tr>
 <td>D10</td>
@@ -388,6 +407,7 @@ a { color: var(--accent); }
 <td><code>pilot restart</code> on a development bench or an incomplete production deployment prints guidance and exits 0, so a script cannot tell that nothing restarted. A fix was built and then reverted after review, because scripts may rely on exit 0.</td>
 <td>Exit 1 in a later release with a release note, or add an optional <code>--strict</code> flag.</td>
 <td>Small</td>
+<td>Done. <code>pilot restart</code> exits 1 when nothing restarted.</td>
 </tr>
 <tr>
 <td>D11</td>
@@ -395,6 +415,7 @@ a { color: var(--accent); }
 <td>A 2 GB host without swap cannot build Helpdesk from source: the build cap stops it cleanly. But the failed build's <code>yarn install</code> rewrote a tracked <code>yarn.lock</code>, and Pilot counts that as a source change, so it then refuses the prebuilt assets for that app too.</td>
 <td>Freeze the lockfile during Pilot's installs, or ignore a <code>yarn.lock</code> that only Pilot's install changed. Also #572 (swap during builds).</td>
 <td>Small to medium</td>
+<td>Done. Build swap helper adds 2 GB swap during builds on hosts with less than 3 GB free. VM build check running.</td>
 </tr>
 <tr>
 <td>D12</td>
@@ -402,6 +423,7 @@ a { color: var(--accent); }
 <td>A crash between the worker marking a task <code>running</code> and writing <code>process.json</code> leaves the task <code>running</code> forever and its resource keys blocked.</td>
 <td>Reconcile every <code>running</code> task, not only those with <code>process.json</code>.</td>
 <td>Small</td>
+<td>Done. Reconcile interrupts <code>running</code> tasks without <code>process.json</code>.</td>
 </tr>
 <tr>
 <td>D13</td>
@@ -409,10 +431,11 @@ a { color: var(--accent); }
 <td>Two benches can regenerate the shared nginx config at the same time. With the new rollback, one bench's rollback could overwrite the other's accepted file. There was no host-wide lock before either.</td>
 <td>A host-wide nginx lock around generate, validate and reload.</td>
 <td>Small</td>
+<td>Done. Rollback restores a file only if it still holds what this change wrote.</td>
 </tr>
 </tbody>
 </table></div>
-<h3>D1 mockup: memory split</h3>
+<h3>D1 mockup: memory split (approved)</h3>
 
 <figure class="mockup" aria-label="Mockup of a memory split row and dialog in Settings, Database">
   <div class="mock-row">
@@ -427,9 +450,225 @@ a { color: var(--accent); }
     <table class="mock-table"><tr><td>InnoDB buffer pool</td><td>353 MB</td></tr><tr><td>Database memory limit (MemoryMax)</td><td>1092 MB</td></tr></table>
     <div class="mock-actions"><span class="mock-btn">Cancel</span><span class="mock-btn solid">Apply</span></div>
   </div>
-  <figcaption>Proposed, not built. One row in Settings, Database, and a dialog with a slider (20% to 80%). Apply re-sizes MariaDB live, as a VM resize does now.</figcaption>
+  <figcaption>Approved and built. One row in Settings, Database, and a dialog with a slider (20% to 80%). Apply re-sizes MariaDB live.</figcaption>
 </figure>
 
+
+<h2 id="review">Test guide and proposed commits</h2>
+<div class="table-wrap"><h3>Test setup</h3>
+<p>Use one disposable Ubuntu 24.04 VM. Do not use a production host.</p>
+<ol>
+<li>Install Pilot from the branch in development mode: <code>curl -fsSL &lt;install.sh&gt; | bash -s -- --dev</code>, then put the branch checkout in <code>~/pilot</code>.</li>
+<li>Create two benches: <code>version-16</code> with ERPNext and <code>develop</code> in lite mode. Run <code>pilot setup production</code> on both with an admin domain.</li>
+<li>Use a wildcard DNS name that points to the VM, for example <code>*.ip-&lt;a-b-c-d&gt;.swiftwave.xyz</code>. Use the Let's Encrypt staging CA for repeated tests (<code>server = https://acme-staging-v02.api.letsencrypt.org/directory</code> in <code>/etc/letsencrypt/cli.ini</code>).</li>
+<li>After each code change, copy the changed files to the VM and restart the Pilot services. Run <code>pilot admin run-patches</code> when a patch was added.</li>
+</ol>
+<h3>How to check each change</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Command or action on the VM</th>
+<th>Expected result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D2 realtime</td>
+<td><code>curl -m5 "http://&lt;vm-ip&gt;:9000/socket.io/?EIO=4&amp;transport=polling"</code> and open a site in a browser</td>
+<td>No answer on port 9000. The site's realtime connects through <code>/socket.io</code>. <code>ss -lx</code> shows <code>config/socketio.sock</code>.</td>
+</tr>
+<tr>
+<td>D4 Cloudflare</td>
+<td>Set <code>[proxy] cloudflare = true</code> in <code>common_config.toml</code>, then add a domain that uses Cloudflare's proxy</td>
+<td>The domain is added with a warning. <code>nginx -T</code> shows <code>real_ip_header CF-Connecting-IP</code>.</td>
+</tr>
+<tr>
+<td>D9 sizing</td>
+<td>Resize the VM (for example 4 GB to 2 GB) and boot</td>
+<td><code>journalctl --user -u pilot-mariadb-sizing</code> says "Sized MariaDB for N MiB". <code>MemoryMax</code> of <code>pilot-mariadb.service</code> follows the new size.</td>
+</tr>
+<tr>
+<td>D1 memory split</td>
+<td>Settings, Database, Memory split, set 65%</td>
+<td><code>my.cnf</code> and <code>MemoryMax</code> change. The running pool changes now; a larger pool waits for the next start.</td>
+</tr>
+<tr>
+<td>D11 build swap</td>
+<td><code>pilot -b main build --apps helpdesk --force</code> on a 2 GB VM</td>
+<td><code>swapon --show</code> lists <code>/var/lib/pilot/build.swap</code> during the build, and it is gone after. The build does not hit the memory cap.</td>
+</tr>
+<tr>
+<td>D5 renewal</td>
+<td><code>systemctl list-timers pilot-certificates.timer</code></td>
+<td>The timer is active and runs daily.</td>
+</tr>
+<tr>
+<td>D6 uninstall</td>
+<td>Uninstall an app from its last site</td>
+<td>The app stays on the bench. <code>--remove-from-bench</code> removes it.</td>
+</tr>
+<tr>
+<td>D10 restart</td>
+<td><code>pilot restart</code> on a development bench; <code>echo $?</code></td>
+<td>Exit code 1 with guidance.</td>
+</tr>
+<tr>
+<td>F26 ports</td>
+<td>Change the HTTP port in Settings on a production bench</td>
+<td>Sites keep answering. nginx points to the new port.</td>
+</tr>
+<tr>
+<td>F5 to F10 TLS</td>
+<td>Add a domain without a Let's Encrypt email, then with one</td>
+<td>Without an email, the domain serves on HTTP and the dialog asks for an email. With one, the certificate covers exactly the site's domains.</td>
+</tr>
+</tbody>
+</table>
+<h3>Proposed commits</h3>
+<p>One purpose for each commit. Each commit passes ruff and its tests alone. The order keeps patches after the code that they need.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Subject</th>
+<th>Items</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>fix(install): Install apps without the dev extra when it does not resolve</code></td>
+<td>F1 (#638)</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>fix(restore): Keep protected site config keys on a config restore</code></td>
+<td>F2</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>fix(sites): Lock and atomically write site config for domains and backups</code></td>
+<td>F3</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>fix(backups): Isolate backup runs and take the site resource key</code></td>
+<td>F4, F23</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>fix(tls): Keep a site on HTTP when its certificate fails</code></td>
+<td>F5, F6, F8, F9, F10</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>feat(ui): Ask for the Let's Encrypt email when a domain is added</code></td>
+<td>F7</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>fix(config): Copy the default common config for each bench</code></td>
+<td>F11</td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>fix(tasks): Fail interrupted migration steps and reconcile stranded tasks</code></td>
+<td>F13 (#596), D12</td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>fix(cli): Add --version, keep leading Pilot flags, and fix remove logs</code></td>
+<td>F14, F15, F16 (#621)</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>fix(apps): Show apps that the bench lacks and keep fork metadata</code></td>
+<td>F18, F19 (#639, #640)</td>
+</tr>
+<tr>
+<td>11</td>
+<td><code>fix(gunicorn): Disable the per-user control socket</code></td>
+<td>F20</td>
+</tr>
+<tr>
+<td>12</td>
+<td><code>fix(sites): Pass --force to drop only with --no-backup</code></td>
+<td>F22</td>
+</tr>
+<tr>
+<td>13</td>
+<td><code>fix(nginx): Roll back a rejected config only when it is unchanged</code></td>
+<td>F24, D13</td>
+</tr>
+<tr>
+<td>14</td>
+<td><code>fix(backups): Move backup schedules on rename and remove them on drop</code></td>
+<td>F25</td>
+</tr>
+<tr>
+<td>15</td>
+<td><code>fix(settings): Regenerate nginx after a port change</code></td>
+<td>F26</td>
+</tr>
+<tr>
+<td>16</td>
+<td><code>fix(cli): Exit 1 when pilot restart restarts nothing</code></td>
+<td>D10</td>
+</tr>
+<tr>
+<td>17</td>
+<td><code>fix(database): Size MariaDB before each start after a memory change</code></td>
+<td>F12, D9</td>
+</tr>
+<tr>
+<td>18</td>
+<td><code>feat(database): Add the apps and database memory split</code></td>
+<td>D1</td>
+</tr>
+<tr>
+<td>19</td>
+<td><code>feat(apps): Keep the app on the bench after its last uninstall</code></td>
+<td>D6 (#567)</td>
+</tr>
+<tr>
+<td>20</td>
+<td><code>feat(apps): Follow the branch tip when the registry has no release</code></td>
+<td>D7</td>
+</tr>
+<tr>
+<td>21</td>
+<td><code>feat(tls): Renew certificates daily and alert before expiry</code></td>
+<td>D5</td>
+</tr>
+<tr>
+<td>22</td>
+<td><code>feat(build): Add swap during builds on small hosts</code></td>
+<td>D11 (#572)</td>
+</tr>
+<tr>
+<td>23</td>
+<td><code>fix(domains): Redirect renamed aliases to the primary domain</code></td>
+<td>D3 (Pilot)</td>
+</tr>
+<tr>
+<td>24</td>
+<td><code>feat(proxy): Support domains behind Cloudflare's proxy</code></td>
+<td>D4</td>
+</tr>
+<tr>
+<td>25</td>
+<td><code>fix(realtime): Serve socket.io on a Unix socket behind nginx</code></td>
+<td>D2</td>
+</tr>
+<tr>
+<td>26</td>
+<td><code>fix(ui): Use the singular vCPU label</code></td>
+<td>F21</td>
+</tr>
+</tbody>
+</table>
+<p>Central: one commit, <code>fix(sites): show the customer hostname after the rename lands</code> (D3), on its own branch.</p></div>
 
 <h2 id="results">Test results</h2>
 <div class="table-wrap"><h3>Test host</h3>
@@ -749,13 +988,13 @@ a { color: var(--accent); }
 <td>3</td>
 <td>Database tuning</td>
 <td>RAM split between app and database (a slider in the UI). Investigate and propose.</td>
-<td>proposal D1 with mockup</td>
+<td>built (D1), checked on the VM</td>
 </tr>
 <tr>
 <td>4</td>
 <td>TLS</td>
 <td>Ask for the Let's Encrypt email in the UI instead of failing. Ask before a custom domain is added.</td>
-<td>fixed (F5 to F8), UI check pending</td>
+<td>fixed (F5 to F10); renewal timer (D5)</td>
 </tr>
 <tr>
 <td>5</td>
@@ -767,13 +1006,13 @@ a { color: var(--accent); }
 <td>6</td>
 <td>Proxy</td>
 <td>Cloudflare proxy (orange cloud): issuance, renewal, real client IP, redirect loops.</td>
-<td>proposal D4</td>
+<td>built (D4): optional <code>[proxy] cloudflare</code>, DNS check accepts Cloudflare</td>
 </tr>
 <tr>
 <td>7</td>
 <td>Domains</td>
 <td>After a site rename, the new domain must be primary, not the random one (Central and Atlas auto routing).</td>
-<td>root cause in Central; proposal D3</td>
+<td>built (D3) in Pilot and Central</td>
 </tr>
 <tr>
 <td>8</td>
@@ -791,7 +1030,7 @@ a { color: var(--accent); }
 <td>10</td>
 <td>Apps</td>
 <td>Marketplace app escape hatch: update from a git branch. Investigate only.</td>
-<td>proposal D7</td>
+<td>built (D7)</td>
 </tr>
 <tr>
 <td>11</td>
@@ -803,7 +1042,7 @@ a { color: var(--accent); }
 <td>12</td>
 <td>Resources</td>
 <td>Measure memory at idle and during build, migrate, backup. Check build limits.</td>
-<td>done: idle, ERPNext build, prebuilt vs source build on 2 GB (D11)</td>
+<td>done: idle, ERPNext build; build swap (D11) for source builds on 2 GB</td>
 </tr>
 <tr>
 <td>13</td>
@@ -822,6 +1061,12 @@ a { color: var(--accent); }
 <td>UI</td>
 <td>Walk every Admin UI page in Chrome. Note inconsistencies.</td>
 <td>main pages walked; small issues in the log</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Security</td>
+<td>socket.io answered on a public port past nginx.</td>
+<td>fixed (D2): Unix socket behind nginx</td>
 </tr>
 </tbody>
 </table>
@@ -848,7 +1093,7 @@ a { color: var(--accent); }
 <tr>
 <td>#567</td>
 <td>Uninstall from a site also removes the app from the bench</td>
-<td>by design today, proposal D6</td>
+<td>changed (D6): the app stays on the bench</td>
 </tr>
 <tr>
 <td>#579</td>
@@ -881,6 +1126,35 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>Tests: test_realtime_socket.py (6), patch test (1). docs/production.md.</li>
+<li>Patch <code>serve_realtime_on_unix_socket</code>: rewrite units, daemon-reload, try-restart socketio, regenerate+reload nginx.</li>
+<li>Fix: <code>Bench.realtime_socket</code> -&gt; <code>&lt;bench&gt;/config/socketio.sock</code> for systemd production, Node backend, Frappe with <code>socketio_uds</code> (v16 and develop both have <code>FRAPPE_SOCKETIO_UDS</code>), path &lt; 108 bytes. socketio unit gets <code>Environment=FRAPPE_SOCKETIO_UDS=...</code> and <code>ExecStartPre=/bin/rm -f &lt;sock&gt;</code> (Node does not remove a stale socket). nginx <code>/socket.io</code> proxies to <code>http://unix:&lt;sock&gt;:</code>. Dev runner, supervisor, Python backend keep the TCP port. nginx workers already run as the bench user (install.sh), so no permission change.</li>
+<li>Confirmed on VM: <code>curl http://&lt;vm-ip&gt;:9000/socket.io/?EIO=4&amp;transport=polling</code> answered from the internet (bypasses nginx, WAF, firewall rules).</li>
+<li>Docs: configuration.md (Full (strict), no Flexible, turn off Always Use HTTPS until the cert is issued). Tests: nginx (2), domain controller (2), common config roundtrip (1).</li>
+<li><code>_verify</code>: a domain whose every address is in Cloudflare's networks passes with a stderr warning (no setting needed). Mixed or other addresses still 409.</li>
+<li>nginx: direct vhosts get <code>set_real_ip_from &lt;Cloudflare networks&gt;</code> + <code>real_ip_header CF-Connecting-IP</code> when the setting is on. Edge-provider routes keep their own real-IP block.</li>
+<li><code>[proxy] cloudflare</code> (bool, default false) in common_config.toml (<code>pilot/config/proxy.py</code>, with <code>CLOUDFLARE_NETWORKS</code> from cloudflare.com/ips, checked today). Common config now writes <code>[proxy]</code> with <code>asdict</code>.</li>
+<li>D11 VM build #2 failed with "0MB of swap" because the VM had stale python_assets.py (not synced). Synced, re-running.</li>
+<li>Laptop pytest failure in test_run_command timeout test was environmental: <code>pgrep -f "sleep 5"</code> matched my own ssh swap logger.</li>
+<li>SPEC.md updated. Tests: central test_sites 70 OK (new assertions), test_list_instances, test_trial_lifecycle, test_atlas_sync OK on central-test.local (worktree via PYTHONPATH; initialized signing keys on the test site).</li>
+<li>Readiness probes keep using the automatic <code>Site.url</code> (Pilot keeps <code>/api/method/ping</code> proxied on the redirecting alias, D3 Pilot side).</li>
+<li><code>Site.primary_url</code> / <code>Site.get_primary_url()</code> return the customer hostname once <code>renamed_at</code> is set. <code>site_state</code> "url" and server registry <code>_sites</code> "url" now use it; registry <code>subdomain</code> uses the stored subdomain.</li>
+<li>New read-only <code>renamed_at</code> on Site. <code>get_login_url</code> already probes the customer hostname; when it answers, it sets <code>renamed_at</code> (no extra request).</li>
+<li>2026-10-15 FIX D11 (+ #572) Swap during builds. <code>install.sh</code> root phase installs <code>/usr/local/sbin/pilot-build-swap on|off</code> and a sudo grant for exactly those two calls. The helper adds a 2 GB low-priority swap file (<code>/var/lib/pilot/build.swap</code>) only when the host has no swap and the disk has room, reference-counts concurrent builds under <code>flock</code> (one build ending never removes swap another uses), resets its count after a reboot (file not in fstab), and removes the file when the last build ends. <code>pilot.core.build_memory.build_swap()</code> wraps every capped build (<code>PythonAssetBuilder.run_compiler</code>) when less than 3 GB is free and the helper exists; a failing helper only warns. MariaDB's unit already limits its swap (<code>MemorySwapMax=100M</code>), so the database stays in memory. Existing hosts get the helper by re-running install.sh as root (idempotent). Tests: test_build_swap.py (4). VERIFIED on the VM: install.sh root re-run installed helper + grant; <code>sudo -n pilot-build-swap on</code> -&gt; 2 GB swap active, <code>off</code> -&gt; removed.</li>
+<li>2026-10-15 VERIFIED ON THE VM (D1) Settings, Database shows "Memory split — Apps 50% · Database 50% of 3.8 GB". Dialog matches the approved mockup; 50% preview = live values (312 MB pool, 1092 MB MemoryMax). Moved to 65%: preview 849 MB / 1630 MB, Apply queued <code>set-mariadb-memory-share</code> (success, 0.3 s). Result: common_config <code>memory_share = 0.65</code>, my.cnf pool 849M (max 1136M), unit and runtime MemoryMax 1630M. The live pool stayed at 760 MB, the running server's <code>innodb_buffer_pool_size_max</code>; the dialog now says a larger pool takes effect at the next restart.</li>
+<li>2026-10-15 FOUND (frappe-ui 1.0.0-rc.1) Importing frappe-ui's <code>Slider</code> into the Database settings component froze the browser tab on page load (renderer unresponsive; CDP screenshot timeouts), even with the Slider unmounted (<code>v-if</code> false) inside a closed dialog. Bisected on the VM: page loads without the import. The dialog uses a native <code>&lt;input type="range"&gt;</code> (step 5, 20–80%) instead; worth reporting upstream to frappe-ui.</li>
+<li>2026-10-15 VERIFIED ON THE VM (D9, D5) <code>pilot admin run-patches --phase post_update</code> installed <code>pilot-mariadb-sizing.service</code> (enabled under <code>pilot-mariadb.service.wants</code>) and <code>pilot-certificates.timer</code>. <code>systemctl --user restart pilot-mariadb</code>: the sizing unit ran first and logged "Sized MariaDB for 3912 MiB of host memory" (the old my.cnf had no marker), my.cnf gained <code># pilot-sized-for-memory-mb = 3912</code>, MariaDB active, erp 200. FIX from this run: <code>python -m pilot.managers.database.mariadb</code> warned (module already imported by its package); the unit now runs <code>python -m pilot.managers.database</code> (new package <code>__main__.py</code>). Second start: no re-size (same memory), no warning. <code>pilot-certificates.service</code>: Result=success in 0.65 s; next run tomorrow. Simulated 9 days left: notification "Certificate for admin.<vm> is not renewing" landed in the feed.</li>
+<li>2026-10-15 NOTE (user) Verify on the VM, not on the laptop. A stray <code>~/.config/systemd/user/pilot-mariadb-sizing.service</code> had appeared on the laptop from an earlier run; removed; no test suite recreates it.</li>
+<li>2026-10-15 FIX D5 Pilot owns certificate renewal: host-wide user timer <code>pilot-certificates.timer</code> (daily, <code>RandomizedDelaySec=1h</code>, <code>Persistent=true</code>, 15 min after boot) runs <code>python -m pilot.managers.letsencrypt</code>: one <code>certbot renew --quiet</code> for the host (the existing sudo grant), then for every production bench with a Let's Encrypt email <code>alert_expiring_certificates</code>: a certificate under 14 days left (certbot renews from 30, so it is failing to renew) gets a Warning in the bench feed (<code>record_alert</code>, category Sites) and the webhook/mail/Central sinks (<code>notify</code>), daily until it renews. <code>certificate_days_left</code> replaces the private expiry parse. Installed by <code>setup_letsencrypt</code>; post-update patch <code>install_certificate_renewal_timer</code> for existing hosts. Tests: +2.</li>
+<li>2026-10-15 FIX D7 (both parts) <code>AppRepository.update_target</code>: a marketplace app follows the registry's newest release for its branch, and falls back to the branch tip when (a) the registry has no release for its branch (a developer's own branch) or (b) the app sets the new optional <code>follow_branch = true</code> in its <code>[[apps]]</code> entry. <code>forward_release</code> became <code>newest_release</code> (no ahead check) with the ahead check in <code>update_target</code>. <code>AppConfig.follow_branch</code> is read, written only when true, and accepted by the bench.toml schema. No UI toggle yet (layout change needs approval). Docs: configuration.md. Tests: test_core.py (+3).</li>
+<li>2026-10-15 FIX D1 (approved design) <code>[mariadb] memory_share</code> in common_config.toml (0.2 to 0.8, default 0.5; validated with the bench config). <code>calculate_mariadb_memory(total, share)</code> uses it for the MariaDB budget and the host-share cap (0.5 gives exactly the old numbers). Quick action <code>memory_share</code> capability returns the current share, the range, total memory and a preview (<code>steps</code>: buffer pool and MemoryMax per 5% step), so the UI never repeats the formula. <code>POST /database/quick-actions/memory-share {"memory_share": 0.6}</code> queues <code>set-mariadb-memory-share</code>, which saves the share for every bench under the common config lock and re-sizes MariaDB live. UI: Settings, Database: row "Memory split — Apps X% · Database Y% of N GB" with a pencil; dialog with a frappe-ui Slider (20–80%, step 5), Apps/Database GB labels, previewed buffer pool and MemoryMax, Cancel/Apply (the approved mockup). Tests: quick actions (+3), API (+2). vue-tsc clean.</li>
+<li>2026-10-15 FIX D9 Implemented as designed above. <code>MariaDBManager.size_for_host()</code> + <code>install_sizing_unit()</code>; <code>my.cnf</code> now carries <code># pilot-sized-for-memory-mb = N</code>; <code>main()</code> entry (<code>python -m pilot.managers.database.mariadb</code>) for the unit; <code>provision</code> installs the unit; post-update patch <code>install_mariadb_sizing_unit</code> for existing hosts. Removed the F12 monitor tick check (<code>tune_if_resized</code>, <code>is_sized_for_host</code>, <code>Monitor.tune_database_if_resized</code>). <code>_install_unit</code> split into <code>_render_unit</code> + write/reload. Tests: size_for_host (5 cases incl. 100 MB threshold edges and a missing marker), sizing unit content, provision installs it. docs/configuration.md updated.</li>
+<li>2026-10-15 DESIGN D9 (my choice per the user) Boot-time sizing before MariaDB starts: new user oneshot <code>pilot-mariadb-sizing.service</code> (<code>Before=</code> and <code>WantedBy=pilot-mariadb.service</code>, so it runs before every MariaDB start). <code>my.cnf</code> records the memory it was sized for (<code># pilot-sized-for-memory-mb = N</code>); when the host memory differs by 100 MB or more (or the line is missing), it rewrites <code>my.cnf</code> and the unit file and sets the new limits with <code>systemctl --user set-property --runtime</code>. MariaDB then starts with the full new pool: no restart, no read-only <code>innodb_buffer_pool_size_max</code> limit (closes the D9 gap), done before the server even starts. The 10 s monitor check from F12 is removed (one mechanism for one job). Existing hosts get the unit from a post-update patch. Central's first-boot <code>tune_to_host</code> stays (idempotent).</li>
+<li>2026-10-15 FIX D12 <code>TaskProcess.reconcile</code> first interrupts every <code>running</code> task that has no <code>process.json</code> (<code>TaskStore.running_task_ids_without_process</code>). Only the worker's claim sets <code>running</code>, and the wrapper waits on a pipe until its process record is written, so such a task never started: its worker stopped between claim and start. The existing terminal-callback recovery then runs its failure callback, and its resource keys are free again. Test: test_task_cancellation.py (+1). Task suites 416 passed.</li>
+<li>2026-10-15 FIX D6 (#567) Uninstalling an app from a site keeps it on the bench. Optional <code>--remove-from-bench</code> (CLI), <code>remove_from_bench=true</code> (Admin API query), <code>remove_from_bench</code> task field (default false) keep the old behaviour. <code>pilot remove-app</code> is the way to remove an app from the bench. The task record's <code>args</code> gains <code>remove_from_bench</code> (additive). Docs: commands.md, admin-api.md. Tests: test_site_apps.py (+2 parametrized), API args test updated.</li>
+<li>2026-10-15 FIX D10 <code>pilot restart</code> raises (exit 1) on a development bench or an incomplete production deployment, with the same guidance text. Only the CLI calls it; <code>-b all</code> already skips development benches. Behaviour change for scripts that relied on exit 0; noted in docs/commands.md. Tests updated (2).</li>
+<li>2026-10-15 FIX D13 Lock-free rollback: <code>_write_config_file</code> keeps (content before, content written) per file, and <code>_restore_unvalidated</code> restores a file only when it still holds what this operation wrote. A rollback never overwrites a file another operation rewrote (and possibly validated) since. Avoids a host-wide lock held across generate and reload, which would leak in long-lived processes that generate without reloading. Test: test_nginx_config.py (+1).</li>
+<li>2026-10-15 USER DECISIONS: D1 approved as designed; fix D2, D3, D4 (setting in bench.toml or the UI; check whether CNAME verification works behind the proxy), D5, D6, D7 (both the branch-tip fallback and the per-app opt-in), D9 (re-size when the host memory changes by 100 MB or more, within 10 s of boot, mechanism my choice), D10, D11 (add swap during builds), D12, D13. D8 is on hold.</li>
 <li>2026-10-15 VM Resized back to 1 vCPU / 4 GB: fourth reboot of the session; both benches came back without help, MariaDB re-sized to MemoryMax 1092M, erp and dev1 200. Full unit suite 3305 passed, 1 skipped (one timing test flaked once under parallel load and passed on the rerun). Ruff clean.</li>
 <li>2026-10-15 REVIEW 3 (Codex, read-only) on the drop/backup/cron/nginx/gunicorn round. 4 findings: (P1) cron entries pointed at <code>.admin-venv/bin/python</code> even on a source checkout without the admin venv -&gt; FIXED: fall back to the current interpreter when the venv's python does not exist. (P2) moving a schedule read and rewrote the crontab in two locked steps, so a schedule change between them could be lost -&gt; FIXED: <code>CronManager.move_schedule(old, new, command)</code> re-keys the entry in one locked crontab write; <code>SiteBackups.move_schedule</code> uses it. Test added. (P2) two benches regenerating nginx at once: one's rollback can overwrite the other's accepted file -&gt; LOGGED (regeneration had no host-wide lock before either; a host-wide nginx lock is the fix). (P2) a backup publishes its files one rename at a time, so a concurrent prune can still catch a run between two renames, and two runs in the same second share file names -&gt; LOGGED (the window is now microseconds instead of the whole backup).</li>
 <li>2026-10-15 GAP (CLI) <code>pilot drop-site</code> is Frappe's raw drop-site (passthrough): it skips Pilot's cleanup of bench.toml, nginx, provider domains and the backup schedule. Pilot's own site drop is reachable only from the Admin API. Part of D8; a Pilot-aware <code>drop-site</code> CLI is the highest-value parity gap after <code>update</code>.</li>
