@@ -53,25 +53,25 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 05:54 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:06 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>25</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>117</b><span>log entries</span></div>
+  <div class="stat"><b>119</b><span>log entries</span></div>
 </div>
 
 <div class="note">
 <b>How to review</b>
 <ul>
-<li>All changes are uncommitted on the local branch <code>fix/bughunt</code>, based on <code>origin/develop</code> (6f142bc5). Nothing is pushed.</li>
+<li>All Pilot changes are uncommitted on the local branch <code>fix/bughunt</code>, based on <code>origin/develop</code> (6f142bc5). The Central part of D3 is on its own branch, <code>fix/site-primary-url</code>. Nothing is pushed. <a href="#open">Open items</a> lists what is not done.</li>
 <li>Start with <a href="#fixes">Fixes</a>: one row per bug, with the files and tests. Then read <a href="#decisions">Decisions</a>: these changed a feature or a public surface, so the owner approved each one first. <a href="#review">Test guide and commits</a> says how to check each change on a VM and how to split the work into commits.</li>
 <li>Every public surface stays compatible: new API fields are optional, no CLI flag was removed, no config key changed shape.</li>
-<li>Check a fix with <code>uv run pytest tests --ignore=tests/e2e --ignore=tests/integration</code> and <code>uv run ruff check admin pilot tests</code>.</li>
+<li>Check a fix with <code>uv run pytest tests/pilot tests/admin</code> (3345 pass) and <code>uv run ruff check admin pilot tests</code>. Pilot supports Frappe v16 and later.</li>
 </ul>
 </div>
 
-<nav><a href="#fixes">Fixes</a><a href="#decisions">Decisions</a><a href="#review">Test guide and commits</a><a href="#results">Test results</a><a href="#parity">bench parity</a><a href="#plan">Plan</a><a href="#log">Log</a></nav>
+<nav><a href="#fixes">Fixes</a><a href="#decisions">Decisions</a><a href="#review">Test guide and commits</a><a href="#open">Open items</a><a href="#results">Test results</a><a href="#parity">bench parity</a><a href="#plan">Plan</a><a href="#log">Log</a></nav>
 
 <h2 id="fixes">Fixes</h2>
 <div class="table-wrap"><table>
@@ -335,13 +335,13 @@ a { color: var(--accent); }
 <td>The split is hard-coded: MariaDB gets about half of the RAM (<code>/2</code> and <code>_MAX_HOST_MEMORY_SHARE = 0.5</code> in <code>pilot/core/mariadb_memory.py</code>). Gunicorn workers do not follow the host size.</td>
 <td>An optional <code>memory_share</code> (0.2 to 0.8, default 0.5) in <code>[mariadb]</code> of <code>common_config.toml</code>, used by the sizing and the Admin limits; a slider on the database settings page. See the mockup below.</td>
 <td>Small backend change, one UI control (needs mockup approval)</td>
-<td>Done. <code>[mariadb] memory_share</code> and a Memory split row in Settings, Database. Checked on VM at 65%.</td>
+<td>Done. <code>[mariadb] memory_share</code> and a Memory split row in Settings, Database. Checked on VM: 65%, then back to 50% from the dialog (MemoryMax and pool as previewed).</td>
 </tr>
 <tr>
 <td>D2</td>
 <td>socket.io exposed</td>
 <td>Frappe's socket.io listens on <code>*:9000</code> and answers from the internet. It bypasses nginx and the WAF. No host firewall is on by default.</td>
-<td>Use Frappe's <code>socketio_uds</code> (Unix socket) and proxy nginx to it, or bind to &lt;vm-ip&gt;.</td>
+<td>Use Frappe's <code>socketio_uds</code> (Unix socket) and proxy nginx to it, or bind to 127.0.0.1.</td>
 <td>Unit and nginx template change, patch for existing benches</td>
 <td>Done. systemd benches serve Node realtime on <code>config/socketio.sock</code>; nginx proxies to it; patch <code>serve_realtime_on_unix_socket</code>. Checked on VM: port 9000 closed, WebSocket 101 through nginx, restart after <code>kill -9</code>.</td>
 </tr>
@@ -669,6 +669,70 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <p>Central: one commit, <code>fix(sites): show the customer hostname after the rename lands</code> (D3), on its own branch.</p></div>
+
+<h2 id="open">Open items</h2>
+<div class="table-wrap"><p>These items are not done. Each row says why and what the next step is.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>State</th>
+<th>Next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Commits and pull requests</td>
+<td>All Pilot changes are uncommitted on <code>fix/bughunt</code>.</td>
+<td>The owner says go; then commit in the order of the proposed commit list.</td>
+</tr>
+<tr>
+<td>Central part of D3</td>
+<td>Built and tested in a separate worktree, branch <code>fix/site-primary-url</code> (6 files, 70 Central site tests pass). Not committed.</td>
+<td>One Central commit and pull request. It does not depend on the Pilot release: Pilot already keeps <code>/api/method/ping</code> on the redirecting alias.</td>
+</tr>
+<tr>
+<td>D8 bench parity</td>
+<td>On hold (owner).</td>
+<td>See the parity table.</td>
+</tr>
+<tr>
+<td>D4 setting in the UI</td>
+<td><code>[proxy] cloudflare</code> is config only.</td>
+<td>A UI toggle needs a mockup first.</td>
+</tr>
+<tr>
+<td>D11 <code>yarn.lock</code> drift</td>
+<td>Not built. The owner chose the build swap. A failed source build can still leave a changed <code>yarn.lock</code>, and Pilot then refuses the prebuilt assets for that app.</td>
+<td>Decide: freeze the lockfile during Pilot's installs, or ignore a <code>yarn.lock</code> that only Pilot changed.</td>
+</tr>
+<tr>
+<td>Restart timeout</td>
+<td><code>_restart_systemd</code> waits 60 s; systemd waits up to 90 s for a worker pool that drains a job. Settings can say "could not be restarted" while the restart completes. F26 keeps nginx correct in that case.</td>
+<td>Decide on a longer wait or an asynchronous restart task.</td>
+</tr>
+<tr>
+<td>Setup wizard message</td>
+<td>After a failed init (seen with #638), the wizard also showed "Lost connection to the setup process". The event stream ended without a <code>done</code> event and the reconnect failed. Not reproduced after F1.</td>
+<td>Reproduce with a failing init; check <code>is_draining</code> and the reconnect status.</td>
+</tr>
+<tr>
+<td>Uptime log</td>
+<td>The uptime log records <code>up: false</code> with no reason (seen with the staging certificate). The Enable SSL task page shows "Server" as its target although the task has a site.</td>
+<td>Add an <code>error</code> field to the uptime entry; show the site on the task page.</td>
+</tr>
+<tr>
+<td>Narrow concurrency windows</td>
+<td>nginx regeneration across benches and backup retention have small windows that are logged, not fixed.</td>
+<td>Review together with the host-wide nginx lock idea.</td>
+</tr>
+<tr>
+<td>Integration tests</td>
+<td><code>test_trusted_proxy_nginx</code> and <code>test_proxy_firewall_e2e</code> need a root nginx. On the VM as root: 3 pass. 1 fails also on clean <code>origin/develop</code>, because nginx's <code>nobody</code> worker cannot read pytest's private temp directory. The same path on the real bench returns the expected 404.</td>
+<td>Run the tests in CI's container, or give the test a readable temp directory.</td>
+</tr>
+</tbody>
+</table></div>
 
 <h2 id="results">Test results</h2>
 <div class="table-wrap"><h3>Test host</h3>
@@ -1156,13 +1220,15 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>Status page: the IP redaction hid every IPv4 (127.0.0.1 showed as <code>&lt;vm-ip&gt;</code>); now it hides only public addresses (keeps loopback, private, documentation, Cloudflare). Added an Open items section (uncommitted work, Central branch, D8, D4 UI, yarn.lock drift, restart timeout, wizard message, uptime log, integration tests).</li>
+<li>Integration tests on the VM as root (copy of the branch): <code>test_trusted_proxy_nginx</code> + <code>test_proxy_firewall_e2e</code>: 3 pass, <code>test_direct_connection_is_blocked_only_proxy_gets_through</code> fails, and it fails the same way on clean <code>origin/develop</code>. Cause: run as root, nginx's worker is <code>nobody</code> and cannot open pytest's 0700 temp dir, so the 404 error page itself becomes 403 (bench error log: <code>open() .../error_pages/404.html failed (13: Permission denied)</code>). Real bench: <code>/.well-known/acme-challenge/probe</code> -&gt; 404. Test environment issue, not a product bug.</li>
 <li>Signed in to the Admin UI through a one-time <code>?sid=</code> link minted on the VM (no password typed in the browser).</li>
 <li>D1 UI verified after rebuilding the dashboard on the VM (13 s): Settings, Database shows "Memory split: Apps 35% · Database 65% of 3.8 GB"; the dialog shows the final note text; slider to 50% previews 1.9/1.9 GB, pool 312 MB, MemoryMax 1092 MB; Apply runs <code>set-mariadb-memory-share</code> ("Giving MariaDB 50% of host memory", success). Result: memory_share 0.5, unit MemoryMax 1092M, live pool 312 MB. VM back at the default split.</li>
 <li>D3 Pilot verified: with a site hostname alias (<code>vmsite-*</code> -&gt; erp, redirect) rendered in memory (Central not enabled on this VM), <code>http://vmsite-abc123.../app/home</code> -&gt; 301 <code>https://erp.../app/home</code>, and <code>/api/method/ping</code> on the alias -&gt; 200 pong. Config restored.</li>
 <li>Resized the VM 0.5 vCPU / 2 GB -&gt; 1 vCPU / 4 GB from the dashboard (disk unchanged). Boot 13 s. <code>pilot-mariadb-sizing</code> logged "Sized MariaDB for 3912 MiB"; with the 65% split left from the D1 test the boot pool was 849 MB (the larger pool applied at start, as designed). Realtime came back on the Unix socket; port 9000 stays closed; erp and dev1 200.</li>
 <li>Finding (not changed): <code>_restart_systemd</code> waits 60 s, systemd's default stop timeout is 90 s. A worker pool that drains a job sometimes takes the full 90 s (seen twice right after the build, not reproducible when idle: 2 s), so Settings reports "could not be restarted" while systemd completes the restart.</li>
 <li>F26 (new): Settings <code>http_port</code> change on a production bench restarted gunicorn on the new port while nginx kept the old upstream -&gt; 502 (reproduced on the VM). Fix: regenerate nginx after restart-triggering changes, in <code>finally</code>, because a timed-out restart still finishes in systemd. Verified: 8000 -&gt; 8020 (restart call timed out, nginx followed, site came back), 8020 -&gt; 8000 (site 200).</li>
-<li>D4 verified: real DNS -&gt; Cloudflare-proxied hosts accepted with the warning, direct host accepted. With <code>cloudflare = true</code>: nginx -t OK, <code>CF-Connecting-IP</code> in 4 server blocks, site 200, and a spoofed <code>CF-Connecting-IP: &amp;lt;vm-ip&amp;gt;</code> from a non-Cloudflare client is not trusted (access log shows the real IP). Reverted to the original common_config.</li>
+<li>D4 verified: real DNS -&gt; Cloudflare-proxied hosts accepted with the warning, direct host accepted. With <code>cloudflare = true</code>: nginx -t OK, <code>CF-Connecting-IP</code> in 4 server blocks, site 200, and a spoofed <code>CF-Connecting-IP: 1.2.3.4</code> from a non-Cloudflare client is not trusted (access log shows the real IP). Reverted to the original common_config.</li>
 <li>D2 verified: patch <code>serve_realtime_on_unix_socket</code> moved <code>main</code> (devb is lite mode, skipped). Port 9000 refuses connections from the internet; socket.io polling and the WebSocket upgrade (101) work through nginx; <code>kill -9</code> of Node -&gt; systemd restarts it, <code>ExecStartPre</code> removes the stale socket, realtime listens again.</li>
 <li>Owner note: Pilot supports Frappe v16 and later only, so <code>Bench.realtime_socket</code> no longer checks Frappe's source for <code>socketio_uds</code> (v16 and develop both have it). This also removes a drift case that Codex found (nginx switching to the socket after a Frappe update while the unit stayed on TCP). Socket path length is now checked in bytes (Codex P2).</li>
 <li>D11 verified on the 0.5 vCPU / 2 GB VM: <code>pilot -b main build --apps helpdesk --force</code> succeeded ("Done in 40m 15s", vite 29m54s, swap peak about 1.5 GB of the 2 GB build swap). No OOM kill. The swap file and the swap were removed after the build; count file back to 0; helpdesk <code>yarn.lock</code> unchanged. The earlier failure ("0MB of swap") came from stale code on the VM.</li>
