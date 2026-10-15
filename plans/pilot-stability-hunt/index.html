@@ -53,10 +53,10 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 14:23 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 14:32 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>47</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>48</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
   <div class="stat"><b>146</b><span>log entries</span></div>
 </div>
@@ -510,6 +510,15 @@ a { color: var(--accent); }
 <td>+2</td>
 <td>No: S3 is not configured on the VM</td>
 </tr>
+<tr>
+<td>F49</td>
+<td>Build (#437)</td>
+<td>Builds ran in a <code>systemd-run --user</code> scope when the host had systemd-run and a memory controller. Without a user bus, as for a supervisor bench started at boot, systemd-run exited 1 before the build started, so every build and an update's revert failed and the sites stayed in maintenance mode. The error named <code>systemd-run</code>, not the build command.</td>
+<td>Pilot starts a trial scope first and builds uncapped when it fails. A capped build error names the build command.</td>
+<td><code>pilot/managers/systemd_user.py</code>, <code>pilot/managers/python_assets.py</code></td>
+<td>+3</td>
+<td>Yes: the check is true with the user bus and false without it</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -797,7 +806,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 64 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 64 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, and F43 to F48. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 65 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 65 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, and F43 to F49. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -1126,6 +1135,11 @@ a { color: var(--accent); }
 <td>64</td>
 <td><code>1f1e804e</code></td>
 <td><code>fix(backups): Show the size of uploaded backup files</code></td>
+</tr>
+<tr>
+<td>65</td>
+<td><code>7754257d</code></td>
+<td><code>fix(build): Build uncapped where systemd-run cannot start a scope</code></td>
 </tr>
 </tbody>
 </table>
