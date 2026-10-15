@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pilot GitHub App Build</title>
+<style>
+:root{--bg:#fff;--fg:#1c1d21;--muted:#6b6f78;--line:#d9dbe0;--todo:#9aa0aa;--wait:#b7791f;--done:#2f855a}
+@media (prefers-color-scheme:dark){:root{--bg:#15161a;--fg:#e8e9ec;--muted:#9a9fa9;--line:#2d2f36;--todo:#6b7078;--wait:#e0a84a;--done:#5cc08a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,sans-serif;padding:32px max(16px,env(safe-area-inset-left,0px))}
+main{max-width:46rem;margin:0 auto}
+h1{font-size:1.7rem;margin:0 0 .25rem}h2{font-size:1.1rem;margin:2rem 0 .5rem;border-bottom:1px solid var(--line);padding-bottom:.3rem}
+p,li{max-width:65ch}.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse;display:block;overflow-x:auto}td,th{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
+.s{font-weight:600;white-space:nowrap}.todo{color:var(--todo)}.wait{color:var(--wait)}.done{color:var(--done)}
+code{font:.9em ui-monospace,monospace}
+</style>
+</head>
+<body>
+<main>
+<h1>Pilot GitHub App Build</h1>
+<p class="muted">Status page. Last update: 2026-10-16. Design source: <a href="../../research/pilot-github-app/">Pilot GitHub App proposal</a>.</p>
+
+<h2>Goal</h2>
+<p>Pilot reads its Central settings from instance metadata. If Central is available, Pilot replaces PAT-based Git access with GitHub App access. If Central is not available, Pilot shows only the PAT form. If Central is available, Pilot also shows a "Connect via Frappe Central" option.</p>
+
+<h2>What I need from you</h2>
+<table>
+<tr><th>#</th><th>Item</th><th>Status</th></tr>
+<tr><td>1</td><td>A GitHub App for testing. Permissions: Contents (read), Metadata (read). Turn on "Request user authorization (OAuth) during installation" and "Expire user authorization tokens". Give me the App ID, client ID, slug, client secret, private key and webhook secret, or put them in Central Settings yourself.</td><td class="s wait">Waiting</td></tr>
+<tr><td>2</td><td>Callback, setup and webhook URLs. GitHub cannot reach <code>central.localhost</code>. Give me a tunnel URL, or accept that I test the webhook only with a signed local request.</td><td class="s wait">Waiting</td></tr>
+<tr><td>3</td><td>A test repository (one private, one public) where the App can be installed.</td><td class="s wait">Waiting</td></tr>
+<tr><td>4</td><td>Confirm: "Central passes" means the metadata has valid Central credentials (<code>central_endpoint</code>, <code>central_auth_token</code>) and Central answers a status call.</td><td class="s wait">Waiting</td></tr>
+<tr><td>5</td><td>Which Central site and which Pilot bench I test with (<code>central.localhost</code> or <code>central-test.local</code>).</td><td class="s wait">Waiting</td></tr>
+<tr><td>6</td><td>Approval of the Central Settings GitHub tab and the new GitHub Connection DocType layout. I will send a mockup first.</td><td class="s todo">Not started</td></tr>
+</table>
+
+<h2>Build state</h2>
+<table>
+<tr><th>Step</th><th>Where</th><th>Status</th></tr>
+<tr><td>Read code: <code>CentralClient</code>, <code>metadata.py</code>, <code>Git.vue</code>, <code>git.py</code></td><td>Pilot</td><td class="s done">Done</td></tr>
+<tr><td>Central Settings GitHub tab and GitHub Connection DocType</td><td>Central</td><td class="s todo">Not started</td></tr>
+<tr><td><code>central/integrations/github.py</code> and <code>central/api/github.py</code></td><td>Central</td><td class="s todo">Not started</td></tr>
+<tr><td>Connection attempt (Redis, 15 minutes), PKCE, callback, complete</td><td>Central</td><td class="s todo">Not started</td></tr>
+<tr><td><code>repository_token</code> (one repository, <code>contents: read</code>)</td><td>Central</td><td class="s todo">Not started</td></tr>
+<tr><td>Webhook with HMAC check and reconcile</td><td>Central</td><td class="s todo">Not started</td></tr>
+<tr><td>Metadata flag and Central availability check</td><td>Pilot</td><td class="s todo">Not started</td></tr>
+<tr><td><code>CentralClient</code> GitHub methods and one Git credential resolver</td><td>Pilot</td><td class="s todo">Not started</td></tr>
+<tr><td>Admin API: connection-attempts, connection, repositories, branches, disconnect</td><td>Pilot</td><td class="s todo">Not started</td></tr>
+<tr><td><code>settings/Git.vue</code>: PAT only, or PAT plus Connect via Frappe Central</td><td>Pilot</td><td class="s todo">Not started</td></tr>
+<tr><td>Tests: cross-team denial, replay, expiry, disconnect race, Central outage</td><td>Both</td><td class="s todo">Not started</td></tr>
+</table>
+
+<h2>Assumptions</h2>
+<ul>
+<li>The existing <code>PUT /git/connection</code> PAT request stays the same. Records without <code>auth_type</code> stay PAT records.</li>
+<li>The App private key stays in Central. Pilot gets only a one-repository token that expires in about one hour.</li>
+<li>I do not commit or push without your approval.</li>
+</ul>
+</main>
+</body>
+</html>
