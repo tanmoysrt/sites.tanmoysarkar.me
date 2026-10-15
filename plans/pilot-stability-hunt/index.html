@@ -53,7 +53,7 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:14 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:38 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>27</b><span>fixes, with tests</span></div>
@@ -71,7 +71,7 @@ a { color: var(--accent); }
 </ul>
 </div>
 
-<nav><a href="#fixes">Fixes</a><a href="#decisions">Decisions</a><a href="#review">Test guide and commits</a><a href="#open">Open items</a><a href="#results">Test results</a><a href="#parity">bench parity</a><a href="#plan">Plan</a><a href="#log">Log</a></nav>
+<nav><a href="#fixes">Fixes</a><a href="#decisions">Decisions</a><a href="#review">Test guide and commits</a><a href="#open">Open items</a><a href="#rollout">Upgrade notes</a><a href="#results">Test results</a><a href="#parity">bench parity</a><a href="#plan">Plan</a><a href="#log">Log</a></nav>
 
 <h2 id="fixes">Fixes</h2>
 <div class="table-wrap"><table>
@@ -758,6 +758,100 @@ a { color: var(--accent); }
 <td>Integration tests</td>
 <td>Fixed in the test: run as root, the throwaway nginx now uses <code>user root;</code>, because its <code>nobody</code> worker could not read pytest's private temp directory (that failure was also on clean <code>origin/develop</code>). On the VM as root: 4 of 4 pass. On a laptop without root, nginx cannot start.</td>
 <td>Run them in CI or on a test VM as root.</td>
+</tr>
+</tbody>
+</table></div>
+
+<h2 id="rollout">Upgrade notes</h2>
+<div class="table-wrap"><p>Read this before you upgrade a host. It lists what runs by itself, what an operator must do, and what changes for scripts and clients.</p>
+<h3>Runs by itself on upgrade</h3>
+<p><code>pilot admin upgrade</code> runs these patches once for each bench:</p>
+<table>
+<thead>
+<tr>
+<th>Patch</th>
+<th>What it does</th>
+<th>Effect on a running host</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>install_mariadb_sizing_unit</code></td>
+<td>Installs <code>pilot-mariadb-sizing.service</code>, which sizes MariaDB before each start.</td>
+<td>None until the next MariaDB start.</td>
+</tr>
+<tr>
+<td><code>install_certificate_renewal_timer</code></td>
+<td>Installs the daily <code>pilot-certificates.timer</code> on hosts that use Let's Encrypt.</td>
+<td>None. It runs once a day, within an hour after midnight.</td>
+</tr>
+<tr>
+<td><code>serve_realtime_on_unix_socket</code></td>
+<td>Moves Node realtime from <code>socketio_port</code> to <code>config/socketio.sock</code> on systemd production benches, then reloads nginx.</td>
+<td>socket.io restarts once. Clients reconnect in a few seconds.</td>
+</tr>
+</tbody>
+</table>
+<h3>Operator action</h3>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Why</th>
+<th>Without it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Run the root phase of <code>install.sh</code> again</td>
+<td>Installs <code>/usr/local/sbin/pilot-build-swap</code> and its sudoers rule (D11).</td>
+<td>Builds run as before, without the temporary swap.</td>
+</tr>
+<tr>
+<td>Cloudflare: set <code>[proxy] cloudflare = true</code> in <code>common_config.toml</code></td>
+<td>nginx takes the client IP from <code>CF-Connecting-IP</code> (D4). Set Cloudflare to Full (strict).</td>
+<td>Domains behind Cloudflare still pass the DNS check, but logs and rate limits see Cloudflare's addresses.</td>
+</tr>
+<tr>
+<td>Optional: close <code>socketio_port</code> (default 9000) in a host firewall</td>
+<td>systemd production benches no longer listen on it.</td>
+<td>Nothing changes.</td>
+</tr>
+</tbody>
+</table>
+<h3>Changes for scripts and clients</h3>
+<p>All changes are additive, except the two behavior changes that you approved (D6 and D10).</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CLI</td>
+<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --remove-from-bench</code>. Behavior: <code>uninstall-app</code> keeps the app on the bench (D6); <code>pilot restart</code> exits 1 when nothing restarted (D10).</td>
+</tr>
+<tr>
+<td>Admin API</td>
+<td>New optional fields: <code>email</code> on <code>POST /sites/&lt;name&gt;/domains</code>; <code>certificate_email_required</code> on the domain list; <code>is_marketplace</code> and <code>missing</code> on app rows; <code>remove_from_bench=true</code> on app uninstall. New route: <code>POST /database/quick-actions/memory-share</code>.</td>
+</tr>
+<tr>
+<td>Config</td>
+<td>New optional keys: <code>[mariadb] memory_share</code> and <code>[proxy] cloudflare</code> in <code>common_config.toml</code>; <code>follow_branch</code> for an app in <code>bench.toml</code>.</td>
+</tr>
+<tr>
+<td>Tasks</td>
+<td>New command: <code>set-mariadb-memory-share</code>. Existing task records keep their shape. <code>setup-letsencrypt</code> without a certificate for its site now fails instead of reporting success (F8).</td>
+</tr>
+<tr>
+<td>Logs and alerts</td>
+<td>The uptime log and the site-down alert can carry an <code>error</code> field (F27).</td>
+</tr>
+<tr>
+<td>Frappe versions</td>
+<td>Pilot supports Frappe v16 and later. The realtime socket depends on that.</td>
 </tr>
 </tbody>
 </table></div>
