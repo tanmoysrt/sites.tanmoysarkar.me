@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:20 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:28 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>18</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>20</b><span>fixes, with tests</span></div>
   <div class="stat"><b>10</b><span>decisions needed</span></div>
-  <div class="stat"><b>62</b><span>log entries</span></div>
+  <div class="stat"><b>68</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -249,6 +249,24 @@ a { color: var(--accent); }
 <td>+1</td>
 <td>No</td>
 </tr>
+<tr>
+<td>F20</td>
+<td>Process managers</td>
+<td>gunicorn 26 opens a control socket at one fixed path per user, so every bench on a host shared it.</td>
+<td>Disable it in the admin and web configs; Pilot does not use it, and older gunicorn ignores the setting.</td>
+<td><code>pilot/managers/gunicorn/</code></td>
+<td>+1</td>
+<td>Pending</td>
+</tr>
+<tr>
+<td>F21</td>
+<td>UI</td>
+<td>Analytics said "1 vCPUs".</td>
+<td>Singular for one CPU.</td>
+<td><code>pages/Analytics.vue</code></td>
+<td>n/a</td>
+<td>No</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -428,6 +446,10 @@ a { color: var(--accent); }
 <td>Restore another site's backup with its config</td>
 <td>The target kept its own domains and certificate settings.</td>
 </tr>
+<tr>
+<td>Kill the backup task of an update (#596)</td>
+<td>The update moved to Needs attention; Retry completed it.</td>
+</tr>
 </tbody>
 </table>
 <h3>Memory use</h3>
@@ -482,6 +504,18 @@ a { color: var(--accent); }
 <td>1 vCPU, 4 GB</td>
 <td>1.26 GB</td>
 <td>the lite bench adds one 123 MB process</td>
+</tr>
+<tr>
+<td>Two benches, idle</td>
+<td>0.5 vCPU, 2 GB</td>
+<td>0.79 GB</td>
+<td>1.17 GB available</td>
+</tr>
+<tr>
+<td>Helpdesk get-app with prebuilt assets (peak)</td>
+<td>0.5 vCPU, 2 GB</td>
+<td>0.94 GB</td>
+<td>52 s, no build</td>
 </tr>
 </tbody>
 </table>
@@ -776,6 +810,12 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 MEMORY (0.5 vCPU / 2 GB) <code>get-app helpdesk</code> used prebuilt assets for its commit: 52 s, peak 939 MB used (1.02 GB still available), MariaDB alive. Prebuilt assets remove the build peak entirely for apps that publish them. Next: forced source build (<code>pilot build --apps helpdesk --force</code>) to test the build memory cap.</li>
+<li>2026-10-15 FIX (gunicorn 26 control socket) Admin and web gunicorn configs set <code>control_socket_disable = True</code>. gunicorn 26 (already in the admin venv) opens <code>$XDG_RUNTIME_DIR/gunicorn.ctl</code> for every master, so all benches of a host share one path and a stopping master can unlink another's socket. Pilot never uses the socket. Older gunicorn ignores unknown config names (checked in gunicorn 23 <code>app/base.py</code>: "Ignore unknown names"). Changed: pilot/managers/gunicorn/<strong>init</strong>.py, templates/gunicorn.conf.py.template, tests/pilot/managers/test_gunicorn.py. Applies when the config is next written (restart or setup).</li>
+<li>2026-10-15 VM Resized to 0.5 vCPU / 2 GB for a build-limit test; monitor re-sized MariaDB to MemoryMax 512M within a minute. Two production benches idle: 793 MB used, 1.17 GB available. Started <code>get-app helpdesk</code> (Vite frontend build) with the memory sampler.</li>
+<li>2026-10-15 SELF-REVIEW Reverted pure formatting hunks that <code>ruff format</code> added to untouched code in files that were not ruff-formatted at base (domains.py x2, restore.py, letsencrypt.py <code>is_public_domain</code>, mariadb.py <code>raise_memory_high</code>). The diff now holds only behavior changes. Ruff clean; core/managers/tasks/admin API suites 2122 passed.</li>
+<li>2026-10-15 UI The Updates page for a running operation has no Cancel action; a stuck task can be cancelled only from the Tasks page (if it allows it) or the API.</li>
+<li>2026-10-15 VERIFIED (F13, #596) On the VM: created a site migration with safeguards for erp (backup phase), killed the <code>migration-backup</code> task 0.5 s after it started (<code>TaskRunner.kill</code>, the same call as the Admin cancel). Result: operation <code>needs_attention</code>, site backup <code>failed</code>, diagnosis "The task stopped before it finished. Retry it, or revert.", maintenance mode and scheduler restored (site 200). The Updates page showed "This update needs attention" with "Retry update". Retry ran backup -&gt; migrate -&gt; <code>completed</code>. Before F13 the operation stayed in "Backing up" forever and blocked later updates.</li>
 <li>2026-10-15 UI FIX Analytics shows "of 1 vCPUs"; now "1 vCPU" for one CPU (pages/Analytics.vue).</li>
 <li>2026-10-15 UI The Enable SSL task page shows "Server" as its target although the task has a <code>site</code>. The uptime log records <code>up: false</code> with no reason when a probe fails (here: staging certificate verification); an <code>error</code> field would make it diagnosable.</li>
 <li>2026-10-15 UI Clicks on the first button after a programmatic scroll often did nothing in the Site settings page (Enable SSL, Restore); a second click worked. Possibly a test-harness effect (hover/scroll), not confirmed as a product bug.</li>
