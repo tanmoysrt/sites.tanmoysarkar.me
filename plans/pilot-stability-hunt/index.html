@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 09:58 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 10:30 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>34</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>37</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>138</b><span>log entries</span></div>
+  <div class="stat"><b>139</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -393,6 +393,33 @@ a { color: var(--accent); }
 <td>+1</td>
 <td>Unit tests</td>
 </tr>
+<tr>
+<td>F36</td>
+<td>Realtime (review)</td>
+<td>A bench whose Frappe does not read <code>FRAPPE_SOCKETIO_UDS</code> keeps listening on <code>socketio_port</code>, so nginx would proxy <code>/socket.io</code> to a missing socket.</td>
+<td>Pilot uses the socket only when <code>apps/frappe/node_utils.js</code> reads <code>FRAPPE_SOCKETIO_UDS</code>.</td>
+<td><code>pilot/core/bench/__init__.py</code></td>
+<td>+1</td>
+<td>Yes: the version-16 production bench keeps the socket</td>
+</tr>
+<tr>
+<td>F37</td>
+<td>Build (review)</td>
+<td>The lockfile restore after a failed build could discard an edit that a person made during the build.</td>
+<td>Pilot copies each restored file to <code>.git/pilot-discarded/</code> in the app and prints the path.</td>
+<td><code>pilot/internal/git.py</code>, <code>pilot/core/app/__init__.py</code></td>
+<td>+1</td>
+<td>Unit tests</td>
+</tr>
+<tr>
+<td>F38</td>
+<td>Apps (review)</td>
+<td>D6 changed the uninstall default for the CLI, the API and saved tasks, which scripts relied on.</td>
+<td>The old default stays outside the dashboard. The dashboard sends <code>remove_from_bench=false</code>; the CLI has <code>--keep-on-bench</code>.</td>
+<td><code>pilot/commands/apps/uninstall.py</code>, <code>admin/backend/api/v1/sites/apps.py</code>, <code>admin/frontend/dashboard/src/api/sites.ts</code></td>
+<td>+3</td>
+<td>Unit tests, vue-tsc</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -456,7 +483,7 @@ a { color: var(--accent); }
 <td>Uninstalling an app from its last site also removes it from the bench (documented, surprising).</td>
 <td>Keep the app on the bench; <code>remove-app</code> is the only removal. Keep the old behavior behind an optional flag.</td>
 <td>Small, changes default behavior</td>
-<td>Done. Uninstall keeps the app on the bench; <code>--remove-from-bench</code> keeps the old behavior.</td>
+<td>Done, changed after review. An uninstall from the dashboard keeps the app on the bench. The CLI, the API and saved tasks keep the old default for compatibility; <code>pilot uninstall-app --keep-on-bench</code> and <code>remove_from_bench=false</code> keep the app.</td>
 </tr>
 <tr>
 <td>D7</td>
@@ -607,7 +634,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Greptile review of #643</h3>
-<p>Greptile reviewed the PR twice. Each finding was checked against the code. Valid findings got the smallest code fix. Findings that conflict with an owner decision or with the supported versions got no code change.</p>
+<p>Greptile reviewed the PR twice. Each finding was checked against the code and got the smallest code fix. On the owner's request, the three findings first left as by design were fixed too.</p>
 <table>
 <thead>
 <tr>
@@ -645,22 +672,22 @@ a { color: var(--accent); }
 <tr>
 <td>Older Frappe versions lose realtime</td>
 <td>P1</td>
-<td>No code change. Pilot supports Frappe v16 and later. A docs line still named a Frappe version check; <code>fbc4cd80</code> removes it.</td>
+<td>Fixed: F36 (<code>8f464ab9</code>). Pilot uses the socket only when the bench's Frappe reads <code>FRAPPE_SOCKETIO_UDS</code>.</td>
 </tr>
 <tr>
 <td>Uninstall changes its default</td>
 <td>P1</td>
-<td>No code change. This is D6, approved by the owner. <code>--remove-from-bench</code> keeps the old behavior.</td>
+<td>Fixed: F38 (<code>36117ff6</code>). The old default stays for the CLI, the API and saved tasks; the dashboard asks to keep the app.</td>
 </tr>
 <tr>
 <td>A failed build can discard a person's lockfile edit</td>
 <td>P1</td>
-<td>No code change. Only lockfiles that were clean before the build are restored. After a failed build, Pilot cannot tell the build's edit from a person's edit made during the build.</td>
+<td>Fixed: F37 (<code>0ca68073</code>). Pilot copies each file to <code>.git/pilot-discarded/</code> in the app before it restores it.</td>
 </tr>
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 44 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 44 came after the PR opened: the memory split task name, the bench user's shell, and the fixes for the Greptile review. Every commit passes ruff and the full unit suite alone (see the check below).</p>
+<p>The branch <code>fix/bughunt</code> holds 47 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 47 came after the PR opened: the memory split task name, the bench user's shell, and the fixes for the Greptile review. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -890,6 +917,21 @@ a { color: var(--accent); }
 <td><code>ba4e9478</code></td>
 <td><code>test(letsencrypt): Cover the renewal timer and the daily renewal run</code></td>
 </tr>
+<tr>
+<td>45</td>
+<td><code>8f464ab9</code></td>
+<td><code>fix(realtime): Keep the port when Frappe does not read the socket path</code></td>
+</tr>
+<tr>
+<td>46</td>
+<td><code>0ca68073</code></td>
+<td><code>fix(build): Keep a copy of each lockfile that a failed build restores</code></td>
+</tr>
+<tr>
+<td>47</td>
+<td><code>36117ff6</code></td>
+<td><code>fix(apps): Keep the old uninstall default for the CLI, API and tasks</code></td>
+</tr>
 </tbody>
 </table>
 <p>Central: <code>7b7ede6b fix(sites): show the customer hostname after the rename lands</code> on branch <code>fix/site-primary-url</code>, pushed as https://github.com/frappe/central/pull/491.</p></div>
@@ -936,9 +978,9 @@ a { color: var(--accent); }
 <td>Small fix in <code>NodePackages</code>, or document <code>yarn install</code> in that directory.</td>
 </tr>
 <tr>
-<td>Greptile threads</td>
-<td>Three findings on #643 are by design: Frappe v16 and later only, D6, and the lockfile edge case. See the Greptile table.</td>
-<td>Reply on the threads, or resolve them in review.</td>
+<td>Greptile</td>
+<td>All findings of reviews 1 and 2 are fixed. A new review runs on each push.</td>
+<td>Fix new findings until the review is clean.</td>
 </tr>
 <tr>
 <td>Switch Bench in the UI</td>
@@ -1006,7 +1048,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Changes for scripts and clients</h3>
-<p>All changes are additive, except the two behavior changes that the owner approved (D6 and D10).</p>
+<p>All changes are additive, except one behavior change that the owner approved (D10).</p>
 <table>
 <thead>
 <tr>
@@ -1017,11 +1059,11 @@ a { color: var(--accent); }
 <tbody>
 <tr>
 <td>CLI</td>
-<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --remove-from-bench</code>. Behavior: <code>uninstall-app</code> keeps the app on the bench (D6); <code>pilot restart</code> exits 1 when nothing restarted (D10); <code>pilot drop</code> refuses a running development bench (F30).</td>
+<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --keep-on-bench</code>. Behavior: <code>pilot restart</code> exits 1 when nothing restarted (D10); <code>pilot drop</code> refuses a running development bench (F30).</td>
 </tr>
 <tr>
 <td>Admin API</td>
-<td>New optional fields: <code>email</code> on <code>POST /sites/&lt;name&gt;/domains</code>; <code>certificate_email_required</code> on the domain list; <code>is_marketplace</code> and <code>missing</code> on app rows; <code>remove_from_bench=true</code> on app uninstall. New route: <code>POST /database/quick-actions/memory-share</code>.</td>
+<td>New optional fields: <code>email</code> on <code>POST /sites/&lt;name&gt;/domains</code>; <code>certificate_email_required</code> on the domain list; <code>is_marketplace</code> and <code>missing</code> on app rows; <code>remove_from_bench=false</code> on app uninstall (the dashboard sends it). New route: <code>POST /database/quick-actions/memory-share</code>.</td>
 </tr>
 <tr>
 <td>Config</td>
@@ -1536,6 +1578,7 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 Owner asked to fix all Greptile findings: realtime socket only when Frappe reads FRAPPE_SOCKETIO_UDS (8f464ab9, VM main bench keeps the socket), lockfile restore keeps copies in .git/pilot-discarded (0ca68073), old uninstall default for CLI/API/tasks with dashboard remove_from_bench=false and --keep-on-bench (36117ff6). Full suite 3362 passed, vue-tsc clean. Pushed; PR body updated.</li>
 <li>2026-10-15 Status page: commit table regenerated from git (44 commits), F31 to F35 and the Greptile table added. Per-commit check restarted for commits 25 to 43 (the scratchpad with earlier results was cleared; commits 1 to 24 had passed).</li>
 <li>2026-10-15 Greptile #643 review 2 (score 1/5): split fail_stopped_step for the complexity limit (4e7d6cab); tests for the renewal timer and daily run (ba4e9478). D6 default, v16-only realtime and the lockfile edge case left as by design. Full suite 3358 passed. Pushed.</li>
 <li>2026-10-15 Greptile #643 review 1: fixed nginx rollback lock (5346ccc2), deferred MariaDB shrink (baa0f9fb), stopped-before-handoff migration (ad1715d6), stale realtime docs (fbc4cd80); lockfile restore finding left as by-design. VM: nginx reload ok, include.conf 0600, site 200/301.</li>
