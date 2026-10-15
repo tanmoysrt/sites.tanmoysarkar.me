@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:54 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 07:09 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>27</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>28</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>127</b><span>log entries</span></div>
+  <div class="stat"><b>131</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -330,6 +330,15 @@ a { color: var(--accent); }
 <td>+1</td>
 <td>Yes: the Enable SSL task page shows the site</td>
 </tr>
+<tr>
+<td>F29</td>
+<td>Setup wizard</td>
+<td>A failed init in the wizard showed "Lost connection to the setup process". Init's rollback deleted <code>tasks/</code>, which held the running wizard task's own record, so the event stream broke and the failed task vanished from history.</td>
+<td>The rollback no longer removes <code>tasks/</code>; the task store owns it. The wizard now gets the failure and shows "Setup failed".</td>
+<td><code>pilot/core/bench/initializer.py</code></td>
+<td>+1</td>
+<td>Yes: reproduced before, fixed after, with a failing init</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -544,7 +553,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Proposed commits</h3>
-<p>Progress: commit 1 is staged and checked alone (ruff clean, 1548 core and manager tests pass on the staged snapshot). It waits for the owner's "next". Commits 2 to 31 follow one at a time. Nothing is pushed.</p>
+<p>Progress: commit 1 is staged and checked alone (ruff clean, 1548 core and manager tests pass on the staged snapshot). It waits for the owner's "next". Commits 2 to 32 follow one at a time. Nothing is pushed.</p>
 <p>One purpose for each commit. Each commit passes ruff and its tests alone. The order keeps patches after the code that they need.</p>
 <table>
 <thead>
@@ -710,6 +719,11 @@ a { color: var(--accent); }
 <td><code>fix(ui): Show the site of Enable SSL and revert tasks</code></td>
 <td>F28</td>
 </tr>
+<tr>
+<td>32</td>
+<td><code>fix(init): Keep task records when a failed init rolls back</code></td>
+<td>F29</td>
+</tr>
 </tbody>
 </table>
 <p>Central: one commit, <code>fix(sites): show the customer hostname after the rename lands</code> (D3), on its own branch.</p></div>
@@ -746,11 +760,6 @@ a { color: var(--accent); }
 <td>None.</td>
 </tr>
 <tr>
-<td>Setup wizard message</td>
-<td>After a failed init (seen with #638), the wizard also showed "Lost connection to the setup process". The event stream ended without a <code>done</code> event and the reconnect failed. Not reproduced after F1.</td>
-<td>Reproduce with a failing init; check <code>is_draining</code> and the reconnect status.</td>
-</tr>
-<tr>
 <td>Narrow concurrency windows</td>
 <td>nginx regeneration across benches and backup retention have small windows that are logged, not fixed.</td>
 <td>Review together with the host-wide nginx lock idea.</td>
@@ -764,6 +773,11 @@ a { color: var(--accent); }
 <td>Nested <code>node_modules</code></td>
 <td>Pilot reinstalls JS dependencies only when an app's root <code>node_modules</code> is missing. An app such as Helpdesk installs <code>desk/</code> from a root postinstall, so a missing <code>desk/node_modules</code> is not noticed and the build stops with "vite: not found".</td>
 <td>Small fix in <code>NodePackages</code>, or document <code>yarn install</code> in that directory.</td>
+</tr>
+<tr>
+<td><code>pilot drop</code> and a running dev bench</td>
+<td>Dropping a bench left its <code>pilot start</code> wizard server running.</td>
+<td>Stop the bench's dev processes in <code>drop</code>, or refuse while they run.</td>
 </tr>
 </tbody>
 </table></div>
@@ -1348,6 +1362,10 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>Finding (not changed): <code>pilot -b wiztest drop</code> deleted the bench but left its wizard admin server (<code>run_server --wizard</code>, started by <code>pilot start</code>) running; killed by hand.</li>
+<li>Fix: drop <code>tasks</code> from <code>_BENCH_DIRS</code> (init never creates it; the task store owns it). Test: a failed init keeps task records and still removes <code>apps</code>. VM after the fix: queued -&gt; running -&gt; failed -&gt; done (exit 1); the record and output stay; rollback still ran. Bench dropped afterwards.</li>
+<li>Reproduced on the VM with the old code: throwaway bench <code>wiztest</code> (sqlite) with a missing frappe repo URL, <code>WizardSetupTask</code> run by <code>pilot -b wiztest start</code>, stream read with <code>TaskReader</code>: status queued -&gt; running -&gt; STREAM BROKE TaskNotFoundError; tasks dir left with only <code>.store.lock</code>.</li>
+<li>Root cause: <code>BenchInitializer._rollback</code> -&gt; <code>_remove_bench_dirs</code> deleted <code>_BENCH_DIRS</code>, which included <code>tasks</code>. The wizard runs init as <code>WizardSetupTask</code>, so a failed init deleted its own task record and output. <code>TaskReader.stream_output</code> then raised <code>TaskNotFoundError</code>, the SSE stream broke without <code>done</code>, the browser's reconnect got 404 (EventSource CLOSED), and the wizard showed "Lost connection to the setup process" instead of "Setup failed". The failed task also vanished from history, and the task worker crashed recording the failure.</li>
 <li>VM: a forced failing build (512 MB cap, <code>desk/node_modules</code> removed) failed earlier than intended ("vite: not found": Helpdesk installs <code>desk/</code> from a root postinstall, and Pilot skips the install while the root <code>node_modules</code> exists), so it did not exercise the restore. Repo clean after; restored deps with <code>yarn install --frozen-lockfile</code> and prebuilt assets (5 s); bench.toml restored; site 200. Finding: Pilot does not notice a missing nested <code>node_modules</code> that a root postinstall owns.</li>
 <li>D11 lockfile: <code>App.restore_lockfiles_on_failure()</code> wraps the source build in <code>build_assets_for_app</code> (now split into <code>build_app_from_source</code>). On failure it discards lockfile changes (<code>yarn.lock</code>, <code>pnpm-lock.yaml</code>) that were not there before the build, with new <code>GitRepo.discard_changes</code> (checkout tracked, delete untracked). Developer edits made before the build stay. Tests +3 with a real git repo. docs/prebuilt-assets.md updated.</li>
 <li>Restart: <code>_restart_systemd</code> waits 120 s (above systemd's 90 s default stop timeout).</li>
