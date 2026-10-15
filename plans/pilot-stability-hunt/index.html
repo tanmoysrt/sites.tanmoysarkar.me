@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 01:47 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:03 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>19</b><span>fixes, with tests</span></div>
-  <div class="stat"><b>9</b><span>decisions needed</span></div>
-  <div class="stat"><b>43</b><span>log entries</span></div>
+  <div class="stat"><b>18</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>10</b><span>decisions needed</span></div>
+  <div class="stat"><b>53</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -139,16 +139,16 @@ a { color: var(--accent); }
 <td>Domain changes always regenerate nginx; certificates are issued only when an email exists.</td>
 <td><code>pilot/core/site/domains.py</code></td>
 <td>+2</td>
-<td>No</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>F7</td>
 <td>TLS (ask email)</td>
 <td>Adding a domain without an email failed later in a task.</td>
-<td>The API answers 422 <code>needs_email</code> before the domain is attached and accepts <code>email</code>. The Add Domain dialog asks for the email on step 1.</td>
+<td>The domain list says when an email is needed, and the Add Domain dialog asks for it on step 1. The API takes an optional <code>email</code>. Old clients keep working: without an email the domain is served over HTTP.</td>
 <td><code>admin/backend/api/v1/sites/domains.py</code>, <code>AddDomainDialog.vue</code></td>
 <td>+2</td>
-<td>Pending</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>F8</td>
@@ -174,8 +174,8 @@ a { color: var(--accent); }
 <td>A removed domain stayed in the certificate, so its renewal later failed for every domain of the site.</td>
 <td>Reissue unless the certificate names exactly the site's domains.</td>
 <td><code>pilot/managers/letsencrypt.py</code></td>
-<td>+3</td>
-<td>No</td>
+<td>+4</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>F11</td>
@@ -190,18 +190,18 @@ a { color: var(--accent); }
 <td>F12</td>
 <td>Database tuning</td>
 <td>MariaDB kept its old memory settings after a VM resize.</td>
-<td>The host monitor re-sizes MariaDB live when the unit's MemoryMax no longer matches the host's memory. A saved buffer pool too large for the new host is dropped.</td>
+<td>The host monitor re-sizes MariaDB live when the unit's MemoryMax no longer matches the host's memory. The unit is written last, so a failed attempt is retried. A saved buffer pool too large for the new host is dropped.</td>
 <td><code>pilot/managers/database/mariadb.py</code>, <code>pilot/core/server/monitoring.py</code></td>
-<td>+5</td>
+<td>+6</td>
 <td>Yes: 4 to 8 to 2 to 4 GB</td>
 </tr>
 <tr>
 <td>F13</td>
 <td>Updates (#596)</td>
 <td>A killed backup, migrate or update task left the operation in its phase forever, with no retry or revert.</td>
-<td>A failure/cancel callback moves the operation to "Needs attention" with a clear diagnosis.</td>
+<td>A failure/cancel callback moves the operation to "Needs attention" with a clear diagnosis. It keeps the touched tables for a revert and does nothing when the step already finished.</td>
 <td><code>pilot/core/bench/migration/operation.py</code>, <code>pilot/tasks/*.py</code></td>
-<td>+3</td>
+<td>+5</td>
 <td>No</td>
 </tr>
 <tr>
@@ -232,19 +232,10 @@ a { color: var(--accent); }
 <td>n/a</td>
 </tr>
 <tr>
-<td>F17</td>
-<td>CLI</td>
-<td><code>pilot restart</code> exited 0 when it restarted nothing.</td>
-<td>It fails with the same guidance.</td>
-<td><code>pilot/core/bench/runtime.py</code></td>
-<td>updated</td>
-<td>n/a</td>
-</tr>
-<tr>
 <td>F18</td>
 <td>Apps (#639)</td>
 <td>Apps a site lists but the bench lacks (after a restore) showed as blank rows, could not be uninstalled, and broke the site asset build.</td>
-<td>Marked "Not on bench"; uninstall removes only the listing; builds skip them.</td>
+<td>Marked "Not on bench" (CLI: a warning on stderr); uninstall removes only the listing; builds skip them.</td>
 <td><code>pilot/core/site/apps.py</code>, <code>Apps.vue</code>, <code>UninstallAppDialog.vue</code></td>
 <td>+3</td>
 <td>Yes: site 500 fixed from the UI</td>
@@ -337,6 +328,13 @@ a { color: var(--accent); }
 <td>Accept, or restart MariaDB once at boot when the host grew (issue #528 asks for no automatic restart).</td>
 <td>Small</td>
 </tr>
+<tr>
+<td>D10</td>
+<td><code>pilot restart</code> exit code</td>
+<td><code>pilot restart</code> on a development bench or an incomplete production deployment prints guidance and exits 0, so a script cannot tell that nothing restarted. A fix was built and then reverted after review, because scripts may rely on exit 0.</td>
+<td>Exit 1 in a later release with a release note, or add an optional <code>--strict</code> flag.</td>
+<td>Small</td>
+</tr>
 </tbody>
 </table></div>
 <h3>D1 mockup: memory split</h3>
@@ -402,6 +400,22 @@ a { color: var(--accent); }
 <td>Resize 2 GB to 4 GB</td>
 <td>Re-sized to MemoryMax 1092M. Site 200.</td>
 </tr>
+<tr>
+<td>Add a domain without an email (UI)</td>
+<td>The dialog asked for the email; it was saved and the certificate covered both names.</td>
+</tr>
+<tr>
+<td>Remove that domain</td>
+<td>The certificate was reissued without it.</td>
+</tr>
+<tr>
+<td>Rename site1 to erp (keep old name)</td>
+<td>The new name is primary; both names serve the site; the certificate covers both.</td>
+</tr>
+<tr>
+<td>ERPNext <code>get-app</code> and install (UI)</td>
+<td>Pass: 4 min 42 s and 75 s on 1 vCPU.</td>
+</tr>
 </tbody>
 </table>
 <h3>Memory use</h3>
@@ -428,6 +442,24 @@ a { color: var(--accent); }
 <td>from the dashboard graph</td>
 </tr>
 <tr>
+<td>ERPNext get-app (peak)</td>
+<td>1 vCPU, 4 GB</td>
+<td>1.65 GB</td>
+<td>2.26 GB still available, no OOM</td>
+</tr>
+<tr>
+<td>ERPNext install on a site (peak)</td>
+<td>1 vCPU, 4 GB</td>
+<td>1.8 GB</td>
+<td></td>
+</tr>
+<tr>
+<td>Idle with ERPNext</td>
+<td>1 vCPU, 4 GB</td>
+<td>1.05 GB</td>
+<td>mariadbd 237 MB</td>
+</tr>
+<tr>
 <td>Idle after boot</td>
 <td>0.5 vCPU, 2 GB</td>
 <td>0.73 GB</td>
@@ -436,7 +468,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Unit tests</h3>
-<p>Full unit suite (<code>tests</code> without e2e and integration): 3278 passed, 1 skipped, before the latest app fixes. Ruff clean. vue-tsc clean.</p></div>
+<p>Full unit suite (<code>tests</code> without e2e and integration): 3296 passed, 1 skipped. Ruff clean. vue-tsc clean. A second-opinion review (Codex, read-only) found 7 issues in the diff; all are fixed or reverted (see the log).</p></div>
 
 <h2 id="parity">bench parity</h2>
 <div class="table-wrap"><p>Every Frappe site command works through Pilot: <code>pilot --site S &lt;command&gt;</code> or <code>pilot frappe --site S &lt;command&gt;</code>. The table lists the <code>bench</code> commands that are bench-level. "By design" means Pilot does the job another way; it is our reading of the architecture, because no Pilot document lists bench commands as out of scope.</p>
@@ -726,6 +758,16 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 REVIEW (Codex gpt-6.1-sol, medium, read-only) over the whole diff. 7 findings, all valid; all handled:</li>
+<li>2026-10-15 CHECKED (wildcard / proxied domains) Central hostname aliases (<code>admin-*</code>, <code>site-*</code> patterns) are rendered HTTP-only and never enter a certificate; provider routes with <code>origin_scheme=http</code> are excluded from <code>certificate_domains</code>. The known issue is already handled in code; no change.</li>
+<li>2026-10-15 MEMORY (ERPNext, 1 vCPU/4 GB) <code>get-app erpnext --branch version-16</code>: 4 min 42 s, peak used 1.65 GB (2.26 GB available), no OOM. Install on site1 from the UI: 75 s, peak 1.8 GB. Idle afterwards 1.05 GB used (mariadbd 237 MB). Local ping 5 ms.</li>
+<li>2026-10-15 FINDING (wizard) "Lost connection to the setup process" appears when the event stream ends without a <code>done</code> event and the reconnect fails (<code>useTaskStream</code> onerror, readyState CLOSED). The backend sends <code>done</code> when a task ends, so the likely path is the stream stopping early (<code>should_stop=is_draining</code>) and the reconnect getting a non-200. Not reproduced yet.</li>
+<li>2026-10-15 UI Marketplace shows the same download icon for an app already on the bench (ERPNext after get-app) as for one that needs a download.</li>
+<li>2026-10-15 UI After a domain is added, the row keeps the open lock until the page reloads, although the certificate task finishes a minute later; there is no "certificate pending" hint. Small UX gap, not fixed.</li>
+<li>2026-10-15 VERIFIED (F10) Removing <code>shop.</code> reissued the certificate with only <code>site1.</code> (before the fix the subset check kept the old certificate with the removed name).</li>
+<li>2026-10-15 VERIFIED (ask email, F6/F7) With <code>letsencrypt.email</code> cleared, the Add Domain dialog showed the "Let's Encrypt email" field on step 1; after Verify DNS the email was saved to common_config.toml and the certificate was reissued for <code>shop.</code> + <code>site1.</code> (staging CA).</li>
+<li>2026-10-15 VERIFIED #639 on the VM: added <code>commera</code> to site1's installed apps with <code>frappe.installer.add_to_installed_apps</code>; the site returned 500 (Frappe imports it), <code>list-site-apps</code> printed <code>commera (not on bench)</code>, the UI card read "Not on bench"; Uninstall from the UI removed only the listing; site 200 again, bench unchanged. The uninstall dialog warned "Every doctype Commera owns is dropped", which is wrong for this case -&gt; FIX: the dialog shows "Only the listing is removed." for a missing app (UninstallAppDialog.vue, Apps.vue passes <code>missing</code>).</li>
+<li>2026-10-15 VERIFIED (resize down/up) 8 GB -&gt; 0.5 vCPU/2 GB: monitor logged "Sized MariaDB for 1963 MiB", unit MemoryMax 3048M -&gt; 512M, pool 128M, no OOM, site 200. 2 GB -&gt; 1 vCPU/4 GB: MemoryMax 1092M again. MariaDB started at boot with the old (larger) my.cnf for about a minute before the monitor shrank it; no memory pressure seen.</li>
 <li>2026-10-15 TESTS ruff check clean; ruff format applied only to touched files that were formatted at base (the repo has 131 unformatted files at base); vue-tsc clean.</li>
 <li>2026-10-15 FIX #640 The site app list used registry title, description, logo, website and docs by app name only, so a fork or private copy showed the upstream links. The API returns <code>is_marketplace</code> per app (the backend already compares the repository URL with <code>same_repository</code>), and the UI uses registry metadata only when it is true. <code>SiteApps.disable_app</code> and the UI <code>canDisable</code> also used a name match; both use <code>is_marketplace</code> now. Changed: same files as #639.</li>
 <li>2026-10-15 FIX #639 A site that lists an app the bench lacks (restore from another bench): <code>GET /sites/&lt;name&gt;/apps</code> marks it <code>missing: true</code> (optional field) and the UI card says "Not on bench" with a one-line explanation instead of a blank row; <code>pilot list-site-apps</code> prints <code>&lt;app&gt; (not on bench)</code>; uninstalling it runs Frappe's <code>remove-from-installed-apps</code> (never imports the app) instead of failing "App X not found in bench", and never touches the bench; <code>Site.build_assets</code> builds only apps the bench has (it raised "App(s) not found in bench"). Changed: pilot/core/site/apps.py (<code>forget_missing_app</code>), pilot/core/site/<strong>init</strong>.py, pilot/commands/sites/list_apps.py, admin/backend/api/v1/sites/apps.py, types/site_apps.py, dashboard components/sites/Apps.vue. Tests: test_site_apps.py (+1), test_site_apps_view.py (+1, +1 assert), test_commands.py (+1).</li>
