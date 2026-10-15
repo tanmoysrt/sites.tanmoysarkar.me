@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:07 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:10 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>25</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>26</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>119</b><span>log entries</span></div>
+  <div class="stat"><b>121</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -311,6 +311,15 @@ a { color: var(--accent); }
 <td><code>pilot/core/bench/settings.py</code></td>
 <td>+2</td>
 <td>Yes: 8000 to 8020 and back</td>
+</tr>
+<tr>
+<td>F27</td>
+<td>Uptime</td>
+<td>A failed ping without an HTTP answer (TLS, DNS, timeout) was logged as <code>up: false</code> with no reason.</td>
+<td>The log entry and the site-down alert carry an optional <code>error</code> with the reason.</td>
+<td><code>pilot/core/site/uptime_monitoring.py</code></td>
+<td>+2</td>
+<td>Yes: staging-certificate sites log the TLS error</td>
 </tr>
 </tbody>
 </table></div>
@@ -612,6 +621,16 @@ a { color: var(--accent); }
 <td>F26</td>
 </tr>
 <tr>
+<td>15a</td>
+<td><code>fix(uptime): Record why a ping failed</code></td>
+<td>F27</td>
+</tr>
+<tr>
+<td>15b</td>
+<td><code>test(nginx): Let root-run nginx workers read the test directory</code></td>
+<td>integration test</td>
+</tr>
+<tr>
 <td>16</td>
 <td><code>fix(cli): Exit 1 when pilot restart restarts nothing</code></td>
 <td>D10</td>
@@ -683,7 +702,7 @@ a { color: var(--accent); }
 <tbody>
 <tr>
 <td>Commits and pull requests</td>
-<td>All Pilot changes are uncommitted on <code>fix/bughunt</code>.</td>
+<td>All Pilot changes are uncommitted on <code>fix/bughunt</code>. The repository rules say to commit only when the owner asks.</td>
 <td>The owner says go; then commit in the order of the proposed commit list.</td>
 </tr>
 <tr>
@@ -717,9 +736,9 @@ a { color: var(--accent); }
 <td>Reproduce with a failing init; check <code>is_draining</code> and the reconnect status.</td>
 </tr>
 <tr>
-<td>Uptime log</td>
-<td>The uptime log records <code>up: false</code> with no reason (seen with the staging certificate). The Enable SSL task page shows "Server" as its target although the task has a site.</td>
-<td>Add an <code>error</code> field to the uptime entry; show the site on the task page.</td>
+<td>Task page target</td>
+<td>The Enable SSL task page shows "Server" as its target although the task has a site. (The uptime reason is fixed: F27.)</td>
+<td>Show the site on the task page.</td>
 </tr>
 <tr>
 <td>Narrow concurrency windows</td>
@@ -728,8 +747,8 @@ a { color: var(--accent); }
 </tr>
 <tr>
 <td>Integration tests</td>
-<td><code>test_trusted_proxy_nginx</code> and <code>test_proxy_firewall_e2e</code> need a root nginx. On the VM as root: 3 pass. 1 fails also on clean <code>origin/develop</code>, because nginx's <code>nobody</code> worker cannot read pytest's private temp directory. The same path on the real bench returns the expected 404.</td>
-<td>Run the tests in CI's container, or give the test a readable temp directory.</td>
+<td>Fixed in the test: run as root, the throwaway nginx now uses <code>user root;</code>, because its <code>nobody</code> worker could not read pytest's private temp directory (that failure was also on clean <code>origin/develop</code>). On the VM as root: 4 of 4 pass. On a laptop without root, nginx cannot start.</td>
+<td>Run them in CI or on a test VM as root.</td>
 </tr>
 </tbody>
 </table></div>
@@ -1220,6 +1239,8 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>Integration test env: <code>test_proxy_firewall_e2e</code> adds <code>user root;</code> to its throwaway nginx.conf when run as root, so workers can read pytest's 0700 temp dir. On the VM as root: 4/4 pass (was 3/4, also on clean develop).</li>
+<li>F27 uptime reason: <code>UptimeMonitor.ping_site</code> now records <code>error</code> (the URLError reason) when a ping fails without an HTTP status; the site-down alert context carries <code>error</code> (null for HTTP failures). Additive field. Tests +2 (and the payload test updated). VM: one pass logged <code>"error": "[SSL: CERTIFICATE_VERIFY_FAILED] ..."</code> for the staging-certificate sites.</li>
 <li>Status page: the IP redaction hid every IPv4 (127.0.0.1 showed as <code>&lt;vm-ip&gt;</code>); now it hides only public addresses (keeps loopback, private, documentation, Cloudflare). Added an Open items section (uncommitted work, Central branch, D8, D4 UI, yarn.lock drift, restart timeout, wizard message, uptime log, integration tests).</li>
 <li>Integration tests on the VM as root (copy of the branch): <code>test_trusted_proxy_nginx</code> + <code>test_proxy_firewall_e2e</code>: 3 pass, <code>test_direct_connection_is_blocked_only_proxy_gets_through</code> fails, and it fails the same way on clean <code>origin/develop</code>. Cause: run as root, nginx's worker is <code>nobody</code> and cannot open pytest's 0700 temp dir, so the 404 error page itself becomes 403 (bench error log: <code>open() .../error_pages/404.html failed (13: Permission denied)</code>). Real bench: <code>/.well-known/acme-challenge/probe</code> -&gt; 404. Test environment issue, not a product bug.</li>
 <li>Signed in to the Admin UI through a one-time <code>?sid=</code> link minted on the VM (no password typed in the browser).</li>
