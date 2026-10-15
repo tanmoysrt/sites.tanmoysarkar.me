@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 05:45 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 05:54 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>25</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>113</b><span>log entries</span></div>
+  <div class="stat"><b>117</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -754,6 +754,30 @@ a { color: var(--accent); }
 <td>Four VM resizes (reboots)</td>
 <td>Both benches came back without help each time; MariaDB re-sized every time.</td>
 </tr>
+<tr>
+<td>D2 realtime (patch on a running bench)</td>
+<td>Port 9000 closed from the internet; socket.io polling and WebSocket (101) work through nginx; Node restarts after <code>kill -9</code>; survives a reboot.</td>
+</tr>
+<tr>
+<td>D4 Cloudflare</td>
+<td>Cloudflare-proxied hosts pass the DNS check with a warning; with <code>cloudflare = true</code> nginx -t passes and a spoofed <code>CF-Connecting-IP</code> from a non-Cloudflare client is ignored.</td>
+</tr>
+<tr>
+<td>D3 alias (Pilot side)</td>
+<td>The alias redirects 301 to <code>https://&lt;primary&gt;</code>; <code>/api/method/ping</code> on the alias answers pong.</td>
+</tr>
+<tr>
+<td>D1 memory split (UI)</td>
+<td>65% to 50% from the dialog: MemoryMax 1092M and pool 312 MB, as previewed.</td>
+</tr>
+<tr>
+<td>D9 resize 2 GB to 4 GB</td>
+<td>Sized before MariaDB started; boot in 13 s.</td>
+</tr>
+<tr>
+<td>F26 port change in Settings</td>
+<td>Before: 502. After: nginx follows the new port, also when the restart call times out.</td>
+</tr>
 </tbody>
 </table>
 <h3>Memory use</h3>
@@ -827,10 +851,16 @@ a { color: var(--accent); }
 <td>stopped at the cap</td>
 <td>The kernel killed only the build cgroup; MariaDB and sites kept running; clear message to add swap</td>
 </tr>
+<tr>
+<td>Helpdesk forced source build with build swap (D11)</td>
+<td>0.5 vCPU, 2 GB</td>
+<td>1.76 GB + 1.5 GB swap</td>
+<td>Pass in 40 min (CPU-bound at 0.5 vCPU); swap removed after; no OOM</td>
+</tr>
 </tbody>
 </table>
 <h3>Unit tests</h3>
-<p>Full unit suite (<code>tests</code> without e2e and integration): 3305 passed, 1 skipped. Ruff clean. vue-tsc clean. Three second-opinion passes (Codex, read-only): 7 issues in the first diff, all fixed or reverted; 6 issues in untested areas, 5 fixed and 1 logged (D12); 4 issues in the later fixes, 2 fixed and 2 logged (D13 and a narrow backup window).</p></div>
+<p>Full unit suite (<code>tests/pilot</code> and <code>tests/admin</code>): 3345 passed, 1 skipped. Ruff clean. vue-tsc clean. Three second-opinion passes (Codex, read-only): 7 issues in the first diff, all fixed or reverted; 6 issues in untested areas, 5 fixed and 1 logged (D12); 4 issues in the later fixes, 2 fixed and 2 logged (D13 and a narrow backup window).</p></div>
 
 <h2 id="parity">bench parity</h2>
 <div class="table-wrap"><p>Every Frappe site command works through Pilot: <code>pilot --site S &lt;command&gt;</code> or <code>pilot frappe --site S &lt;command&gt;</code>. The table lists the <code>bench</code> commands that are bench-level. "By design" means Pilot does the job another way; it is our reading of the architecture, because no Pilot document lists bench commands as out of scope.</p>
@@ -1126,6 +1156,10 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>Signed in to the Admin UI through a one-time <code>?sid=</code> link minted on the VM (no password typed in the browser).</li>
+<li>D1 UI verified after rebuilding the dashboard on the VM (13 s): Settings, Database shows "Memory split: Apps 35% · Database 65% of 3.8 GB"; the dialog shows the final note text; slider to 50% previews 1.9/1.9 GB, pool 312 MB, MemoryMax 1092 MB; Apply runs <code>set-mariadb-memory-share</code> ("Giving MariaDB 50% of host memory", success). Result: memory_share 0.5, unit MemoryMax 1092M, live pool 312 MB. VM back at the default split.</li>
+<li>D3 Pilot verified: with a site hostname alias (<code>vmsite-*</code> -&gt; erp, redirect) rendered in memory (Central not enabled on this VM), <code>http://vmsite-abc123.../app/home</code> -&gt; 301 <code>https://erp.../app/home</code>, and <code>/api/method/ping</code> on the alias -&gt; 200 pong. Config restored.</li>
+<li>Resized the VM 0.5 vCPU / 2 GB -&gt; 1 vCPU / 4 GB from the dashboard (disk unchanged). Boot 13 s. <code>pilot-mariadb-sizing</code> logged "Sized MariaDB for 3912 MiB"; with the 65% split left from the D1 test the boot pool was 849 MB (the larger pool applied at start, as designed). Realtime came back on the Unix socket; port 9000 stays closed; erp and dev1 200.</li>
 <li>Finding (not changed): <code>_restart_systemd</code> waits 60 s, systemd's default stop timeout is 90 s. A worker pool that drains a job sometimes takes the full 90 s (seen twice right after the build, not reproducible when idle: 2 s), so Settings reports "could not be restarted" while systemd completes the restart.</li>
 <li>F26 (new): Settings <code>http_port</code> change on a production bench restarted gunicorn on the new port while nginx kept the old upstream -&gt; 502 (reproduced on the VM). Fix: regenerate nginx after restart-triggering changes, in <code>finally</code>, because a timed-out restart still finishes in systemd. Verified: 8000 -&gt; 8020 (restart call timed out, nginx followed, site came back), 8020 -&gt; 8000 (site 200).</li>
 <li>D4 verified: real DNS -&gt; Cloudflare-proxied hosts accepted with the warning, direct host accepted. With <code>cloudflare = true</code>: nginx -t OK, <code>CF-Connecting-IP</code> in 4 server blocks, site 200, and a spoofed <code>CF-Connecting-IP: &amp;lt;vm-ip&amp;gt;</code> from a non-Cloudflare client is not trusted (access log shows the real IP). Reverted to the original common_config.</li>
