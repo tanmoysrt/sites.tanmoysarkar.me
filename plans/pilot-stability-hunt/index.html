@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 10:30 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 10:42 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>37</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>139</b><span>log entries</span></div>
+  <div class="stat"><b>140</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -405,10 +405,10 @@ a { color: var(--accent); }
 <tr>
 <td>F37</td>
 <td>Build (review)</td>
-<td>The lockfile restore after a failed build could discard an edit that a person made during the build.</td>
-<td>Pilot copies each restored file to <code>.git/pilot-discarded/</code> in the app and prints the path.</td>
-<td><code>pilot/internal/git.py</code>, <code>pilot/core/app/__init__.py</code></td>
-<td>+1</td>
+<td>The lockfile restore after a failed build could overwrite an edit that a person made during the build.</td>
+<td>Pilot no longer restores lockfiles. It records the content hash of each lockfile a failed build changed, in <code>.git/pilot-failed-build-lockfiles.json</code>; a recorded lockfile does not count as a local change until its content changes.</td>
+<td><code>pilot/core/app/__init__.py</code>, <code>pilot/internal/git.py</code></td>
+<td>+2</td>
 <td>Unit tests</td>
 </tr>
 <tr>
@@ -634,7 +634,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Greptile review of #643</h3>
-<p>Greptile reviewed the PR twice. Each finding was checked against the code and got the smallest code fix. On the owner's request, the three findings first left as by design were fixed too.</p>
+<p>Greptile reviewed the PR four times; review 4 scored it 4/5 with one open finding, fixed in <code>60661460</code>. Each finding was checked against the code and got the smallest code fix. On the owner's request, the three findings first left as by design were fixed too.</p>
 <table>
 <thead>
 <tr>
@@ -682,12 +682,12 @@ a { color: var(--accent); }
 <tr>
 <td>A failed build can discard a person's lockfile edit</td>
 <td>P1</td>
-<td>Fixed: F37 (<code>0ca68073</code>). Pilot copies each file to <code>.git/pilot-discarded/</code> in the app before it restores it.</td>
+<td>Fixed: F37 (<code>60661460</code>). Pilot records the hashes of the build's lockfiles and does not change the files. A first fix that kept a copy (<code>0ca68073</code>) did not satisfy the review.</td>
 </tr>
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 47 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 47 came after the PR opened: the memory split task name, the bench user's shell, and the fixes for the Greptile review. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 48 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 48 came after the PR opened: the memory split task name, the bench user's shell, and the fixes for the Greptile review. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -932,6 +932,11 @@ a { color: var(--accent); }
 <td><code>36117ff6</code></td>
 <td><code>fix(apps): Keep the old uninstall default for the CLI, API and tasks</code></td>
 </tr>
+<tr>
+<td>48</td>
+<td><code>60661460</code></td>
+<td><code>fix(build): Record a failed build's lockfiles instead of restoring them</code></td>
+</tr>
 </tbody>
 </table>
 <p>Central: <code>7b7ede6b fix(sites): show the customer hostname after the rename lands</code> on branch <code>fix/site-primary-url</code>, pushed as https://github.com/frappe/central/pull/491.</p></div>
@@ -1084,6 +1089,10 @@ a { color: var(--accent); }
 <tr>
 <td>Files</td>
 <td>Pilot writes a bench's nginx and ModSecurity config files with mode 0600. nginx reads them as root, so nothing else changes.</td>
+</tr>
+<tr>
+<td>Builds</td>
+<td>After a failed source build, Pilot records the app's changed lockfiles in <code>.git/pilot-failed-build-lockfiles.json</code> and leaves the files as they are.</td>
 </tr>
 <tr>
 <td>Install</td>
@@ -1578,6 +1587,7 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 Greptile review 4 scored 4/5 with one open P1 (lockfile restore overwrites edits; the copy fix 0ca68073 was not enough). Replaced the restore with a hash record of the failed build's lockfiles (60661460), discard_changes removed. Full suite 3363 passed. Pushed.</li>
 <li>2026-10-15 Owner asked to fix all Greptile findings: realtime socket only when Frappe reads FRAPPE_SOCKETIO_UDS (8f464ab9, VM main bench keeps the socket), lockfile restore keeps copies in .git/pilot-discarded (0ca68073), old uninstall default for CLI/API/tasks with dashboard remove_from_bench=false and --keep-on-bench (36117ff6). Full suite 3362 passed, vue-tsc clean. Pushed; PR body updated.</li>
 <li>2026-10-15 Status page: commit table regenerated from git (44 commits), F31 to F35 and the Greptile table added. Per-commit check restarted for commits 25 to 43 (the scratchpad with earlier results was cleared; commits 1 to 24 had passed).</li>
 <li>2026-10-15 Greptile #643 review 2 (score 1/5): split fail_stopped_step for the complexity limit (4e7d6cab); tests for the renewal timer and daily run (ba4e9478). D6 default, v16-only realtime and the lockfile edge case left as by design. Full suite 3358 passed. Pushed.</li>
