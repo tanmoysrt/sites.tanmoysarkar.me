@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 10:42 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 11:02 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>37</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>39</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>140</b><span>log entries</span></div>
+  <div class="stat"><b>142</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -420,6 +420,24 @@ a { color: var(--accent); }
 <td>+3</td>
 <td>Unit tests, vue-tsc</td>
 </tr>
+<tr>
+<td>F39</td>
+<td>Build</td>
+<td>Pilot checked <code>node_modules</code> only in the app root, <code>frontend</code> and <code>roster</code>. Helpdesk builds <code>desk</code>, which its root postinstall installs, so an installed root hid a missing <code>desk/node_modules</code> and the build stopped with "vite: not found".</td>
+<td>Each <code>build_dir</code> in <code>[tool.bench.assets]</code> is checked and installed too.</td>
+<td><code>pilot/managers/python_assets.py</code>, <code>pilot/core/app/prebuilt_assets.py</code></td>
+<td>+1</td>
+<td>Yes: with <code>desk/node_modules</code> removed, the Helpdesk build installs it and completes</td>
+</tr>
+<tr>
+<td>F40</td>
+<td>CLI</td>
+<td><code>pilot --site SITE drop-site</code> passed through to Frappe and left the site in nginx, its domains and the backup schedule. Pilot had no CLI command for a site drop.</td>
+<td>New <code>pilot drop-site SITE [--no-backup]</code> runs Pilot's drop. Frappe's <code>drop-site</code> through Pilot is refused with a pointer to it.</td>
+<td><code>pilot/commands/sites/drop.py</code>, <code>pilot/commands/runtime/frappe.py</code></td>
+<td>+5</td>
+<td>Yes: create then drop leaves no site folder, nginx block or cron entry; the pass-through exits 1</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -634,7 +652,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Greptile review of #643</h3>
-<p>Greptile reviewed the PR four times; review 4 scored it 4/5 with one open finding, fixed in <code>60661460</code>. Each finding was checked against the code and got the smallest code fix. On the owner's request, the three findings first left as by design were fixed too.</p>
+<p>Greptile reviewed the PR five times. Review 5 scored it 5/5 (safe to merge) with one P2, fixed in <code>f8fa096f</code>. Each finding was checked against the code and got the smallest code fix. On the owner's request, the three findings first left as by design were fixed too.</p>
 <table>
 <thead>
 <tr>
@@ -687,7 +705,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 48 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 48 came after the PR opened: the memory split task name, the bench user's shell, and the fixes for the Greptile review. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 52 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 52 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, and the pre-release fixes F39 and F40. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -937,6 +955,26 @@ a { color: var(--accent); }
 <td><code>60661460</code></td>
 <td><code>fix(build): Record a failed build's lockfiles instead of restoring them</code></td>
 </tr>
+<tr>
+<td>49</td>
+<td><code>94359997</code></td>
+<td><code>fix(api): Type the site app list entries for mypy</code></td>
+</tr>
+<tr>
+<td>50</td>
+<td><code>f8fa096f</code></td>
+<td><code>perf(build): Hash a changed file only when its lockfile hash is recorded</code></td>
+</tr>
+<tr>
+<td>51</td>
+<td><code>18d58bdd</code></td>
+<td><code>fix(build): Install JS dependencies in each declared build dir</code></td>
+</tr>
+<tr>
+<td>52</td>
+<td><code>7d0a1038</code></td>
+<td><code>fix(cli): Add pilot drop-site and refuse Frappe's drop-site</code></td>
+</tr>
 </tbody>
 </table>
 <p>Central: <code>7b7ede6b fix(sites): show the customer hostname after the rename lands</code> on branch <code>fix/site-primary-url</code>, pushed as https://github.com/frappe/central/pull/491.</p></div>
@@ -976,11 +1014,6 @@ a { color: var(--accent); }
 <td>Integration tests</td>
 <td>Fixed in the test: run as root, the throwaway nginx now uses <code>user root;</code>, because its <code>nobody</code> worker could not read pytest's private temp directory (that failure was also on clean <code>origin/develop</code>). On the VM as root: 4 of 4 pass. On a laptop without root, nginx cannot start.</td>
 <td>Run them in CI or on a test VM as root.</td>
-</tr>
-<tr>
-<td>Nested <code>node_modules</code></td>
-<td>Pilot reinstalls JS dependencies only when an app's root <code>node_modules</code> is missing. An app such as Helpdesk installs <code>desk/</code> from a root postinstall, so a missing <code>desk/node_modules</code> is not noticed and the build stops with "vite: not found".</td>
-<td>Small fix in <code>NodePackages</code>, or document <code>yarn install</code> in that directory.</td>
 </tr>
 <tr>
 <td>Greptile</td>
@@ -1053,7 +1086,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Changes for scripts and clients</h3>
-<p>All changes are additive, except one behavior change that the owner approved (D10).</p>
+<p>All changes are additive, except two behavior changes: <code>pilot restart</code> exits 1 when nothing restarted (D10, owner approved), and Frappe's <code>drop-site</code> through Pilot is refused (F40).</p>
 <table>
 <thead>
 <tr>
@@ -1064,7 +1097,7 @@ a { color: var(--accent); }
 <tbody>
 <tr>
 <td>CLI</td>
-<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --keep-on-bench</code>. Behavior: <code>pilot restart</code> exits 1 when nothing restarted (D10); <code>pilot drop</code> refuses a running development bench (F30).</td>
+<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --keep-on-bench</code>; <code>pilot drop-site</code>. Behavior: <code>pilot --site S drop-site</code> and <code>pilot frappe drop-site</code> are refused (use <code>pilot drop-site</code>); <code>pilot restart</code> exits 1 when nothing restarted (D10); <code>pilot drop</code> refuses a running development bench (F30).</td>
 </tr>
 <tr>
 <td>Admin API</td>
@@ -1370,9 +1403,9 @@ a { color: var(--accent); }
 <td>Gap</td>
 </tr>
 <tr>
-<td><code>drop-site</code> (Pilot-aware)</td>
-<td>passes through to Frappe, so <code>bench.toml</code> and nginx can drift</td>
-<td>Gap</td>
+<td><code>drop-site</code></td>
+<td><code>pilot drop-site SITE</code> (Frappe's <code>drop-site</code> through Pilot is refused)</td>
+<td>OK</td>
 </tr>
 <tr>
 <td><code>renew-lets-encrypt</code></td>
@@ -1587,6 +1620,8 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 Pre-release fixes on owner request: F39 declared build dirs get JS deps (18d58bdd; VM: Helpdesk build with desk/node_modules removed installs it and completes), F40 pilot drop-site + refuse Frappe drop-site passthrough (7d0a1038; VM: create+drop leaves no site/nginx/cron, passthrough exit 1). Full suite 3369 passed, pinned ruff and mypy clean. Pushed; PR body updated.</li>
+<li>2026-10-15 Greptile review 5: 5/5, one P2 (hash only recorded lockfiles) fixed f8fa096f. mypy CI failure (dict entry types in site apps list, from a07245b8) fixed 94359997.</li>
 <li>2026-10-15 Greptile review 4 scored 4/5 with one open P1 (lockfile restore overwrites edits; the copy fix 0ca68073 was not enough). Replaced the restore with a hash record of the failed build's lockfiles (60661460), discard_changes removed. Full suite 3363 passed. Pushed.</li>
 <li>2026-10-15 Owner asked to fix all Greptile findings: realtime socket only when Frappe reads FRAPPE_SOCKETIO_UDS (8f464ab9, VM main bench keeps the socket), lockfile restore keeps copies in .git/pilot-discarded (0ca68073), old uninstall default for CLI/API/tasks with dashboard remove_from_bench=false and --keep-on-bench (36117ff6). Full suite 3362 passed, vue-tsc clean. Pushed; PR body updated.</li>
 <li>2026-10-15 Status page: commit table regenerated from git (44 commits), F31 to F35 and the Greptile table added. Per-commit check restarted for commits 25 to 43 (the scratchpad with earlier results was cleared; commits 1 to 24 had passed).</li>
