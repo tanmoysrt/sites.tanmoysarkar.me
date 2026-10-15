@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:03 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 02:20 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>18</b><span>fixes, with tests</span></div>
   <div class="stat"><b>10</b><span>decisions needed</span></div>
-  <div class="stat"><b>53</b><span>log entries</span></div>
+  <div class="stat"><b>62</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -103,7 +103,7 @@ a { color: var(--accent); }
 <td>The restore keeps every protected key of the target (<code>PROTECTED_CONFIG_KEYS</code> is the one list).</td>
 <td><code>pilot/core/site/restore.py</code></td>
 <td>updated</td>
-<td>No</td>
+<td>Yes: UI restore from another site</td>
 </tr>
 <tr>
 <td>F3</td>
@@ -130,7 +130,7 @@ a { color: var(--accent); }
 <td>No email or a certbot error leaves the site on HTTP with a message.</td>
 <td><code>pilot/core/site/provisioning.py</code></td>
 <td>+2</td>
-<td>No</td>
+<td>Yes: a real Let's Encrypt error kept the site</td>
 </tr>
 <tr>
 <td>F6</td>
@@ -157,7 +157,7 @@ a { color: var(--accent); }
 <td>The task fails when no certificate covers the site, so its TLS flag goes back and the action can be retried.</td>
 <td><code>pilot/tasks/setup_letsencrypt.py</code></td>
 <td>+1</td>
-<td>No</td>
+<td>Yes: retry from the UI</td>
 </tr>
 <tr>
 <td>F9</td>
@@ -416,6 +416,18 @@ a { color: var(--accent); }
 <td>ERPNext <code>get-app</code> and install (UI)</td>
 <td>Pass: 4 min 42 s and 75 s on 1 vCPU.</td>
 </tr>
+<tr>
+<td>Second bench on Frappe <code>develop</code></td>
+<td>Init 2 min 41 s, production 12 s, lite mode (one process), site with TLS in 38 s.</td>
+</tr>
+<tr>
+<td>New site while Let's Encrypt is busy</td>
+<td>The site stayed on HTTP; Enable SSL later issued the certificate.</td>
+</tr>
+<tr>
+<td>Restore another site's backup with its config</td>
+<td>The target kept its own domains and certificate settings.</td>
+</tr>
 </tbody>
 </table>
 <h3>Memory use</h3>
@@ -464,6 +476,12 @@ a { color: var(--accent); }
 <td>0.5 vCPU, 2 GB</td>
 <td>0.73 GB</td>
 <td>MariaDB at 128M pool</td>
+</tr>
+<tr>
+<td>Two benches (version-16 classic + develop lite)</td>
+<td>1 vCPU, 4 GB</td>
+<td>1.26 GB</td>
+<td>the lite bench adds one 123 MB process</td>
 </tr>
 </tbody>
 </table>
@@ -674,7 +692,7 @@ a { color: var(--accent); }
 <td>11</td>
 <td>Parity</td>
 <td>Compare every <code>frappe/bench</code> command with Pilot. List what is missing and not left out by design.</td>
-<td>table done; CLI bugs fixed (F14 to F17); gaps in D8</td>
+<td>table done; CLI bugs fixed (F14 to F16), restart exit code in D10; gaps in D8</td>
 </tr>
 <tr>
 <td>12</td>
@@ -758,6 +776,15 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 UI FIX Analytics shows "of 1 vCPUs"; now "1 vCPU" for one CPU (pages/Analytics.vue).</li>
+<li>2026-10-15 UI The Enable SSL task page shows "Server" as its target although the task has a <code>site</code>. The uptime log records <code>up: false</code> with no reason when a probe fails (here: staging certificate verification); an <code>error</code> field would make it diagnosable.</li>
+<li>2026-10-15 UI Clicks on the first button after a programmatic scroll often did nothing in the Site settings page (Enable SSL, Restore); a second click worked. Possibly a test-harness effect (hover/scroll), not confirmed as a product bug.</li>
+<li>2026-10-15 VERIFIED (F2) Backup of erp from the UI, then UI restore "Other site: erp" with Database + Public + Private + Site config into site2: site2 kept its own <code>domains</code> (none), no <code>cert_name</code>, <code>ssl</code> true; <code>installed_apps</code> from the restored database; site 200. Before F2 site2 would have taken erp's <code>site1.</code> domain and certificate pin.</li>
+<li>2026-10-15 VERIFIED (F8 + F10) "Enable SSL" on site2 from the UI issued the certificate (HTTPS 200). The same run logged "Certificate for erp... matches its domains and is not near expiry. Skipping." which confirms the corrected SAN parse (before it, every run reissued).</li>
+<li>2026-10-15 VERIFIED (F5 in the wild) <code>pilot new-site site2...</code> hit a Let's Encrypt staging "Service busy; retry later" (rateLimited). Before F5 this failed the task and the cleanup callback dropped the site; now the site stayed on HTTP (200) with the message "Enable SSL from its settings once its DNS points to this server".</li>
+<li>2026-10-15 NOTE (gunicorn 26) The admin venv runs gunicorn 26.2, which opens a control socket at a fixed <code>$XDG_RUNTIME_DIR/gunicorn.ctl</code>. Every bench's admin on a host shares that path; the last one to start owns it and a stopping one can unlink it. Pilot does not use the control socket, so there is no impact today. Option: set a per-bench path or disable it in admin-gunicorn.conf.py.</li>
+<li>2026-10-15 VERIFIED (develop) Second bench <code>devb</code> on frappe <code>develop</code>: <code>pilot -b devb init</code> 2 min 41 s (full clones: Pilot is a dev install, <code>depth_flags</code> empty by design); <code>setup production --admin-domain admin2.&lt;vm&gt; --tls</code> 12 s; lite mode on (one <code>frappe.runner</code> 123 MB instead of gunicorn + workers); new site in 38 s with prebuilt frappe assets; HTTPS 200. Two benches side by side, both admins 200. Host total 1.26 GB used.</li>
+<li>2026-10-15 VERIFIED (rename) UI rename site1 -&gt; erp with "keep old name": new name is primary (no <code>host_name</code> override), old name kept as a plain domain and served, certificate reissued for both, ping 200 on both names. Tasks list keeps old rows under the old site name (history).</li>
 <li>2026-10-15 REVIEW (Codex gpt-6.1-sol, medium, read-only) over the whole diff. 7 findings, all valid; all handled:</li>
 <li>2026-10-15 CHECKED (wildcard / proxied domains) Central hostname aliases (<code>admin-*</code>, <code>site-*</code> patterns) are rendered HTTP-only and never enter a certificate; provider routes with <code>origin_scheme=http</code> are excluded from <code>certificate_domains</code>. The known issue is already handled in code; no change.</li>
 <li>2026-10-15 MEMORY (ERPNext, 1 vCPU/4 GB) <code>get-app erpnext --branch version-16</code>: 4 min 42 s, peak used 1.65 GB (2.26 GB available), no OOM. Install on site1 from the UI: 75 s, peak 1.8 GB. Idle afterwards 1.05 GB used (mariadbd 237 MB). Local ping 5 ms.</li>
