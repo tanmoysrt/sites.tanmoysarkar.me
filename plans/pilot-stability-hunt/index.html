@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 11:02 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 11:12 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>39</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>40</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>142</b><span>log entries</span></div>
+  <div class="stat"><b>143</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -438,6 +438,15 @@ a { color: var(--accent); }
 <td>+5</td>
 <td>Yes: create then drop leaves no site folder, nginx block or cron entry; the pass-through exits 1</td>
 </tr>
+<tr>
+<td>F41</td>
+<td>nginx</td>
+<td>All benches share one nginx. One bench could write its config while another ran <code>nginx -t</code>; the test failed on the first bench's untested files and the second bench rolled back a valid change.</td>
+<td>A config change holds the host lock <code>benches/.nginx.lock</code> from its first write until nginx reloads or the rejected files are put back. <code>apply_config</code> and <code>publish_config</code> replace the separate write, test and reload calls.</td>
+<td><code>pilot/managers/nginx/__init__.py</code> and its callers</td>
+<td>+1</td>
+<td>Yes: a config change waited 4.7 s for a holder of the lock, then nginx tested clean and the site answered 200</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -705,7 +714,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 52 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 52 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, and the pre-release fixes F39 and F40. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 53 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 53 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, and the pre-release fixes F39 to F41. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -975,6 +984,11 @@ a { color: var(--accent); }
 <td><code>7d0a1038</code></td>
 <td><code>fix(cli): Add pilot drop-site and refuse Frappe's drop-site</code></td>
 </tr>
+<tr>
+<td>53</td>
+<td><code>ebe36682</code></td>
+<td><code>fix(nginx): Serialize config changes across benches with a host lock</code></td>
+</tr>
 </tbody>
 </table>
 <p>Central: <code>7b7ede6b fix(sites): show the customer hostname after the rename lands</code> on branch <code>fix/site-primary-url</code>, pushed as https://github.com/frappe/central/pull/491.</p></div>
@@ -1006,9 +1020,9 @@ a { color: var(--accent); }
 <td>None.</td>
 </tr>
 <tr>
-<td>Narrow concurrency windows</td>
-<td>nginx regeneration across benches and backup retention have small windows that are logged, not fixed.</td>
-<td>Review together with the host-wide nginx lock idea.</td>
+<td>Narrow concurrency window</td>
+<td>Backup retention has a small window that is logged, not fixed. The nginx window is fixed (F41).</td>
+<td>Review in a follow-up.</td>
 </tr>
 <tr>
 <td>Integration tests</td>
@@ -1118,6 +1132,10 @@ a { color: var(--accent); }
 <tr>
 <td>Frappe versions</td>
 <td>Pilot supports Frappe v16 and later. The realtime socket depends on that.</td>
+</tr>
+<tr>
+<td>Locks</td>
+<td>nginx config changes from every bench on the host wait for <code>benches/.nginx.lock</code>. A stuck process that holds it blocks nginx changes until it exits.</td>
 </tr>
 <tr>
 <td>Files</td>
@@ -1620,6 +1638,7 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 F41 host nginx lock (ebe36682): benches/.nginx.lock held from first write to reload/rollback; apply_config/publish_config replace write+test+reload pairs; tests use a no-op lock (autouse) plus one real-lock test. VM: a reload waited 4.7 s for a lock holder, nginx -t ok, site 200. Full suite 3370 passed, pinned ruff + mypy clean. Pushed.</li>
 <li>2026-10-15 Pre-release fixes on owner request: F39 declared build dirs get JS deps (18d58bdd; VM: Helpdesk build with desk/node_modules removed installs it and completes), F40 pilot drop-site + refuse Frappe drop-site passthrough (7d0a1038; VM: create+drop leaves no site/nginx/cron, passthrough exit 1). Full suite 3369 passed, pinned ruff and mypy clean. Pushed; PR body updated.</li>
 <li>2026-10-15 Greptile review 5: 5/5, one P2 (hash only recorded lockfiles) fixed f8fa096f. mypy CI failure (dict entry types in site apps list, from a07245b8) fixed 94359997.</li>
 <li>2026-10-15 Greptile review 4 scored 4/5 with one open P1 (lockfile restore overwrites edits; the copy fix 0ca68073 was not enough). Replaced the restore with a hash record of the failed build's lockfiles (60661460), discard_changes removed. Full suite 3363 passed. Pushed.</li>
