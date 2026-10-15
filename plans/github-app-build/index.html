@@ -19,7 +19,7 @@ code{font:.9em ui-monospace,monospace}
 <body>
 <main>
 <h1>Pilot GitHub App Build</h1>
-<p class="muted">Status page. Last update: 2026-10-16 03:45. Design source: <a href="../../research/pilot-github-app/">Pilot GitHub App proposal</a>.</p>
+<p class="muted">Status page. Last update: 2026-10-16 04:15. Design source: <a href="../../research/pilot-github-app/">Pilot GitHub App proposal</a>.</p>
 
 <h2>Goal</h2>
 <p>Pilot reads its Central settings from instance metadata. If Central is available, Pilot replaces PAT-based Git access with GitHub App access. If Central is not available, Pilot shows only the PAT form. If Central is available, Pilot also shows a "Connect via Frappe Central" option.</p>
@@ -40,19 +40,34 @@ code{font:.9em ui-monospace,monospace}
 <h2>Build state</h2>
 <table>
 <tr><th>Step</th><th>Where</th><th>Status</th></tr>
-<tr><td>Central Settings "Create GitHub App" button (manifest flow)</td><td>Central</td><td class="s todo">Not started</td></tr>
-<tr><td>Read code: <code>CentralClient</code>, <code>metadata.py</code>, <code>Git.vue</code>, <code>git.py</code></td><td>Pilot</td><td class="s done">Done</td></tr>
-<tr><td>Central Settings GitHub tab and GitHub Connection DocType</td><td>Central</td><td class="s todo">Not started</td></tr>
-<tr><td><code>central/integrations/github.py</code> and <code>central/api/github.py</code></td><td>Central</td><td class="s todo">Not started</td></tr>
-<tr><td>Connection attempt (Redis, 15 minutes), PKCE, callback, complete</td><td>Central</td><td class="s todo">Not started</td></tr>
-<tr><td><code>repository_token</code> (one repository, <code>contents: read</code>)</td><td>Central</td><td class="s todo">Not started</td></tr>
-<tr><td>Webhook with HMAC check and reconcile</td><td>Central</td><td class="s todo">Not started</td></tr>
-<tr><td>Central availability check (existing token)</td><td>Pilot</td><td class="s todo">Not started</td></tr>
-<tr><td><code>CentralClient</code> GitHub methods and one Git credential resolver</td><td>Pilot</td><td class="s todo">Not started</td></tr>
-<tr><td>Admin API: connection-attempts, connection, repositories, branches, disconnect</td><td>Pilot</td><td class="s todo">Not started</td></tr>
-<tr><td><code>settings/Git.vue</code>: PAT only, or PAT plus Connect via Frappe Central</td><td>Pilot</td><td class="s todo">Not started</td></tr>
-<tr><td>Tests: cross-team denial, replay, expiry, disconnect race, Central outage</td><td>Both</td><td class="s todo">Not started</td></tr>
+<tr><td>Central Settings GitHub tab, GitHub Connection DocType</td><td>Central</td><td class="s done">Done</td></tr>
+<tr><td>Central Settings "Create GitHub App" button (manifest flow)</td><td>Central</td><td class="s wait">Built, not yet run</td></tr>
+<tr><td><code>central/integrations/github.py</code> and <code>central/api/github.py</code></td><td>Central</td><td class="s done">Done</td></tr>
+<tr><td>Connection attempt (Redis, 15 minutes), PKCE, callback, complete</td><td>Central</td><td class="s done">Tested live</td></tr>
+<tr><td><code>repository_token</code> (one repository, <code>contents: read</code>)</td><td>Central</td><td class="s done">Tested live</td></tr>
+<tr><td>Webhook with HMAC check</td><td>Central</td><td class="s done">Tested live</td></tr>
+<tr><td>Central connect page in the dashboard</td><td>Central</td><td class="s done">Tested live</td></tr>
+<tr><td><code>CentralClient</code> GitHub methods and one token resolver for clone, fetch, branches and app lookup</td><td>Pilot</td><td class="s done">Tested live</td></tr>
+<tr><td>Admin API: connection-attempts, connection, repositories, disconnect</td><td>Pilot</td><td class="s done">Tested live</td></tr>
+<tr><td><code>settings/Git.vue</code>: PAT only, or PAT plus Connect through Frappe Central</td><td>Pilot</td><td class="s done">Tested live</td></tr>
+<tr><td>Disconnect from Pilot</td><td>Both</td><td class="s todo">Next</td></tr>
+<tr><td>Minimal unit tests, docs</td><td>Both</td><td class="s todo">Next</td></tr>
 </table>
+
+<h2>Live checks passed</h2>
+<ul>
+<li>Pilot shows "Connect GitHub through Frappe Central" only when Central answers and has a GitHub App.</li>
+<li>Full browser flow: Pilot, Central, GitHub authorize and install, repository grant, back to Pilot.</li>
+<li>Private repository clone with a Central-minted token. Public repository clone with no token. No token in <code>.git/config</code>.</li>
+<li>Import dialog lists only granted repositories. Branch list and app lookup use the App token.</li>
+<li>GitHub webhook delivery returns 200. A removed repository is removed from the grant, and Central then refuses a token for it (403). A bad signature gets 401.</li>
+<li>Refused: a user of another team, a second user on a bound link, a callback with no session, a replayed callback, an expired link.</li>
+</ul>
+
+<h2>Screens</h2>
+<figure><img src="central-select.jpg" alt="Central page where the user selects repositories to grant to the server" style="max-width:100%;border:1px solid var(--line)"><figcaption class="muted">Central: select repositories. Only repositories where the user is an admin can be selected.</figcaption></figure>
+<figure><img src="pilot-connected.jpg" alt="Pilot Git settings showing the Frappe Central connection and the granted repository" style="max-width:100%;border:1px solid var(--line)"><figcaption class="muted">Pilot: connected through Frappe Central.</figcaption></figure>
+<figure><img src="pilot-import.jpg" alt="Pilot import app dialog with the granted private repository and its branch" style="max-width:100%;border:1px solid var(--line)"><figcaption class="muted">Pilot: import an app from a granted private repository.</figcaption></figure>
 
 <h2>Assumptions</h2>
 <ul>
