@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 11:57 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 12:17 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>41</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>145</b><span>log entries</span></div>
+  <div class="stat"><b>146</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -670,7 +670,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Greptile review of #643</h3>
-<p>Greptile reviewed the PR five times. Review 5 scored it 5/5 (safe to merge) with one P2, fixed in <code>f8fa096f</code>. Each finding was checked against the code and got the smallest code fix. On the owner's request, the three findings first left as by design were fixed too.</p>
+<p>Greptile reviewed the PR 11 times. Review 11, on <code>e56a89a2</code>, scored it 5/5 (safe to merge) with no open threads. Each finding was checked against the code and got the smallest code fix. On the owner's request, the three findings first left as by design were fixed too.</p>
 <table>
 <thead>
 <tr>
@@ -720,10 +720,30 @@ a { color: var(--accent); }
 <td>P1</td>
 <td>Fixed: F37 (<code>60661460</code>). Pilot records the hashes of the build's lockfiles and does not change the files. A first fix that kept a copy (<code>0ca68073</code>) did not satisfy the review.</td>
 </tr>
+<tr>
+<td><code>drop-site</code> broke existing scripts and lacked <code>--force</code></td>
+<td>P1</td>
+<td>Fixed: <code>946893d2</code>. Frappe's form runs Pilot's drop with Frappe's options.</td>
+</tr>
+<tr>
+<td>A hung domain provider blocked nginx on every bench</td>
+<td>P1</td>
+<td>Fixed: <code>37aa4805</code> and <code>e56a89a2</code>. Renders ask the provider before the lock, with a 30 s timeout; route removal never asks it.</td>
+</tr>
+<tr>
+<td>The site app list hid every lookup error</td>
+<td>P2</td>
+<td>Fixed: <code>2ada7cf3</code>. Only expected errors are caught, and they are logged.</td>
+</tr>
+<tr>
+<td>Hashing every changed file wasted memory</td>
+<td>P2</td>
+<td>Fixed: <code>f8fa096f</code>.</td>
+</tr>
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 53 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 53 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, and the pre-release fixes F39 to F41. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 58 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 58 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, and the fixes for Greptile reviews 3 to 10. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -998,6 +1018,31 @@ a { color: var(--accent); }
 <td><code>ebe36682</code></td>
 <td><code>fix(nginx): Serialize config changes across benches with a host lock</code></td>
 </tr>
+<tr>
+<td>54</td>
+<td><code>944f280a</code></td>
+<td><code>fix(tasks): Pass false to the task for a flag that defaults to true</code></td>
+</tr>
+<tr>
+<td>55</td>
+<td><code>946893d2</code></td>
+<td><code>fix(cli): Run Frappe's drop-site form through Pilot's drop</code></td>
+</tr>
+<tr>
+<td>56</td>
+<td><code>37aa4805</code></td>
+<td><code>fix(nginx): Ask the domain provider before taking the host lock</code></td>
+</tr>
+<tr>
+<td>57</td>
+<td><code>2ada7cf3</code></td>
+<td><code>fix(api): Catch only expected errors when reading site app details</code></td>
+</tr>
+<tr>
+<td>58</td>
+<td><code>e56a89a2</code></td>
+<td><code>fix(nginx): Remove a bench's routes without asking the domain provider</code></td>
+</tr>
 </tbody>
 </table>
 <p>Central: <code>7b7ede6b fix(sites): show the customer hostname after the rename lands</code> on branch <code>fix/site-primary-url</code>, pushed as https://github.com/frappe/central/pull/491.</p></div>
@@ -1037,11 +1082,6 @@ a { color: var(--accent); }
 <td>Integration tests</td>
 <td>Fixed in the test: run as root, the throwaway nginx now uses <code>user root;</code>, because its <code>nobody</code> worker could not read pytest's private temp directory (that failure was also on clean <code>origin/develop</code>). On the VM as root: 4 of 4 pass. On a laptop without root, nginx cannot start.</td>
 <td>Run them in CI or on a test VM as root.</td>
-</tr>
-<tr>
-<td>Greptile</td>
-<td>Review 5 scored 5/5 (safe to merge); its one P2 is fixed. A new review runs on each push.</td>
-<td>Fix new findings until the review is clean.</td>
 </tr>
 <tr>
 <td>Switch Bench in the UI</td>
@@ -1657,6 +1697,7 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 Greptile review 10 (4/5): uninstall_config must not depend on the provider; fixed e56a89a2 (provider asked only by renders, before the lock). Review 11: 5/5, safe to merge, no open threads.</li>
 <li>2026-10-15 Greptile review 9 (3/5): drop-site compat (946893d2, Frappe form routed to Site.drop with --force/--no-backup/--archived-sites-path; VM ok), provider asked before the host lock + 30 s timeout (37aa4805), site app list catches only expected errors (2ada7cf3). e2e mariadb 'Uninstall the app' fails on and off on develop too (Blog stays installed on the site). Full suite 3381 passed. Pushed.</li>
 <li>2026-10-15 VM checks: F34 (stale larger unit limits fixed by the sizing unit at restart, 1630M file and live, site 200), F35 (real erp migration: backup done, fake killed tail task, callback -&gt; needs_attention, retry -&gt; migrate task ran -&gt; completed, maintenance restored), F38 found F42: bool task fields that default to true could not be false in the task argv (uninstall remove_from_bench, rename keep_old_hostname on develop too); fixed 944f280a with --no- flags; VM: dashboard-style uninstall keeps app, CLI default removes. Note: task worker runs in the Admin process; a socket-activated idle Admin leaves CLI-queued tasks waiting until the next Admin request.</li>
 <li>2026-10-15 F41 host nginx lock (ebe36682): benches/.nginx.lock held from first write to reload/rollback; apply_config/publish_config replace write+test+reload pairs; tests use a no-op lock (autouse) plus one real-lock test. VM: a reload waited 4.7 s for a lock holder, nginx -t ok, site 200. Full suite 3370 passed, pinned ruff + mypy clean. Pushed.</li>
