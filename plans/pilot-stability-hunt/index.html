@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 08:07 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 08:35 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>29</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>131</b><span>log entries</span></div>
+  <div class="stat"><b>134</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -562,7 +562,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>All changes are committed on the local branch <code>fix/bughunt</code>, one purpose for each commit, in this order. Nothing is pushed. Each commit was checked alone with ruff and its tests before it was made; a full-suite run of every commit runs after.</p>
+<p>All changes are committed on the local branch <code>fix/bughunt</code>, one purpose for each commit, in this order. Pushed as https://github.com/frappe/pilot/pull/643. Each commit was checked alone with ruff and its tests before it was made; a full-suite run of every commit runs after.</p>
 <table>
 <thead>
 <tr>
@@ -768,9 +768,9 @@ a { color: var(--accent); }
 </thead>
 <tbody>
 <tr>
-<td>Push and pull requests</td>
-<td>All work is committed locally (Pilot <code>fix/bughunt</code>, Central <code>fix/site-primary-url</code>). Nothing is pushed.</td>
-<td>Push and open pull requests when the owner asks.</td>
+<td>Pull requests</td>
+<td>Pilot: https://github.com/frappe/pilot/pull/643 (<code>fix/bughunt</code>). Central: https://github.com/frappe/central/pull/491 (<code>fix/site-primary-url</code>).</td>
+<td>Review and merge.</td>
 </tr>
 <tr>
 <td>D8 bench parity</td>
@@ -1380,6 +1380,9 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>Extra fixes found while committing: test_cron depended on a local <code>.admin-venv</code>; stale <code>tune_if_resized</code> comment; duplicate assets test dropped in favour of the updated test_build_task; F30 <code>pilot drop</code> refuses a running dev bench; docs for D5 timer, D11 swap and D3 alias.</li>
+<li>History was rewritten locally three times with git plumbing (no stash, no worktree change): commit 1 missed its test_commands updates; the F11 config copy had to come before the TLS commit (a TLS test depended on it); a -U1 hunk put <code>memory_share</code> under <code>[postgres]</code> in the docs (hunk context switched to -U3). Backup branches: backup/bughunt-before-*.</li>
+<li>36 local commits on <code>fix/bughunt</code> (6f142bc5..HEAD), one purpose each; Central <code>7b7ede6b</code> on <code>fix/site-primary-url</code>. Nothing pushed. Working tree equals HEAD except the owner's package-lock files.</li>
 <li>Finding (not changed): <code>pilot -b wiztest drop</code> deleted the bench but left its wizard admin server (<code>run_server --wizard</code>, started by <code>pilot start</code>) running; killed by hand.</li>
 <li>Fix: drop <code>tasks</code> from <code>_BENCH_DIRS</code> (init never creates it; the task store owns it). Test: a failed init keeps task records and still removes <code>apps</code>. VM after the fix: queued -&gt; running -&gt; failed -&gt; done (exit 1); the record and output stay; rollback still ran. Bench dropped afterwards.</li>
 <li>Reproduced on the VM with the old code: throwaway bench <code>wiztest</code> (sqlite) with a missing frappe repo URL, <code>WizardSetupTask</code> run by <code>pilot -b wiztest start</code>, stream read with <code>TaskReader</code>: status queued -&gt; running -&gt; STREAM BROKE TaskNotFoundError; tasks dir left with only <code>.store.lock</code>.</li>
