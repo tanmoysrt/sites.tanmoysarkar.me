@@ -53,10 +53,10 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 12:17 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 14:23 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>41</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>47</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
   <div class="stat"><b>146</b><span>log entries</span></div>
 </div>
@@ -456,6 +456,60 @@ a { color: var(--accent); }
 <td>+2</td>
 <td>Yes: found on the VM; the uninstall task gets <code>--no-remove-from-bench</code> and keeps the app</td>
 </tr>
+<tr>
+<td>F43</td>
+<td>Tasks</td>
+<td>The Admin runs the task worker and stops after 10 idle minutes. A task queued from the CLI, a script or a task process, or released with <code>pilot tasks start</code>, waited until the next Admin request.</td>
+<td>Without a task worker in its own process, Pilot starts the Admin service. Starting a running Admin does nothing.</td>
+<td><code>pilot/managers/task/control.py</code>, <code>pilot/managers/processes/systemd.py</code></td>
+<td>+3</td>
+<td>Yes: with the Admin stopped, <code>pilot tasks start</code> started it</td>
+</tr>
+<tr>
+<td>F44</td>
+<td>Tasks</td>
+<td>After a reboot only the Admin socket started, so tasks queued before the reboot waited until someone opened the Admin.</td>
+<td>The Admin service starts at boot, runs queued tasks and stops after its idle timeout. The <code>start_admin_at_boot</code> patch enables it on existing benches.</td>
+<td><code>pilot/managers/processes/systemd_render.py</code>, <code>pilot/patches/start_admin_at_boot.py</code></td>
+<td>+3</td>
+<td>Yes: patch ran; the Admin is wanted by <code>default.target</code>. A real reboot was not tested</td>
+</tr>
+<tr>
+<td>F45</td>
+<td>Realtime</td>
+<td>nginx and the realtime unit chose socket or port from the Frappe code at the time each was written. <code>pilot restart</code> rewrites the unit without nginx, and a domain change rewrites nginx without the unit, so a Frappe change across v16 gave 502.</td>
+<td>nginx proxies realtime to an upstream with the socket first and the port as backup. <code>max_fails=0</code> tries the socket on every request.</td>
+<td><code>pilot/managers/nginx/templates/bench.conf.template</code>, <code>pilot/core/bench/__init__.py</code></td>
+<td>+2</td>
+<td>Yes: 200 on the socket, 200 on the port with no nginx change, 200 right after the switch back</td>
+</tr>
+<tr>
+<td>F46</td>
+<td>Backups</td>
+<td>A backup moved its files in one rename at a time, so retention could see part of a run. Two runs in the same second wrote the same file names.</td>
+<td>Publishing a run and retention hold one lock for each site (<code>.backup_runs.lock</code>). A run that would overwrite a run from the same second fails.</td>
+<td><code>pilot/core/site/backups.py</code></td>
+<td>+2</td>
+<td>Yes: a backup published through the lock and retention ran</td>
+</tr>
+<tr>
+<td>F47</td>
+<td>Domains UI</td>
+<td>After a domain was added, its row showed TLS inactive until a page reload, with no sign that a certificate was on the way.</td>
+<td>The domain list returns <code>certificate_pending</code> while a certificate task is queued or running. The row shows "Certificate pending" and the list refreshes until the task ends.</td>
+<td><code>pilot/core/site/domains.py</code>, <code>Domains.vue</code></td>
+<td>+2</td>
+<td>API value read on the VM. The badge was not seen in a browser</td>
+</tr>
+<tr>
+<td>F48</td>
+<td>Backups UI</td>
+<td>Uploaded backup files always had size 0, so the Admin showed "-" once the local copy was removed.</td>
+<td>The backup list reads each uploaded file's size from the bucket listing. Older uploads get sizes too, and the stored metadata keeps its shape.</td>
+<td><code>pilot/integrations/s3/backups.py</code>, <code>admin/backend/providers/backups.py</code></td>
+<td>+2</td>
+<td>No: S3 is not configured on the VM</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -743,7 +797,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 58 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 58 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, and the fixes for Greptile reviews 3 to 10. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 64 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 64 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, and F43 to F48. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -1043,6 +1097,36 @@ a { color: var(--accent); }
 <td><code>e56a89a2</code></td>
 <td><code>fix(nginx): Remove a bench's routes without asking the domain provider</code></td>
 </tr>
+<tr>
+<td>59</td>
+<td><code>b53822f9</code></td>
+<td><code>fix(tasks): Start the Admin for a task queued outside it</code></td>
+</tr>
+<tr>
+<td>60</td>
+<td><code>2f4f6512</code></td>
+<td><code>fix(tasks): Start the Admin at boot to run tasks queued before a reboot</code></td>
+</tr>
+<tr>
+<td>61</td>
+<td><code>0459ae55</code></td>
+<td><code>fix(nginx): Try the realtime socket first, then the port</code></td>
+</tr>
+<tr>
+<td>62</td>
+<td><code>154f40b1</code></td>
+<td><code>fix(backups): Publish a backup run and apply retention under one lock</code></td>
+</tr>
+<tr>
+<td>63</td>
+<td><code>e2d20f98</code></td>
+<td><code>feat(domains): Show a pending certificate on the domain list</code></td>
+</tr>
+<tr>
+<td>64</td>
+<td><code>1f1e804e</code></td>
+<td><code>fix(backups): Show the size of uploaded backup files</code></td>
+</tr>
 </tbody>
 </table>
 <p>Central: <code>7b7ede6b fix(sites): show the customer hostname after the rename lands</code> on branch <code>fix/site-primary-url</code>, pushed as https://github.com/frappe/central/pull/491.</p></div>
@@ -1074,24 +1158,14 @@ a { color: var(--accent); }
 <td>None.</td>
 </tr>
 <tr>
-<td>Narrow concurrency window</td>
-<td>Backup retention has a small window that is logged, not fixed. The nginx window is fixed (F41).</td>
-<td>Review in a follow-up.</td>
-</tr>
-<tr>
 <td>Integration tests</td>
 <td>Fixed in the test: run as root, the throwaway nginx now uses <code>user root;</code>, because its <code>nobody</code> worker could not read pytest's private temp directory (that failure was also on clean <code>origin/develop</code>). On the VM as root: 4 of 4 pass. On a laptop without root, nginx cannot start.</td>
 <td>Run them in CI or on a test VM as root.</td>
 </tr>
 <tr>
-<td>Switch Bench in the UI</td>
-<td>Only <code>[admin] allow_bench_management</code> in each bench's <code>bench.toml</code> controls it. The owner reports that the switcher does not show as expected. On the test VM, with the flag true on both benches, it shows.</td>
-<td>Confirm which <code>bench.toml</code> was changed, then reload the page.</td>
-</tr>
-<tr>
-<td>Realtime drift (owner decision)</td>
-<td>F36 uses the socket only when Frappe reads <code>FRAPPE_SOCKETIO_UDS</code>. If Frappe changes across that line and nginx is regenerated but the realtime unit is not, nginx proxies to a socket that Node does not listen on (502). Rare on v16 and later.</td>
-<td>Owner chooses: rewrite the realtime unit together with nginx (recommended), or go back to v16 only without the check.</td>
+<td>Uninstall shows the app as still installed</td>
+<td>Frappe bug in v16 and develop, not in Pilot. <code>remove_from_installed_apps</code> clears the installed apps cache before it commits, so a process that reads in that gap (scheduler, web) puts the old list back, and Frappe copies it to <code>site_config.json</code>. The Admin reads that file, so the app still shows. This is the flaky e2e step "Uninstall the app".</td>
+<td>Owner: left for now. Fix upstream: clear the cache after the commit.</td>
 </tr>
 <tr>
 <td>Merge method</td>
@@ -1128,6 +1202,11 @@ a { color: var(--accent); }
 <td><code>serve_realtime_on_unix_socket</code></td>
 <td>Moves Node realtime from <code>socketio_port</code> to <code>config/socketio.sock</code> on systemd production benches, then reloads nginx.</td>
 <td>socket.io restarts once. Clients reconnect in a few seconds.</td>
+</tr>
+<tr>
+<td><code>start_admin_at_boot</code></td>
+<td>Enables the Admin service for <code>default.target</code> on systemd production benches, so it starts at boot and runs queued tasks.</td>
+<td>None until the next boot. After a boot the Admin runs until it is idle for 10 minutes.</td>
 </tr>
 </tbody>
 </table>
@@ -1174,7 +1253,7 @@ a { color: var(--accent); }
 </tr>
 <tr>
 <td>Admin API</td>
-<td>New optional fields: <code>email</code> on <code>POST /sites/&lt;name&gt;/domains</code>; <code>certificate_email_required</code> on the domain list; <code>is_marketplace</code> and <code>missing</code> on app rows; <code>remove_from_bench=false</code> on app uninstall (the dashboard sends it). New route: <code>POST /database/quick-actions/memory-share</code>.</td>
+<td>New optional fields: <code>email</code> on <code>POST /sites/&lt;name&gt;/domains</code>; <code>certificate_email_required</code> and <code>certificate_pending</code> on the domain list; <code>is_marketplace</code> and <code>missing</code> on app rows; <code>remove_from_bench=false</code> on app uninstall (the dashboard sends it). New route: <code>POST /database/quick-actions/memory-share</code>.</td>
 </tr>
 <tr>
 <td>Config</td>
@@ -1194,7 +1273,15 @@ a { color: var(--accent); }
 </tr>
 <tr>
 <td>Locks</td>
-<td>nginx config changes from every bench on the host wait for <code>benches/.nginx.lock</code>. A stuck process that holds it blocks nginx changes until it exits.</td>
+<td>nginx config changes from every bench on the host wait for <code>benches/.nginx.lock</code>. A stuck process that holds it blocks nginx changes until it exits. Backup publishing and retention for a site wait for <code>.backup_runs.lock</code> in the site folder. A backup that would overwrite a run from the same second fails.</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>A task queued outside the Admin (CLI, script, task process) or released with <code>pilot tasks start</code> starts the Admin service.</td>
+</tr>
+<tr>
+<td>Realtime</td>
+<td>On systemd benches nginx tries the realtime socket first, then <code>socketio_port</code>.</td>
 </tr>
 <tr>
 <td>Files</td>
