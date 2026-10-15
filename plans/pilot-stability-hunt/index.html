@@ -53,10 +53,10 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 14:54 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 19:31 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>48</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>50</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
   <div class="stat"><b>146</b><span>log entries</span></div>
 </div>
@@ -519,6 +519,24 @@ a { color: var(--accent); }
 <td>+3</td>
 <td>Yes: the check is true with the user bus and false without it</td>
 </tr>
+<tr>
+<td>F50</td>
+<td>Apps</td>
+<td>After an uninstall the app could still show as installed. Frappe clears its installed apps cache before it commits, so a process that reads in between caches the old list, and Frappe copies it to <code>site_config.json</code>, which the Admin reads first. This made the e2e step "Uninstall the app" fail often.</td>
+<td>After the uninstall, Pilot writes the committed <code>installed_apps</code> setting back to <code>site_config.json</code> when the copy differs.</td>
+<td><code>pilot/core/site/apps.py</code>, <code>pilot/core/site/config.py</code></td>
+<td>+2</td>
+<td>CI: e2e (mariadb) passes. The committed list reads correctly on the VM</td>
+</tr>
+<tr>
+<td>F51</td>
+<td>nginx (review)</td>
+<td>A rejected change put back the previous files, then unpublished the bench anyway, so the next reload dropped its working sites.</td>
+<td>The bench is unpublished only when no config is left for it.</td>
+<td><code>pilot/managers/nginx/__init__.py</code></td>
+<td>+1</td>
+<td>No</td>
+</tr>
 </tbody>
 </table></div>
 
@@ -806,7 +824,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 71 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 71 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, F43 to F49, and the fixes for Greptile reviews 12 and 13. The branch also merges <code>develop</code>. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 78 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 78 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, F43 to F49, and the fixes for Greptile reviews 12 to 21, and F50. Greptile review 22 is 5/5. The branch also merges <code>develop</code>. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -1171,6 +1189,41 @@ a { color: var(--accent); }
 <td><code>c1790a1d</code></td>
 <td><code>fix(tasks): Stop the database wait when the Admin drains</code></td>
 </tr>
+<tr>
+<td>72</td>
+<td><code>d42cde79</code></td>
+<td><code>fix(nginx): Keep a published bench in nginx when a change is rejected</code></td>
+</tr>
+<tr>
+<td>73</td>
+<td><code>52f244a6</code></td>
+<td><code>refactor(patches): Split the MariaDB sizing patch check and tighten comments</code></td>
+</tr>
+<tr>
+<td>74</td>
+<td><code>dbb2d599</code></td>
+<td><code>docs(api): Describe certificate_pending on the domain list</code></td>
+</tr>
+<tr>
+<td>75</td>
+<td><code>1a12ae20</code></td>
+<td><code>chore: Shorten comments and docstrings added for the bug hunt</code></td>
+</tr>
+<tr>
+<td>76</td>
+<td><code>658b54fa</code></td>
+<td><code>refactor: Keep functions changed for the bug hunt at complexity 8 or less</code></td>
+</tr>
+<tr>
+<td>77</td>
+<td><code>373c6fa9</code></td>
+<td><code>refactor(patches): Name the patch bench checks with is_ and has_</code></td>
+</tr>
+<tr>
+<td>78</td>
+<td><code>d6e314a5</code></td>
+<td><code>fix(apps): Put back the committed app list after an uninstall</code></td>
+</tr>
 </tbody>
 </table>
 <p>Central: <code>7b7ede6b fix(sites): show the customer hostname after the rename lands</code> on branch <code>fix/site-primary-url</code>, pushed as https://github.com/frappe/central/pull/491.</p></div>
@@ -1205,11 +1258,6 @@ a { color: var(--accent); }
 <td>Integration tests</td>
 <td>Fixed in the test: run as root, the throwaway nginx now uses <code>user root;</code>, because its <code>nobody</code> worker could not read pytest's private temp directory (that failure was also on clean <code>origin/develop</code>). On the VM as root: 4 of 4 pass. On a laptop without root, nginx cannot start.</td>
 <td>Run them in CI or on a test VM as root.</td>
-</tr>
-<tr>
-<td>Uninstall shows the app as still installed</td>
-<td>Frappe bug in v16 and develop, not in Pilot. <code>remove_from_installed_apps</code> clears the installed apps cache before it commits, so a process that reads in that gap (scheduler, web) puts the old list back, and Frappe copies it to <code>site_config.json</code>. The Admin reads that file, so the app still shows. This is the flaky e2e step "Uninstall the app".</td>
-<td>Owner: left for now. Fix upstream: clear the cache after the commit.</td>
 </tr>
 <tr>
 <td>Merge method</td>
