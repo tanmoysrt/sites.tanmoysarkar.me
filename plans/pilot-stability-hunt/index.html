@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 05:07 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 05:45 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>25</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>107</b><span>log entries</span></div>
+  <div class="stat"><b>113</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -307,10 +307,10 @@ a { color: var(--accent); }
 <td>F26</td>
 <td>Settings</td>
 <td>A change to <code>http_port</code> or <code>socketio_port</code> in Settings restarted the services on the new port, but nginx kept the old upstream, so every site answered 502.</td>
-<td>After a restart-triggering change on a production bench, Pilot regenerates nginx after the restart.</td>
+<td>After a restart-triggering change on a production bench, Pilot regenerates nginx, also when the restart call times out (systemd still completes it).</td>
 <td><code>pilot/core/bench/settings.py</code></td>
-<td>+1</td>
-<td>Pending</td>
+<td>+2</td>
+<td>Yes: 8000 to 8020 and back</td>
 </tr>
 </tbody>
 </table></div>
@@ -343,7 +343,7 @@ a { color: var(--accent); }
 <td>Frappe's socket.io listens on <code>*:9000</code> and answers from the internet. It bypasses nginx and the WAF. No host firewall is on by default.</td>
 <td>Use Frappe's <code>socketio_uds</code> (Unix socket) and proxy nginx to it, or bind to &lt;vm-ip&gt;.</td>
 <td>Unit and nginx template change, patch for existing benches</td>
-<td>Done. systemd benches serve Node realtime on <code>config/socketio.sock</code>; nginx proxies to it; patch <code>serve_realtime_on_unix_socket</code>. VM check pending.</td>
+<td>Done. systemd benches serve Node realtime on <code>config/socketio.sock</code>; nginx proxies to it; patch <code>serve_realtime_on_unix_socket</code>. Checked on VM: port 9000 closed, WebSocket 101 through nginx, restart after <code>kill -9</code>.</td>
 </tr>
 <tr>
 <td>D3</td>
@@ -359,7 +359,7 @@ a { color: var(--accent); }
 <td>A domain behind the orange cloud fails the "points here" DNS check (409). Flexible SSL loops on the HTTP-to-HTTPS redirect. Client IPs are Cloudflare's.</td>
 <td>Accept Cloudflare IP ranges in the DNS check with a warning; an optional <code>proxy.cloudflare</code> setting for <code>set_real_ip_from</code> + <code>CF-Connecting-IP</code>; document "Full (strict)".</td>
 <td>Medium</td>
-<td>Done. Optional <code>[proxy] cloudflare</code>; Cloudflare addresses pass the DNS check with a warning; docs say Full (strict). Setting is in config, not in the UI.</td>
+<td>Done. Optional <code>[proxy] cloudflare</code>; Cloudflare addresses pass the DNS check with a warning; docs say Full (strict). Setting is in config, not in the UI. Checked on VM with real DNS; spoofed header not trusted.</td>
 </tr>
 <tr>
 <td>D5</td>
@@ -415,7 +415,7 @@ a { color: var(--accent); }
 <td>A 2 GB host without swap cannot build Helpdesk from source: the build cap stops it cleanly. But the failed build's <code>yarn install</code> rewrote a tracked <code>yarn.lock</code>, and Pilot counts that as a source change, so it then refuses the prebuilt assets for that app too.</td>
 <td>Freeze the lockfile during Pilot's installs, or ignore a <code>yarn.lock</code> that only Pilot's install changed. Also #572 (swap during builds).</td>
 <td>Small to medium</td>
-<td>Done. Build swap helper adds 2 GB swap during builds on hosts with less than 3 GB free. VM build check running.</td>
+<td>Done. Build swap helper adds 2 GB swap during builds on hosts with less than 3 GB free. Checked on VM: Helpdesk source build on 2 GB succeeded (40 min at 0.5 vCPU), swap removed after.</td>
 </tr>
 <tr>
 <td>D12</td>
@@ -1126,6 +1126,12 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>Finding (not changed): <code>_restart_systemd</code> waits 60 s, systemd's default stop timeout is 90 s. A worker pool that drains a job sometimes takes the full 90 s (seen twice right after the build, not reproducible when idle: 2 s), so Settings reports "could not be restarted" while systemd completes the restart.</li>
+<li>F26 (new): Settings <code>http_port</code> change on a production bench restarted gunicorn on the new port while nginx kept the old upstream -&gt; 502 (reproduced on the VM). Fix: regenerate nginx after restart-triggering changes, in <code>finally</code>, because a timed-out restart still finishes in systemd. Verified: 8000 -&gt; 8020 (restart call timed out, nginx followed, site came back), 8020 -&gt; 8000 (site 200).</li>
+<li>D4 verified: real DNS -&gt; Cloudflare-proxied hosts accepted with the warning, direct host accepted. With <code>cloudflare = true</code>: nginx -t OK, <code>CF-Connecting-IP</code> in 4 server blocks, site 200, and a spoofed <code>CF-Connecting-IP: &amp;lt;vm-ip&amp;gt;</code> from a non-Cloudflare client is not trusted (access log shows the real IP). Reverted to the original common_config.</li>
+<li>D2 verified: patch <code>serve_realtime_on_unix_socket</code> moved <code>main</code> (devb is lite mode, skipped). Port 9000 refuses connections from the internet; socket.io polling and the WebSocket upgrade (101) work through nginx; <code>kill -9</code> of Node -&gt; systemd restarts it, <code>ExecStartPre</code> removes the stale socket, realtime listens again.</li>
+<li>Owner note: Pilot supports Frappe v16 and later only, so <code>Bench.realtime_socket</code> no longer checks Frappe's source for <code>socketio_uds</code> (v16 and develop both have it). This also removes a drift case that Codex found (nginx switching to the socket after a Frappe update while the unit stayed on TCP). Socket path length is now checked in bytes (Codex P2).</li>
+<li>D11 verified on the 0.5 vCPU / 2 GB VM: <code>pilot -b main build --apps helpdesk --force</code> succeeded ("Done in 40m 15s", vite 29m54s, swap peak about 1.5 GB of the 2 GB build swap). No OOM kill. The swap file and the swap were removed after the build; count file back to 0; helpdesk <code>yarn.lock</code> unchanged. The earlier failure ("0MB of swap") came from stale code on the VM.</li>
 <li>Tests: test_realtime_socket.py (6), patch test (1). docs/production.md.</li>
 <li>Patch <code>serve_realtime_on_unix_socket</code>: rewrite units, daemon-reload, try-restart socketio, regenerate+reload nginx.</li>
 <li>Fix: <code>Bench.realtime_socket</code> -&gt; <code>&lt;bench&gt;/config/socketio.sock</code> for systemd production, Node backend, Frappe with <code>socketio_uds</code> (v16 and develop both have <code>FRAPPE_SOCKETIO_UDS</code>), path &lt; 108 bytes. socketio unit gets <code>Environment=FRAPPE_SOCKETIO_UDS=...</code> and <code>ExecStartPre=/bin/rm -f &lt;sock&gt;</code> (Node does not remove a stale socket). nginx <code>/socket.io</code> proxies to <code>http://unix:&lt;sock&gt;:</code>. Dev runner, supervisor, Python backend keep the TCP port. nginx workers already run as the bench user (install.sh), so no permission change.</li>
