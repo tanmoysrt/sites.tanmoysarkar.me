@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 11:12 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 11:57 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>40</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>41</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>143</b><span>log entries</span></div>
+  <div class="stat"><b>145</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -382,7 +382,7 @@ a { color: var(--accent); }
 <td>The sizing unit also sizes again when the unit limits do not match my.cnf, so the next start applies the lower limits.</td>
 <td><code>pilot/managers/database/mariadb.py</code></td>
 <td>+1</td>
-<td>Unit tests</td>
+<td>Yes: with old, larger limits left in the unit, a MariaDB restart put back the sized limits (1630M) in the unit and live</td>
 </tr>
 <tr>
 <td>F35</td>
@@ -391,7 +391,7 @@ a { color: var(--accent); }
 <td>The stopped-task callback checks that the task is still the last in the chain, then moves the operation to <code>needs_attention</code>. Retry queues the next step.</td>
 <td><code>pilot/core/bench/migration/operation.py</code>, <code>pilot/internal/tasks/callbacks.py</code></td>
 <td>+1</td>
-<td>Unit tests</td>
+<td>Yes: a real site migration with its backup done and no next task paused in <code>needs_attention</code>; Retry ran the migrate task and the operation completed, with maintenance mode restored</td>
 </tr>
 <tr>
 <td>F36</td>
@@ -418,7 +418,7 @@ a { color: var(--accent); }
 <td>The old default stays outside the dashboard. The dashboard sends <code>remove_from_bench=false</code>; the CLI has <code>--keep-on-bench</code>.</td>
 <td><code>pilot/commands/apps/uninstall.py</code>, <code>admin/backend/api/v1/sites/apps.py</code>, <code>admin/frontend/dashboard/src/api/sites.ts</code></td>
 <td>+3</td>
-<td>Unit tests, vue-tsc</td>
+<td>Yes, after F42: a dashboard-style uninstall keeps the app on the bench; the CLI default removes it</td>
 </tr>
 <tr>
 <td>F39</td>
@@ -433,10 +433,10 @@ a { color: var(--accent); }
 <td>F40</td>
 <td>CLI</td>
 <td><code>pilot --site SITE drop-site</code> passed through to Frappe and left the site in nginx, its domains and the backup schedule. Pilot had no CLI command for a site drop.</td>
-<td>New <code>pilot drop-site SITE [--no-backup]</code> runs Pilot's drop. Frappe's <code>drop-site</code> through Pilot is refused with a pointer to it.</td>
+<td>New <code>pilot drop-site SITE [--no-backup]</code> runs Pilot's drop. Frappe's <code>drop-site</code> form through Pilot runs the same drop with <code>--no-backup</code>, <code>--force</code> and <code>--archived-sites-path</code>.</td>
 <td><code>pilot/commands/sites/drop.py</code>, <code>pilot/commands/runtime/frappe.py</code></td>
-<td>+5</td>
-<td>Yes: create then drop leaves no site folder, nginx block or cron entry; the pass-through exits 1</td>
+<td>+9</td>
+<td>Yes: <code>pilot --site S drop-site S --force --no-backup</code> leaves no site folder, nginx block or cron entry</td>
 </tr>
 <tr>
 <td>F41</td>
@@ -446,6 +446,15 @@ a { color: var(--accent); }
 <td><code>pilot/managers/nginx/__init__.py</code> and its callers</td>
 <td>+1</td>
 <td>Yes: a config change waited 4.7 s for a holder of the lock, then nginx tested clean and the site answered 200</td>
+</tr>
+<tr>
+<td>F42</td>
+<td>Tasks</td>
+<td>A task runs from argv, and a bool field was passed only as a flag when true. A field that defaults to true could never reach the task as false: a dashboard uninstall still removed the app from the bench, and a rename with <code>keep_old_hostname=false</code> still kept the old hostname (the rename case is also on <code>develop</code>).</td>
+<td>Such a field has a <code>--no-</code> form, and the task argv uses it for false.</td>
+<td><code>pilot/internal/tasks/authoring.py</code>, <code>pilot/internal/cli/fields.py</code></td>
+<td>+2</td>
+<td>Yes: found on the VM; the uninstall task gets <code>--no-remove-from-bench</code> and keeps the app</td>
 </tr>
 </tbody>
 </table></div>
@@ -1031,13 +1040,23 @@ a { color: var(--accent); }
 </tr>
 <tr>
 <td>Greptile</td>
-<td>All findings of reviews 1 and 2 are fixed. A new review runs on each push.</td>
+<td>Review 5 scored 5/5 (safe to merge); its one P2 is fixed. A new review runs on each push.</td>
 <td>Fix new findings until the review is clean.</td>
 </tr>
 <tr>
 <td>Switch Bench in the UI</td>
 <td>Only <code>[admin] allow_bench_management</code> in each bench's <code>bench.toml</code> controls it. The owner reports that the switcher does not show as expected. On the test VM, with the flag true on both benches, it shows.</td>
 <td>Confirm which <code>bench.toml</code> was changed, then reload the page.</td>
+</tr>
+<tr>
+<td>Realtime drift (owner decision)</td>
+<td>F36 uses the socket only when Frappe reads <code>FRAPPE_SOCKETIO_UDS</code>. If Frappe changes across that line and nginx is regenerated but the realtime unit is not, nginx proxies to a socket that Node does not listen on (502). Rare on v16 and later.</td>
+<td>Owner chooses: rewrite the realtime unit together with nginx (recommended), or go back to v16 only without the check.</td>
+</tr>
+<tr>
+<td>Merge method</td>
+<td>Commits 12 to 49 fail mypy alone (fixed in <code>94359997</code>); each passes ruff and the unit suite.</td>
+<td>Squash-merge.</td>
 </tr>
 </tbody>
 </table></div>
@@ -1100,7 +1119,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Changes for scripts and clients</h3>
-<p>All changes are additive, except two behavior changes: <code>pilot restart</code> exits 1 when nothing restarted (D10, owner approved), and Frappe's <code>drop-site</code> through Pilot is refused (F40).</p>
+<p>All changes are additive, except one behavior change that the owner approved: <code>pilot restart</code> exits 1 when nothing restarted (D10).</p>
 <table>
 <thead>
 <tr>
@@ -1111,7 +1130,7 @@ a { color: var(--accent); }
 <tbody>
 <tr>
 <td>CLI</td>
-<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --keep-on-bench</code>; <code>pilot drop-site</code>. Behavior: <code>pilot --site S drop-site</code> and <code>pilot frappe drop-site</code> are refused (use <code>pilot drop-site</code>); <code>pilot restart</code> exits 1 when nothing restarted (D10); <code>pilot drop</code> refuses a running development bench (F30).</td>
+<td>New: <code>pilot --version</code>; <code>pilot uninstall-app --keep-on-bench</code>; <code>pilot drop-site</code>. Behavior: <code>pilot --site S drop-site</code> and <code>pilot frappe drop-site</code> run Pilot's drop with Frappe's options; <code>pilot restart</code> exits 1 when nothing restarted (D10); <code>pilot drop</code> refuses a running development bench (F30).</td>
 </tr>
 <tr>
 <td>Admin API</td>
@@ -1422,7 +1441,7 @@ a { color: var(--accent); }
 </tr>
 <tr>
 <td><code>drop-site</code></td>
-<td><code>pilot drop-site SITE</code> (Frappe's <code>drop-site</code> through Pilot is refused)</td>
+<td><code>pilot drop-site SITE</code>; Frappe's form through Pilot runs the same drop</td>
 <td>OK</td>
 </tr>
 <tr>
@@ -1638,6 +1657,8 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 Greptile review 9 (3/5): drop-site compat (946893d2, Frappe form routed to Site.drop with --force/--no-backup/--archived-sites-path; VM ok), provider asked before the host lock + 30 s timeout (37aa4805), site app list catches only expected errors (2ada7cf3). e2e mariadb 'Uninstall the app' fails on and off on develop too (Blog stays installed on the site). Full suite 3381 passed. Pushed.</li>
+<li>2026-10-15 VM checks: F34 (stale larger unit limits fixed by the sizing unit at restart, 1630M file and live, site 200), F35 (real erp migration: backup done, fake killed tail task, callback -&gt; needs_attention, retry -&gt; migrate task ran -&gt; completed, maintenance restored), F38 found F42: bool task fields that default to true could not be false in the task argv (uninstall remove_from_bench, rename keep_old_hostname on develop too); fixed 944f280a with --no- flags; VM: dashboard-style uninstall keeps app, CLI default removes. Note: task worker runs in the Admin process; a socket-activated idle Admin leaves CLI-queued tasks waiting until the next Admin request.</li>
 <li>2026-10-15 F41 host nginx lock (ebe36682): benches/.nginx.lock held from first write to reload/rollback; apply_config/publish_config replace write+test+reload pairs; tests use a no-op lock (autouse) plus one real-lock test. VM: a reload waited 4.7 s for a lock holder, nginx -t ok, site 200. Full suite 3370 passed, pinned ruff + mypy clean. Pushed.</li>
 <li>2026-10-15 Pre-release fixes on owner request: F39 declared build dirs get JS deps (18d58bdd; VM: Helpdesk build with desk/node_modules removed installs it and completes), F40 pilot drop-site + refuse Frappe drop-site passthrough (7d0a1038; VM: create+drop leaves no site/nginx/cron, passthrough exit 1). Full suite 3369 passed, pinned ruff and mypy clean. Pushed; PR body updated.</li>
 <li>2026-10-15 Greptile review 5: 5/5, one P2 (hash only recorded lockfiles) fixed f8fa096f. mypy CI failure (dict entry types in site apps list, from a07245b8) fixed 94359997.</li>
