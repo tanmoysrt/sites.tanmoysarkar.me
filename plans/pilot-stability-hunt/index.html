@@ -53,7 +53,7 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 14:32 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 14:42 UTC.</p>
 
 <div class="stats">
   <div class="stat"><b>48</b><span>fixes, with tests</span></div>
@@ -469,7 +469,7 @@ a { color: var(--accent); }
 <td>F44</td>
 <td>Tasks</td>
 <td>After a reboot only the Admin socket started, so tasks queued before the reboot waited until someone opened the Admin.</td>
-<td>The Admin service starts at boot, runs queued tasks and stops after its idle timeout. The <code>start_admin_at_boot</code> patch enables it on existing benches.</td>
+<td>The Admin service starts at boot, waits up to 120 s for the bench's database, runs queued tasks and stops after its idle timeout. The <code>start_admin_at_boot</code> patch enables it on existing benches.</td>
 <td><code>pilot/managers/processes/systemd_render.py</code>, <code>pilot/patches/start_admin_at_boot.py</code></td>
 <td>+3</td>
 <td>Yes: patch ran; the Admin is wanted by <code>default.target</code>. A real reboot was not tested</td>
@@ -487,7 +487,7 @@ a { color: var(--accent); }
 <td>F46</td>
 <td>Backups</td>
 <td>A backup moved its files in one rename at a time, so retention could see part of a run. Two runs in the same second wrote the same file names.</td>
-<td>Publishing a run and retention hold one lock for each site (<code>.backup_runs.lock</code>). A run that would overwrite a run from the same second fails.</td>
+<td>Publishing a run and retention's selection and local deletes hold one lock for each site (<code>.backup_runs.lock</code>); offsite deletes run without it. A run that would overwrite a run from the same second fails.</td>
 <td><code>pilot/core/site/backups.py</code></td>
 <td>+2</td>
 <td>Yes: a backup published through the lock and retention ran</td>
@@ -806,7 +806,7 @@ a { color: var(--accent); }
 </tbody>
 </table>
 <h3>Commits</h3>
-<p>The branch <code>fix/bughunt</code> holds 65 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 65 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, and F43 to F49. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
+<p>The branch <code>fix/bughunt</code> holds 70 commits, one purpose for each commit, in this order. They are pushed as https://github.com/frappe/pilot/pull/643. Commits 37 to 70 came after the PR opened: the memory split task name, the bench user's shell, the fixes for the Greptile review, the mypy fix, the pre-release fixes F39 to F42, the fixes for Greptile reviews 3 to 10, F43 to F49, and the fixes for Greptile review 12. Commits 1 to 24 passed ruff and the full unit suite alone. The same check for the later commits is running; its results will be added here.</p>
 <table>
 <thead>
 <tr>
@@ -1140,6 +1140,31 @@ a { color: var(--accent); }
 <td>65</td>
 <td><code>7754257d</code></td>
 <td><code>fix(build): Build uncapped where systemd-run cannot start a scope</code></td>
+</tr>
+<tr>
+<td>66</td>
+<td><code>ea382f71</code></td>
+<td><code>test(tasks): Stub the Admin start in the tasks start command test</code></td>
+</tr>
+<tr>
+<td>67</td>
+<td><code>5b17bb32</code></td>
+<td><code>fix(tasks): Wait for the bench database before the first task runs</code></td>
+</tr>
+<tr>
+<td>68</td>
+<td><code>6b41383c</code></td>
+<td><code>fix(backups): Delete offsite runs outside the backup runs lock</code></td>
+</tr>
+<tr>
+<td>69</td>
+<td><code>84d4bbd2</code></td>
+<td><code>fix(ui): Stop the domain list refresh after the page closes</code></td>
+</tr>
+<tr>
+<td>70</td>
+<td><code>5f447ca9</code></td>
+<td><code>perf(backups): Read uploaded file sizes only for the listed runs</code></td>
 </tr>
 </tbody>
 </table>
