@@ -53,12 +53,12 @@ a { color: var(--accent); }
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:10 UTC.</p>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 06:14 UTC.</p>
 
 <div class="stats">
-  <div class="stat"><b>26</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>27</b><span>fixes, with tests</span></div>
   <div class="stat"><b>13</b><span>owner decisions (12 built, 1 on hold)</span></div>
-  <div class="stat"><b>121</b><span>log entries</span></div>
+  <div class="stat"><b>122</b><span>log entries</span></div>
 </div>
 
 <div class="note">
@@ -320,6 +320,15 @@ a { color: var(--accent); }
 <td><code>pilot/core/site/uptime_monitoring.py</code></td>
 <td>+2</td>
 <td>Yes: staging-certificate sites log the TLS error</td>
+</tr>
+<tr>
+<td>F28</td>
+<td>UI</td>
+<td>Enable SSL and revert-site tasks showed "Server" as their target, and the task list's site filter missed them.</td>
+<td>The task scope table names their <code>site</code> argument; a bench-wide Let's Encrypt task still shows Server.</td>
+<td><code>admin/frontend/dashboard/src/utils/taskFormat.ts</code></td>
+<td>+1</td>
+<td>Yes: the Enable SSL task page shows the site</td>
 </tr>
 </tbody>
 </table></div>
@@ -685,6 +694,11 @@ a { color: var(--accent); }
 <td><code>fix(ui): Use the singular vCPU label</code></td>
 <td>F21</td>
 </tr>
+<tr>
+<td>29</td>
+<td><code>fix(ui): Show the site of Enable SSL and revert tasks</code></td>
+<td>F28</td>
+</tr>
 </tbody>
 </table>
 <p>Central: one commit, <code>fix(sites): show the customer hostname after the rename lands</code> (D3), on its own branch.</p></div>
@@ -734,11 +748,6 @@ a { color: var(--accent); }
 <td>Setup wizard message</td>
 <td>After a failed init (seen with #638), the wizard also showed "Lost connection to the setup process". The event stream ended without a <code>done</code> event and the reconnect failed. Not reproduced after F1.</td>
 <td>Reproduce with a failing init; check <code>is_draining</code> and the reconnect status.</td>
-</tr>
-<tr>
-<td>Task page target</td>
-<td>The Enable SSL task page shows "Server" as its target although the task has a site. (The uptime reason is fixed: F27.)</td>
-<td>Show the site on the task page.</td>
 </tr>
 <tr>
 <td>Narrow concurrency windows</td>
@@ -1239,6 +1248,7 @@ a { color: var(--accent); }
 <h2 id="log">Log</h2>
 <p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
 <details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>F28 task scope: the dashboard's <code>SITE_ARG_KEY</code> lacked <code>setup-letsencrypt</code> and <code>revert-site</code>, so Enable SSL and revert-site tasks showed "Server" as their target and were missing from the site filter. Added both; a bench-wide Let's Encrypt task (empty site) still shows Server. Dashboard tests 79 pass, vue-tsc and Biome clean. VM: rebuilt dashboard; the Enable SSL task for site2 now shows the site.</li>
 <li>Integration test env: <code>test_proxy_firewall_e2e</code> adds <code>user root;</code> to its throwaway nginx.conf when run as root, so workers can read pytest's 0700 temp dir. On the VM as root: 4/4 pass (was 3/4, also on clean develop).</li>
 <li>F27 uptime reason: <code>UptimeMonitor.ping_site</code> now records <code>error</code> (the URLError reason) when a ping fails without an HTTP status; the site-down alert context carries <code>error</code> (null for HTTP failures). Additive field. Tests +2 (and the payload test updated). VM: one pass logged <code>"error": "[SSL: CERTIFICATE_VERIFY_FAILED] ..."</code> for the staging-certificate sites.</li>
 <li>Status page: the IP redaction hid every IPv4 (127.0.0.1 showed as <code>&lt;vm-ip&gt;</code>); now it hides only public addresses (keeps loopback, private, documentation, Cloudflare). Added an Open items section (uncommitted work, Central branch, D8, D4 UI, yarn.lock drift, restart timeout, wizard message, uptime log, integration tests).</li>
