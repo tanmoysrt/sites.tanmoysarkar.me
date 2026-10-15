@@ -5,30 +5,560 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pilot stability hunt</title>
 <style>
-:root { --fg:#1f2328; --muted:#59636e; --line:#e3e6ea; --bg:#fff; --code:#f4f5f7; --accent:#0b6bcb; }
-@media (prefers-color-scheme: dark) { :root { --fg:#e6e8eb; --muted:#9aa3ad; --line:#30363d; --bg:#0f1115; --code:#1b1f26; --accent:#5aa9f5; } }
+:root { --fg:#1f2328; --muted:#59636e; --line:#e3e6ea; --bg:#fff; --soft:#f6f8fa; --code:#eff1f3; --accent:#0b6bcb; --ok:#1a7f37; }
+@media (prefers-color-scheme: dark) { :root { --fg:#e6e8eb; --muted:#9aa3ad; --line:#30363d; --bg:#0f1115; --soft:#161a20; --code:#1b1f26; --accent:#5aa9f5; --ok:#3fb950; } }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 980px; margin: 0 auto; padding: 32px 16px 80px; }
-h1 { font-size: 26px; margin: 0 0 4px; }
-h2 { font-size: 19px; margin: 36px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+main { max-width: 1080px; margin: 0 auto; padding: 32px 16px 96px; }
+h1 { font-size: 28px; margin: 0 0 6px; }
+h2 { font-size: 20px; margin: 44px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p { margin: 8px 0; }
 .meta { color: var(--muted); font-size: 13px; }
-table { border-collapse: collapse; width: 100%; font-size: 14px; display: block; overflow-x: auto; }
-th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
-th { font-weight: 600; }
-code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 13px; word-break: break-word; }
-#log ul { list-style: none; padding: 0; }
-#log li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 20px 0; }
+.stat { border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+.stat b { display:block; font-size:24px; }
+.stat span { color:var(--muted); font-size:13px; }
+.note { background:var(--soft); border:1px solid var(--line); border-radius:8px; padding:12px 16px; }
+.note ul { margin: 6px 0; padding-left: 20px; }
+nav { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 0; margin-top: 8px; z-index: 1; overflow-x: auto; white-space: nowrap; }
+nav a { margin-right: 16px; font-size: 14px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+th { font-weight: 600; white-space: nowrap; }
+code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 12.5px; word-break: break-word; }
+#log-body ul { list-style: none; padding: 0; margin: 0; }
+#log-body li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+details summary { cursor: pointer; color: var(--accent); margin: 8px 0; }
 a { color: var(--accent); }
-nav a { margin-right: 14px; }
+.mockup { margin: 16px 0; padding: 16px; border: 1px dashed var(--line); border-radius: 10px; background: #1b1b1b; color: #e9e9e9; max-width: 640px; }
+.mockup figcaption { color: #a8a8a8; font-size: 13px; margin-top: 12px; }
+.mock-row { display:flex; justify-content:space-between; align-items:center; padding: 10px 4px; border-bottom: 1px solid #333; }
+.mock-title { font-weight: 600; font-size: 14px; }
+.mock-sub { color: #a8a8a8; font-size: 13px; margin: 2px 0 0; }
+.mock-icon { color: #bbb; }
+.mock-dialog { margin-top: 14px; background: #232323; border-radius: 10px; padding: 16px; }
+.mock-slider { position: relative; height: 6px; background: #3a3a3a; border-radius: 3px; margin: 18px 0 8px; }
+.mock-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #e9e9e9; border-radius: 3px; }
+.mock-knob { position: absolute; top: -5px; width: 16px; height: 16px; margin-left: -8px; background: #fff; border-radius: 50%; }
+.mock-scale { display:flex; justify-content:space-between; font-size: 12px; color: #bbb; }
+.mock-table { margin-top: 12px; font-size: 13px; color: #ddd; }
+.mock-table td { border-color: #333; }
+.mock-actions { display:flex; justify-content:flex-end; gap: 8px; margin-top: 12px; }
+.mock-btn { padding: 4px 12px; border-radius: 6px; background: #333; font-size: 13px; }
+.mock-btn.solid { background: #f2f2f2; color: #111; }
 </style>
 </head>
 <body>
 <main>
 <h1>Pilot stability hunt</h1>
-<p class="meta">Live status of a bug hunt on Pilot. Updated 2026-10-15 01:35 UTC. 36 log entries, newest first.</p>
-<nav><a href="#plan">Plan</a><a href="#log">Log</a></nav>
-<section id="plan"><h2>Goal</h2>
+<p class="meta">A live record of a bug hunt on Pilot (develop), run on a real VM. Updated 2026-10-15 01:47 UTC.</p>
+
+<div class="stats">
+  <div class="stat"><b>19</b><span>fixes, with tests</span></div>
+  <div class="stat"><b>9</b><span>decisions needed</span></div>
+  <div class="stat"><b>43</b><span>log entries</span></div>
+</div>
+
+<div class="note">
+<b>How to review</b>
+<ul>
+<li>All changes are uncommitted on the local branch <code>fix/bughunt</code>, based on <code>origin/develop</code> (6f142bc5). Nothing is pushed.</li>
+<li>Start with <a href="#fixes">Fixes</a>: one row per bug, with the files and tests. Then read <a href="#decisions">Decisions needed</a>: these change a feature or a public surface, so they wait for an owner.</li>
+<li>Every public surface stays compatible: new API fields are optional, no CLI flag was removed, no config key changed shape.</li>
+<li>Check a fix with <code>uv run pytest tests --ignore=tests/e2e --ignore=tests/integration</code> and <code>uv run ruff check admin pilot tests</code>.</li>
+</ul>
+</div>
+
+<nav><a href="#fixes">Fixes</a><a href="#decisions">Decisions needed</a><a href="#results">Test results</a><a href="#parity">bench parity</a><a href="#plan">Plan</a><a href="#log">Log</a></nav>
+
+<h2 id="fixes">Fixes</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Area</th>
+<th>Problem</th>
+<th>Fix</th>
+<th>Main files</th>
+<th>Tests</th>
+<th>Checked on VM</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>Install (#638)</td>
+<td>A version-16 bench from the setup wizard fails: <code>frappe[dev]</code> does not resolve (pypika-stubs against frappe's PyPika fork). Every new dev bench failed.</td>
+<td>Install <code>&lt;app&gt;[dev]</code>; if it fails, warn and install the app without the extra. One install path for init and requirements.</td>
+<td><code>pilot/managers/environment.py</code>, <code>pilot/core/bench/runtime.py</code></td>
+<td>+2</td>
+<td>Yes: wizard init completed</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>Restore</td>
+<td>A config restore copied the source site's custom domains, certificate name and edge route into the target site.</td>
+<td>The restore keeps every protected key of the target (<code>PROTECTED_CONFIG_KEYS</code> is the one list).</td>
+<td><code>pilot/core/site/restore.py</code></td>
+<td>updated</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F3</td>
+<td>Concurrency</td>
+<td>Domain changes and backup retention rewrote <code>site_config.json</code> in place, without the file lock. A domain change during a rename or restore could undo it.</td>
+<td>Read-modify-write under the file lock with an atomic replace.</td>
+<td><code>pilot/core/adapters/domain_provider.py</code>, <code>pilot/config/site_backup.py</code></td>
+<td>+1</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F4</td>
+<td>Concurrency</td>
+<td>A backup could start while a restore, rename or drop owned the site.</td>
+<td>The backup task takes the <code>site:&lt;name&gt;</code> resource key (409 when busy).</td>
+<td><code>admin/backend/api/v1/sites/backups.py</code></td>
+<td>+1</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>TLS</td>
+<td>A certificate failure at the end of <code>new-site</code> failed the task, and the cleanup callback dropped the new site.</td>
+<td>No email or a certbot error leaves the site on HTTP with a message.</td>
+<td><code>pilot/core/site/provisioning.py</code></td>
+<td>+2</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>TLS</td>
+<td>Without a Let's Encrypt email, a domain change failed before nginx was regenerated, so the domain was listed but not served.</td>
+<td>Domain changes always regenerate nginx; certificates are issued only when an email exists.</td>
+<td><code>pilot/core/site/domains.py</code></td>
+<td>+2</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F7</td>
+<td>TLS (ask email)</td>
+<td>Adding a domain without an email failed later in a task.</td>
+<td>The API answers 422 <code>needs_email</code> before the domain is attached and accepts <code>email</code>. The Add Domain dialog asks for the email on step 1.</td>
+<td><code>admin/backend/api/v1/sites/domains.py</code>, <code>AddDomainDialog.vue</code></td>
+<td>+2</td>
+<td>Pending</td>
+</tr>
+<tr>
+<td>F8</td>
+<td>TLS</td>
+<td>Enable SSL "succeeded" when no certificate was issued, then the action was hidden.</td>
+<td>The task fails when no certificate covers the site, so its TLS flag goes back and the action can be retried.</td>
+<td><code>pilot/tasks/setup_letsencrypt.py</code></td>
+<td>+1</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F9</td>
+<td>TLS</td>
+<td>Domain rows showed TLS active with no certificate.</td>
+<td>A direct route shows TLS only when the certificate covers the domain.</td>
+<td><code>pilot/core/site/domains.py</code></td>
+<td>+1</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F10</td>
+<td>TLS</td>
+<td>A removed domain stayed in the certificate, so its renewal later failed for every domain of the site.</td>
+<td>Reissue unless the certificate names exactly the site's domains.</td>
+<td><code>pilot/managers/letsencrypt.py</code></td>
+<td>+3</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F11</td>
+<td>Config</td>
+<td><code>BenchConfig.default()</code> shared one module-level common config, so a change on one config leaked to all others in the process.</td>
+<td>Deep copy per config.</td>
+<td><code>pilot/config/bench.py</code></td>
+<td>+1</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>F12</td>
+<td>Database tuning</td>
+<td>MariaDB kept its old memory settings after a VM resize.</td>
+<td>The host monitor re-sizes MariaDB live when the unit's MemoryMax no longer matches the host's memory. A saved buffer pool too large for the new host is dropped.</td>
+<td><code>pilot/managers/database/mariadb.py</code>, <code>pilot/core/server/monitoring.py</code></td>
+<td>+5</td>
+<td>Yes: 4 to 8 to 2 to 4 GB</td>
+</tr>
+<tr>
+<td>F13</td>
+<td>Updates (#596)</td>
+<td>A killed backup, migrate or update task left the operation in its phase forever, with no retry or revert.</td>
+<td>A failure/cancel callback moves the operation to "Needs attention" with a clear diagnosis.</td>
+<td><code>pilot/core/bench/migration/operation.py</code>, <code>pilot/tasks/*.py</code></td>
+<td>+3</td>
+<td>No</td>
+</tr>
+<tr>
+<td>F14</td>
+<td>CLI (#621)</td>
+<td>No <code>pilot --version</code>.</td>
+<td>Added.</td>
+<td><code>pilot/internal/cli/registry.py</code></td>
+<td>+1</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>F15</td>
+<td>CLI</td>
+<td><code>pilot -y --site S cmd</code> sent <code>-y</code> to Frappe.</td>
+<td>Leading Pilot flags stay with Pilot.</td>
+<td><code>pilot/internal/cli/dispatch.py</code></td>
+<td>+1</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>F16</td>
+<td>CLI</td>
+<td><code>pilot remove logs</code> could not run (missing package file).</td>
+<td>Added <code>pilot/commands/remove/__init__.py</code>.</td>
+<td></td>
+<td>+1</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>F17</td>
+<td>CLI</td>
+<td><code>pilot restart</code> exited 0 when it restarted nothing.</td>
+<td>It fails with the same guidance.</td>
+<td><code>pilot/core/bench/runtime.py</code></td>
+<td>updated</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>F18</td>
+<td>Apps (#639)</td>
+<td>Apps a site lists but the bench lacks (after a restore) showed as blank rows, could not be uninstalled, and broke the site asset build.</td>
+<td>Marked "Not on bench"; uninstall removes only the listing; builds skip them.</td>
+<td><code>pilot/core/site/apps.py</code>, <code>Apps.vue</code>, <code>UninstallAppDialog.vue</code></td>
+<td>+3</td>
+<td>Yes: site 500 fixed from the UI</td>
+</tr>
+<tr>
+<td>F19</td>
+<td>Apps (#640)</td>
+<td>A fork showed the upstream app's website, docs and logo.</td>
+<td>Registry metadata is used only when the app's repository is the listed one.</td>
+<td><code>admin/backend/api/v1/sites/apps.py</code>, <code>Apps.vue</code></td>
+<td>+1</td>
+<td>No</td>
+</tr>
+</tbody>
+</table></div>
+
+<h2 id="decisions">Decisions needed</h2>
+<div class="table-wrap"><p>These items need an owner's decision. Each one changes a feature, a deployment layout or a public surface, so nothing is built yet.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Topic</th>
+<th>What we found</th>
+<th>Proposal</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>App/database RAM split</td>
+<td>The split is hard-coded: MariaDB gets about half of the RAM (<code>/2</code> and <code>_MAX_HOST_MEMORY_SHARE = 0.5</code> in <code>pilot/core/mariadb_memory.py</code>). Gunicorn workers do not follow the host size.</td>
+<td>An optional <code>memory_share</code> (0.2 to 0.8, default 0.5) in <code>[mariadb]</code> of <code>common_config.toml</code>, used by the sizing and the Admin limits; a slider on the database settings page. See the mockup below.</td>
+<td>Small backend change, one UI control (needs mockup approval)</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>socket.io exposed</td>
+<td>Frappe's socket.io listens on <code>*:9000</code> and answers from the internet. It bypasses nginx and the WAF. No host firewall is on by default.</td>
+<td>Use Frappe's <code>socketio_uds</code> (Unix socket) and proxy nginx to it, or bind to &lt;vm-ip&gt;.</td>
+<td>Unit and nginx template change, patch for existing benches</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>Rename and Central</td>
+<td>Pilot sets the new name as primary when Central asks (<code>make_primary</code>). Central keeps the auto-routed <code>site-xxxxx</code> host as the record name and its URL. The image runs <code>setup central --site-pattern</code> without <code>--redirect</code>, so the alias is served, not redirected.</td>
+<td>Central: switch the shown URL to <code>rename_target</code> after the rename task succeeds. Pilot: when <code>redirect</code> is on, redirect the alias to <code>site.primary</code>, except <code>/api/method/ping</code>, which Central probes.</td>
+<td>Central change plus a small nginx change</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>Cloudflare proxy</td>
+<td>A domain behind the orange cloud fails the "points here" DNS check (409). Flexible SSL loops on the HTTP-to-HTTPS redirect. Client IPs are Cloudflare's.</td>
+<td>Accept Cloudflare IP ranges in the DNS check with a warning; an optional <code>proxy.cloudflare</code> setting for <code>set_real_ip_from</code> + <code>CF-Connecting-IP</code>; document "Full (strict)".</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>Certificate renewal</td>
+<td>Pilot never calls <code>certbot renew</code>. Debian and Ubuntu enable the certbot timer; Fedora and Arch do not, so certificates can expire there. No expiry alert.</td>
+<td>A Pilot user timer that runs <code>renew</code> and a reissue sweep, plus a notification under 14 days.</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>Uninstall (#567)</td>
+<td>Uninstalling an app from its last site also removes it from the bench (documented, surprising).</td>
+<td>Keep the app on the bench; <code>remove-app</code> is the only removal. Keep the old behavior behind an optional flag.</td>
+<td>Small, changes default behavior</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>Marketplace escape hatch</td>
+<td>A marketplace app follows registry releases only; a developer's branch with no release never gets updates.</td>
+<td>Fall back to the branch tip when the registry lists no release for that branch, or an opt-in per app.</td>
+<td>Small</td>
+</tr>
+<tr>
+<td>D8</td>
+<td>Bench parity</td>
+<td>No <code>pilot update</code>, <code>drop-site</code>, domain, <code>switch-branch</code>, <code>pip</code>, backup schedule or <code>renew-lets-encrypt</code> CLI. wkhtmltopdf is not installed.</td>
+<td>Thin CLI commands over the existing core and tasks, in priority order of the parity table.</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>D9</td>
+<td>MariaDB pool after upsize</td>
+<td><code>innodb_buffer_pool_size_max</code> is read-only, so after an upsize the larger pool waits for the next MariaDB restart.</td>
+<td>Accept, or restart MariaDB once at boot when the host grew (issue #528 asks for no automatic restart).</td>
+<td>Small</td>
+</tr>
+</tbody>
+</table></div>
+<h3>D1 mockup: memory split</h3>
+
+<figure class="mockup" aria-label="Mockup of a memory split row and dialog in Settings, Database">
+  <div class="mock-row">
+    <div><div class="mock-title">Memory split</div><div class="mock-sub">Apps 50% &middot; Database 50% of 3.8 GB</div></div>
+    <span class="mock-icon" aria-hidden="true">&#9998;</span>
+  </div>
+  <div class="mock-dialog">
+    <div class="mock-title">Memory split</div>
+    <p class="mock-sub">Choose how much memory the database may use. The rest stays for web, workers and Redis.</p>
+    <div class="mock-slider"><span class="mock-fill" style="width:50%"></span><span class="mock-knob" style="left:50%"></span></div>
+    <div class="mock-scale"><span>Apps 1.9 GB</span><span>Database 1.9 GB</span></div>
+    <table class="mock-table"><tr><td>InnoDB buffer pool</td><td>353 MB</td></tr><tr><td>Database memory limit (MemoryMax)</td><td>1092 MB</td></tr></table>
+    <div class="mock-actions"><span class="mock-btn">Cancel</span><span class="mock-btn solid">Apply</span></div>
+  </div>
+  <figcaption>Proposed, not built. One row in Settings, Database, and a dialog with a slider (20% to 80%). Apply re-sizes MariaDB live, as a VM resize does now.</figcaption>
+</figure>
+
+
+<h2 id="results">Test results</h2>
+<div class="table-wrap"><h3>Test host</h3>
+<p>One Ubuntu 24.04 VM, resized during the tests. Pilot <code>develop</code> (<code>--dev</code> install) plus the local fixes, Frappe <code>version-16</code>, production with systemd and nginx. Certificates come from the Let's Encrypt staging CA, because the test domains share one rate limit.</p>
+<h3>End-to-end checks</h3>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Root install, then <code>install.sh --dev</code> as the bench user</td>
+<td>Pass. The first <code>pilot start</code> builds 3 frontends: about 12 minutes on 1 vCPU, most of it npm install.</td>
+</tr>
+<tr>
+<td>Setup wizard, version-16, MariaDB</td>
+<td>Failed before F1 (#638). Pass after F1, including a retry of the failed init.</td>
+</tr>
+<tr>
+<td><code>setup production --admin-domain ... --tls</code></td>
+<td>Pass in 14 s. Admin served over HTTPS.</td>
+</tr>
+<tr>
+<td>New site from the Admin UI</td>
+<td>Pass. HTTPS 200.</td>
+</tr>
+<tr>
+<td>Site lists an app the bench lacks</td>
+<td>Site returned 500. After F18 the UI shows "Not on bench" and uninstall brings the site back to 200.</td>
+</tr>
+<tr>
+<td>Resize 4 GB to 8 GB</td>
+<td>MariaDB re-sized about 1 minute after boot: MemoryMax 1092M to 3048M, pool 1568M in my.cnf. The live pool stays at the old maximum until the next MariaDB restart (D9).</td>
+</tr>
+<tr>
+<td>Resize 8 GB to 2 GB</td>
+<td>Re-sized to MemoryMax 512M, pool 128M. No OOM. Site 200.</td>
+</tr>
+<tr>
+<td>Resize 2 GB to 4 GB</td>
+<td>Re-sized to MemoryMax 1092M. Site 200.</td>
+</tr>
+</tbody>
+</table>
+<h3>Memory use</h3>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Host</th>
+<th>Used</th>
+<th>Main processes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Idle, one site, production</td>
+<td>1 vCPU, 4 GB</td>
+<td>about 1.0 GB</td>
+<td>mariadbd 170 MB, gunicorn master + 2 workers 377 MB, worker pool 214 MB, socket.io 69 MB, admin 83 MB</td>
+</tr>
+<tr>
+<td>New site from the UI (peak)</td>
+<td>1 vCPU, 4 GB</td>
+<td>2.1 GB</td>
+<td>from the dashboard graph</td>
+</tr>
+<tr>
+<td>Idle after boot</td>
+<td>0.5 vCPU, 2 GB</td>
+<td>0.73 GB</td>
+<td>MariaDB at 128M pool</td>
+</tr>
+</tbody>
+</table>
+<h3>Unit tests</h3>
+<p>Full unit suite (<code>tests</code> without e2e and integration): 3278 passed, 1 skipped, before the latest app fixes. Ruff clean. vue-tsc clean.</p></div>
+
+<h2 id="parity">bench parity</h2>
+<div class="table-wrap"><p>Every Frappe site command works through Pilot: <code>pilot --site S &lt;command&gt;</code> or <code>pilot frappe --site S &lt;command&gt;</code>. The table lists the <code>bench</code> commands that are bench-level. "By design" means Pilot does the job another way; it is our reading of the architecture, because no Pilot document lists bench commands as out of scope.</p>
+<table>
+<thead>
+<tr>
+<th>bench</th>
+<th>Pilot</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>init</code></td>
+<td><code>pilot new</code> + <code>pilot init</code> (branch and Python come from <code>bench.toml</code> or the wizard)</td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>get-app</code>, <code>new-app</code>, <code>remove-app</code></td>
+<td>same names</td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>start</code>, <code>restart</code></td>
+<td><code>pilot start</code>, <code>pilot restart</code></td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>backup-all-sites</code></td>
+<td><code>pilot --site all backup</code></td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>setup production</code>, <code>nginx</code>, <code>supervisor</code>, <code>systemd</code></td>
+<td><code>pilot setup production</code>, <code>pilot setup nginx</code></td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>setup requirements</code>, <code>setup config</code>, <code>setup redis</code></td>
+<td><code>pilot setup requirements</code>, <code>pilot setup config</code></td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>setup lets-encrypt</code></td>
+<td><code>pilot setup letsencrypt</code></td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>disable-production</code></td>
+<td><code>pilot remove production</code></td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>config set-common-config</code></td>
+<td><code>pilot frappe set-config -g</code></td>
+<td>OK</td>
+</tr>
+<tr>
+<td><code>update</code> (<code>--pull --patch --build --apps --no-backup</code>)</td>
+<td>Admin API only</td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>retry-upgrade</code></td>
+<td>Admin API only</td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>switch-to-branch</code></td>
+<td>Admin API only</td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>setup add-domain</code>, <code>remove-domain</code></td>
+<td>Admin API only</td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>drop-site</code> (Pilot-aware)</td>
+<td>passes through to Frappe, so <code>bench.toml</code> and nginx can drift</td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>renew-lets-encrypt</code></td>
+<td>none (see D5)</td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>setup backups</code></td>
+<td>Admin schedule only</td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>pip</code></td>
+<td>none (uv venv has no pip)</td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>install wkhtmltopdf</code></td>
+<td>not installed by <code>install.sh</code></td>
+<td>Gap</td>
+</tr>
+<tr>
+<td><code>setup wildcard-ssl</code>, <code>set-ssl-certificate</code></td>
+<td>none (Let's Encrypt HTTP-01 only)</td>
+<td>Gap, low</td>
+</tr>
+<tr>
+<td><code>migrate-env</code>, <code>completions</code>, <code>setup fonts</code></td>
+<td>none</td>
+<td>Gap, low</td>
+</tr>
+<tr>
+<td><code>exclude-app</code>, <code>validate-dependencies</code>, <code>src</code>, <code>find</code>, <code>app-cache</code>, <code>install *</code>, <code>setup sudoers</code>, <code>setup procfile</code>, <code>setup firewall</code></td>
+<td>done another way: Admin app selection, automatic validation, fixed benches directory, prebuilt assets, <code>install.sh</code>, own process runner, <code>[firewall]</code></td>
+<td>By design</td>
+</tr>
+</tbody>
+</table></div>
+
+<h2 id="plan">Plan and status</h2>
+<div class="table-wrap"><h2>Goal</h2>
 <p>Make Pilot stable, correct and light on resources for production use. Find bugs on a real VM, fix the small ones, and record every finding. Test with Frappe <code>version-16</code> and <code>develop</code>. Bug fixes only: no new features unless a bug needs one.</p>
 <h2>Ground rules</h2>
 <ul>
@@ -52,73 +582,73 @@ nav a { margin-right: 14px; }
 <td>1</td>
 <td>Setup</td>
 <td>Install develop Pilot on the VM (<code>--dev</code>), wizard init on version-16.</td>
-<td>done (install), init running</td>
+<td>done: install pass, wizard init pass after F1</td>
 </tr>
 <tr>
 <td>2</td>
 <td>Database tuning</td>
 <td>MariaDB settings must follow the host size after a resize. Find why they do not.</td>
-<td>root cause found, fixing</td>
+<td>fixed (F12), checked with 3 real resizes</td>
 </tr>
 <tr>
 <td>3</td>
 <td>Database tuning</td>
 <td>RAM split between app and database (a slider in the UI). Investigate and propose.</td>
-<td>investigated, proposal pending</td>
+<td>proposal D1 with mockup</td>
 </tr>
 <tr>
 <td>4</td>
 <td>TLS</td>
 <td>Ask for the Let's Encrypt email in the UI instead of failing. Ask before a custom domain is added.</td>
-<td>root cause found, fixing</td>
+<td>fixed (F5 to F8), UI check pending</td>
 </tr>
 <tr>
 <td>5</td>
 <td>TLS</td>
 <td>A wildcard domain that a proxy serves must not go into certificate renewal.</td>
-<td>mostly correct already; 2 gaps found</td>
+<td>already correct for provider routes; 2 small gaps logged</td>
 </tr>
 <tr>
 <td>6</td>
 <td>Proxy</td>
 <td>Cloudflare proxy (orange cloud): issuance, renewal, real client IP, redirect loops.</td>
-<td>2 bugs found, fixing</td>
+<td>proposal D4</td>
 </tr>
 <tr>
 <td>7</td>
 <td>Domains</td>
 <td>After a site rename, the new domain must be primary, not the random one (Central and Atlas auto routing).</td>
-<td>todo</td>
+<td>root cause in Central; proposal D3</td>
 </tr>
 <tr>
 <td>8</td>
 <td>Restore</td>
 <td>Restoring site config must not add back old custom domains.</td>
-<td>todo</td>
+<td>fixed (F2)</td>
 </tr>
 <tr>
 <td>9</td>
 <td>Apps</td>
 <td>Apps in Installed Applications but not on the bench show in the app list (after a restore). Issue #639.</td>
-<td>todo</td>
+<td>fixed (F18), checked in the UI</td>
 </tr>
 <tr>
 <td>10</td>
 <td>Apps</td>
 <td>Marketplace app escape hatch: update from a git branch. Investigate only.</td>
-<td>todo</td>
+<td>proposal D7</td>
 </tr>
 <tr>
 <td>11</td>
 <td>Parity</td>
 <td>Compare every <code>frappe/bench</code> command with Pilot. List what is missing and not left out by design.</td>
-<td>table done, CLI bugs being fixed</td>
+<td>table done; CLI bugs fixed (F14 to F17); gaps in D8</td>
 </tr>
 <tr>
 <td>12</td>
 <td>Resources</td>
 <td>Measure memory at idle and during build, migrate, backup. Check build limits.</td>
-<td>todo</td>
+<td>idle measured; build test next</td>
 </tr>
 <tr>
 <td>13</td>
@@ -130,7 +660,7 @@ nav a { margin-right: 14px; }
 <td>14</td>
 <td>Issues</td>
 <td>Fix small reported bugs from frappe/pilot issues.</td>
-<td>todo</td>
+<td>#638 #639 #640 #596 #621 fixed</td>
 </tr>
 <tr>
 <td>15</td>
@@ -153,17 +683,17 @@ nav a { margin-right: 14px; }
 <tr>
 <td>#639</td>
 <td>App lists out of sync (site lists apps the bench does not have)</td>
-<td>fixing</td>
+<td>fixed (F18)</td>
 </tr>
 <tr>
 <td>#640</td>
 <td>Forked app shows upstream repository and links</td>
-<td>fixing</td>
+<td>fixed (F19)</td>
 </tr>
 <tr>
 <td>#567</td>
 <td>Uninstall from a site also removes the app from the bench</td>
-<td>by design today, proposal</td>
+<td>by design today, proposal D6</td>
 </tr>
 <tr>
 <td>#579</td>
@@ -173,17 +703,17 @@ nav a { margin-right: 14px; }
 <tr>
 <td>#596</td>
 <td>Killed backup during update leaves a "backing up" loader</td>
-<td>fixing</td>
+<td>fixed (F13)</td>
 </tr>
 <tr>
 <td>#638</td>
 <td>version-16 bench install fails with the <code>dev</code> extra</td>
-<td>fixing</td>
+<td>fixed (F1), checked on the VM</td>
 </tr>
 <tr>
 <td>#621</td>
 <td>No <code>pilot --version</code></td>
-<td>fixing</td>
+<td>fixed (F14)</td>
 </tr>
 <tr>
 <td>#408</td>
@@ -191,9 +721,18 @@ nav a { margin-right: 14px; }
 <td>todo</td>
 </tr>
 </tbody>
-</table></section>
-<h2>Log (newest first)</h2>
-<section id="log"><ul>
+</table></div>
+
+<h2 id="log">Log</h2>
+<p class="meta">Every step, newest first. The source is an append-only log in the repository checkout.</p>
+<details><summary>Show the full log</summary><section id="log-body"><ul>
+<li>2026-10-15 TESTS ruff check clean; ruff format applied only to touched files that were formatted at base (the repo has 131 unformatted files at base); vue-tsc clean.</li>
+<li>2026-10-15 FIX #640 The site app list used registry title, description, logo, website and docs by app name only, so a fork or private copy showed the upstream links. The API returns <code>is_marketplace</code> per app (the backend already compares the repository URL with <code>same_repository</code>), and the UI uses registry metadata only when it is true. <code>SiteApps.disable_app</code> and the UI <code>canDisable</code> also used a name match; both use <code>is_marketplace</code> now. Changed: same files as #639.</li>
+<li>2026-10-15 FIX #639 A site that lists an app the bench lacks (restore from another bench): <code>GET /sites/&lt;name&gt;/apps</code> marks it <code>missing: true</code> (optional field) and the UI card says "Not on bench" with a one-line explanation instead of a blank row; <code>pilot list-site-apps</code> prints <code>&lt;app&gt; (not on bench)</code>; uninstalling it runs Frappe's <code>remove-from-installed-apps</code> (never imports the app) instead of failing "App X not found in bench", and never touches the bench; <code>Site.build_assets</code> builds only apps the bench has (it raised "App(s) not found in bench"). Changed: pilot/core/site/apps.py (<code>forget_missing_app</code>), pilot/core/site/<strong>init</strong>.py, pilot/commands/sites/list_apps.py, admin/backend/api/v1/sites/apps.py, types/site_apps.py, dashboard components/sites/Apps.vue. Tests: test_site_apps.py (+1), test_site_apps_view.py (+1, +1 assert), test_commands.py (+1).</li>
+<li>2026-10-15 FIX (CLI) <code>pilot restart</code> printed guidance and exited 0 on a development bench or an incomplete production deployment, so scripts took a skipped restart for a done one. It now raises <code>BenchError</code> (exit 1) with the same text. Only the CLI calls <code>restart_workload</code>; <code>-b all</code> already skips development benches. Removed the unused <code>_incomplete_message</code>. Tests updated (2) + 3 new CLI tests. docs/commands.md: <code>--version</code>, restart exit, <code>setup telemetry</code>, <code>remove logs</code>, <code>admin revoke-totp</code>.</li>
+<li>2026-10-15 FIX (CLI) <code>pilot remove logs</code> was unreachable: <code>pilot/commands/remove/</code> had no <code>__init__.py</code>, so command discovery (<code>pkgutil.walk_packages</code>) skipped it. Added the package file. Test asserts discovery finds it.</li>
+<li>2026-10-15 FIX (CLI) <code>pilot -y --site S &lt;frappe command&gt;</code> passed <code>-y</code> to Frappe ("No such option: -y"). Leading Pilot-only flags (<code>--verbose</code>, <code>--yes</code>, <code>-y</code>) are now dropped before passthrough; flags after the Frappe command (e.g. <code>reinstall --yes</code>) stay. Changed: pilot/internal/cli/dispatch.py.</li>
+<li>2026-10-15 FIX #621 <code>pilot --version</code> prints <code>pilot &lt;version&gt;</code> (<code>dev</code> on a source checkout) instead of going to Frappe ("No such option: --version"). Changed: pilot/internal/cli/registry.py, pilot/internal/cli/dispatch.py.</li>
 <li>2026-10-15 MEMORY (idle, 1 vCPU/4 GB, version-16, one site, production systemd) ~1.0 GB used: mariadbd 170 MB, gunicorn master+2 workers 377 MB, worker pool 2 processes 214 MB, socket.io 69 MB, admin 83 MB. Dashboard peak 2.12 GB during new-site.</li>
 <li>2026-10-15 FIX #596 Chain tasks (<code>migration-backup</code>, <code>migrate</code>, <code>update</code>) declare <code>@on_failure @on_cancel fail_migration_step</code> -&gt; new callback operation <code>fail-migration-step</code> -&gt; <code>MigrationOperation.fail_stopped_step(phase, site)</code>. When a task is killed or its process dies while the operation is still in that phase, the site step is marked failed, the diagnosis says "The task stopped before it finished. Retry it, or revert.", the operation enters <code>needs_attention</code> (retry/revert allowed), and a backup phase restores maintenance settings. A no-op once the operation left the phase, so normal failures (already handled in the task) are unchanged. Changed: pilot/core/bench/migration/operation.py, pilot/internal/tasks/callbacks.py, pilot/tasks/{migration_backup,migrate,update}.py. Tests: test_migration_operation.py (+3). Suites tasks/core/internal/admin: 1847 passed.</li>
 <li>2026-10-15 VERIFIED (resize up) Dashboard resize 1 vCPU/4 GB -&gt; 2 vCPU/8 GB. About 1 minute after boot the monitor logged "Sized MariaDB for 7937 MiB of host memory": unit MemoryHigh/Max 964M/1092M -&gt; 2744M/3048M (runtime too), my.cnf pool 1568M, log file 512M. Live pool stayed 760M: <code>innodb_buffer_pool_size_max</code> is read-only, so the larger pool needs the next MariaDB restart (known MariaDB limit, already noted in code). site1 200 after the resize.</li>
@@ -230,7 +769,7 @@ nav a { margin-right: 14px; }
 <li>2026-10-15 SCOPE (user) Run develop Pilot on the VM (<code>--dev</code> checkout, synced with local <code>fix/bughunt</code>). Clean up inconsistent or tangled code only where a fix already touches it. Review with the Atlas engineering playbook (<code>benches/atlas-bench/apps/atlas/llm/engineering-playbook</code>).</li>
 <li>2026-10-15 SETUP Started the released install (<code>install.sh</code> as root) on the VM.</li>
 <li>2026-10-15 START Read CLAUDE.md, playbook, SPEC.md. Switched the checkout from <code>feat/pilot-mailbox</code> (no own commits, behind develop) to new branch <code>fix/bughunt</code> on origin/develop. Read open bug issues #640 #639 #638 #596 #579 #571 #567 #437 #408 #528 #572 #627 #621.</li>
-</ul></section>
+</ul></section></details>
 </main>
 </body>
 </html>
