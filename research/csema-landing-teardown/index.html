@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSEMA landing page teardown</title>
+<meta name="description" content="A conversion teardown of the CSEMA homepage: what stops visitors from creating a free account, the evidence, and a proposed layout.">
+<style>
+  :root {
+    --ink: #171717; --ink2: #404040; --ink3: #6b6b6b; --line: #e5e5e5; --soft: #f6f6f6;
+    --red: #c81e1e; --red-soft: #fdf1f1;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--ink); font: 17px/1.65 var(--sans); }
+  main { max-width: 760px; margin: 0 auto; padding: 56px 20px 96px; }
+  h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 12px; }
+  h2 { font-size: 24px; line-height: 1.25; letter-spacing: -.01em; margin: 64px 0 12px; }
+  h3 { font-size: 18px; margin: 36px 0 6px; }
+  p, li { color: var(--ink2); }
+  a { color: var(--ink); text-underline-offset: 3px; }
+  a:hover { color: var(--red); }
+  code, .num { font-family: var(--mono); font-size: .9em; }
+  .meta { color: var(--ink3); font-size: 14px; margin: 0 0 32px; }
+  .verdict { border: 1px solid var(--ink); border-radius: 10px; padding: 20px 22px; margin: 28px 0; }
+  .verdict p { margin: 0; color: var(--ink); }
+  .verdict p + p { margin-top: 10px; color: var(--ink2); }
+  .tag { display: inline-block; font: 600 12px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--red); margin-bottom: 6px; }
+  .finding { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 40px; }
+  .finding h3 { margin-top: 8px; }
+  .rows { display: grid; grid-template-columns: 92px 1fr; gap: 6px 16px; margin: 12px 0 0; font-size: 16px; }
+  .rows dt { color: var(--ink3); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; padding-top: 3px; }
+  .rows dd { margin: 0; color: var(--ink2); }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 16px 0; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink3); font-weight: 600; }
+  td.bad { color: var(--red); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  figure { margin: 24px 0; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; display: block; }
+  figcaption { font-size: 14px; color: var(--ink3); margin-top: 8px; }
+  .diagram { width: 100%; height: auto; display: block; }
+  ol.layout { padding-left: 22px; }
+  ol.layout li { margin: 6px 0; }
+  ol.layout b { color: var(--ink); }
+  .cta { display: inline-block; background: var(--red); color: #fff; text-decoration: none; font-weight: 600; padding: 12px 20px; border-radius: 8px; margin-top: 8px; }
+  .cta:hover { background: #a51616; color: #fff; }
+  .note { background: var(--soft); border-radius: 8px; padding: 14px 16px; font-size: 15px; }
+  .sources li { font-size: 15px; }
+  @media (max-width: 600px) {
+    .rows { grid-template-columns: 1fr; gap: 0; }
+    .rows dd { margin-bottom: 10px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<span class="tag">Research · Teardown</span>
+<h1>CSEMA landing page teardown</h1>
+<p class="meta">Page: <a href="https://csem.sturtles.in/">csem.sturtles.in</a> · Checked on 17 October 2026, logged out · Goal of the page: a visitor creates a free account</p>
+
+<p>CSEMA is a hands-on cybersecurity training platform. Its homepage has one job. It must turn a visitor into a free account. This teardown finds what stops that. Each finding has evidence and a fix. At the end, there is a proposed layout and a working demo of it.</p>
+
+<p>Method: I took screenshots at 1440 px (desktop) and 390 px (phone) width. I followed every button with a logged-out browser. I compared the numbers on the homepage with the numbers on the sign-up, pricing and challenges pages. I calculated text contrast with the WCAG formula.</p>
+
+<div class="verdict">
+  <p><b>What is fundamentally wrong: the page is a product catalogue, not a path to a first win.</b></p>
+  <p>The page lists every product area with equal weight: paths, scenarios, challenges, SOC, network labs, AI robotics and the attack box. Each area gets the same red button. The visitor must decide alone where to start. The strongest reasons to sign up are hidden: no card is needed, 5 free machine hours, one-click Google or GitHub sign-up, and labs built on real CVEs. The red accent is on almost everything, so the real call to action does not stand out.</p>
+</div>
+
+<figure>
+  <img src="hero-desktop.webp" width="1200" height="750" alt="Current CSEMA hero at desktop width. A large headline with two words in red, one red button, a row of small avatars with five yellow stars, and a dashboard mockup below.">
+  <figcaption>The current first screen at 1440 px. The headline is a general claim. The visual below it is a lesson dashboard.</figcaption>
+</figure>
+
+<h2>Findings, most damaging first</h2>
+
+<div class="finding">
+  <span class="tag">1 · Navigation</span>
+  <h3>Eight buttons look the same and go to five places</h3>
+  <p>The homepage has eight filled red buttons. They have the same color, size and arrow. A visitor cannot know which one is the main action. Two of them send a new visitor to a sign-in page. The Zero Hour campaign page also asks a new visitor to "Log In to Start".</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Button text</th><th>Goes to</th><th>What a new visitor sees</th></tr></thead>
+    <tbody>
+      <tr><td>Start free (nav)</td><td><code>/register</code></td><td>Sign-up form</td></tr>
+      <tr><td>Get started for free (hero)</td><td><code>/register</code></td><td>Sign-up form</td></tr>
+      <tr><td>Start practicing</td><td><code>/register</code></td><td>Sign-up form</td></tr>
+      <tr><td>Start a path now</td><td><code>/learning</code></td><td>Catalogue page</td></tr>
+      <tr><td>Start a challenge now</td><td><code>/challenges</code></td><td>Catalogue page</td></tr>
+      <tr><td>Start a scenario now</td><td><code>/dashboard/red-team-labs</code></td><td class="bad">"Sign in to your account. Welcome back!"</td></tr>
+      <tr><td>SOC Arena (card)</td><td><code>/dashboard/soc</code></td><td class="bad">"Sign in to your account. Welcome back!"</td></tr>
+      <tr><td>Start your attack box</td><td><code>/register</code></td><td>Sign-up form</td></tr>
+      <tr><td>Get started for free (footer)</td><td><code>/register</code></td><td>Sign-up form</td></tr>
+      <tr><td>Zero Hour (text link) → "Log In to Start"</td><td><code>/campaigns/zero-hour</code></td><td class="bad">A button that asks a new visitor to log in</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <figure style="max-width: 520px">
+    <img src="login-wall.webp" width="1200" height="750" alt="The page a logged-out visitor sees after clicking Start a scenario now: a sign-in form titled Sign in to your account, with the text Welcome back.">
+    <figcaption>"Start a scenario now" opens this page. It says "Welcome back" to a person who has no account.</figcaption>
+  </figure>
+  <dl class="rows">
+    <dt>Effect</dt><dd>A visitor who clicks the scenario button expects a lab. They get a login form for an account they do not have. Many will leave.</dd>
+    <dt>Fix</dt><dd>Use one filled red button style, and send it to sign-up only. Make every other action an outline button or a text link. If a link needs an account, send the visitor to <code>/register?redirect=…</code>, not to <code>/login</code>.</dd>
+  </dl>
+</div>
+
+<div class="finding">
+  <span class="tag">2 · Visual hierarchy</span>
+  <h3>Red is everywhere, so the call to action does not stand out</h3>
+  <p>An accent color works because it is rare. On this page, red is in the hero headline, in the second line of six section headings, on eight buttons and on many icons. Other colors also compete: yellow stars, green progress rings, blue and violet icon tiles, and an indigo chat bubble.</p>
+  <dl class="rows">
+    <dt>Effect</dt><dd>The eye has no single target. The sign-up button has the same visual weight as the words "your expertise" and "good questions".</dd>
+    <dt>Fix</dt><dd>Make the page monochrome: black, white and a gray scale. Use red for two jobs only: the primary action, and the "Live" state of a season. Set headings in white, not red.</dd>
+  </dl>
+</div>
+
+<div class="finding">
+  <span class="tag">3 · Hero</span>
+  <h3>The hero shows the least exciting moment of the product</h3>
+  <p>The headline says "The best way to build real cybersecurity skills". Any competitor can say that. The visual below it is a learning dashboard: "Good afternoon, Alex", a lesson list and weekly goals. It looks like a course site.</p>
+  <p>The moment that makes CSEMA different is lower on the page, in section seven. That moment is a terminal in the browser, a live target machine and a captured flag.</p>
+  <dl class="rows">
+    <dt>Effect</dt><dd>The first screen does not show why this is better than a video course.</dd>
+    <dt>Fix</dt><dd>Lead with the concrete promise: "Hack real machines in your browser." The sign-up page already uses this line. Show the terminal and a captured flag in the hero.</dd>
+  </dl>
+</div>
+
+<div class="finding">
+  <span class="tag">4 · Offer</span>
+  <h3>The best reasons to sign up are hidden</h3>
+  <p>Other pages of the site state strong facts. The homepage does not show them near the main button.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Fact</th><th>Where it is today</th></tr></thead>
+    <tbody>
+      <tr><td>Free plan is ₹0, no card needed</td><td>Pricing page, sign-up page</td></tr>
+      <tr><td>5 machine hours every month, free</td><td>Small gray text next to button 8, and in the FAQ</td></tr>
+      <tr><td>One-click sign-up with Google or GitHub</td><td>Sign-up page only</td></tr>
+      <tr><td>Labs built on real CVEs (TeamCity, Jenkins, Check Point, Apache Struts)</td><td>Challenges page only</td></tr>
+      <tr><td>Nothing to install</td><td>FAQ, item 3</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <dl class="rows">
+    <dt>Effect</dt><dd>"Start free" asks for trust but does not say what the visitor gets. Fear of a hidden cost or a long setup stays.</dd>
+    <dt>Fix</dt><dd>Put a short line under the main button: "₹0 · No card · 5 lab hours every month · Runs in your browser". Show the Google and GitHub buttons in the hero.</dd>
+  </dl>
+</div>
+
+<div class="finding">
+  <span class="tag">5 · Trust</span>
+  <h3>The numbers disagree, and one number hurts</h3>
+  <p>The site gives four different challenge counts:</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Page</th><th>Claim</th></tr></thead>
+    <tbody>
+      <tr><td>Homepage stats</td><td><span class="num">385</span> hands-on challenges</td></tr>
+      <tr><td>Sign-up page</td><td><span class="num">350+</span> free challenges</td></tr>
+      <tr><td>Challenges page tab</td><td>Challenges <span class="num">231</span> · Labs <span class="num">25</span></td></tr>
+      <tr><td>Pricing, free plan</td><td><span class="num">118</span> free challenges</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>The counts may use different definitions. A visitor cannot know that. The sign-up page says "350+ free challenges", but the pricing page says 118 are free. That looks like an exaggeration.</p>
+  <p>The homepage also shows "31 flags captured this week" next to "6,988 registered learners". Read together, this suggests a low level of activity. The five yellow stars have no source.</p>
+  <dl class="rows">
+    <dt>Effect</dt><dd>Security learners are skeptical by trade. Inconsistent numbers reduce trust in every other claim.</dd>
+    <dt>Fix</dt><dd>Use one source for each count, with one definition. Remove the weekly flag count, or replace it with a larger time window. Remove the stars, or link them to a real review source.</dd>
+  </dl>
+</div>
+
+<div class="finding">
+  <span class="tag">6 · Structure</span>
+  <h3>One template, repeated six times, for one audience</h3>
+  <p>Six sections use the same pattern: a heading with a red second line, two paragraphs, a mockup and a red button. The sections alternate left and right. The page does not tell a story. It does not ask "Who are you?".</p>
+  <p>CSEMA has at least three audiences: complete beginners, practitioners who want hands-on practice, and teams or universities. Beginners find reassurance only in the FAQ. Teams find only one FAQ answer and an outline button.</p>
+  <dl class="rows">
+    <dt>Effect</dt><dd>The visitor must map the product menu to their own need. Many visitors will not do this work.</dd>
+    <dt>Fix</dt><dd>Replace the five feature sections with one "Pick your starting point" block. It has three choices, one per audience. Add a separate band for teams.</dd>
+  </dl>
+</div>
+
+<div class="finding">
+  <span class="tag">7 · Leaks and noise</span>
+  <h3>Too many exits, and a widget that covers content</h3>
+  <p>The top bar has seven links. One of them, "Events", opens a different domain. On a phone, the indigo chat bubble covers the product mockup and part of the text.</p>
+  <figure style="max-width: 280px">
+    <img src="hero-mobile.webp" width="390" height="844" alt="Current CSEMA hero at phone width. The indigo chat bubble sits on top of the dashboard mockup.">
+    <figcaption>Phone width, 390 px. The chat bubble is off-brand and covers content.</figcaption>
+  </figure>
+  <dl class="rows">
+    <dt>Effect</dt><dd>Each extra link is a way to leave before sign-up. The chat bubble adds a seventh color and blocks the page.</dd>
+    <dt>Fix</dt><dd>Keep four links: Learn, Practice, Teams, Pricing. Move Events to the footer. Make the chat bubble monochrome. On a phone, show it only after the visitor scrolls past the hero.</dd>
+  </dl>
+</div>
+
+<div class="finding">
+  <span class="tag">8 · After the click</span>
+  <h3>The sign-up form asks for more than it needs</h3>
+  <p>The email sign-up form has four fields: username, email, password and confirm password. Then it sends a code to verify the email.</p>
+  <dl class="rows">
+    <dt>Fix</dt><dd>Remove "Confirm password". The eye icon already lets the user check the password. Ask for the username after the first lab, not before. Put Google and GitHub first, as they are now.</dd>
+  </dl>
+</div>
+
+<div class="finding">
+  <span class="tag">9 · Accessibility</span>
+  <h3>White text on the red buttons fails the contrast minimum</h3>
+  <p>The buttons use <code>#EF4444</code> with white text. The contrast ratio is <span class="num">3.76:1</span>. WCAG AA needs <span class="num">4.5:1</span> for text of this size.</p>
+  <dl class="rows">
+    <dt>Fix</dt><dd>Use <code>#DC2626</code> (<span class="num">4.83:1</span>) for the button fill and <code>#B91C1C</code> (<span class="num">6.47:1</span>) for hover. The red stays the same family.</dd>
+  </dl>
+</div>
+
+<h2>Before and after: page structure</h2>
+<p>The left column is the current page, top to bottom. The right column is the proposed page. A filled dot is a filled red button. A ring is an outline button or a text link.</p>
+<svg id="structure" class="diagram" viewBox="0 0 720 800" role="img" aria-label="Diagram. Current page: eleven sections with eight filled red buttons spread through them. Proposed page: eleven sections where the filled red button appears in the top bar, the hero, after the attack box demo, in the free plan block and in the final band, all going to sign-up. Other actions are outline buttons."></svg>
+
+<h2>Proposed layout</h2>
+<p>Each section has one job. The filled red button always goes to sign-up. It says the same words every time.</p>
+<ol class="layout">
+  <li><b>Season bar.</b> One line: "Season 1: Zero Hour is live". Red "Live" dot. Gives a reason to start today.</li>
+  <li><b>Top bar.</b> Logo, four links, "Log in" as text, "Start free" as the only filled button. It stays on screen when the visitor scrolls.</li>
+  <li><b>Hero.</b> "Hack real machines. Right in your browser." Short sub-line. Main button "Start free". Variant B replaces it with Google and GitHub buttons. Below: "₹0 · No card · 5 lab hours every month". On the right: a live terminal that ends with "Flag captured +175 XP".</li>
+  <li><b>Proof strip.</b> Four facts with one definition each, for example registered learners, challenges, learning paths and free machine hours.</li>
+  <li><b>How it works.</b> Three steps: learn the idea, use it on a real machine, prove it with XP and a certificate.</li>
+  <li><b>Pick your starting point.</b> Three cards: "I am new", "I want practice", "I want a real incident". Each card has an outline button.</li>
+  <li><b>Attack box demo.</b> The product moment at full width, with the real CVE lab names. Filled button: "Start free".</li>
+  <li><b>Season.</b> Operation Zero Hour: 24 missions, five chapters, one leaderboard.</li>
+  <li><b>Free plan, and teams.</b> What the ₹0 plan includes, next to an outline "Talk to our team" block for universities.</li>
+  <li><b>FAQ.</b> The four current questions. They answer the main fears.</li>
+  <li><b>Final band.</b> One line, one filled button.</li>
+</ol>
+
+<p><a class="cta" href="../../demos/csema-landing/">Open the working demo</a></p>
+
+<h2>How to measure the change</h2>
+<p>This teardown predicts the direction of the change, not its size. Do not trust a number until you measure it. The site already loads Google Analytics 4 and a first-party tracking script, so you can track these events now.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Metric</th><th>Definition</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Primary</td><td>Homepage visitors who open <code>/register</code>, divided by all homepage visitors</td><td>This is the click rate the redesign targets</td></tr>
+    <tr><td>Primary</td><td>Accounts created within 24 hours, divided by homepage visitors</td><td>A click is only useful if it becomes an account</td></tr>
+    <tr><td>Guardrail</td><td>New accounts that start a machine in their first session</td><td>Checks that the new copy does not attract the wrong visitors</td></tr>
+    <tr><td>Diagnostic</td><td>Clicks per button, by position (hero, demo, free plan, final band)</td><td>Shows which position does the work</td></tr>
+    <tr><td>Diagnostic</td><td>Visits to <code>/login</code> from homepage links, by new visitors</td><td>Must drop to zero after fix 1</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Ship in this order. Each step is cheap and has a clear test:</p>
+<ol>
+  <li>Fix the two login-wall links and the button contrast. These are bugs, not experiments.</li>
+  <li>Make the page monochrome with one button style. Run it against the current page as an A/B test.</li>
+  <li>Test the hero. Variant A: one "Start free" button. Variant B: Google and GitHub buttons in the hero.</li>
+  <li>Replace the feature sections with the three-choice block.</li>
+</ol>
+
+<p class="note"><b>Limits.</b> I checked the site on one day, logged out, from one location (prices showed for Kolkata). I had no access to analytics, so this teardown has no traffic or conversion data. The counts in finding 5 may have reasons that are not visible from outside.</p>
+
+<h2>Sources</h2>
+<ul class="sources">
+  <li><a href="https://csem.sturtles.in/">Homepage</a>, <a href="https://csem.sturtles.in/register">sign-up page</a>, <a href="https://csem.sturtles.in/pricing">pricing page</a>, <a href="https://csem.sturtles.in/challenges">challenges page</a>. Checked 17 October 2026.</li>
+  <li><a href="https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html">WCAG 2.2, Understanding SC 1.4.3 Contrast (Minimum)</a>.</li>
+</ul>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  var svg = document.getElementById('structure');
+  if (!window.rough || !svg) return;
+  var rc = rough.svg(svg);
+  var NS = 'http://www.w3.org/2000/svg';
+  var INK = '#171717', MUTE = '#9a9a9a', RED = '#c81e1e';
+
+  function text(x, y, s, opts) {
+    var t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('font-family', 'ui-sans-serif, system-ui, sans-serif');
+    t.setAttribute('font-size', (opts && opts.size) || 14);
+    t.setAttribute('fill', (opts && opts.fill) || INK);
+    if (opts && opts.weight) t.setAttribute('font-weight', opts.weight);
+    t.textContent = s;
+    svg.appendChild(t);
+  }
+
+  // Each block: [label, height, cta] where cta is 'fill', 'ring' or ''.
+  var before = [
+    ['Top bar: 7 links', 30, 'fill'],
+    ['Hero: general claim', 54, 'fill'],
+    ['Dashboard mockup', 54, ''],
+    ['Stats (31 flags this week)', 40, ''],
+    ['"Hands-on learning"', 48, 'fill'],
+    ['Guided paths', 48, 'fill'],
+    ['Scenarios', 48, 'fill'],
+    ['Challenges', 48, 'fill'],
+    ['4 lab tiles', 40, ''],
+    ['Attack box demo', 60, 'fill'],
+    ['FAQ', 40, 'ring'],
+    ['Final band', 40, 'fill']
+  ];
+  var after = [
+    ['Season bar: Live', 30, ''],
+    ['Top bar: 4 links', 30, 'fill'],
+    ['Hero: terminal + offer', 76, 'fill'],
+    ['Proof strip', 36, ''],
+    ['How it works: 3 steps', 46, ''],
+    ['Pick your start: 3 choices', 60, 'ring'],
+    ['Attack box demo', 66, 'fill'],
+    ['Season: Zero Hour', 44, 'ring'],
+    ['Free plan + Teams', 52, 'fill'],
+    ['FAQ', 40, ''],
+    ['Final band', 40, 'fill']
+  ];
+
+  function column(x, title, blocks, accent) {
+    text(x, 26, title, { size: 16, weight: 700 });
+    var y = 44;
+    blocks.forEach(function (b) {
+      svg.appendChild(rc.rectangle(x, y, 250, b[1], { stroke: accent && b[2] === 'fill' ? INK : MUTE, roughness: 1.1, strokeWidth: 1.2 }));
+      text(x + 12, y + b[1] / 2 + 5, b[0], { size: 14, fill: INK });
+      if (b[2] === 'fill') svg.appendChild(rc.circle(x + 280, y + b[1] / 2, 16, { fill: RED, fillStyle: 'solid', stroke: RED, roughness: .8 }));
+      if (b[2] === 'ring') svg.appendChild(rc.circle(x + 280, y + b[1] / 2, 16, { stroke: INK, roughness: .8 }));
+      y += b[1] + 14;
+    });
+    return y;
+  }
+
+  var yb = column(10, 'Current: 8 filled buttons, 5 targets', before, false);
+  var ya = column(380, 'Proposed: 5 filled buttons, 1 target', after, true);
+  text(10, yb + 18, 'Every block has the same weight.', { size: 13, fill: '#6b6b6b' });
+  text(380, ya + 18, 'Every filled button goes to /register.', { size: 13, fill: '#6b6b6b' });
+})();
+</script>
+</body>
+</html>
