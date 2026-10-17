@@ -219,22 +219,19 @@
 
 <h2>Before and after: page structure</h2>
 <p>The left column is the current page, top to bottom. The right column is the proposed page. A filled dot is a filled red button. A ring is an outline button or a text link.</p>
-<svg id="structure" class="diagram" viewBox="0 0 720 800" role="img" aria-label="Diagram. Current page: eleven sections with eight filled red buttons spread through them. Proposed page: ten sections where the filled red button appears in the top bar, the hero, after the attack box demo, in the free plan block and in the final band, all going to sign-up. Other actions are outline buttons."></svg>
+<svg id="structure" class="diagram" viewBox="0 0 720 800" role="img" aria-label="Diagram. Current page: eleven sections with eight filled red buttons spread through them. Proposed page: six blocks where the filled red button appears in the top bar, the hero, the free plan block and the final band, all going to sign-up. Other actions are outline buttons."></svg>
 
 <h2>Proposed layout</h2>
 <p>Each section has one job. The filled red button always goes to sign-up. It says the same words every time.</p>
 <ol class="layout">
   <li><b>Top bar.</b> Logo, four links, "Log in" as text, "Start free" as the only filled button. It stays on screen when the visitor scrolls.</li>
-  <li><b>Hero.</b> Centered and minimal. A small "Live · Season 1: Zero Hour" link gives a reason to start today. Headline: "Hack real machines. Right in your browser." One sub-line. Main button "Start free". Variant B replaces it with Google and GitHub buttons. One reassurance line: "₹0, no card. 5 lab hours every month." Below: a live terminal with a task panel. The tasks tick as the session runs, and it ends with "Flag captured +175 XP".</li>
-  <li><b>Proof strip.</b> Four facts with one definition each, for example registered learners, challenges, learning paths and free machine hours.</li>
-  <li><b>How it works.</b> Three steps: learn the idea, use it on a real machine, prove it with XP and a certificate.</li>
-  <li><b>Pick your starting point.</b> Three cards: "I am new", "I want practice", "I want a real incident". Each card has an outline button.</li>
-  <li><b>Attack box demo.</b> The product moment at full width, with the real CVE lab names. Filled button: "Start free".</li>
-  <li><b>Season.</b> Operation Zero Hour: 24 missions, five chapters, one leaderboard.</li>
+  <li><b>Hero.</b> Centered and minimal. A small "Live · Season 1: Zero Hour" link gives a reason to start today. Headline: "Hack real machines. Right in your browser." One sub-line. Main button "Start free". Variant B replaces it with Google and GitHub buttons. One reassurance line: "₹0, no card. 5 lab hours every month. Joined by 6,988+ learners." Below: a live terminal with a task panel. The tasks tick as the session runs, and it ends with "Flag captured +175 XP".</li>
+  <li><b>Pick your starting point.</b> Three cards: "I am new", "I want practice", "I want the real thing". Each card shows its real count (29 paths; 231 challenges and 25 labs; 24 missions) and has an outline button.</li>
   <li><b>Free plan, and teams.</b> What the ₹0 plan includes, next to an outline "Talk to our team" block for universities.</li>
-  <li><b>FAQ.</b> The four current questions. They answer the main fears.</li>
+  <li><b>FAQ.</b> The four current questions. They answer the main fears: experience, cost, setup and teams.</li>
   <li><b>Final band.</b> One line, one filled button.</li>
 </ol>
+<p>The page has six blocks, down from eleven. A block stays only if it moves the visitor closer to sign-up. The numbers strip, the "how it works" steps, the attack box section and the season section are gone. Each one repeated the hero. Their useful facts moved into the route cards and the FAQ.</p>
 
 <p><a class="cta" href="../../demos/csema-landing/">Open the working demo</a></p>
 
@@ -257,7 +254,7 @@
   <li>Fix the two login-wall links and the button contrast. These are bugs, not experiments.</li>
   <li>Make the page monochrome with one button style. Run it against the current page as an A/B test.</li>
   <li>Test the hero. Variant A: one "Start free" button. Variant B: Google and GitHub buttons in the hero.</li>
-  <li>Replace the feature sections with the three-choice block.</li>
+  <li>Replace the five feature sections with the three-choice block, and remove the blocks that repeat the hero.</li>
 </ol>
 
 <p class="note"><b>Limits.</b> I checked the site on one day, logged out, from one location (prices showed for Kolkata). I had no access to analytics, so this teardown has no traffic or conversion data. The counts in finding 5 may have reasons that are not visible from outside.</p>
@@ -307,15 +304,11 @@
   ];
   var after = [
     ['Top bar: 4 links', 30, 'fill'],
-    ['Hero: promise + live lab', 76, 'fill'],
-    ['Proof strip', 36, ''],
-    ['How it works: 3 steps', 46, ''],
-    ['Pick your start: 3 choices', 60, 'ring'],
-    ['Attack box demo', 66, 'fill'],
-    ['Season: Zero Hour', 44, 'ring'],
-    ['Free plan + Teams', 52, 'fill'],
-    ['FAQ', 40, ''],
-    ['Final band', 40, 'fill']
+    ['Hero: promise + live lab', 120, 'fill'],
+    ['Pick your start: 3 choices', 90, 'ring'],
+    ['Free plan + Teams', 70, 'fill'],
+    ['FAQ', 50, ''],
+    ['Final band', 44, 'fill']
   ];
 
   function column(x, title, blocks, accent) {
@@ -332,7 +325,7 @@
   }
 
   var yb = column(10, 'Current: 8 filled buttons, 5 targets', before, false);
-  var ya = column(380, 'Proposed: 5 filled buttons, 1 target', after, true);
+  var ya = column(380, 'Proposed: 4 filled buttons, 1 target', after, true);
   text(10, yb + 18, 'Every block has the same weight.', { size: 13, fill: '#6b6b6b' });
   text(380, ya + 18, 'Every filled button goes to /register.', { size: 13, fill: '#6b6b6b' });
 })();

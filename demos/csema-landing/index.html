@@ -120,28 +120,14 @@
   .toast .flag svg { width: 16px; height: 16px; color: #fff; }
   .toast small { display: block; color: var(--ink3); font: 12px/1.3 var(--mono); }
 
-  /* Proof strip */
-  .stats { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .stats .wrap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .stat { padding: 36px 24px; border-left: 1px solid var(--line); }
-  .stat:first-child { border-left: 0; padding-left: 0; }
-  .stat b { display: block; font-size: clamp(30px, 3.4vw, 44px); line-height: 1; letter-spacing: -.03em; font-weight: 600; }
-  .stat span { display: block; margin-top: 10px; color: var(--ink2); font-size: 14px; }
-
-  /* Steps */
-  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: s; }
-  .step { padding: 28px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); }
-  .step .n { font: 500 13px/1 var(--mono); color: var(--ink3); }
-  .step h3 { font-size: 22px; margin: 40px 0 10px; }
-  .step p { margin: 0; color: var(--ink2); }
-  .step .meta { margin-top: 20px; font: 12px/1 var(--mono); color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; }
-
   /* Pick your start */
   .routes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
   .route { display: flex; flex-direction: column; padding: 32px 28px 28px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); transition: border-color .15s, background .15s; }
   .route:hover { border-color: var(--line2); background: var(--card2); }
   .route .who { font: 500 13px/1 var(--mono); color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; }
-  .route h3 { font-size: 26px; margin: 14px 0 12px; }
+  .route h3 { font-size: 26px; margin: 14px 0 6px; }
+  .route .count { font: 13px/1.4 var(--mono); color: var(--ink3); margin-bottom: 16px; }
+  .route li span.now { color: var(--red-ink); }
   .route p { color: var(--ink2); margin: 0 0 24px; }
   .route ul { list-style: none; margin: 0 0 32px; padding: 0; border-top: 1px solid var(--line); }
   .route li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
@@ -149,37 +135,6 @@
   .route .btn { margin-top: auto; align-self: flex-start; }
   .route.rec { border-color: var(--line2); }
   .route .badge { align-self: flex-start; font: 500 12px/1 var(--mono); padding: 6px 8px; border: 1px solid var(--line2); border-radius: 6px; color: var(--ink); margin-bottom: 18px; }
-
-  /* Attack box */
-  .box-grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 56px; align-items: center; }
-  .checks { list-style: none; padding: 0; margin: 28px 0 36px; display: grid; gap: 14px; }
-  .checks li { display: flex; gap: 12px; color: var(--ink2); }
-  .checks svg { width: 20px; height: 20px; flex: none; color: var(--ink); margin-top: 2px; }
-  .machine { background: var(--card); border: 1px solid var(--line2); border-radius: 14px; overflow: hidden; }
-  .machine-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .machine-head h3 { font-size: 18px; }
-  .machine-head small { color: var(--ink3); font-size: 13px; }
-  .state { font: 12px/1 var(--mono); color: var(--ink); display: inline-flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 6px; }
-  .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
-  .q { display: grid; grid-template-columns: 36px 1fr auto; gap: 14px; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); font-size: 14px; }
-  .q .i { width: 36px; height: 28px; border-radius: 6px; border: 1px solid var(--line2); display: grid; place-items: center; font: 12px/1 var(--mono); color: var(--ink2); }
-  .q.done .i { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-  .q .pts { font: 12px/1 var(--mono); color: var(--ink3); }
-  .labs { padding: 16px 20px 20px; }
-  .labs p { margin: 0 0 12px; font: 12px/1 var(--mono); color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip { font: 12px/1 var(--mono); padding: 8px 10px; border: 1px solid var(--line2); border-radius: 6px; color: var(--ink2); }
-
-  /* Season */
-  .season { background: var(--card); border: 1px solid var(--line2); border-radius: 16px; padding: clamp(28px, 5vw, 56px); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 48px; align-items: center; position: relative; overflow: hidden; }
-  .season h2 { margin: 18px 0 16px; }
-  .season p { color: var(--ink2); font-size: 18px; margin: 0 0 32px; max-width: 520px; }
-  .chapters { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .chapters li { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; background: var(--bg2); }
-  .chapters li span { font: 12px/1 var(--mono); color: var(--ink3); width: 28px; }
-  .chapters li em { margin-left: auto; font: normal 12px/1 var(--mono); color: var(--ink3); }
-  .chapters li.now { border-color: var(--line2); background: var(--card2); }
-  .chapters li.now em { color: var(--red-ink); }
 
   /* Free + teams */
   .split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 16px; }
@@ -221,15 +176,12 @@
   .m-cta { display: none; }
   @media (max-width: 1120px) { .toast { left: 16px; } }
   @media (max-width: 960px) {
-    .box-grid, .season, .faq-grid, .split { grid-template-columns: 1fr; }
+    .faq-grid, .split { grid-template-columns: 1fr; }
     .win { grid-template-columns: 1fr; }
     .side { border-left: 0; border-top: 1px solid var(--line); }
     .toast { left: 12px; }
-    .steps, .routes { grid-template-columns: 1fr; }
+    .routes { grid-template-columns: 1fr; }
     .nav ul { display: none; }
-    .stats .wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .stat:nth-child(3) { border-left: 0; padding-left: 0; }
-    .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
     .section { padding: 80px 0; }
   }
   @media (max-width: 640px) {
@@ -340,45 +292,6 @@
   </div>
 </section>
 
-<section class="stats" aria-label="CSEMA in numbers">
-  <div class="wrap">
-    <div class="stat"><b>6,988+</b><span>registered learners</span></div>
-    <div class="stat"><b>231</b><span>challenges, plus 25 machine labs</span></div>
-    <div class="stat"><b>29</b><span>guided learning paths</span></div>
-    <div class="stat"><b>5 h</b><span>free lab time, every month</span></div>
-  </div>
-</section>
-
-<section class="section" id="how">
-  <div class="wrap">
-    <div class="section-head">
-      <p class="eyebrow">How it works</p>
-      <h2>Every lesson ends on a real machine.</h2>
-      <p>You do not watch someone else hack. You read a short lesson, then you do it yourself, against a target built for it.</p>
-    </div>
-    <div class="steps">
-      <article class="step">
-        <span class="n">01</span>
-        <h3>Learn the idea</h3>
-        <p>Short lessons explain one concept at a time: networks, Linux, web, Active Directory, cloud.</p>
-        <div class="meta">About 12 minutes</div>
-      </article>
-      <article class="step">
-        <span class="n">02</span>
-        <h3>Use it on a live target</h3>
-        <p>Start your attack box in the browser. The tools are ready. Scan, exploit and escalate on a real machine.</p>
-        <div class="meta">One click to start</div>
-      </article>
-      <article class="step">
-        <span class="n">03</span>
-        <h3>Prove it</h3>
-        <p>Capture flags, earn XP, climb the rank and finish paths with a verified certificate.</p>
-        <div class="meta">Shareable proof</div>
-      </article>
-    </div>
-  </div>
-</section>
-
 <section class="section" id="start">
   <div class="wrap">
     <div class="section-head">
@@ -391,7 +304,8 @@
         <span class="badge">Best first step</span>
         <span class="who">I am new to security</span>
         <h3>Guided paths</h3>
-        <p>Start from zero. Each stage builds on the last, with a lab in every module.</p>
+        <span class="count">29 paths</span>
+        <p>Start from zero. Each stage builds on the last, with a lab in every module. Finish with a verified certificate.</p>
         <ul>
           <li>Networking Fundamentals <span>12 lessons</span></li>
           <li>Digital Forensics 101 <span>9 lessons</span></li>
@@ -402,77 +316,27 @@
       <article class="route">
         <span class="who">I want hands-on practice</span>
         <h3>Challenges</h3>
-        <p>One technique per challenge, with a clear difficulty and XP. Practise until it sticks.</p>
+        <span class="count">231 challenges · 25 machine labs</span>
+        <p>One technique at a time, from web and crypto to forensics. Some machine labs are built on real CVEs.</p>
         <ul>
-          <li>Union-based SQL injection <span>Easy · 100 XP</span></li>
-          <li>Weak RSA keys <span>Medium · 200 XP</span></li>
-          <li>Memory dump triage <span>Medium · 250 XP</span></li>
+          <li>NightShift Server <span>Boot2Root · 350 XP</span></li>
+          <li>Union-based SQL injection <span>Web · 100 XP</span></li>
+          <li>TeamCity auth bypass <span>CVE-2024-27198</span></li>
         </ul>
         <a class="btn btn-ghost" href="https://csem.sturtles.in/challenges">Pick a challenge <svg><use href="#i-arrow"/></svg></a>
       </article>
       <article class="route">
         <span class="who">I want the real thing</span>
         <h3>Scenarios</h3>
+        <span class="count">24 missions · 5 chapters</span>
         <p>Step into an incident. Logs, a disk image and one compromised host. Find out who got in.</p>
         <ul>
-          <li>Operation Zero Hour <span>5 chapters</span></li>
+          <li>Operation Zero Hour <span class="now">Live</span></li>
           <li>SOC Arena <span>Defend</span></li>
           <li>Red team labs over VPN <span>Attack</span></li>
         </ul>
         <a class="btn btn-ghost" href="https://csem.sturtles.in/campaigns/zero-hour">Enter Zero Hour <svg><use href="#i-arrow"/></svg></a>
       </article>
-    </div>
-  </div>
-</section>
-
-<section class="section" id="attack-box">
-  <div class="wrap box-grid">
-    <div>
-      <p class="eyebrow">The attack box</p>
-      <h2>Your hacking toolkit, in one browser tab.</h2>
-      <ul class="checks">
-        <li><svg><use href="#i-check"/></svg> No virtual machines to build. No installs. Nothing to break on your laptop.</li>
-        <li><svg><use href="#i-check"/></svg> Tools are ready on a personal attack machine, one click from every lab.</li>
-        <li><svg><use href="#i-check"/></svg> Prefer your own setup? Download a VPN config and connect.</li>
-        <li><svg><use href="#i-check"/></svg> Works on a phone, with a touch keyboard for the terminal.</li>
-      </ul>
-      <div class="cta-row">
-        <a class="btn btn-primary" href="https://csem.sturtles.in/register">Start free <svg><use href="#i-arrow"/></svg></a>
-        <span class="faint" style="font-size: 14px">5 lab hours included every month</span>
-      </div>
-    </div>
-    <div class="machine">
-      <div class="machine-head">
-        <div><h3>Machine labs</h3><small>Boot2Root and real-CVE targets</small></div>
-        <span class="state">25 labs</span>
-      </div>
-      <div class="q"><span class="i">B2R</span><span>NightShift Server</span><span class="pts">Medium · 350 XP</span></div>
-      <div class="q"><span class="i">B2R</span><span>Warehouse API</span><span class="pts">Medium · 300 XP</span></div>
-      <div class="q"><span class="i">B2R</span><span>Printer Room</span><span class="pts">Easy · 225 XP</span></div>
-      <div class="q"><span class="i">CVE</span><span>TeamCity auth bypass · CVE-2024-27198</span><span class="pts">Hard · Prime</span></div>
-      <div class="q"><span class="i">CVE</span><span>Check Point VPN disclosure · CVE-2024-24919</span><span class="pts">Hard · Prime</span></div>
-    </div>
-  </div>
-</section>
-
-<section class="section" id="season">
-  <div class="wrap">
-    <div class="season">
-      <div>
-        <span class="live">Live now</span>
-        <h2>Operation Zero Hour</h2>
-        <p>24 connected missions across five chapters. Trace the breach, uncover a hidden facility and stop Project JANUS. Forensics, OSINT, web and machine missions, on one leaderboard.</p>
-        <div class="cta-row">
-          <a class="btn btn-ghost" href="https://csem.sturtles.in/campaigns/zero-hour">Join Season 1 <svg><use href="#i-arrow"/></svg></a>
-        </div>
-      </div>
-      <ol class="chapters">
-        <li class="now"><span>01</span> ARES HQ <em>Start here · 4 missions</em></li>
-        <li><span>02</span> K-17 Facility</li>
-        <li><span>03</span> GRID-07</li>
-        <li><span>04</span> Relay R-17</li>
-        <li><span>05</span> JANUS</li>
-      </ol>
     </div>
   </div>
 </section>
@@ -523,7 +387,7 @@
       </details>
       <details>
         <summary>Do I need to install anything?</summary>
-        <p>No. Challenges, lessons and the attack box run in your browser. Some machine and red team labs also offer a VPN connection if you prefer your own tools.</p>
+        <p>No. Challenges, lessons and the attack box run in your browser, with the tools ready. It works on a phone too, with a touch keyboard for the terminal. Prefer your own setup? Machine and red team labs also offer a VPN connection.</p>
       </details>
       <details>
         <summary>Can my team or university use CSEMA?</summary>
