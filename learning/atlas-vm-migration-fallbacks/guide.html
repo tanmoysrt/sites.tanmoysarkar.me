@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Atlas VM migration: scenarios and fallbacks</title>
+<style>
+  :root { --text: #1d1d1f; --muted: #5f6368; --line: #d9d9de; --soft: #f6f6f8; --accent: #b4441f; --ok: #2f6f4f; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--text); font: 16px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.35rem; margin: 56px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 32px 0 8px; }
+  p { margin: 0 0 12px; max-width: 72ch; }
+  .lede { color: var(--muted); font-size: 1.05rem; }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 0.92rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--soft); }
+  .wrap { overflow-x: auto; }
+  .note { border-left: 3px solid var(--accent); padding: 8px 14px; background: #fdf6f3; margin: 16px 0; max-width: 72ch; }
+  .tag { display: inline-block; font-size: 0.8rem; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+  .keep { color: var(--ok); font-weight: 600; }
+  .lose { color: var(--accent); font-weight: 600; }
+  figure { margin: 20px 0 28px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+  nav ol { columns: 2; padding-left: 20px; color: var(--muted); }
+  nav a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Atlas VM migration: scenarios and fallbacks</h1>
+<p class="lede">A personal reference. It explains how Atlas moves a VM between hosts, what can fail, and what Atlas and Metal do in each case.</p>
+
+<nav>
+<ol>
+  <li><a href="#what">What a migration does</a></li>
+  <li><a href="#modes">Disk-only and memory snapshot modes</a></li>
+  <li><a href="#fallback">The disk-only fallback</a></li>
+  <li><a href="#before">Before transfer</a></li>
+  <li><a href="#copy">During copy</a></li>
+  <li><a href="#cutover">Cutover and start</a></li>
+  <li><a href="#after">After commit</a></li>
+  <li><a href="#rollback">Cancellation and rollback</a></li>
+  <li><a href="#recovery">The inspect-first recovery rule</a></li>
+  <li><a href="#timers">Timers and limits</a></li>
+  <li><a href="#sleepy">Sleeping VMs</a></li>
+  <li><a href="#codes">Error codes</a></li>
+</ol>
+</nav>
+
+<h2 id="what">What a migration does</h2>
+<p>A migration moves one VM from a <strong>source</strong> host to a <strong>destination</strong> host. Atlas is the control plane. It picks the destination and records which host owns the VM. Metal is the host daemon. Destination Metal pulls the disk from source Metal.</p>
+<p>The most important idea is the <strong>commit point</strong>. Atlas keeps the source as the owner until destination Metal reports <code>ready</code>. Then Atlas changes the owner to the destination in one transaction. Before the commit, a failure rolls back to the source. After the commit, a failure must go forward on the destination.</p>
+
+<figure>
+  <svg id="flow" viewBox="0 0 940 230" role="img" aria-label="Migration phases from preparing to completed, with the commit point between ready and finalizing. Failures before the commit roll back to the source. Failures after the commit retry forward."></svg>
+  <figcaption>The commit point splits every failure into two groups: roll back, or retry forward.</figcaption>
+</figure>
+
+<p>A migration must meet three goals. It must not abort for a temporary problem. It must not stay stuck forever. It must not lose data.</p>
+
+<h2 id="modes">Disk-only and memory snapshot modes</h2>
+<p>Metal first copies a full ZFS snapshot while the VM runs. Then it copies smaller changes. When the change is small enough, Metal starts <strong>cutover</strong>: it stops the source and copies the last change.</p>
+<div class="wrap"><table>
+  <tr><th>Mode</th><th>At cutover</th><th>On the destination</th><th>Guest memory</th></tr>
+  <tr><td>Disk-only</td><td>Source stops normally.</td><td>Cold boot from the copied disk.</td><td class="lose">Lost</td></tr>
+  <tr><td>Memory snapshot</td><td>Source saves its memory, then stops. Memory moves beside the last disk change.</td><td>Load the guest paused. Resume it at finish.</td><td class="keep">Kept</td></tr>
+</table></div>
+<p>A memory snapshot migration needs compatible hosts. Atlas checks the CPU profile, CPU vendor, Firecracker build, kernel, VM shape, and clock before it starts. A host with the CPU template disabled reports the profile <code>native</code>. It can only take memory from a host with the same CPU model and features.</p>
+
+<h2 id="fallback">The disk-only fallback</h2>
+<p>The migration record has the option <strong>Allow Disk-Only Fallback</strong>. It is on by default. It decides what happens when memory cannot move.</p>
+<div class="wrap"><table>
+  <tr><th>Option</th><th>Atlas pre-check fails</th><th>Destination restore fails</th></tr>
+  <tr><td>On</td><td>Atlas clears Memory Snapshot. The migration continues with the disk only. The reason goes to <strong>Error Message</strong>.</td><td>Metal removes the failed runtime, recreates the network, and cold-boots the received disk. <code>memory_snapshot_status</code> stays <code>failed</code> after the migration completes.</td></tr>
+  <tr><td>Off</td><td>The migration fails with <code>migration_incompatible</code>. No transfer starts.</td><td>The transfer fails. Atlas rolls back to the source.</td></tr>
+</table></div>
+<p>The pre-check also fails when the VM desired state is <code>stopped</code>, because a stopped VM has no memory to move. It also fails for a resize, because a memory snapshot cannot change the VM shape.</p>
+<div class="note">A fallback costs a guest reboot. The guest loses its RAM state but keeps its disk. Use the option off when a reboot is worse than a failed migration.</div>
+
+<h2 id="before">Before transfer</h2>
+<div class="wrap"><table>
+  <tr><th>Trigger</th><th>What happens</th><th>VM ends</th><th>You see</th></tr>
+  <tr><td>Migrations are paused, or the VM is draft, terminating, already migrating, or changing its public address</td><td>Atlas rejects the request.</td><td>Source, unchanged</td><td>User error</td></tr>
+  <tr><td>No destination has capacity</td><td>Atlas records the attempt. The reconciler tries again.</td><td>Source, unchanged</td><td><code>scheduled</code> with a selection message</td></tr>
+  <tr><td>The named destination is unavailable</td><td>Atlas fails the migration.</td><td>Source, unchanged</td><td><code>failed</code>, <code>destination_unavailable</code></td></tr>
+  <tr><td>Memory pre-check fails, fallback on</td><td>Atlas continues with the disk only.</td><td>Destination after cutover</td><td>Error Message explains the skip</td></tr>
+  <tr><td>Memory pre-check fails, fallback off</td><td>Atlas releases the reservation.</td><td>Source, unchanged</td><td><code>failed</code>, <code>migration_incompatible</code></td></tr>
+  <tr><td>Source preparation does not start in 10 minutes</td><td>Metal cleans up the destination.</td><td>Source, unchanged</td><td><code>aborted</code> or <code>failed</code></td></tr>
+</table></div>
+
+<h2 id="copy">During copy</h2>
+<div class="wrap"><table>
+  <tr><th>Trigger</th><th>What happens</th><th>VM ends</th><th>You see</th></tr>
+  <tr><td>A stream or worker stops for a short time</td><td>Metal continues from its saved checkpoint. ZFS resumes the partial receive.</td><td>Source runs</td><td>No change</td></tr>
+  <tr><td>A poll fails</td><td>Atlas polls again. It fails only after 10 minutes of silence since the last good poll.</td><td>Source runs</td><td><code>metal_client_error</code>, then <code>destination_unreachable</code> after 10 minutes</td></tr>
+  <tr><td>Deadlock, lock wait timeout, job timeout, or retryable Metal error in Atlas</td><td>Atlas rolls back the transaction. The next run continues.</td><td>No change</td><td>Nothing terminal</td></tr>
+  <tr><td>The Atlas worker runs for 30 minutes</td><td>The run ends. The reconciler starts a new run within a minute.</td><td>No change</td><td>Nothing terminal</td></tr>
+  <tr><td>Another Atlas worker error</td><td>Atlas fails the migration and rolls back.</td><td>Source</td><td><code>migration_worker_error</code></td></tr>
+  <tr><td>The copy does not reach cutover in time</td><td>Atlas fails the migration and rolls back. The limit applies only while Metal reports preparing or copying, and not while canceling.</td><td>Source runs</td><td><code>copy_timeout</code></td></tr>
+  <tr><td>A snapshot ID does not match, or an unrelated dataset exists</td><td>Metal fails the transfer and keeps the data.</td><td>Source after rollback</td><td><code>transfer_failed</code></td></tr>
+</table></div>
+
+<h2 id="cutover">Cutover and start</h2>
+<div class="wrap"><table>
+  <tr><th>Trigger</th><th>What happens</th><th>VM ends</th><th>You see</th></tr>
+  <tr><td>Source has no memory to save (it stopped or crashed during the copy)</td><td>The source rejects the stop. The destination fails the transfer. This happens with the fallback on or off.</td><td>Source, as it was</td><td>HTTP 422 <code>memory_snapshot_unavailable</code>, then <code>transfer_failed</code></td></tr>
+  <tr><td>Destination cannot load memory, fallback on</td><td>Metal removes the runtime, recreates the network, and cold-boots the disk.</td><td>Destination, cold-booted</td><td><code>memory_snapshot_status</code> <code>failed</code></td></tr>
+  <tr><td>Fallback cleanup fails for a short time</td><td>Metal tries again on the next pass.</td><td>Not started yet</td><td><code>starting</code></td></tr>
+  <tr><td>Destination cannot load memory, fallback off</td><td>Metal fails the transfer. Atlas rolls back.</td><td>Source after rollback</td><td><code>transfer_failed</code>, then <code>failed</code></td></tr>
+  <tr><td>Destination network or disk-only start fails</td><td>Metal fails the transfer. Atlas rolls back. This is the same for a fallback start.</td><td>Source after rollback</td><td><code>transfer_failed</code>, then <code>failed</code></td></tr>
+</table></div>
+
+<h2 id="after">After commit</h2>
+<p>After the commit, Atlas does not accept a cancel. Every failure retries forward.</p>
+<div class="wrap"><table>
+  <tr><th>Trigger</th><th>What happens</th><th>VM ends</th><th>You see</th></tr>
+  <tr><td>Resume returns an error</td><td>Metal inspects the guest first. See the <a href="#recovery">inspect-first rule</a>.</td><td>Destination</td><td><code>finalizing</code> until it settles</td></tr>
+  <tr><td>The restored process exits or crashes</td><td>Metal cold-boots the current disk. Disk writes since activation stay.</td><td>Destination, RAM lost</td><td><code>finalizing</code></td></tr>
+  <tr><td>A failed cold boot leaves a created but not started process</td><td>Metal removes it and cold-boots again.</td><td>Destination</td><td><code>finalizing</code></td></tr>
+  <tr><td>A public IP move fails</td><td>The allocation retries on its own schedule. The owner stays the destination.</td><td>Destination</td><td>Allocation stays <code>Attaching</code></td></tr>
+  <tr><td>Source removal or cleanup fails</td><td>Metal retries forward.</td><td>Destination</td><td><code>finalizing</code>, then <code>completed</code></td></tr>
+</table></div>
+
+<h2 id="rollback">Cancellation and rollback</h2>
+<div class="wrap"><table>
+  <tr><th>Trigger</th><th>What happens</th><th>VM ends</th><th>You see</th></tr>
+  <tr><td>Abort before the source stops</td><td>Metal removes destination data and unlocks the source.</td><td>Source, unchanged</td><td><code>canceling</code>, then <code>aborted</code></td></tr>
+  <tr><td>Abort after the source stops</td><td>Metal removes the destination, then restores the source from saved memory or from disk.</td><td>Source, original state</td><td><code>canceling</code>, then <code>aborted</code></td></tr>
+  <tr><td>Source memory restore returns an error</td><td>Metal inspects the guest. A guest that reached its state keeps its memory. Any other guest cold-boots.</td><td>Source</td><td><code>canceling</code></td></tr>
+  <tr><td>Source cold boot works but pause fails</td><td>The next pass only pauses the running guest. It does not boot again.</td><td>Source, paused</td><td><code>canceling</code></td></tr>
+  <tr><td>A failure caused the abort</td><td>Atlas keeps the failure code through cleanup.</td><td>Source</td><td><code>failed</code>, not <code>aborted</code></td></tr>
+  <tr><td>Abort after the commit</td><td>Atlas rejects it and continues the finish.</td><td>Destination</td><td>User error</td></tr>
+  <tr><td>Atlas stops calling for 15 minutes before <code>ready</code></td><td>Metal rolls back the abandoned destination.</td><td>Source</td><td>Metal <code>aborted</code></td></tr>
+</table></div>
+<p>The Abort button sends only the record name. The server reads the latest record. This avoids a stale form save while the worker records progress.</p>
+
+<h2 id="recovery">The inspect-first recovery rule</h2>
+<p>A restore or resume can report an error after it worked. For example, a socket can time out after Firecracker resumed the guest. A blind cold boot would then kill a healthy guest and lose its RAM. So Metal always inspects the guest before it decides.</p>
+
+<figure>
+  <svg id="inspect" viewBox="0 0 940 250" role="img" aria-label="After a restore or resume error, Metal inspects the guest. Running in the desired state: keep memory. Paused at finish: retry the resume. Process gone: remove it and cold-boot the disk."></svg>
+  <figcaption>One error, three outcomes. Only a guest that is really gone cold-boots.</figcaption>
+</figure>
+
+<div class="wrap"><table>
+  <tr><th>Guest state after the error</th><th>At finish (destination)</th><th>At rollback (source)</th></tr>
+  <tr><td>In its desired state</td><td class="keep">Keep the memory</td><td class="keep">Keep the memory</td></tr>
+  <tr><td>Still paused</td><td>Retry the resume on the next pass</td><td>Remove and cold-boot</td></tr>
+  <tr><td>Process gone or failed</td><td class="lose">Remove and cold-boot</td><td class="lose">Remove and cold-boot</td></tr>
+</table></div>
+<p>A cold boot keeps the disk consistent. Only the guest RAM state is lost. A cold boot that fails keeps the migration in its phase for another try.</p>
+
+<h2 id="timers">Timers and limits</h2>
+<div class="wrap"><table>
+  <tr><th>Timer</th><th>Value</th><th>Effect</th></tr>
+  <tr><td>Destination silence</td><td>10 minutes since the last good poll</td><td>Atlas fails with <code>destination_unreachable</code></td></tr>
+  <tr><td>Atlas worker run</td><td>30 minutes</td><td>The run ends. The migration continues in the next run.</td></tr>
+  <tr><td>Reconciler</td><td>Every minute</td><td>Starts a run for each VM with an active migration</td></tr>
+  <tr><td>Copy limit</td><td>Disk size at 25 MiB/s, plus 1 hour, from <code>started_at</code></td><td>Atlas fails with <code>copy_timeout</code>. For example, 100 GiB gets about 2 h 8 min.</td></tr>
+  <tr><td>Metal copy budget</td><td>16 intervals, 30 minutes, or a change under 512 MiB</td><td>Metal starts cutover</td></tr>
+  <tr><td>Destination reservation</td><td>10 minutes without source preparation</td><td>Metal cleans up</td></tr>
+  <tr><td>Idle source or destination</td><td>15 minutes without contact</td><td>Metal releases safe work. A stopped source or ready destination never expires.</td></tr>
+  <tr><td>Snapshot listener</td><td>2 minutes without a connection or progress</td><td>The listener closes</td></tr>
+</table></div>
+<p class="note">The 25 MiB/s floor is the minimum supported migration throughput. A slower link can hit the copy limit on a large disk.</p>
+
+<h2 id="sleepy">Sleeping VMs</h2>
+<p>A sleeping VM has saved memory on disk and no running process. Atlas shows it as <code>stopped</code>, but its desired state is <code>running</code>. That is how Atlas tells it apart from a VM that a user stopped.</p>
+<div class="wrap"><table>
+  <tr><th>Mode</th><th>What Metal does</th><th>Result</th></tr>
+  <tr><td>Memory snapshot</td><td>Sends the existing saved state. It does not wake the VM on the source.</td><td class="keep">Memory kept. The VM is awake on the new host.</td></tr>
+  <tr><td>Disk-only</td><td>Wakes the VM, shuts it down cleanly, then cold-boots it on the new host.</td><td class="lose">Memory lost</td></tr>
+</table></div>
+<p>Outside migration, a failed wake-up keeps the saved state for another try. Migration rollback is the one exception: Metal cold-boots the source so the migration cannot stay stuck.</p>
+
+<h2 id="codes">Error codes</h2>
+<div class="wrap"><table>
+  <tr><th>Code</th><th>Where</th><th>Meaning</th></tr>
+  <tr><td><code>migration_incompatible</code></td><td>Atlas</td><td>Memory cannot move and the fallback is off</td></tr>
+  <tr><td><code>destination_unavailable</code></td><td>Atlas</td><td>The named destination cannot take the VM</td></tr>
+  <tr><td><code>destination_unreachable</code></td><td>Atlas</td><td>No good poll for 10 minutes</td></tr>
+  <tr><td><code>copy_timeout</code></td><td>Atlas</td><td>The copy did not reach cutover in time</td></tr>
+  <tr><td><code>migration_worker_error</code></td><td>Atlas</td><td>A worker error that is not temporary</td></tr>
+  <tr><td><code>metal_client_error</code></td><td>Atlas</td><td>A temporary client error. It never replaces a real failure.</td></tr>
+  <tr><td><code>memory_snapshot_unavailable</code></td><td>Metal source, HTTP 422</td><td>The source has no memory to save</td></tr>
+  <tr><td><code>transfer_failed</code></td><td>Metal destination</td><td>A definite transfer or start failure. Atlas rolls back.</td></tr>
+  <tr><td><code>memory_snapshot_status = failed</code></td><td>Atlas field</td><td>The memory did not move. With the fallback, the migration can still complete.</td></tr>
+</table></div>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/roughjs/4.6.6/rough.min.js"></script>
+<script>
+(function () {
+  if (!window.rough) return;
+  const ink = "#1d1d1f", muted = "#5f6368", accent = "#b4441f", ok = "#2f6f4f";
+  const ns = "http://www.w3.org/2000/svg";
+  function text(svg, x, y, value, options) {
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y);
+    t.setAttribute("text-anchor", (options && options.anchor) || "middle");
+    t.setAttribute("font-size", (options && options.size) || 14);
+    t.setAttribute("font-family", "-apple-system, Segoe UI, Roboto, sans-serif");
+    t.setAttribute("fill", (options && options.color) || ink);
+    if (options && options.weight) t.setAttribute("font-weight", options.weight);
+    t.textContent = value;
+    svg.appendChild(t);
+  }
+  function arrow(svg, rc, x1, y1, x2, y2, color) {
+    const stroke = color || ink;
+    svg.appendChild(rc.line(x1, y1, x2, y2, { stroke, roughness: 0.8 }));
+    const angle = Math.atan2(y2 - y1, x2 - x1), size = 9;
+    svg.appendChild(rc.linearPath([
+      [x2 - size * Math.cos(angle - 0.45), y2 - size * Math.sin(angle - 0.45)],
+      [x2, y2],
+      [x2 - size * Math.cos(angle + 0.45), y2 - size * Math.sin(angle + 0.45)],
+    ], { stroke, roughness: 0.6 }));
+  }
+
+  const flow = document.getElementById("flow"), rf = rough.svg(flow);
+  const phases = ["preparing", "copying", "cutting over", "starting", "ready", "finalizing", "completed"];
+  const width = 112, gap = 18, top = 70;
+  phases.forEach(function (name, index) {
+    const x = 10 + index * (width + gap);
+    const afterCommit = index >= 5;
+    flow.appendChild(rf.rectangle(x, top, width, 44, { stroke: afterCommit ? ok : ink, roughness: 0.9 }));
+    text(flow, x + width / 2, top + 27, name, { size: 13 });
+    if (index < phases.length - 1) arrow(flow, rf, x + width + 2, top + 22, x + width + gap - 2, top + 22);
+  });
+  const commitX = 10 + 5 * (width + gap) - gap / 2;
+  flow.appendChild(rf.line(commitX, 30, commitX, 200, { stroke: accent, strokeWidth: 2, roughness: 1.2 }));
+  text(flow, commitX, 22, "commit point", { color: accent, weight: 600 });
+  text(flow, commitX - 20, 160, "failure: roll back to the source", { anchor: "end", color: muted });
+  text(flow, commitX + 20, 160, "failure: retry forward", { anchor: "start", color: ok });
+  text(flow, commitX - 20, 182, "Atlas owner = source", { anchor: "end", color: muted, size: 13 });
+  text(flow, commitX + 20, 182, "Atlas owner = destination", { anchor: "start", color: ok, size: 13 });
+
+  const inspect = document.getElementById("inspect"), ri = rough.svg(inspect);
+  inspect.appendChild(ri.rectangle(20, 95, 190, 54, { stroke: accent, roughness: 0.9 }));
+  text(inspect, 115, 118, "restore or resume", { size: 14 });
+  text(inspect, 115, 136, "returns an error", { size: 14 });
+  arrow(inspect, ri, 214, 122, 300, 122, accent);
+  inspect.appendChild(ri.rectangle(304, 95, 170, 54, { stroke: ink, roughness: 0.9 }));
+  text(inspect, 389, 127, "inspect the guest", { weight: 600 });
+  const outcomes = [
+    { y: 30, label: "in desired state", result: "keep the memory", color: ok },
+    { y: 122, label: "still paused (finish)", result: "retry the resume", color: ink },
+    { y: 214, label: "process gone", result: "remove + cold boot", color: accent },
+  ];
+  outcomes.forEach(function (outcome) {
+    arrow(inspect, ri, 478, 122, 640, outcome.y, outcome.color);
+    text(inspect, 560, outcome.y < 122 ? 62 : outcome.y > 122 ? 186 : 114, outcome.label, { size: 12, color: muted });
+    inspect.appendChild(ri.rectangle(644, outcome.y - 22, 220, 44, { stroke: outcome.color, roughness: 0.9 }));
+    text(inspect, 754, outcome.y + 5, outcome.result, { color: outcome.color, weight: 600 });
+  });
+})();
+</script>
+</body>
+</html>
