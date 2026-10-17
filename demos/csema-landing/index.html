@@ -27,8 +27,6 @@
   img { display: block; }
   .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 20px; }
   .mono { font-family: var(--mono); }
-  .muted { color: var(--ink2); }
-  .faint { color: var(--ink3); }
   :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 6px; }
 
   /* Buttons: one filled style (sign-up), one outline style (everything else). */
@@ -62,9 +60,6 @@
 
   /* Shared action rows */
   .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  .offer { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 22px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--ink2); }
-  .offer li { display: inline-flex; align-items: center; gap: 8px; }
-  .offer svg { width: 16px; height: 16px; color: var(--ink); }
 
   /* Hero: one message, one action, then the product in motion. */
   .hero { position: relative; overflow: hidden; padding: 72px 0 112px; text-align: center; }
@@ -117,58 +112,63 @@
   .toast .flag svg { width: 16px; height: 16px; color: #fff; }
   .toast small { display: block; color: var(--ink3); font: 12px/1.3 var(--mono); }
 
-  /* Where are you today: choices on the left, the chosen route on the right. */
-  .picker { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 64px; align-items: start; }
-  .picker-sub { color: var(--ink2); font-size: 18px; margin: 16px 0 36px; max-width: 440px; }
-  .options { display: grid; gap: 10px; }
-  .option { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 20px 22px; text-align: left; background: transparent; color: var(--ink2); border: 1px solid var(--line); border-radius: 12px; font: inherit; cursor: pointer; transition: border-color .15s, background .15s, color .15s; }
-  .option:hover { border-color: var(--line2); color: var(--ink); }
-  .option b { display: block; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
-  .option small { display: block; margin-top: 4px; font-size: 14px; color: var(--ink3); }
-  .option svg { width: 20px; height: 20px; flex: none; opacity: 0; transform: translateX(-6px); transition: opacity .15s, transform .15s; }
-  .option[aria-selected="true"] { border-color: var(--ink3); background: var(--card2); color: var(--ink); }
-  .option[aria-selected="true"] svg { opacity: 1; transform: none; }
-  .panel { padding: clamp(28px, 4vw, 44px); background: var(--card); border: 1px solid var(--line2); border-radius: 16px; min-height: 100%; }
+  /* Content sections share one pattern: heading column on the left, content column on the right. */
+  .split { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 64px; align-items: start; }
+  .split-head .sub { color: var(--ink2); font-size: 18px; margin: 16px 0 0; max-width: 440px; }
+  .split-head .cta-row { margin-top: 32px; }
+  .split-head { position: sticky; top: 108px; }
+  [role="tabpanel"] { margin-top: 16px; }
+
+  /* Row: the bordered row used by the picker choices and the FAQ questions. */
+  .rows-list { display: grid; gap: 10px; }
+  .row { display: block; width: 100%; background: transparent; color: var(--ink2); border: 1px solid var(--line); border-radius: 12px; font: inherit; text-align: left; transition: border-color .15s, background .15s, color .15s; }
+  .row:hover { border-color: var(--line2); color: var(--ink); }
+  .row-main { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 22px; min-height: 44px; cursor: pointer; }
+  .row-main b { display: block; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+  .row-main small { display: block; margin-top: 4px; font-size: 14px; color: var(--ink3); }
+  .row-main svg { width: 20px; height: 20px; flex: none; color: var(--ink3); transition: transform .2s, opacity .15s, color .15s; }
+  .row.is-on, .row[open] { border-color: var(--ink3); background: var(--card2); color: var(--ink); }
+  .row.is-on .row-main svg, .row[open] .row-main svg { color: var(--ink); }
+
+  /* Picker rows: the arrow shows only on the chosen row. */
+  .option .row-main svg { opacity: 0; transform: translateX(-6px); }
+  .option.is-on .row-main svg { opacity: 1; transform: none; }
+
+  /* FAQ rows: native details, the plus turns into a cross when open. */
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  .faq[open] .row-main svg { transform: rotate(45deg); }
+  .faq p { margin: -6px 22px 22px; color: var(--ink2); max-width: 600px; }
+
+  /* Panel: the card that holds a detail list. */
+  .panel { padding: clamp(28px, 4vw, 44px); background: var(--card); border: 1px solid var(--line2); border-radius: 16px; }
   .panel-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
   .panel h3 { font-size: 32px; letter-spacing: -.03em; }
   .panel .count { font: 13px/1 var(--mono); color: var(--ink3); }
   .panel > p { color: var(--ink2); font-size: 17px; margin: 16px 0 28px; max-width: 520px; }
+  .panel-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--ink2); font-size: 15px; }
+  .panel-foot b { color: var(--ink); font-weight: 600; }
+
+  /* Detail list: label left, short mono value right. */
   .items { list-style: none; margin: 0 0 32px; padding: 0; border-top: 1px solid var(--line); counter-reset: item; }
-  .items li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 16px; counter-increment: item; }
-  .items li span { display: flex; align-items: baseline; gap: 16px; }
-  .items li span::before { content: counter(item, decimal-leading-zero); font: 12px/1 var(--mono); color: var(--ink3); flex: none; }
+  .items li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 16px; color: var(--ink); }
   .items em { font: normal 13px/1 var(--mono); color: var(--ink3); white-space: nowrap; }
   .items em.now { color: var(--red-ink); }
+  .items.numbered li { counter-increment: item; }
+  .items.numbered li span { display: flex; align-items: baseline; gap: 16px; }
+  .items.numbered li span::before { content: counter(item, decimal-leading-zero); font: 12px/1 var(--mono); color: var(--ink3); flex: none; }
+  .items.last { margin-bottom: 0; }
 
-  /* Free + teams */
-  .split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 16px; }
-  .plan, .teams { padding: clamp(28px, 4vw, 44px); border-radius: 16px; border: 1px solid var(--line); background: var(--card); }
-  .plan { border-color: var(--line2); }
-  .price { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 6px; }
-  .price b { font-size: 56px; line-height: 1; letter-spacing: -.04em; font-weight: 600; }
-  .plan-list { list-style: none; padding: 0; margin: 28px 0 32px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
-  .plan-list li { display: flex; gap: 10px; color: var(--ink2); font-size: 15px; }
-  .plan-list svg { width: 18px; height: 18px; color: var(--ink); flex: none; margin-top: 3px; }
-  .teams h3 { font-size: 22px; margin: 0 0 12px; }
-  .plan-title { font-size: 22px; }
-  .teams p { color: var(--ink2); margin: 0 0 28px; }
+  /* Price line inside the free plan panel. */
+  .price { display: flex; align-items: baseline; gap: 10px; margin: 20px 0 28px; }
+  .price b { font-size: 64px; line-height: 1; letter-spacing: -.045em; font-weight: 600; }
+  .price span { color: var(--ink3); font-size: 15px; }
 
-  /* FAQ */
-  .faq-grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 56px; }
-  details { border-bottom: 1px solid var(--line); }
-  details:first-of-type { border-top: 1px solid var(--line); }
-  summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 16px; padding: 22px 0; font-size: 18px; font-weight: 500; min-height: 44px; }
-  summary::-webkit-details-marker { display: none; }
-  summary::after { content: "+"; font: 300 24px/1 var(--sans); color: var(--ink3); transition: transform .2s; }
-  details[open] summary::after { transform: rotate(45deg); }
-  details p { margin: 0 0 22px; color: var(--ink2); max-width: 620px; }
-
-  /* Final band */
+  /* Final band: the hero's closing echo, centered. */
   .final { text-align: center; padding: 128px 0; border-top: 1px solid var(--line); }
   .final h2 { font-size: clamp(36px, 5.6vw, 64px); max-width: 820px; margin: 0 auto; }
-  .final p { color: var(--ink2); font-size: 18px; margin: 20px 0 36px; }
+  .final .sub { color: var(--ink2); font-size: 18px; margin: 20px auto 36px; max-width: 560px; }
   .final .cta-row { justify-content: center; }
-  .final .offer { justify-content: center; }
 
   footer { border-top: 1px solid var(--line); padding: 40px 0 120px; font-size: 14px; color: var(--ink3); }
   footer .wrap { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: center; }
@@ -181,11 +181,11 @@
   .m-cta { display: none; }
   @media (max-width: 1120px) { .toast { left: 16px; } }
   @media (max-width: 960px) {
-    .faq-grid, .split { grid-template-columns: 1fr; }
+    .split { grid-template-columns: 1fr; gap: 32px; }
+    .split-head { position: static; }
     .win { grid-template-columns: 1fr; }
     .side { border-left: 0; border-top: 1px solid var(--line); }
     .toast { left: 12px; }
-    .picker { grid-template-columns: 1fr; gap: 32px; }
     .nav ul { display: none; }
     .section { padding: 80px 0; }
   }
@@ -197,7 +197,6 @@
     .nav .login { display: none; }
     .cta-row .btn { flex: 1 1 100%; }
     .cta-row .or { display: none; }
-    .plan-list { grid-template-columns: 1fr; }
     .term-body { min-height: 340px; font-size: 12px; padding: 20px; }
     .hide-sm { display: none; }
     .m-cta { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; gap: 12px; align-items: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(10, 10, 10, .94); border-top: 1px solid var(--line2); transform: translateY(110%); transition: transform .25s; }
@@ -224,6 +223,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4M4 4h12l-2 4 2 4H4"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></symbol>
   <symbol id="i-google" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3c1.8-1.6 2.8-4 2.8-7.1Z"/><path d="M12 21c2.5 0 4.6-.8 6.2-2.3l-3-2.4c-.8.6-1.9 1-3.2 1a5.6 5.6 0 0 1-5.3-3.9H3.6v2.4A9 9 0 0 0 12 21Z"/><path d="M6.7 13.4a5.4 5.4 0 0 1 0-3.6V7.4H3.6a9 9 0 0 0 0 8.2l3.1-2.2Z"/><path d="M12 6.4c1.4 0 2.6.5 3.6 1.4l2.7-2.7A9 9 0 0 0 3.6 7.4l3.1 2.4A5.6 5.6 0 0 1 12 6.4Z"/></symbol>
@@ -298,31 +298,27 @@
 </section>
 
 <section class="section" id="start">
-  <div class="wrap picker">
-    <div class="picker-side">
+  <div class="wrap split">
+    <div class="split-head">
       <h2>Where are you today?</h2>
-      <p class="picker-sub">Pick one to start. You can switch at any time. Everything shares one account and one rank.</p>
-      <div class="options" role="tablist" aria-label="Starting points" aria-orientation="vertical">
-        <button class="option" type="button" role="tab" id="tab-new" aria-controls="panel-new" aria-selected="true">
-          <span><b>I am new to security</b><small>Best first step · Guided paths</small></span>
-          <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+      <p class="sub">Pick one to start. You can switch at any time. Everything shares one account and one rank.</p>
+    </div>
+    <div>
+      <div class="rows-list" role="tablist" aria-label="Starting points" aria-orientation="vertical">
+        <button class="row option is-on" type="button" role="tab" id="tab-new" aria-controls="panel-new" aria-selected="true">
+          <span class="row-main"><span><b>I am new to security</b><small>Best first step · Guided paths</small></span><svg aria-hidden="true"><use href="#i-arrow"/></svg></span>
         </button>
-        <button class="option" type="button" role="tab" id="tab-practice" aria-controls="panel-practice" aria-selected="false" tabindex="-1">
-          <span><b>I want hands-on practice</b><small>Challenges and machine labs</small></span>
-          <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+        <button class="row option" type="button" role="tab" id="tab-practice" aria-controls="panel-practice" aria-selected="false" tabindex="-1">
+          <span class="row-main"><span><b>I want hands-on practice</b><small>Challenges and machine labs</small></span><svg aria-hidden="true"><use href="#i-arrow"/></svg></span>
         </button>
-        <button class="option" type="button" role="tab" id="tab-real" aria-controls="panel-real" aria-selected="false" tabindex="-1">
-          <span><b>I want the real thing</b><small>Scenarios and live incidents</small></span>
-          <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+        <button class="row option" type="button" role="tab" id="tab-real" aria-controls="panel-real" aria-selected="false" tabindex="-1">
+          <span class="row-main"><span><b>I want the real thing</b><small>Scenarios and live incidents</small></span><svg aria-hidden="true"><use href="#i-arrow"/></svg></span>
         </button>
       </div>
-    </div>
-
-    <div class="panels">
       <div class="panel" role="tabpanel" id="panel-new" aria-labelledby="tab-new">
         <div class="panel-head"><h3>Guided paths</h3><span class="count">29 paths</span></div>
         <p>Start from zero. Each stage builds on the last, with a lab in every module. Finish with a verified certificate.</p>
-        <ol class="items">
+        <ol class="items numbered">
           <li><span>Networking Fundamentals</span><em>12 lessons</em></li>
           <li><span>Digital Forensics 101</span><em>9 lessons</em></li>
           <li><span>Web and Linux security</span><em>Stage II</em></li>
@@ -333,7 +329,7 @@
       <div class="panel" role="tabpanel" id="panel-practice" aria-labelledby="tab-practice" hidden>
         <div class="panel-head"><h3>Challenges</h3><span class="count">231 challenges · 25 labs</span></div>
         <p>One technique at a time, from web and crypto to forensics. Every challenge has a clear difficulty and XP. Some machine labs are built on real CVEs.</p>
-        <ol class="items">
+        <ol class="items numbered">
           <li><span>NightShift Server</span><em>Boot2Root · 350 XP</em></li>
           <li><span>Union-based SQL injection</span><em>Web · 100 XP</em></li>
           <li><span>Weak RSA keys</span><em>Crypto · 200 XP</em></li>
@@ -344,7 +340,7 @@
       <div class="panel" role="tabpanel" id="panel-real" aria-labelledby="tab-real" hidden>
         <div class="panel-head"><h3>Scenarios</h3><span class="count">24 missions · 5 chapters</span></div>
         <p>Step into an incident. Logs, a disk image and one compromised host. Follow the evidence and find out who got in.</p>
-        <ol class="items">
+        <ol class="items numbered">
           <li><span>Operation Zero Hour</span><em class="now">Live</em></li>
           <li><span>SOC Arena</span><em>Defend</em></li>
           <li><span>Red team labs over VPN</span><em>Attack</em></li>
@@ -358,52 +354,54 @@
 
 <section class="section" id="free">
   <div class="wrap split">
-    <div class="plan">
-      <h3 class="plan-title">Free plan</h3>
-      <div class="price"><b>₹0</b><span class="muted">/ month · no card needed</span></div>
-      <p class="muted" style="margin: 0">Start now. Upgrade only when you want more lab time or Prime content.</p>
-      <ul class="plan-list">
-        <li><svg><use href="#i-check"/></svg> Free learning paths</li>
-        <li><svg><use href="#i-check"/></svg> 118 free challenges</li>
-        <li><svg><use href="#i-check"/></svg> 5 machine hours a month</li>
-        <li><svg><use href="#i-check"/></svg> The current season</li>
-        <li><svg><use href="#i-check"/></svg> Leaderboard and teams</li>
-        <li><svg><use href="#i-check"/></svg> Browser attack box</li>
-      </ul>
+    <div class="split-head">
+      <h2>Start free. Upgrade when you want more.</h2>
+      <p class="sub">Sign up with Google, GitHub or email. No card needed. Paid plans add more lab time and every challenge.</p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://csem.sturtles.in/register">Create free account <svg><use href="#i-arrow"/></svg></a>
-        <a class="link" href="https://csem.sturtles.in/pricing">Compare plans</a>
+        <a class="btn btn-ghost" href="https://csem.sturtles.in/pricing">Compare plans</a>
       </div>
     </div>
-    <div class="teams">
-      <h3>Teams and universities</h3>
-      <p>Train a whole cohort. Organisation accounts include learning paths, learner progress and certificates. Tell us your training goals and group size.</p>
-      <a class="btn btn-ghost" href="https://csem.sturtles.in/contact">Talk to our team <svg><use href="#i-arrow"/></svg></a>
+    <div class="panel">
+      <div class="panel-head"><h3>Free plan</h3><span class="count">No card needed</span></div>
+      <div class="price"><b>₹0</b><span>/ month</span></div>
+      <ul class="items last">
+        <li><span>Machine lab time</span><em>5 h / month</em></li>
+        <li><span>Challenges</span><em>118 free</em></li>
+        <li><span>Learning paths</span><em>Free paths</em></li>
+        <li><span>Season 1: Zero Hour</span><em class="now">Live</em></li>
+        <li><span>Leaderboard and teams</span><em>Included</em></li>
+        <li><span>Attack box</span><em>In your browser</em></li>
+      </ul>
+      <div class="panel-foot">
+        <span><b>Training a cohort?</b> Accounts for teams and universities.</span>
+        <a class="link" href="https://csem.sturtles.in/contact">Talk to our team</a>
+      </div>
     </div>
   </div>
 </section>
 
 <section class="section" id="faq">
-  <div class="wrap faq-grid">
-    <div>
+  <div class="wrap split">
+    <div class="split-head">
       <h2>Good questions.</h2>
-      <p class="muted" style="margin-top: 16px">Something else? <a class="link" href="https://csem.sturtles.in/contact">Ask our team</a>.</p>
+      <p class="sub">The four we hear most. Something else? <a class="link" href="https://csem.sturtles.in/contact">Ask our team</a>.</p>
     </div>
-    <div>
-      <details open>
-        <summary>Can I start with no cybersecurity experience?</summary>
+    <div class="rows-list">
+      <details class="row faq" open>
+        <summary class="row-main"><b>Can I start with no cybersecurity experience?</b><svg aria-hidden="true"><use href="#i-plus"/></svg></summary>
         <p>Yes. Start with a beginner path. It builds your networking, systems and security foundations, with a practical task in every module.</p>
       </details>
-      <details>
-        <summary>What do I get with a free account?</summary>
-        <p>Free challenges and learning content, 5 hours of machine lab time every month, the current season and a public profile. No card is needed. Upgrade when you want Prime content or more lab time.</p>
-      </details>
-      <details>
-        <summary>Do I need to install anything?</summary>
+      <details class="row faq">
+        <summary class="row-main"><b>Do I need to install anything?</b><svg aria-hidden="true"><use href="#i-plus"/></svg></summary>
         <p>No. Challenges, lessons and the attack box run in your browser, with the tools ready. It works on a phone too, with a touch keyboard for the terminal. Prefer your own setup? Machine and red team labs also offer a VPN connection.</p>
       </details>
-      <details>
-        <summary>Can my team or university use CSEMA?</summary>
+      <details class="row faq">
+        <summary class="row-main"><b>Can I cancel a paid plan at any time?</b><svg aria-hidden="true"><use href="#i-plus"/></svg></summary>
+        <p>Yes. Start on the free plan and upgrade only when you need more. You can cancel a paid plan at any time. Checkout is through Razorpay.</p>
+      </details>
+      <details class="row faq">
+        <summary class="row-main"><b>Can my team or university use CSEMA?</b><svg aria-hidden="true"><use href="#i-plus"/></svg></summary>
         <p>Yes. Organisation accounts support learning paths, learner progress and certificates. Contact our team to discuss your cohort.</p>
       </details>
     </div>
@@ -413,15 +411,11 @@
 <section class="final">
   <div class="wrap">
     <h2>Your first flag is one lesson away.</h2>
-    <p>Join free. Pick a path or a machine. Start building proof that you can do the job.</p>
+    <p class="sub">Join free. Pick a path or a machine. Start building proof that you can do the job.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://csem.sturtles.in/register">Start free <svg><use href="#i-arrow"/></svg></a>
     </div>
-    <ul class="offer">
-      <li><svg><use href="#i-check"/></svg> ₹0, no card</li>
-      <li><svg><use href="#i-check"/></svg> Google or GitHub sign-up</li>
-      <li><svg><use href="#i-check"/></svg> Runs in your browser</li>
-    </ul>
+    <p class="offer-line"><b>₹0, no card.</b> Google or GitHub sign-up. Runs in your browser.</p>
   </div>
 </section>
 
@@ -517,6 +511,7 @@
     tabs.forEach(function (t) {
       var on = t === tab;
       t.setAttribute('aria-selected', String(on));
+      t.classList.toggle('is-on', on);
       t.tabIndex = on ? 0 : -1;
       document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
     });
