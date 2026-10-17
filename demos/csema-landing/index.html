@@ -45,12 +45,9 @@
 
   .live { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--red-ink); }
   .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 4px rgba(220, 38, 38, .2); }
-  .eyebrow { font: 500 13px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); margin: 0 0 16px; }
   h1, h2, h3 { margin: 0; letter-spacing: -.025em; font-weight: 600; }
   h2 { font-size: clamp(30px, 4.2vw, 46px); line-height: 1.08; }
   .section { padding: 112px 0; border-top: 1px solid var(--line); }
-  .section-head { max-width: 680px; margin-bottom: 48px; }
-  .section-head p { color: var(--ink2); font-size: 18px; margin: 16px 0 0; }
 
   /* Top bar */
   .nav { position: sticky; top: 0; z-index: 20; background: rgba(10, 10, 10, .82); backdrop-filter: saturate(140%) blur(12px); -webkit-backdrop-filter: saturate(140%) blur(12px); border-bottom: 1px solid var(--line); }
@@ -120,21 +117,28 @@
   .toast .flag svg { width: 16px; height: 16px; color: #fff; }
   .toast small { display: block; color: var(--ink3); font: 12px/1.3 var(--mono); }
 
-  /* Pick your start */
-  .routes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-  .route { display: flex; flex-direction: column; padding: 32px 28px 28px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); transition: border-color .15s, background .15s; }
-  .route:hover { border-color: var(--line2); background: var(--card2); }
-  .route .who { font: 500 13px/1 var(--mono); color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; }
-  .route h3 { font-size: 26px; margin: 14px 0 6px; }
-  .route .count { font: 13px/1.4 var(--mono); color: var(--ink3); margin-bottom: 16px; }
-  .route li span.now { color: var(--red-ink); }
-  .route p { color: var(--ink2); margin: 0 0 24px; }
-  .route ul { list-style: none; margin: 0 0 32px; padding: 0; border-top: 1px solid var(--line); }
-  .route li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
-  .route li span { color: var(--ink3); font-family: var(--mono); font-size: 12px; white-space: nowrap; padding-top: 2px; }
-  .route .btn { margin-top: auto; align-self: flex-start; }
-  .route.rec { border-color: var(--line2); }
-  .route .badge { align-self: flex-start; font: 500 12px/1 var(--mono); padding: 6px 8px; border: 1px solid var(--line2); border-radius: 6px; color: var(--ink); margin-bottom: 18px; }
+  /* Where are you today: choices on the left, the chosen route on the right. */
+  .picker { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 64px; align-items: start; }
+  .picker-sub { color: var(--ink2); font-size: 18px; margin: 16px 0 36px; max-width: 440px; }
+  .options { display: grid; gap: 10px; }
+  .option { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 20px 22px; text-align: left; background: transparent; color: var(--ink2); border: 1px solid var(--line); border-radius: 12px; font: inherit; cursor: pointer; transition: border-color .15s, background .15s, color .15s; }
+  .option:hover { border-color: var(--line2); color: var(--ink); }
+  .option b { display: block; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+  .option small { display: block; margin-top: 4px; font-size: 14px; color: var(--ink3); }
+  .option svg { width: 20px; height: 20px; flex: none; opacity: 0; transform: translateX(-6px); transition: opacity .15s, transform .15s; }
+  .option[aria-selected="true"] { border-color: var(--ink3); background: var(--card2); color: var(--ink); }
+  .option[aria-selected="true"] svg { opacity: 1; transform: none; }
+  .panel { padding: clamp(28px, 4vw, 44px); background: var(--card); border: 1px solid var(--line2); border-radius: 16px; min-height: 100%; }
+  .panel-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+  .panel h3 { font-size: 32px; letter-spacing: -.03em; }
+  .panel .count { font: 13px/1 var(--mono); color: var(--ink3); }
+  .panel > p { color: var(--ink2); font-size: 17px; margin: 16px 0 28px; max-width: 520px; }
+  .items { list-style: none; margin: 0 0 32px; padding: 0; border-top: 1px solid var(--line); counter-reset: item; }
+  .items li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 16px; counter-increment: item; }
+  .items li span { display: flex; align-items: baseline; gap: 16px; }
+  .items li span::before { content: counter(item, decimal-leading-zero); font: 12px/1 var(--mono); color: var(--ink3); flex: none; }
+  .items em { font: normal 13px/1 var(--mono); color: var(--ink3); white-space: nowrap; }
+  .items em.now { color: var(--red-ink); }
 
   /* Free + teams */
   .split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 16px; }
@@ -145,7 +149,8 @@
   .plan-list { list-style: none; padding: 0; margin: 28px 0 32px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
   .plan-list li { display: flex; gap: 10px; color: var(--ink2); font-size: 15px; }
   .plan-list svg { width: 18px; height: 18px; color: var(--ink); flex: none; margin-top: 3px; }
-  .teams h3 { font-size: 26px; margin: 14px 0 12px; }
+  .teams h3 { font-size: 22px; margin: 0 0 12px; }
+  .plan-title { font-size: 22px; }
   .teams p { color: var(--ink2); margin: 0 0 28px; }
 
   /* FAQ */
@@ -180,7 +185,7 @@
     .win { grid-template-columns: 1fr; }
     .side { border-left: 0; border-top: 1px solid var(--line); }
     .toast { left: 12px; }
-    .routes { grid-template-columns: 1fr; }
+    .picker { grid-template-columns: 1fr; gap: 32px; }
     .nav ul { display: none; }
     .section { padding: 80px 0; }
   }
@@ -293,50 +298,60 @@
 </section>
 
 <section class="section" id="start">
-  <div class="wrap">
-    <div class="section-head">
-      <p class="eyebrow">Pick your starting point</p>
+  <div class="wrap picker">
+    <div class="picker-side">
       <h2>Where are you today?</h2>
-      <p>Choose one. You can switch at any time. Everything shares one account and one rank.</p>
+      <p class="picker-sub">Pick one to start. You can switch at any time. Everything shares one account and one rank.</p>
+      <div class="options" role="tablist" aria-label="Starting points" aria-orientation="vertical">
+        <button class="option" type="button" role="tab" id="tab-new" aria-controls="panel-new" aria-selected="true">
+          <span><b>I am new to security</b><small>Best first step · Guided paths</small></span>
+          <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+        </button>
+        <button class="option" type="button" role="tab" id="tab-practice" aria-controls="panel-practice" aria-selected="false" tabindex="-1">
+          <span><b>I want hands-on practice</b><small>Challenges and machine labs</small></span>
+          <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+        </button>
+        <button class="option" type="button" role="tab" id="tab-real" aria-controls="panel-real" aria-selected="false" tabindex="-1">
+          <span><b>I want the real thing</b><small>Scenarios and live incidents</small></span>
+          <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="routes">
-      <article class="route rec">
-        <span class="badge">Best first step</span>
-        <span class="who">I am new to security</span>
-        <h3>Guided paths</h3>
-        <span class="count">29 paths</span>
+
+    <div class="panels">
+      <div class="panel" role="tabpanel" id="panel-new" aria-labelledby="tab-new">
+        <div class="panel-head"><h3>Guided paths</h3><span class="count">29 paths</span></div>
         <p>Start from zero. Each stage builds on the last, with a lab in every module. Finish with a verified certificate.</p>
-        <ul>
-          <li>Networking Fundamentals <span>12 lessons</span></li>
-          <li>Digital Forensics 101 <span>9 lessons</span></li>
-          <li>Web and Linux security <span>Stage II</span></li>
-        </ul>
+        <ol class="items">
+          <li><span>Networking Fundamentals</span><em>12 lessons</em></li>
+          <li><span>Digital Forensics 101</span><em>9 lessons</em></li>
+          <li><span>Web and Linux security</span><em>Stage II</em></li>
+          <li><span>Red team and cloud</span><em>Stage III</em></li>
+        </ol>
         <a class="btn btn-ghost" href="https://csem.sturtles.in/learning">See the paths <svg><use href="#i-arrow"/></svg></a>
-      </article>
-      <article class="route">
-        <span class="who">I want hands-on practice</span>
-        <h3>Challenges</h3>
-        <span class="count">231 challenges · 25 machine labs</span>
-        <p>One technique at a time, from web and crypto to forensics. Some machine labs are built on real CVEs.</p>
-        <ul>
-          <li>NightShift Server <span>Boot2Root · 350 XP</span></li>
-          <li>Union-based SQL injection <span>Web · 100 XP</span></li>
-          <li>TeamCity auth bypass <span>CVE-2024-27198</span></li>
-        </ul>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-practice" aria-labelledby="tab-practice" hidden>
+        <div class="panel-head"><h3>Challenges</h3><span class="count">231 challenges · 25 labs</span></div>
+        <p>One technique at a time, from web and crypto to forensics. Every challenge has a clear difficulty and XP. Some machine labs are built on real CVEs.</p>
+        <ol class="items">
+          <li><span>NightShift Server</span><em>Boot2Root · 350 XP</em></li>
+          <li><span>Union-based SQL injection</span><em>Web · 100 XP</em></li>
+          <li><span>Weak RSA keys</span><em>Crypto · 200 XP</em></li>
+          <li><span>TeamCity auth bypass</span><em>CVE-2024-27198</em></li>
+        </ol>
         <a class="btn btn-ghost" href="https://csem.sturtles.in/challenges">Pick a challenge <svg><use href="#i-arrow"/></svg></a>
-      </article>
-      <article class="route">
-        <span class="who">I want the real thing</span>
-        <h3>Scenarios</h3>
-        <span class="count">24 missions · 5 chapters</span>
-        <p>Step into an incident. Logs, a disk image and one compromised host. Find out who got in.</p>
-        <ul>
-          <li>Operation Zero Hour <span class="now">Live</span></li>
-          <li>SOC Arena <span>Defend</span></li>
-          <li>Red team labs over VPN <span>Attack</span></li>
-        </ul>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-real" aria-labelledby="tab-real" hidden>
+        <div class="panel-head"><h3>Scenarios</h3><span class="count">24 missions · 5 chapters</span></div>
+        <p>Step into an incident. Logs, a disk image and one compromised host. Follow the evidence and find out who got in.</p>
+        <ol class="items">
+          <li><span>Operation Zero Hour</span><em class="now">Live</em></li>
+          <li><span>SOC Arena</span><em>Defend</em></li>
+          <li><span>Red team labs over VPN</span><em>Attack</em></li>
+          <li><span>Digital forensics</span><em>Investigate</em></li>
+        </ol>
         <a class="btn btn-ghost" href="https://csem.sturtles.in/campaigns/zero-hour">Enter Zero Hour <svg><use href="#i-arrow"/></svg></a>
-      </article>
+      </div>
     </div>
   </div>
 </section>
@@ -344,7 +359,7 @@
 <section class="section" id="free">
   <div class="wrap split">
     <div class="plan">
-      <p class="eyebrow" style="margin: 0">Free plan</p>
+      <h3 class="plan-title">Free plan</h3>
       <div class="price"><b>₹0</b><span class="muted">/ month · no card needed</span></div>
       <p class="muted" style="margin: 0">Start now. Upgrade only when you want more lab time or Prime content.</p>
       <ul class="plan-list">
@@ -361,9 +376,8 @@
       </div>
     </div>
     <div class="teams">
-      <p class="eyebrow" style="margin: 0">For teams and universities</p>
-      <h3>Train a whole cohort.</h3>
-      <p>Organisation accounts with learning paths, learner progress and certificates. Tell us your training goals and group size.</p>
+      <h3>Teams and universities</h3>
+      <p>Train a whole cohort. Organisation accounts include learning paths, learner progress and certificates. Tell us your training goals and group size.</p>
       <a class="btn btn-ghost" href="https://csem.sturtles.in/contact">Talk to our team <svg><use href="#i-arrow"/></svg></a>
     </div>
   </div>
@@ -372,7 +386,6 @@
 <section class="section" id="faq">
   <div class="wrap faq-grid">
     <div>
-      <p class="eyebrow">Before you begin</p>
       <h2>Good questions.</h2>
       <p class="muted" style="margin-top: 16px">Something else? <a class="link" href="https://csem.sturtles.in/contact">Ask our team</a>.</p>
     </div>
@@ -497,6 +510,31 @@
       })();
     })();
   }
+
+  // Where are you today: switch the route panel.
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.option'));
+  function select(tab) {
+    tabs.forEach(function (t) {
+      var on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach(function (t, n) {
+    t.addEventListener('click', function () {
+      select(t);
+      // On a phone the panel sits below the options: bring it into view.
+      if (window.innerWidth <= 960) document.getElementById(t.getAttribute('aria-controls')).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    t.addEventListener('keydown', function (e) {
+      var d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      var next = tabs[(n + d + tabs.length) % tabs.length];
+      select(next); next.focus();
+    });
+  });
 
   // Phone: show the bottom action bar once the hero leaves the screen.
   var mcta = document.getElementById('mcta');
