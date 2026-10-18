@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Concept demo: CSEMA lesson, network lab and course page after a beginner walkthrough.">
+<title>CSEMA Beginner Fixes</title>
+<style>
+@font-face { font-family: "Inter"; src: url("brand/inter.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+:root {
+  --bg: #ffffff; --sidebar: #f9f9f9; --card: #ffffff;
+  --s1: #f9f9f9; --s2: #f4f4f4; --s3: #ededed; --s5: #c9c9c9;
+  --ink9: #171717; --ink8: #262626; --ink7: #474747; --ink6: #646464; --ink5: #7b7b7b; --ink4: #a3a3a3;
+  --line1: #efefef; --line2: #e6e6e6; --line3: #d6d6d6;
+  --brand: #dc2626; --brand-hover: #b91c1c; --brand-soft: #fef2f2; --brand-soft2: #fee2e2; --brand-ink: #b91c1c;
+  --green-bg: #e3f7ea; --green-ink: #137547; --blue-ink: #0b6bcb; --dots: rgba(0, 0, 0, .075); --overlay: rgba(0, 0, 0, .35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .05); --shadow-lg: 0 16px 40px rgba(0, 0, 0, .16);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0f0f; --sidebar: #141414; --card: #161616;
+    --s1: #191919; --s2: #202020; --s3: #292929; --s5: #4a4a4a;
+    --ink9: #f5f5f5; --ink8: #e6e6e6; --ink7: #c2c2c2; --ink6: #a0a0a0; --ink5: #868686; --ink4: #5f5f5f;
+    --line1: #222222; --line2: #2a2a2a; --line3: #3a3a3a;
+    --brand: #ef4444; --brand-hover: #dc2626; --brand-soft: rgba(239, 68, 68, .1); --brand-soft2: rgba(239, 68, 68, .18); --brand-ink: #fca5a5;
+    --green-bg: #12301f; --green-ink: #5fd18e; --blue-ink: #6fb5ff; --dots: rgba(255, 255, 255, .06); --overlay: rgba(0, 0, 0, .6);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4); --shadow-lg: 0 16px 40px rgba(0, 0, 0, .6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0f0f; --sidebar: #141414; --card: #161616;
+  --s1: #191919; --s2: #202020; --s3: #292929; --s5: #4a4a4a;
+  --ink9: #f5f5f5; --ink8: #e6e6e6; --ink7: #c2c2c2; --ink6: #a0a0a0; --ink5: #868686; --ink4: #5f5f5f;
+  --line1: #222222; --line2: #2a2a2a; --line3: #3a3a3a;
+  --brand: #ef4444; --brand-hover: #dc2626; --brand-soft: rgba(239, 68, 68, .1); --brand-soft2: rgba(239, 68, 68, .18); --brand-ink: #fca5a5;
+  --green-bg: #12301f; --green-ink: #5fd18e; --blue-ink: #6fb5ff; --dots: rgba(255, 255, 255, .06); --overlay: rgba(0, 0, 0, .6);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4); --shadow-lg: 0 16px 40px rgba(0, 0, 0, .6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink9); font: 420 14px/1.35 "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+p, h1, h2, h3, ul, ol, dl, dd { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .92em; }
+code { background: var(--s3); padding: 1px 5px; border-radius: 4px; }
+.i { width: 16px; height: 16px; flex-shrink: 0; }
+.ink5 { color: var(--ink5); } .ink6 { color: var(--ink6); } .green { color: var(--green-ink); } .brand { color: var(--brand); }
+.t-sm { font-size: 13px; } .semi { font-weight: 600; } .p { line-height: 1.55; }
+.row { display: flex; align-items: center; } .g2 { gap: 8px; } .ml-auto { margin-left: auto; }
+.mt1 { margin-top: 4px; } .mt2 { margin-top: 8px; } .mt3 { margin-top: 12px; }
+
+/* Shell */
+.app { display: flex; height: 100vh; height: 100dvh; }
+.side { width: 15rem; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--line1); display: flex; flex-direction: column; overflow-y: auto; }
+.brandbar { padding: 14px 12px; }
+.logo { height: 32px; width: auto; display: block; }
+.logo-dark { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo-light { display: none; } :root:not([data-theme="light"]) .logo-dark { display: block; } }
+:root[data-theme="dark"] .logo-light { display: none; } :root[data-theme="dark"] .logo-dark { display: block; }
+.nav { padding: 2px 10px; }
+.nav a { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 8px; color: var(--ink7); margin-bottom: 2px; }
+.nav a:hover { background: var(--s3); }
+.nav a.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--line2); }
+.nav a.on .i { color: var(--brand); }
+.col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+main { flex: 1; min-height: 0; overflow-y: auto; }
+.ph { min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--line1); background: var(--bg); flex-shrink: 0; }
+.ph h1 { font-size: 16px; font-weight: 600; }
+.crumbs { display: flex; align-items: center; gap: 6px; font-size: 16px; min-width: 0; }
+.crumbs a { color: var(--ink5); white-space: nowrap; } .crumbs a:hover { color: var(--ink8); }
+.crumbs .sep { color: var(--ink4); }
+.crumbs .cur { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.body { max-width: 940px; margin: 0 auto; padding: 20px 20px 48px; display: flex; flex-direction: column; gap: 28px; }
+.sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sec-h h2 { font-size: 16px; font-weight: 600; }
+.sec-h p { font-size: 13px; color: var(--ink5); }
+@media (max-width: 767px) { .app > .side { display: none; } .ph { padding: 0 16px; } .body { padding: 20px 16px 48px; } }
+
+/* Cards and lists */
+.card { background: var(--card); border: 1px solid var(--line2); border-radius: 10px; box-shadow: var(--shadow-sm); }
+.cards { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 820px) { .cards, .cards.two { grid-template-columns: minmax(0, 1fr); } }
+.card-body { padding: 16px; display: flex; flex-direction: column; height: 100%; }
+.card-body h3 { font-size: 15px; font-weight: 600; }
+.card-foot { margin-top: auto; padding-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+a.card { transition: border-color .15s; } a.card:hover { border-color: var(--line3); }
+.rows > * + * { border-top: 1px solid var(--line1); }
+.li { display: flex; align-items: center; gap: 12px; padding: 11px 16px; }
+.li.next { background: var(--brand-soft); }
+
+/* Controls */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; font-size: 13px; font-weight: 500; white-space: nowrap; background: var(--s2); color: var(--ink8); transition: background .12s; }
+.btn:hover { background: var(--s3); }
+.btn.solid { background: var(--brand); color: #fff; } .btn.solid:hover { background: var(--brand-hover); }
+.btn.outline { background: var(--card); border-color: var(--line3); } .btn.outline:hover { background: var(--s1); }
+.btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--s2); }
+.btn.md { height: 32px; padding: 0 12px; }
+.btn.icon { width: 28px; padding: 0; }
+.btn[disabled] { opacity: .45; cursor: default; pointer-events: none; }
+.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; background: var(--s3); color: var(--ink7); }
+.b-green { background: var(--green-bg); color: var(--green-ink); } .b-red { background: var(--brand-soft2); color: var(--brand-ink); }
+.seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 9px; background: var(--s2); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.seg button { border: 0; background: transparent; height: 28px; padding: 0 12px; border-radius: 7px; font-size: 13px; color: var(--ink6); white-space: nowrap; }
+.seg button:hover { color: var(--ink9); }
+.seg button.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); }
+.seg button.right { background: var(--green-bg); color: var(--green-ink); font-weight: 500; }
+.seg button.wrong { background: var(--brand-soft2); color: var(--brand-ink); font-weight: 500; }
+.sw { position: relative; width: 30px; height: 18px; border-radius: 99px; border: 0; background: var(--s5); padding: 0; flex-shrink: 0; transition: background .15s; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 99px; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.sw[aria-checked="true"] { background: var(--green-ink); }
+.sw[aria-checked="true"]::after { transform: translateX(12px); }
+.ring { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--ink4); flex-shrink: 0; display: grid; place-items: center; }
+.ring.done { background: var(--green-ink); border-color: var(--green-ink); }
+.ring.done::after { content: ""; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 1.5px 1.5px; transform: translateY(-1px) rotate(-45deg); }
+.ring.cur { border-color: var(--brand); background: radial-gradient(var(--brand) 35%, transparent 40%); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line1); vertical-align: middle; }
+th { font-weight: 500; color: var(--ink5); }
+tr:last-child td { border-bottom: 0; }
+.tbl { border: 1px solid var(--line2); border-radius: 10px; overflow-x: auto; background: var(--card); }
+dl.terms { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; font-size: 13px; line-height: 1.45; }
+dl.terms dt { font-weight: 500; }
+dl.terms dd { color: var(--ink6); }
+
+/* Lesson player */
+.outline { padding: 6px 10px 20px; }
+.outline .unit { display: flex; justify-content: space-between; gap: 8px; padding: 14px 8px 6px; font-size: 12px; color: var(--ink5); line-height: 1.35; }
+.outline a { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 13px; color: var(--ink7); }
+.outline a:hover { background: var(--s3); }
+.outline a.on { background: var(--card); color: var(--ink9); font-weight: 500; box-shadow: var(--shadow-sm); outline: 1px solid var(--line2); }
+.backlink { display: flex; align-items: center; gap: 8px; padding: 14px 18px 4px; font-weight: 600; }
+.player { max-width: 760px; margin: 0 auto; padding: 24px 20px 48px; }
+.slide { display: flex; flex-direction: column; min-height: 460px; }
+.slide-body { flex: 1; padding: 32px 28px; display: flex; flex-direction: column; gap: 14px; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 14px 14px, var(--s1); border-radius: 10px 10px 0 0; }
+.slide-body h2 { font-size: 20px; font-weight: 600; }
+.slide-body > p { font-size: 15px; line-height: 1.6; color: var(--ink8); max-width: 60ch; }
+.slide-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line1); }
+.slide-foot .ink5 { text-align: center; }
+.hexrow { display: flex; flex-wrap: wrap; gap: 4px; font: 15px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.hexrow span { padding: 6px 7px; border-radius: 6px; background: var(--card); border: 1px solid var(--line2); }
+.hexrow span.sig { background: var(--brand-soft2); border-color: transparent; color: var(--brand-ink); font-weight: 600; }
+.exlist { display: flex; flex-direction: column; gap: 8px; }
+.ex { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 12px 14px; background: var(--card); border: 1px solid var(--line2); border-radius: 10px; }
+.ex .fb { grid-column: 1 / -1; font-size: 13px; line-height: 1.45; }
+.ex .fb:empty { display: none; }
+@media (max-width: 640px) { .ex { grid-template-columns: minmax(0, 1fr); } .slide-body { padding: 24px 16px; } .player { padding: 16px 12px 40px; } }
+.drawer { position: fixed; inset: 0 0 0 auto; width: min(360px, 100%); background: var(--card); border-left: 1px solid var(--line2); box-shadow: var(--shadow-lg); z-index: 30; display: flex; flex-direction: column; transform: translateX(100%); transition: transform .18s ease; }
+.drawer.open { transform: none; }
+.scrim { position: fixed; inset: 0; background: var(--overlay); z-index: 25; opacity: 0; pointer-events: none; transition: opacity .18s; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.side.sheet { position: fixed; inset: 0 auto 0 0; z-index: 30; display: flex !important; transform: translateX(-100%); transition: transform .18s ease; box-shadow: var(--shadow-lg); }
+.side.sheet.open { transform: none; }
+.input { height: 32px; width: 100%; border: 1px solid transparent; border-radius: 8px; background: var(--s2); padding: 0 10px; font-size: 13px; }
+.input:focus { outline: none; background: var(--card); border-color: var(--line3); }
+.only-sm { display: none; }
+@media (max-width: 767px) { .only-sm { display: inline-flex; } .hide-sm { display: none !important; } }
+
+/* Network lab */
+.lab { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+.stagecol { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line1); flex-wrap: wrap; }
+.bar.bottom { border-bottom: 0; border-top: 1px solid var(--line1); }
+.status { padding: 10px 16px; font-size: 13px; color: var(--ink7); border-bottom: 1px solid var(--line1); min-height: 40px; }
+.stage { flex: 1; min-height: 300px; position: relative; background: radial-gradient(var(--dots) 1px, transparent 1.2px) 0 0 / 18px 18px, var(--s1); }
+.stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.labpanel { border-left: 1px solid var(--line1); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 24px; }
+.labpanel h2 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.check { display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 13px; }
+.portrow { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 12px; font-size: 13px; }
+.note { font-size: 13px; line-height: 1.45; color: var(--ink6); }
+.node { cursor: pointer; outline: none; }
+.node rect { fill: var(--card); stroke: var(--line3); stroke-width: 1; transition: stroke .15s; }
+.node:hover rect { stroke: var(--ink4); }
+.node.sel rect, .node:focus-visible rect { stroke: var(--brand); stroke-width: 2; }
+.node.armed rect { stroke: var(--brand); stroke-width: 2; stroke-dasharray: 5 4; }
+.node .name { fill: var(--ink9); font: 500 13px "Inter", system-ui, sans-serif; }
+.node .ico { color: var(--ink6); }
+.cable { cursor: pointer; }
+.cable .hit { stroke: transparent; stroke-width: 14; }
+.cable .wire { stroke-width: 2.5; transition: stroke .2s; }
+.cable.sel .wire { stroke-width: 4; }
+.plabel { fill: var(--ink6); font: 11px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+@media (max-width: 900px) {
+  .lab { display: block; overflow-y: auto; }
+  .stage { flex: none; height: 52vh; min-height: 280px; }
+  .labpanel { border-left: 0; border-top: 1px solid var(--line1); overflow: visible; }
+}
+
+/* Terminal lab */
+.tlab { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--task-w, 440px) 6px minmax(0, 1fr); }
+.task { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line1); }
+.task-scroll { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+.task h2 { font-size: 18px; font-weight: 600; }
+.task h3 { font-size: 15px; font-weight: 600; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.step { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 8px; background: var(--card); font-size: 13px; color: var(--ink6); text-align: left; min-width: 0; }
+.step span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step.on { border-color: var(--ink9); color: var(--ink9); font-weight: 500; }
+.step[disabled] { opacity: .5; cursor: default; }
+.howto { counter-reset: n; display: flex; flex-direction: column; gap: 10px; }
+.howto li { counter-increment: n; display: grid; grid-template-columns: 22px 1fr; gap: 8px; line-height: 1.55; }
+.howto li::before { content: counter(n); width: 22px; height: 22px; border-radius: 50%; background: var(--s3); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--ink7); }
+.copy { border: 1px solid var(--line2); background: var(--s2); border-radius: 6px; padding: 2px 6px; font: 13px ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--ink9); }
+.copy:hover { background: var(--s3); }
+.copy::after { content: "copy"; margin-left: 8px; font: 11px "Inter", system-ui, sans-serif; color: var(--ink5); }
+.copy.copied::after { content: "copied"; color: var(--green-ink); }
+.reveal { background: var(--s2); border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
+.options { display: flex; flex-direction: column; gap: 6px; }
+.option { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line2); border-radius: 8px; background: var(--card); font-size: 13px; text-align: left; }
+.option[aria-checked="true"] { border-color: var(--ink9); font-weight: 500; }
+.option[aria-checked="true"] .ring { border-color: var(--ink9); background: radial-gradient(var(--ink9) 35%, transparent 40%); }
+.task-foot { border-top: 1px solid var(--line1); padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
+.task-foot .msg { flex: 1; font-size: 13px; line-height: 1.45; }
+.divider { cursor: col-resize; background: transparent; position: relative; }
+.divider::after { content: ""; position: absolute; inset: 0 2px; background: var(--line1); transition: background .15s; }
+.divider:hover::after, .divider.drag::after { background: var(--line3); }
+.term { display: flex; flex-direction: column; min-height: 0; background: var(--sidebar); }
+.term-head { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line1); font-size: 13px; }
+.term-tip { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line1); font-size: 13px; color: var(--ink6); line-height: 1.45; }
+.term-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; font: 13px/1.65 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--ink8); cursor: text; }
+.term-out { white-space: pre-wrap; word-break: break-word; }
+.ps { color: var(--green-ink); } .dim { color: var(--ink5); } .err { color: var(--brand); } .dir { color: var(--blue-ink); font-weight: 600; }
+.term-in { display: flex; gap: 8px; }
+.term-in input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink9); font: inherit; caret-color: var(--brand); padding: 0; }
+.only-xs { display: none; }
+.ph .seg { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .tlab { display: block; }
+  .tlab .divider { display: none; }
+  .tlab > .task, .tlab > .term { height: 100%; border-right: 0; }
+  .tlab[data-pane="task"] > .term, .tlab[data-pane="term"] > .task { display: none; }
+  .only-xs { display: inline-flex; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const root = $('#root');
+
+const ICON = {
+  back: '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+  panel: '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>',
+  home: '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21H3z"/></svg>',
+  learn: '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg>',
+  practice: '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>',
+  compete: '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>',
+};
+const LOGO = '<img class="logo logo-light" src="brand/csema-logo-light.png" alt="CSEMA"><img class="logo logo-dark" src="brand/csema-logo-dark.png" alt="CSEMA">';
+
+function mainShell(active, header, body) {
+  const link = (href, key, label) => `<a href="${href}" class="${active === key ? 'on' : ''}">${ICON[key]}${label}</a>`;
+  return `<div class="app">
+    <aside class="side" aria-label="Main navigation">
+      <div class="brandbar">${LOGO}</div>
+      <nav class="nav">${link('#/', 'home', 'Home')}${link('#/course', 'learn', 'Learn')}${link('#/', 'practice', 'Practice')}${link('#/', 'compete', 'Compete')}</nav>
+    </aside>
+    <div class="col"><header class="ph">${header}</header><main>${body}</main></div>
+  </div>`;
+}
+
+/* ---------------- Home: the demo index ---------------- */
+const CHANGES = {
+  lesson: [
+    ['P1', 'The quiz asks about files that the exercise shows.'],
+    ['P1', 'Answers are choices, not free text.'],
+    ['P1', 'The second exercise needs reasoning: compare the extension with the bytes.'],
+    ['P2', 'Unknown has an example and a meaning.'],
+    ['P2', 'Each term is defined on the slide where it first appears.'],
+    ['P2', 'The first slide says why the trick matters.'],
+    ['P2', 'One Next button. It stays locked until the exercise is done.'],
+    ['P3', 'File names show as code. The diagram is a table with clean text.'],
+    ['P3', 'Unit titles wrap. The tutor button has a label.'],
+  ],
+  lab: [
+    ['P1', 'Before power on, ports are grey and say Off. Red means a real fault.'],
+    ['P2', 'Click 2 devices to connect them. Ports are picked for you, and the cable shows at once.'],
+    ['P2', 'No port menu, so nothing covers the next device.'],
+    ['P2', 'One status line tells you the next step.'],
+    ['P2', 'Cable types and port names are explained in the panel.'],
+    ['P3', 'Device details show in the panel and follow your selection.'],
+  ],
+  terminal: [
+    ['P1', 'The task no longer gives the answer. Hint and solution are opt-in, and the solution says what it costs.'],
+    ['P1', 'Check says what is wrong and what to do next.'],
+    ['P2', 'The lab uses the full screen. The course outline is gone, and you can drag the divider.'],
+    ['P2', 'A stepper shows the 3 tasks in one even row. Later tasks unlock in order.'],
+    ['P2', 'New terms such as ~ and > are defined next to the task. The prompt is explained once.'],
+    ['P2', 'The OS task is a question with choices, answered from command output.'],
+    ['P3', 'No eyebrow labels and no red links. The timer says what happens when time ends.'],
+  ],
+  course: [
+    ['P2', 'Level is Intermediate, with a note for beginners.'],
+    ['P2', 'The main action starts Unit 1. Labs come after the units.'],
+    ['P3', 'Labs are called scenario labs and run in the browser.'],
+  ],
+};
+function renderHome() {
+  const screen = (href, title, meta) => `<a class="card" href="${href}"><div class="card-body"><h3>${title}</h3><p class="t-sm ink5 mt1">${meta}</p><div class="card-foot"><span class="t-sm ink6">Open</span></div></div></a>`;
+  const list = key => `<div class="card rows">${CHANGES[key].map(([priority, text]) =>
+    `<div class="li"><span class="badge ${priority === 'P1' ? 'b-red' : ''}">${priority}</span><span class="t-sm">${text}</span></div>`).join('')}</div>`;
+  root.innerHTML = mainShell('home', '<h1>Beginner fixes</h1>', `<div class="body">
+    <p class="p ink6">Four CSEMA screens after a walkthrough as a total beginner. This is a static concept. Nothing is saved.</p>
+    <section><div class="cards two">
+      ${screen('#/lesson', "What's really inside?", 'Cyber foundations · lesson 7')}
+      ${screen('#/lab', 'Build a small office LAN', 'Networking · lab 1')}
+      ${screen('#/course', 'Networking deep dive, part 1', 'Course page')}
+      ${screen('#/linux-lab', 'Explore your first Linux server', 'Operating systems · terminal lab')}
+    </div></section>
+    <section><div class="sec-h"><h2>Lesson</h2></div>${list('lesson')}</section>
+    <section><div class="sec-h"><h2>Network lab</h2></div>${list('lab')}</section>
+    <section><div class="sec-h"><h2>Course page</h2></div>${list('course')}</section>
+    <section><div class="sec-h"><h2>Terminal lab</h2></div>${list('terminal')}</section>
+  </div>`);
+}
+
+/* ---------------- A. Lesson ---------------- */
+const SIGNATURES = [['JPEG', 'FF D8 FF'], ['PDF', '25 50 44 46'], ['PNG', '89 50 4E 47']];
+const EXTENSION_TYPE = { jpg: 'JPEG', pdf: 'PDF', png: 'PNG', zip: 'ZIP' };
+const FILES = [
+  ['holiday.jpg', 'FF D8 FF E0'],
+  ['vacation.pdf', 'FF D8 FF E1'],
+  ['report.pdf', '25 50 44 46'],
+  ['invoice.pdf', '89 50 4E 47'],
+  ['backup.zip', '50 4B 03 04'],
+];
+const typeFromBytes = bytes => SIGNATURES.find(([, signature]) => bytes.startsWith(signature))?.[0];
+function classify([name, bytes]) {
+  const real = typeFromBytes(bytes);
+  if (!real) return 'Unknown';
+  return EXTENSION_TYPE[name.split('.').pop()] === real ? 'Genuine' : 'Renamed';
+}
+function reason([name, bytes]) {
+  const real = typeFromBytes(bytes), named = EXTENSION_TYPE[name.split('.').pop()];
+  if (!real) return `${bytes} is not in your table, so you cannot tell.`;
+  return real === named ? `The bytes say ${real}. The name says ${named}. They match.` : `The bytes say ${real}, but the name says ${named}.`;
+}
+const signatureTable = () => `<div class="tbl"><table><tr><th>File type</th><th>Signature</th></tr>${SIGNATURES.map(([type, signature]) => `<tr><td>${type}</td><td><code>${signature}</code></td></tr>`).join('')}</table></div>`;
+const QUIZ = [
+  { question: 'In the exercise, <code>vacation.pdf</code> starts with <code>FF D8 FF</code>. What is it?', right: 'Renamed', why: 'The bytes say JPEG. The name says PDF.' },
+  { question: 'A new file, <code>report.pdf</code>, starts with <code>25 50 44 46</code>. What is it?', right: 'Genuine', why: 'The bytes say PDF. The name says PDF.' },
+];
+
+const SLIDES = [
+  { title: 'A name can lie', html: () => `
+      <p>A file name ends with an <b>extension</b>, for example <code>.jpg</code>. The extension is only a label.</p>
+      <p>Rename <code>vacation.jpg</code> to <code>vacation.pdf</code>. The label changes. The data inside does not. It is still a photo.</p>
+      <p>Attackers use this trick. They rename malware to <code>invoice.pdf</code>. A filter that reads only the name lets it through.</p>` },
+  { title: 'Look inside the file', html: () => `
+      <p>A file is a list of <b>bytes</b>. We write each byte as 2 <b>hex</b> characters, from <code>00</code> to <code>FF</code>.</p>
+      <p>These are the first bytes of <code>vacation.pdf</code>:</p>
+      <div class="hexrow" aria-label="FF D8 FF E1 00 10 4A 46"><span class="sig">FF</span><span class="sig">D8</span><span class="sig">FF</span><span>E1</span><span>00</span><span>10</span><span>4A</span><span>46</span></div>
+      <p>The first few bytes are the <b>file signature</b>. Each file type has its own. <code>FF D8 FF</code> means JPEG.</p>
+      <p class="t-sm ink6">To see them yourself, run <code>xxd vacation.pdf | head -1</code> in a terminal. <code>file vacation.pdf</code> prints the real type.</p>` },
+  { title: 'Three possible answers', html: () => `
+      <p>Find the type from the signature. Then compare it with the extension.</p>
+      <div class="tbl"><table>
+        <tr><th>Answer</th><th>Example</th><th>Meaning</th></tr>
+        <tr><td class="semi">Genuine</td><td><code>photo.jpg</code> · <code>FF D8 FF</code></td><td>The signature matches the extension.</td></tr>
+        <tr><td class="semi">Renamed</td><td><code>photo.pdf</code> · <code>FF D8 FF</code></td><td>The signature is a different type.</td></tr>
+        <tr><td class="semi">Unknown</td><td><code>backup.zip</code> · <code>50 4B 03 04</code></td><td>The signature is not in your table.</td></tr>
+      </table></div>
+      <p class="t-sm ink6">Unknown does not mean bad. It means you need a bigger signature list.</p>` },
+  { title: 'Read the signature', gate: 'Match all 3 to continue', html: () => `
+      <p>Which file type do these bytes show? Use the table.</p>${signatureTable()}
+      <div class="exlist">${SIGNATURES.map(([type, signature], i) => exercise(`signature${i}`, `<code>${signature}</code>`, ['JPEG', 'PDF', 'PNG'], type,
+        '', 'Look for these bytes in the table.')).join('')}</div>` },
+  { title: 'Classify the files', gate: 'Classify all 5 to continue', html: () => `
+      <p>Now each file has a name. Is it genuine, renamed or unknown?</p>${signatureTable()}
+      <div class="exlist">${FILES.map((file, i) => exercise(`file${i}`, `<code>${file[0]}</code> <span class="ink5">·</span> <code>${file[1]}</code>`, ['Genuine', 'Renamed', 'Unknown'], classify(file),
+        reason(file), 'Find the type from the bytes first. Then compare it with the extension.')).join('')}</div>` },
+  { title: 'Check your understanding', gate: 'Answer both to continue', html: () =>
+      `<div class="exlist">${QUIZ.map((item, i) => exercise(`quiz${i}`, `<span class="p">${i + 1}. ${item.question}</span>`, ['Genuine', 'Renamed', 'Unknown'], item.right,
+        item.why, 'Not quite. Compare the type from the bytes with the extension.')).join('')}</div>` },
+];
+const answers = {};
+const lesson = { slide: 0 };
+
+function exercise(id, label, options, right, rightText, wrongText) {
+  const picked = answers[id];
+  const feedback = !picked ? '' : picked === right ? `<span class="green">Correct. ${rightText}</span>` : `<span class="brand">${wrongText}</span>`;
+  return `<div class="ex" data-exercise="${id}" data-right="${right}"><div>${label}</div>
+    <div class="seg" role="radiogroup">${options.map(option => `<button role="radio" aria-checked="${picked === option}" data-pick="${option}" class="${picked === option ? (option === right ? 'right' : 'wrong') : ''}">${option}</button>`).join('')}</div>
+    <div class="fb" aria-live="polite">${feedback}</div></div>`;
+}
+const slideDone = () => $$('[data-exercise]').every(ex => answers[ex.dataset.exercise] === ex.dataset.right);
+
+const OUTLINE = [
+  ['Unit 1: How computers really work', '6/8', ['How machines work', 'Under the hood', 'Speak in binary', 'Bits to bytes', 'Computers and characters', 'Where files live', "What's really inside?", 'Disk detective']],
+  ['Unit 2: Windows fundamentals', '0/8', ['Meet Windows', 'Exploring Windows', 'Inside NTFS', 'Users and groups']],
+];
+function renderLesson() {
+  const outline = OUTLINE.map(([unit, count, items], u) => `<div class="unit" title="${unit}"><span>${unit}</span><span>${count}</span></div>` +
+    items.map((name, i) => {
+      const state = u === 0 && i < 6 ? 'done' : u === 0 && i === 6 ? 'cur' : '';
+      return `<a href="#/lesson" class="${state === 'cur' ? 'on' : ''}" ${state === 'cur' ? 'aria-current="page"' : ''}><span class="ring ${state}"></span>${name}</a>`;
+    }).join('')).join('');
+  root.innerHTML = `<div class="app">
+    <aside class="side" id="outline" aria-label="Course outline"><a class="backlink" href="#/">${ICON.back}Cyber foundations</a><nav class="outline">${outline}</nav></aside>
+    <div class="col">
+      <header class="ph">
+        <button class="btn ghost icon only-sm" id="openOutline" aria-label="Show course outline">${ICON.panel}</button>
+        <h1>What's really inside?</h1>
+        <span class="t-sm ink5 ml-auto hide-sm">Lesson 7 of 40</span>
+        <button class="btn" id="openTutor">Ask the tutor</button>
+      </header>
+      <main><div class="player"><div class="card slide">
+        <div class="slide-body"></div>
+        <div class="slide-foot">
+          <button class="btn ghost md" id="prev">Back</button>
+          <span class="t-sm ink5" id="progress"></span>
+          <button class="btn solid md" id="next">Next</button>
+        </div>
+      </div></div></main>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="tutor" aria-label="Tutor">
+    <header class="ph"><h1>Tutor</h1><button class="btn ghost ml-auto" id="closeTutor">Close</button></header>
+    <p class="note" style="padding:16px">Ask a question about this lesson. The tutor sees the slide you are on.</p>
+    <div style="margin-top:auto;padding:12px;border-top:1px solid var(--line1)"><input class="input" aria-label="Your question" placeholder="Type a question"></div>
+  </aside>`;
+  const outlineEl = $('#outline'), scrim = $('#scrim'), tutor = $('#tutor');
+  $('#openOutline').onclick = () => { outlineEl.classList.add('sheet'); requestAnimationFrame(() => outlineEl.classList.add('open')); scrim.classList.add('open'); };
+  $('#openTutor').onclick = () => { tutor.classList.add('open'); scrim.classList.add('open'); };
+  $('#closeTutor').onclick = scrim.onclick = () => { outlineEl.classList.remove('open'); tutor.classList.remove('open'); scrim.classList.remove('open'); };
+  $('#prev').onclick = () => { lesson.slide--; drawSlide(); };
+  $('#next').onclick = () => { if (lesson.slide < SLIDES.length - 1) { lesson.slide++; drawSlide(); } else location.hash = '#/'; };
+  $('.slide-body').addEventListener('click', e => {
+    const button = e.target.closest('[data-pick]');
+    if (!button) return;
+    answers[button.closest('[data-exercise]').dataset.exercise] = button.dataset.pick;
+    drawSlide();
+  });
+  drawSlide();
+}
+function drawSlide() {
+  const slide = SLIDES[lesson.slide], last = lesson.slide === SLIDES.length - 1;
+  $('.slide-body').innerHTML = `<h2>${slide.title}</h2>${slide.html()}`;
+  const locked = slide.gate && !slideDone();
+  $('#prev').disabled = lesson.slide === 0;
+  $('#next').disabled = locked;
+  $('#next').textContent = last ? 'Next lesson' : 'Next';
+  $('#progress').textContent = locked ? slide.gate : `${lesson.slide + 1} / ${SLIDES.length}`;
+}
+
+/* ---------------- B. Network lab ---------------- */
+const DEVICES = {
+  designPc: { name: 'Design PC', kind: 'pc', ports: ['eth0'], role: 'A computer that staff use.' },
+  salesPc: { name: 'Sales PC', kind: 'pc', ports: ['eth0'], role: 'A computer that staff use.' },
+  accessSwitch: { name: 'Access SW', kind: 'switch', ports: ['Fa0/1', 'Fa0/2', 'Fa0/3', 'Gi0/1'], role: 'A switch. It connects the devices in the office.' },
+  edgeRouter: { name: 'Edge Router', kind: 'router', ports: ['Gi0/0', 'Gi0/1'], role: 'A router. It connects the office to other networks.' },
+};
+// Phones get a portrait layout so the devices stay large enough to tap.
+const LAYOUTS = {
+  wide: { viewBox: '0 0 830 460', designPc: [150, 110], salesPc: [150, 350], accessSwitch: [430, 230], edgeRouter: [680, 230] },
+  narrow: { viewBox: '0 0 440 540', designPc: [100, 80], salesPc: [340, 80], accessSwitch: [220, 270], edgeRouter: [220, 450] },
+};
+const narrowScreen = matchMedia('(max-width: 640px)');
+function applyLayout() {
+  const layout = LAYOUTS[narrowScreen.matches ? 'narrow' : 'wide'];
+  for (const id in DEVICES) [DEVICES[id].x, DEVICES[id].y] = layout[id];
+  return layout.viewBox;
+}
+narrowScreen.addEventListener('change', () => { if (location.hash === '#/lab') { $('#net').setAttribute('viewBox', applyLayout()); drawNetwork(); } });
+const REQUIRED = [['designPc', 'accessSwitch'], ['salesPc', 'accessSwitch'], ['accessSwitch', 'edgeRouter']];
+const CABLES = {
+  auto: ['Auto', 'Picks the right copper cable for you. Use it when you are not sure.'],
+  straight: ['Straight-through', 'Copper cable for different devices, for example PC to switch or switch to router.'],
+  crossover: ['Crossover', 'Copper cable for similar devices, for example switch to switch.'],
+  fiber: ['Fiber', 'Sends light through glass, for long distances. These devices have no fiber ports.'],
+};
+const KIND_NAME = { pc: 'PC', switch: 'switch', router: 'router' };
+const NODE_W = 104, NODE_H = 64;
+const lab = { cable: 'auto', armed: null, links: [], powered: false, selected: null, status: 'Click a device to start a cable.', result: null };
+
+const linkBetween = (a, b) => lab.links.find(l => (l.a === a && l.b === b) || (l.a === b && l.b === a));
+const linkOnPort = (id, port) => lab.links.find(l => (l.a === id && l.aPort === port) || (l.b === id && l.bPort === port));
+// A PC and a router use the same pin layout and a switch uses the crossed one, so two devices with the same layout need a crossover cable.
+const neededCable = (a, b) => (DEVICES[a].kind === 'switch') === (DEVICES[b].kind === 'switch') ? 'crossover' : 'straight';
+const linkState = l => !lab.powered ? 'off' : l.cable === neededCable(l.a, l.b) ? 'up' : 'down';
+const STATE_COLOR = { off: 'var(--ink4)', up: 'var(--green-ink)', down: 'var(--brand)' };
+const STATE_BADGE = { off: '<span class="badge">Off</span>', up: '<span class="badge b-green">Up</span>', down: '<span class="badge b-red">Down</span>' };
+const OFF_NOTE = '<p class="note mt2">Off is normal before you turn on the power.</p>';
+
+function freePort(id, peer) {
+  const free = DEVICES[id].ports.filter(p => !linkOnPort(id, p));
+  if (DEVICES[id].kind === 'switch') return free.find(p => p.startsWith(DEVICES[peer].kind === 'router' ? 'Gi' : 'Fa'));
+  return free[0];
+}
+
+function renderLab() {
+  root.innerHTML = `<div class="app"><div class="col">
+    <header class="ph">
+      <nav class="crumbs"><a href="#/course" class="row g2">${ICON.back}<span class="hide-sm">Networking deep dive, part 1</span></a><span class="sep hide-sm">/</span><span class="cur">Build a small office LAN</span></nav>
+      <span class="t-sm ink5 ml-auto hide-sm">Lab 1 of 15</span>
+      <button class="btn solid md" id="checkLab">Check lab</button>
+    </header>
+    <div class="lab">
+      <div class="stagecol">
+        <div class="bar">
+          <span class="t-sm ink6">Cable</span>
+          <div class="seg" role="radiogroup" aria-label="Cable type">${Object.entries(CABLES).map(([key, [label]]) => `<button role="radio" data-cable="${key}">${label}</button>`).join('')}</div>
+          <button class="btn ghost ml-auto" id="resetLab">Reset</button>
+        </div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+        <div class="stage"><svg id="net" viewBox="${applyLayout()}" preserveAspectRatio="xMidYMid meet" aria-label="Network diagram"></svg></div>
+        <div class="bar bottom">
+          <button class="sw" id="power" role="switch" aria-checked="false" aria-labelledby="powerLabel"></button>
+          <span id="powerLabel" class="t-sm">Power</span>
+          <span class="t-sm ink5" id="powerText"></span>
+          <span class="t-sm ink6 ml-auto" id="count"></span>
+        </div>
+      </div>
+      <aside class="labpanel" id="panel"></aside>
+    </div>
+  </div></div>`;
+  $$('[data-cable]').forEach(button => button.onclick = () => {
+    lab.cable = button.dataset.cable; lab.armed = null;
+    lab.status = lab.cable === 'fiber' ? 'These devices have no fiber ports. Choose Auto.' : 'Click a device to start a cable.';
+    drawLab();
+  });
+  $('#power').onclick = () => {
+    lab.powered = !lab.powered;
+    const down = lab.links.filter(l => linkState(l) === 'down').length;
+    lab.status = !lab.powered ? 'Power is off.' : down ? `Power is on. ${down} link is down. Select the red cable to see why.` : 'Power is on. Green ports are up.';
+    drawLab();
+  };
+  $('#resetLab').onclick = () => { Object.assign(lab, { armed: null, links: [], powered: false, selected: null, result: null, status: 'Lab reset. Click a device to start a cable.' }); drawLab(); };
+  $('#checkLab').onclick = checkLab;
+  $('#net').addEventListener('click', e => {
+    const node = e.target.closest('[data-device]'), cable = e.target.closest('[data-link]');
+    if (node) return onDevice(node.dataset.device);
+    lab.armed = null;
+    lab.selected = cable ? { link: lab.links[cable.dataset.link] } : null;
+    drawLab();
+  });
+  $('#net').addEventListener('keydown', e => {
+    const node = e.target.closest('[data-device]');
+    if (node && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onDevice(node.dataset.device); }
+  });
+  drawLab();
+}
+
+function onDevice(id) {
+  const device = DEVICES[id];
+  lab.selected = { device: id };
+  if (lab.cable === 'fiber') lab.status = `${device.name} has no fiber port. Choose Auto.`;
+  else if (lab.armed === id) { lab.armed = null; lab.status = 'Cable cancelled.'; }
+  else if (!lab.armed) {
+    if (device.ports.every(p => linkOnPort(id, p))) lab.status = `${device.name} has no free port. Remove a cable first.`;
+    else { lab.armed = id; lab.status = `Now click the device to connect ${device.name} to. Click ${device.name} again to cancel.`; }
+  } else {
+    const a = lab.armed, aPort = freePort(a, id), bPort = freePort(id, a);
+    if (linkBetween(a, id)) lab.status = `${DEVICES[a].name} and ${device.name} already have a cable.`;
+    else if (!aPort || !bPort) lab.status = `${aPort ? device.name : DEVICES[a].name} has no free port for this cable.`;
+    else {
+      lab.links.push({ a, aPort, b: id, bPort, cable: lab.cable === 'auto' ? neededCable(a, id) : lab.cable });
+      const done = REQUIRED.filter(([x, y]) => linkBetween(x, y)).length;
+      lab.status = `Connected ${DEVICES[a].name} ${aPort} to ${device.name} ${bPort}.` + (done === 3 && !lab.powered ? ' All cables are done. Turn on the power.' : '');
+    }
+    lab.armed = null;
+  }
+  drawLab();
+}
+
+function drawLab() {
+  $$('[data-cable]').forEach(button => { button.classList.toggle('on', button.dataset.cable === lab.cable); button.setAttribute('aria-checked', button.dataset.cable === lab.cable); });
+  $('#status').textContent = lab.status;
+  $('#power').setAttribute('aria-checked', lab.powered);
+  $('#powerText').textContent = lab.powered ? 'Devices are on' : 'Devices are off';
+  $('#count').textContent = `Cables ${REQUIRED.filter(([x, y]) => linkBetween(x, y)).length} of 3`;
+  drawNetwork();
+  drawPanel();
+}
+
+function drawNetwork() {
+  const icon = {
+    pc: '<rect x="-12" y="-16" width="24" height="16" rx="2"/><path d="M-6 5h12M0 0v5"/>',
+    switch: '<rect x="-15" y="-12" width="30" height="16" rx="3"/><path d="M-9 -4h2M-3 -4h2M3 -4h2"/>',
+    router: '<circle cy="-4" r="11"/><path d="M-11 -4h22M0 -15v22"/>',
+  };
+  // Port dots sit just outside the device box, on the line towards the peer.
+  const portEnd = (from, to) => {
+    const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+    const t = Math.min(Math.abs(NODE_W / 2 / ux), Math.abs(NODE_H / 2 / uy)) + 12;
+    return { x: from.x + ux * t, y: from.y + uy * t, ux, uy };
+  };
+  const cables = lab.links.map((l, i) => {
+    const A = DEVICES[l.a], B = DEVICES[l.b], color = STATE_COLOR[linkState(l)];
+    const ends = [[portEnd(A, B), l.aPort], [portEnd(B, A), l.bPort]].map(([p, port]) =>
+      `<circle cx="${p.x}" cy="${p.y}" r="4.5" fill="${color}"/><text class="plabel" text-anchor="middle" x="${p.x + p.ux * 26 + p.uy * 12}" y="${p.y + p.uy * 26 - p.ux * 12 + 4}">${port}</text>`).join('');
+    return `<g class="cable ${lab.selected?.link === l ? 'sel' : ''}" data-link="${i}">
+      <line class="hit" x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}"/>
+      <line class="wire" x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="${color}" ${l.cable === 'crossover' ? 'stroke-dasharray="7 5"' : ''}/>${ends}</g>`;
+  }).join('');
+  const nodes = Object.entries(DEVICES).map(([id, d]) => `<g class="node ${lab.selected?.device === id ? 'sel' : ''} ${lab.armed === id ? 'armed' : ''}" data-device="${id}" tabindex="0" role="button" aria-label="${d.name}" transform="translate(${d.x} ${d.y})">
+      <rect x="${-NODE_W / 2}" y="${-NODE_H / 2}" width="${NODE_W}" height="${NODE_H}" rx="10"/>
+      <g class="ico" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" transform="translate(0 4)">${icon[d.kind]}</g>
+      <text class="name" text-anchor="middle" y="${NODE_H / 2 + 20}">${d.name}</text></g>`).join('');
+  $('#net').innerHTML = cables + nodes;
+}
+
+function drawPanel() {
+  const selected = lab.selected;
+  let selection = '';
+  if (selected?.device) {
+    const id = selected.device, d = DEVICES[id];
+    const rows = d.ports.map(port => {
+      const l = linkOnPort(id, port);
+      const peer = !l ? '<span class="ink5">Not connected</span>' : l.a === id ? `${DEVICES[l.b].name} ${l.bPort}` : `${DEVICES[l.a].name} ${l.aPort}`;
+      return `<div class="portrow"><code>${port}</code><span class="t-sm">${peer}</span>${l ? STATE_BADGE[linkState(l)] : ''}</div>`;
+    }).join('');
+    selection = `<section><h2>${d.name}</h2><p class="note">${d.role}</p><div class="card rows mt3">${rows}</div>
+      ${!lab.powered && d.ports.some(port => linkOnPort(id, port)) ? OFF_NOTE : ''}</section>`;
+  }
+  if (selected?.link) {
+    const l = selected.link, state = linkState(l), [cableName] = CABLES[l.cable];
+    const problem = `A ${KIND_NAME[DEVICES[l.a].kind]} and a ${KIND_NAME[DEVICES[l.b].kind]} need a ${CABLES[neededCable(l.a, l.b)][0].toLowerCase()} cable. Remove this cable and connect again with Auto.`;
+    selection = `<section><h2>${DEVICES[l.a].name} to ${DEVICES[l.b].name}</h2>
+      <div class="card rows"><div class="portrow"><span class="ink5">Cable</span><span>${cableName}</span>${STATE_BADGE[state]}</div>
+      <div class="portrow"><span class="ink5">Ports</span><span><code>${l.aPort}</code> to <code>${l.bPort}</code></span><span></span></div></div>
+      ${state === 'down' ? `<p class="note mt2">${problem}</p>` : state === 'off' ? OFF_NOTE : ''}
+      <button class="btn outline mt3" id="removeCable">Remove cable</button></section>`;
+  }
+  const result = lab.result ? `<section><h2>Score ${lab.result.score} / 100</h2><div class="card rows">${lab.result.items.map(([ok, text]) =>
+    `<div class="check"><span class="ring ${ok ? 'done' : ''}"></span>${text}</div>`).join('')}</div></section>` : '';
+  $('#panel').innerHTML = result + selection + `
+    <section><h2>Task</h2><p class="note">The office has 2 PCs. Connect both PCs to the switch, and the switch to the router. Then turn on the power and check the lab.</p></section>
+    <section><h2>Cables</h2><div class="card rows">${REQUIRED.map(([x, y]) => { const l = linkBetween(x, y);
+      return `<div class="check"><span class="ring ${l ? 'done' : ''}"></span>${DEVICES[x].name} to ${DEVICES[y].name}${l && linkState(l) === 'down' ? `<span class="ml-auto">${STATE_BADGE.down}</span>` : ''}</div>`; }).join('')}</div></section>
+    <section><h2>${CABLES[lab.cable][0]} cable</h2><p class="note">${CABLES[lab.cable][1]}</p></section>
+    <section><h2>Words to know</h2><dl class="terms">
+      <dt>Port</dt><dd>The socket where a cable goes.</dd>
+      <dt><code>eth0</code></dt><dd>The first network port on a PC.</dd>
+      <dt><code>Fa0/1</code></dt><dd>FastEthernet port 1, up to 100 Mbit/s.</dd>
+      <dt><code>Gi0/1</code></dt><dd>GigabitEthernet port 1, up to 1 Gbit/s.</dd>
+      <dt>Off</dt><dd>The cable is in, but the power is off.</dd>
+      <dt>Up</dt><dd>The link works.</dd>
+      <dt>Down</dt><dd>A real problem. Select the cable to see why.</dd>
+    </dl></section>`;
+  const remove = $('#removeCable');
+  if (remove) remove.onclick = () => { lab.links = lab.links.filter(l => l !== selected.link); lab.selected = null; lab.status = 'Cable removed.'; drawLab(); };
+}
+
+function checkLab() {
+  const items = REQUIRED.map(([x, y]) => {
+    const l = linkBetween(x, y), name = `${DEVICES[x].name} to ${DEVICES[y].name}`;
+    if (!l) return [false, `${name}: no cable yet.`];
+    if (l.cable !== neededCable(x, y)) return [false, `${name}: wrong cable type.`];
+    return [true, name];
+  });
+  items.push(lab.powered ? [true, 'Power is on'] : [false, 'Power is off. Turn it on.']);
+  lab.result = { items, score: items.slice(0, 3).filter(([ok]) => ok).length * 30 + (lab.powered ? 10 : 0) };
+  lab.status = lab.result.score === 100 ? 'Lab complete. Both PCs can reach the router.' : 'Not done yet. See the list in the panel.';
+  drawLab();
+  $('#panel').scrollTop = 0;
+}
+
+/* ---------------- C. Course page ---------------- */
+function renderCourse() {
+  const units = [
+    ['Unit 1: Network foundations', [['Introduction to computer networks', '10 min'], ['Network components', '12 min'], ['Network topologies', '12 min'], ['Enterprise network architectures', '15 min']]],
+    ['Unit 2: Models and protocols', [['OSI model fundamentals', '12 min'], ['TCP/IP model', '14 min'], ['Data encapsulation', '14 min'], ['TCP and UDP', '15 min'], ['Common network protocols', '15 min']]],
+  ];
+  const labCard = (title, meta) => `<a class="card" href="#/lab"><div class="card-body"><h3>${title}</h3><p class="t-sm ink5 mt1">${meta}</p><div class="card-foot"><span class="t-sm ink6">Runs in your browser</span><span class="btn outline">Open lab</span></div></div></a>`;
+  root.innerHTML = mainShell('learn', `<nav class="crumbs"><a href="#/">Learn</a><span class="sep">/</span><span class="cur">Networking deep dive, part 1</span></nav>
+      <a class="btn solid md ml-auto" href="#/course">Start Unit 1</a>`, `<div class="body">
+    <section>
+      <p class="p">Learn how office and campus networks work, from cables and switches to routing, VLANs and Cisco IOS.</p>
+      <p class="t-sm ink5 mt2">68 lessons · 18 hours · Intermediate · 0 of 68 done</p>
+      <p class="t-sm ink6 mt2">New to networks? Do <a href="#/lesson" class="brand">Cyber foundations</a> first.</p>
+    </section>
+    ${units.map(([unit, items], u) => `<section><div class="sec-h"><h2>${unit}</h2><p>0 / ${items.length}</p></div>
+      <div class="card rows">${items.map(([name, minutes], i) => `<div class="li ${u === 0 && i === 0 ? 'next' : ''}"><span class="ring ${u === 0 && i === 0 ? 'cur' : ''}"></span><span class="t-sm" style="flex:1">${name}</span><span class="t-sm ink5">${minutes}</span></div>`).join('')}</div></section>`).join('')}
+    <section><div class="sec-h"><div><h2>Scenario labs</h2><p class="mt1">Build and repair networks. Each lab says which lesson to finish first.</p></div><a class="t-sm ink6" href="#/course">See all 15</a></div>
+      <div class="cards two">
+        ${labCard('Build a small office LAN', 'After: Network components')}
+        ${labCard('Restore a web and DNS path', 'After: Common network protocols')}
+      </div></section>
+  </div>`);
+}
+
+
+/* ---------------- D. Terminal lab ---------------- */
+const HOME = '/home/student', HOST = 'lab-server';
+const OS_RELEASE = 'PRETTY_NAME="Ubuntu 22.04.4 LTS"\nNAME="Ubuntu"\nVERSION_ID="22.04"\nID=ubuntu\n';
+const TASKS = [
+  { short: 'User', title: 'Find out who you are',
+    intro: 'Every command runs as a user. Find your user name and save it in a file.',
+    steps: ['Run <button class="copy">whoami</button>. It prints your user name.', 'Save that output to the file <code>~/whoami.txt</code>.'],
+    terms: [['<code>~</code>', `Your home folder, <code>${HOME}</code>.`], ['<code>&gt;</code>', 'Sends the output of a command into a file, not to the screen.']],
+    hint: 'Put <code>&gt;</code> and the file name after the command: <code>command &gt; file</code>.',
+    solution: '<code>whoami &gt; ~/whoami.txt</code>',
+    check: () => {
+      const file = shell.files[HOME + '/whoami.txt'];
+      if (file === undefined) return [false, 'There is no <code>~/whoami.txt</code> yet. Use <code>&gt;</code> to send the output of <code>whoami</code> into it.'];
+      if (file.trim() !== 'student') return [false, '<code>~/whoami.txt</code> exists, but it does not contain <code>student</code>.'];
+      return [true, '<code>~/whoami.txt</code> contains <code>student</code>.'];
+    } },
+  { short: 'System', title: 'Identify the operating system',
+    intro: 'The file <code>/etc/os-release</code> describes the operating system. Read it to answer.',
+    steps: ['Run <button class="copy">cat /etc/os-release</button>. <code>cat</code> prints a file.', 'Find the line that starts with <code>PRETTY_NAME</code>.'],
+    terms: [],
+    options: ['Ubuntu 22.04', 'Debian 12', 'Alpine 3.19', 'Rocky Linux 9'],
+    hint: 'Read the text in quotes after <code>PRETTY_NAME=</code>.',
+    solution: 'Ubuntu 22.04',
+    check: () => tlab.choice === 'Ubuntu 22.04' ? [true, 'This server runs Ubuntu 22.04.']
+      : [false, tlab.choice ? 'Not this one. Read the <code>PRETTY_NAME</code> line again.' : 'Choose an answer first.'] },
+  { short: 'Workspace', title: 'Make your workspace',
+    intro: 'Make a folder for your work in this course.',
+    steps: ['Make a folder called <code>workspace</code> in your home folder.', 'List your home folder to see it.'],
+    terms: [['<code>mkdir</code>', 'Makes a folder.'], ['<code>ls</code>', 'Lists what is in a folder.']],
+    hint: '<code>mkdir</code> takes the path of the new folder, for example <code>mkdir ~/name</code>.',
+    solution: '<code>mkdir ~/workspace</code>, then <code>ls ~</code>',
+    check: () => shell.dirs.has(HOME + '/workspace') ? [true, 'The folder <code>~/workspace</code> exists.']
+      : [false, 'There is no <code>~/workspace</code> folder yet. Use <code>mkdir</code> to make it.'] },
+];
+const tlab = { task: 0, done: [], reveal: null, choice: null, result: null, pane: 'task', ready: false, tip: true, endArmed: false, secondsLeft: 3600 };
+const shell = { cwd: HOME, history: [], back: 0, lines: [],
+  dirs: new Set(['/', '/home', HOME, '/etc', '/tmp', '/var']),
+  files: { [HOME + '/notes.txt']: 'Welcome to your first server.\n', '/etc/os-release': OS_RELEASE } };
+
+function resolvePath(path) {
+  path = path.replace(/^~(?=\/|$)/, HOME);
+  const parts = (path.startsWith('/') ? [] : shell.cwd.split('/')).concat(path.split('/'));
+  const out = [];
+  for (const part of parts) { if (part === '..') out.pop(); else if (part && part !== '.') out.push(part); }
+  return '/' + out.join('/');
+}
+const shortPath = path => path === HOME ? '~' : path.startsWith(HOME + '/') ? '~' + path.slice(HOME.length) : path;
+const parentOf = path => path.slice(0, path.lastIndexOf('/')) || '/';
+const escapeHtml = text => text.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+function runCommand(line) {
+  const [, command, op, target] = line.match(/^(.*?)\s*(>>|>)\s*(\S+)\s*$/) || [, line];
+  const [name, ...args] = command.trim().split(/\s+/);
+  const flags = args.filter(a => a.startsWith('-')).join(''), paths = args.filter(a => !a.startsWith('-'));
+  let out = '';
+  switch (name) {
+    case 'whoami': out = 'student\n'; break;
+    case 'hostname': out = HOST + '\n'; break;
+    case 'pwd': out = shell.cwd + '\n'; break;
+    case 'uname': out = flags.includes('a') ? `Linux ${HOST} 5.15.0-105-generic x86_64 GNU/Linux\n` : 'Linux\n'; break;
+    case 'echo': out = args.join(' ').replace(/^["']|["']$/g, '') + '\n'; break;
+    case 'clear': shell.lines = []; return;
+    case 'help': out = 'Commands in this lab: whoami, hostname, pwd, ls, cd, cat, echo, mkdir, uname, clear\n'; break;
+    case 'cd': {
+      const path = resolvePath(paths[0] || '~');
+      if (!shell.dirs.has(path)) return print(`<span class="err">bash: cd: ${escapeHtml(paths[0])}: No such file or directory</span>`);
+      shell.cwd = path; return;
+    }
+    case 'ls': {
+      const path = resolvePath(paths[0] || '.');
+      if (!shell.dirs.has(path)) return print(`<span class="err">ls: cannot access '${escapeHtml(paths[0])}': No such file or directory</span>`);
+      const children = [...shell.dirs, ...Object.keys(shell.files)].filter(p => p !== path && parentOf(p) === path).sort();
+      const names = children.map(p => p.slice(p.lastIndexOf('/') + 1)).filter(n => flags.includes('a') || !n.startsWith('.'));
+      if (op) { out = names.join('\n') + '\n'; break; }
+      return print(children.map(p => shell.dirs.has(p) ? `<span class="dir">${escapeHtml(p.slice(p.lastIndexOf('/') + 1))}</span>` : escapeHtml(p.slice(p.lastIndexOf('/') + 1))).join('  '));
+    }
+    case 'cat': {
+      const path = resolvePath(paths[0] || '');
+      if (shell.dirs.has(path)) return print(`<span class="err">cat: ${escapeHtml(paths[0])}: Is a directory</span>`);
+      if (shell.files[path] === undefined) return print(`<span class="err">cat: ${escapeHtml(paths[0] || '')}: No such file or directory</span>`);
+      out = shell.files[path]; break;
+    }
+    case 'mkdir': {
+      for (const raw of paths) {
+        const path = resolvePath(raw);
+        if (shell.dirs.has(path)) { print(`<span class="err">mkdir: cannot create directory '${escapeHtml(raw)}': File exists</span>`); continue; }
+        if (!shell.dirs.has(parentOf(path)) && !flags.includes('p')) { print(`<span class="err">mkdir: cannot create directory '${escapeHtml(raw)}': No such file or directory</span>`); continue; }
+        let p = path; while (p !== '/') { shell.dirs.add(p); p = parentOf(p); }
+      }
+      return;
+    }
+    default:
+      return print(`<span class="err">${escapeHtml(name)}: command not found</span>\n<span class="dim">Type help to see the commands in this lab.</span>`);
+  }
+  if (!op) return print(escapeHtml(out.replace(/\n$/, '')));
+  const path = resolvePath(target);
+  if (!shell.dirs.has(parentOf(path)) || shell.dirs.has(path)) return print(`<span class="err">bash: ${escapeHtml(target)}: No such file or directory</span>`);
+  shell.files[path] = (op === '>>' ? shell.files[path] || '' : '') + out;
+}
+function print(html) { if (html) shell.lines.push(html); }
+const promptHtml = () => `<span class="ps">student@${HOST}</span>:<span class="dir">${escapeHtml(shortPath(shell.cwd))}</span>$`;
+
+function renderTerminalLab() {
+  root.innerHTML = `<div class="app"><div class="col">
+    <header class="ph">
+      <nav class="crumbs"><a href="#/" class="row g2">${ICON.back}<span class="hide-sm">Operating systems, part 1</span></a><span class="sep hide-sm">/</span><span class="cur">Explore your first Linux server</span></nav>
+      <div class="seg only-xs ml-auto" role="tablist">${['task', 'term'].map(p => `<button data-pane="${p}">${p === 'task' ? 'Task' : 'Terminal'}</button>`).join('')}</div>
+      <span class="t-sm ink5 ml-auto hide-sm" id="timer" title="The server stops when the time ends. Files on it are not kept."></span>
+      <button class="btn ghost hide-sm" id="endLab">End lab</button>
+    </header>
+    <div class="tlab" id="tlab">
+      <section class="task" aria-label="Task"><div class="task-scroll" id="taskScroll"></div><div class="task-foot" id="taskFoot"></div></section>
+      <div class="divider" id="divider" role="separator" aria-label="Resize panels"></div>
+      <section class="term" aria-label="Terminal">
+        <div class="term-head"><span class="semi">Terminal</span><span class="ink5">student@${HOST}</span><button class="btn ghost ml-auto" id="resetServer">Reset server</button></div>
+        <div id="termTip"></div>
+        <div class="term-body" id="termBody"></div>
+      </section>
+    </div>
+  </div></div>`;
+  try { const w = localStorage.getItem('csema-task-width'); if (w) $('#tlab').style.setProperty('--task-w', w); } catch {}
+  $$('[data-pane]').forEach(b => b.onclick = () => { tlab.pane = b.dataset.pane; drawTerminalLab(); });
+  $('#endLab').onclick = () => {
+    if (tlab.endArmed) return location.hash = '#/';
+    tlab.endArmed = true; $('#endLab').textContent = 'Click again to end';
+    setTimeout(() => { tlab.endArmed = false; const b = $('#endLab'); if (b) b.textContent = 'End lab'; }, 3000);
+  };
+  $('#resetServer').onclick = () => {
+    Object.assign(shell, { cwd: HOME, lines: [], dirs: new Set(['/', '/home', HOME, '/etc', '/tmp', '/var']), files: { [HOME + '/notes.txt']: 'Welcome to your first server.\n', '/etc/os-release': OS_RELEASE } });
+    tlab.ready = false; bootServer();
+  };
+  $('#taskScroll').addEventListener('click', e => {
+    const copy = e.target.closest('.copy');
+    if (copy) { navigator.clipboard?.writeText(copy.textContent).catch(() => {}); copy.classList.add('copied'); setTimeout(() => copy.classList.remove('copied'), 1200); return; }
+    const step = e.target.closest('[data-step]');
+    if (step) { tlab.task = +step.dataset.step; tlab.reveal = null; tlab.result = null; return drawTerminalLab(); }
+    const reveal = e.target.closest('[data-reveal]');
+    if (reveal) { tlab.reveal = tlab.reveal === reveal.dataset.reveal ? null : reveal.dataset.reveal; return drawTerminalLab(); }
+    const option = e.target.closest('[data-option]');
+    if (option) { tlab.choice = option.dataset.option; tlab.result = null; drawTerminalLab(); }
+  });
+  $('#termBody').addEventListener('click', () => $('#termInput')?.focus());
+  const divider = $('#divider');
+  divider.addEventListener('pointerdown', e => {
+    divider.setPointerCapture(e.pointerId); divider.classList.add('drag');
+    const left = $('#tlab').getBoundingClientRect().left;
+    divider.onpointermove = m => $('#tlab').style.setProperty('--task-w', Math.min(Math.max(m.clientX - left, 320), innerWidth * .6) + 'px');
+    divider.onpointerup = () => {
+      divider.onpointermove = null; divider.classList.remove('drag');
+      try { localStorage.setItem('csema-task-width', $('#tlab').style.getPropertyValue('--task-w')); } catch {}
+    };
+  });
+  clearInterval(tlab.timer);
+  tlab.timer = setInterval(() => { if (!$('#timer')) return clearInterval(tlab.timer); tlab.secondsLeft--; drawTimer(); }, 1000);
+  drawTimer();
+  drawTerminalLab();
+  if (!tlab.ready) bootServer(); else drawTerminal();
+}
+function drawTimer() {
+  const m = Math.floor(tlab.secondsLeft / 60), s = String(tlab.secondsLeft % 60).padStart(2, '0');
+  $('#timer').textContent = `${m}:${s} left`;
+}
+function bootServer() {
+  shell.lines = ['<span class="dim">Starting your server…</span>'];
+  drawTerminal();
+  setTimeout(() => {
+    shell.lines = ['Welcome to Ubuntu 22.04.4 LTS', '<span class="dim">This server is yours for 60 minutes. Type help to see the commands in this lab.</span>', ''];
+    tlab.ready = true;
+    drawTerminal();
+    $('#termInput')?.focus();
+  }, 1200);
+}
+
+function drawTerminalLab() {
+  const task = TASKS[tlab.task], allDone = tlab.done.length === TASKS.length;
+  $('#tlab').dataset.pane = tlab.pane;
+  $$('[data-pane]').forEach(b => b.classList.toggle('on', b.dataset.pane === tlab.pane));
+  const steps = `<div class="steps" role="tablist">${TASKS.map((t, i) => {
+    const unlocked = i === 0 || tlab.done.includes(i - 1);
+    return `<button class="step ${i === tlab.task && !allDone ? 'on' : ''}" data-step="${i}" ${unlocked ? '' : 'disabled'} role="tab" aria-selected="${i === tlab.task}"><span class="ring ${tlab.done.includes(i) ? 'done' : ''}"></span><span>${t.short}</span></button>`;
+  }).join('')}</div>`;
+  const header = `<div><h2>Explore your first Linux server</h2><p class="note mt1">You have a new Linux server. Find out who you are, what system it runs, and make a folder for your work.</p><p class="t-sm ink5 mt2">3 tasks · about 10 min · 30 XP</p></div>`;
+  if (allDone) {
+    $('#taskScroll').innerHTML = header + steps + `<div><h3>Lab complete</h3><p class="note mt2">You ran your first commands on a real server. You know these commands now:</p>
+      <dl class="terms mt3"><dt><code>whoami</code></dt><dd>Prints your user name.</dd><dt><code>cat</code></dt><dd>Prints a file.</dd><dt><code>mkdir</code></dt><dd>Makes a folder.</dd><dt><code>&gt;</code></dt><dd>Sends output into a file.</dd></dl></div>`;
+    $('#taskFoot').innerHTML = `<span class="msg green">30 XP earned.</span><a class="btn solid md" href="#/">Next lesson</a>`;
+    return;
+  }
+  const reveal = tlab.reveal === 'hint' ? `<div class="reveal">${task.hint}</div>` : tlab.reveal === 'solution' ? `<div class="reveal">${task.solution}<p class="ink5 mt1">You still pass the task, but you get no XP for it.</p></div>` : '';
+  $('#taskScroll').innerHTML = header + steps + `<div>
+      <h3>${task.title}</h3><p class="note mt2">${task.intro}</p>
+      <ol class="howto mt3">${task.steps.map(s => `<li><span>${s}</span></li>`).join('')}</ol>
+    </div>
+    ${task.options ? `<div><p class="semi" style="font-size:13px;margin-bottom:8px">Which operating system runs on this server?</p><div class="options" role="radiogroup">${task.options.map(o => `<button class="option" role="radio" data-option="${o}" aria-checked="${tlab.choice === o}"><span class="ring"></span>${o}</button>`).join('')}</div></div>` : ''}
+    ${task.terms.length ? `<dl class="terms">${task.terms.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl>` : ''}
+    <div><div class="row g2"><button class="btn ghost" data-reveal="hint">${tlab.reveal === 'hint' ? 'Hide hint' : 'Show hint'}</button><button class="btn ghost" data-reveal="solution">${tlab.reveal === 'solution' ? 'Hide solution' : 'Show solution'}</button></div>${reveal ? `<div class="mt2">${reveal}</div>` : ''}</div>`;
+  const passed = tlab.done.includes(tlab.task);
+  const msg = tlab.result ? `<span class="msg ${tlab.result[0] ? 'green' : 'brand'}">${tlab.result[0] ? 'Correct. ' : ''}${tlab.result[1]}</span>` : `<span class="msg ink5">Task ${tlab.task + 1} of ${TASKS.length}</span>`;
+  $('#taskFoot').innerHTML = msg + (passed ? '<button class="btn solid md" id="nextTask">Next task</button>' : '<button class="btn solid md" id="checkTask">Check</button>');
+  $('#checkTask')?.addEventListener('click', () => {
+    tlab.result = task.check();
+    if (tlab.result[0] && !tlab.done.includes(tlab.task)) tlab.done.push(tlab.task);
+    drawTerminalLab();
+  });
+  $('#nextTask')?.addEventListener('click', () => {
+    const next = TASKS.findIndex((_, i) => !tlab.done.includes(i));
+    Object.assign(tlab, { task: next < 0 ? tlab.task : next, result: null, reveal: null });
+    drawTerminalLab();
+  });
+}
+
+function drawTerminal() {
+  $('#termTip').innerHTML = tlab.tip && tlab.ready ? `<div class="term-tip"><span><code>student@${HOST}:~$</code> is the prompt. It shows your user, the server name and your folder (<code>~</code> is home). Type a command after the <code>$</code> and press Enter.</span><button class="btn ghost" id="hideTip">Got it</button></div>` : '';
+  $('#hideTip')?.addEventListener('click', () => { tlab.tip = false; drawTerminal(); });
+  const body = $('#termBody');
+  body.innerHTML = `<div class="term-out">${shell.lines.join('\n')}</div>` + (tlab.ready ? `<label class="term-in"><span>${promptHtml()}</span><input id="termInput" autocomplete="off" spellcheck="false" aria-label="Command"></label>` : '');
+  const input = $('#termInput');
+  if (input) input.onkeydown = e => {
+    if (e.key === 'Enter') {
+      const line = input.value;
+      shell.lines.push(`${promptHtml()} ${escapeHtml(line)}`);
+      if (line.trim()) { shell.history.push(line); runCommand(line.trim()); }
+      shell.back = 0; drawTerminal(); $('#termInput').focus();
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      shell.back = Math.min(Math.max(shell.back + (e.key === 'ArrowUp' ? 1 : -1), 0), shell.history.length);
+      input.value = shell.back ? shell.history[shell.history.length - shell.back] : '';
+    }
+  };
+  body.scrollTop = body.scrollHeight;
+}
+
+const ROUTES = { '': renderHome, lesson: renderLesson, lab: renderLab, course: renderCourse, 'linux-lab': renderTerminalLab };
+const TITLES = { lesson: "What's really inside?", lab: 'Build a small office LAN', course: 'Networking deep dive, part 1', 'linux-lab': 'Explore your first Linux server' };
+function route() {
+  const name = location.hash.replace(/^#\/?/, '');
+  (ROUTES[name] || renderHome)();
+  document.title = (TITLES[name] || 'Beginner fixes') + ' · CSEMA';
+}
+addEventListener('hashchange', route);
+addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (location.hash === '#/lab' && (lab.armed || lab.selected)) { lab.armed = null; lab.selected = null; lab.status = 'Cancelled.'; drawLab(); }
+  $('#scrim')?.click();
+});
+route();
+</script>
+</body>
+</html>
