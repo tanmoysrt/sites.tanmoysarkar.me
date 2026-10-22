@@ -72,11 +72,12 @@
   {
    "area": "Migration",
    "scenario": "An operator or an error aborts a disk-only migration after the destination VM booted, before Atlas commits.",
-   "behavior": "Metal removes the destination disk and restores the source from its final snapshot. Writes the guest made on the destination are discarded.",
-   "status": "Untested",
-   "score": 5,
+   "behavior": "Confirmed in T21. The destination cold-booted and ran for 29 s before Atlas committed; the guest wrote and synced a file. An abort then deleted the destination disk and restarted the source from its pre-cutover disk. The file and 30 s of synced writes were lost, with no error or warning. Triggers: the Abort button while the status is `cutting_over`, `starting` or `finalizing` before commit, or a non-transient worker error during commit (the worker then fails the migration and aborts).",
+   "status": "Not handled",
+   "score": 2,
    "ideal": "Keep the destination paused or offline until finish, or allow only finish after the destination starts. See [F7].",
-   "evidence": "Code reading and the migration handbook."
+   "evidence": "T21 on development hosts (Atlas worker frozen at cutover, abort sent while the destination ran).",
+   "injected": true
   },
   {
    "area": "Images",
@@ -353,13 +354,13 @@
   },
   {
    "id": "F7",
-   "severity": "Medium",
+   "severity": "Critical",
    "area": "Migration",
    "problem": "A disk-only migration cold-boots the destination before Atlas commits. An abort in that window restores the source from the final snapshot.",
-   "effect": "Writes made by the guest on the destination are lost.",
-   "fix": "Keep the destination paused or offline until finish, or reject abort after the destination started.",
+   "effect": "Writes that the guest made and synced on the destination are lost after an abort, silently. The guest goes back in time by the length of the window.",
+   "fix": "Once the destination has started the guest, allow only finish: reject abort in Atlas and Metal, and make the worker retry commit instead of failing. Or keep the destination guest paused (and with no network) until Atlas commits, so it cannot write.",
    "where": "`metal/internal/vm/migration`",
-   "verified": "Code reading and handbook"
+   "verified": "T21 fault injection: synced guest writes lost"
   },
   {
    "id": "F8",
