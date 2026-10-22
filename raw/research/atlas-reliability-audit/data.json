@@ -1,5 +1,5 @@
 {
- "status": "First pass complete: 31 fault tests on development hosts and a code review of Atlas, Metal, WG Mesh, the HTTP proxy cluster and the IPv6 router. 4 critical findings, 3 of them confirmed by fault injection. Development hosts are back to their normal state.",
+ "status": "First pass complete: 30 fault tests on development hosts (T1 to T31; disk failure T13 could not be injected) and a code review of Atlas, Metal, WG Mesh, the HTTP proxy cluster and the IPv6 router. 4 critical findings, 3 of them confirmed by fault injection. Development hosts are back to their normal state.",
  "updated": "2026-10-22 23:35 UTC",
  "scenarios": [
   {

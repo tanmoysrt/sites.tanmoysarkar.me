@@ -58,7 +58,7 @@ a { color: var(--accent); }
 <div class="note">
 <b>How to read this</b>
 <ul>
-<li><b>Status:</b> First pass complete: 31 fault tests on development hosts and a code review of Atlas, Metal, WG Mesh, the HTTP proxy cluster and the IPv6 router. 4 critical findings, 3 of them confirmed by fault injection. Development hosts are back to their normal state.</li>
+<li><b>Status:</b> First pass complete: 30 fault tests on development hosts (T1 to T31; disk failure T13 could not be injected) and a code review of Atlas, Metal, WG Mesh, the HTTP proxy cluster and the IPv6 router. 4 critical findings, 3 of them confirmed by fault injection. Development hosts are back to their normal state.</li>
 <li><a href="#scenarios">Scenarios</a> has one row per failure: what breaks, what the system does, and whether it recovers. "Handled" means it recovers without an operator and without data loss. "Partial" means it recovers with a gap. "Not handled" means an operator must act, or state or data can be lost. "Untested" means code reading only.</li>
 <li><a href="#findings">Findings</a> lists bugs and missing fallbacks, most severe first. Critical means data loss or a stuck system with no automatic recovery. High means a customer outage or a stuck operation that needs an operator.</li>
 <li>Fault injection ran only on development hosts and the local development Atlas site. No code in the Atlas repository was changed. Host names and addresses are left out on purpose.</li>
