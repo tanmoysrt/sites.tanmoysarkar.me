@@ -1,6 +1,6 @@
 {
  "status": "28 fault tests done on development hosts, plus code review. Two confirmed data-loss paths in migration rollback ([F7]): an operator abort, and a network cut between Atlas and the destination at cutover.",
- "updated": "2026-10-22 23:15 UTC",
+ "updated": "2026-10-22 23:25 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -54,11 +54,11 @@
   {
    "area": "Atlas control plane",
    "scenario": "Atlas web, workers, and scheduler are down for hours.",
-   "behavior": "Hosts keep the last complete sync (peers, image policies, privileged addresses) and keep running every VM. No create, change, or migration is possible. Proxy routes and telemetry stop updating.",
-   "status": "Untested",
+   "behavior": "Hosts keep the last complete sync (peers, image policies, privileged addresses) and keep running every VM. No create, change, or migration is possible. Proxy routes and telemetry stop updating. Creates fail with an out-of-capacity error after 2 min ([F27]).",
+   "status": "Handled",
    "score": 8,
    "ideal": "Same, plus an external health check that pages when the scheduler stops.",
-   "evidence": "Code reading: Metal does not need Atlas to run VMs."
+   "evidence": "T3 (Atlas cut off from a host for 5 min) and T25 (scheduler stopped): running VMs were not affected."
   },
   {
    "area": "Host storage",
@@ -369,6 +369,15 @@
    "score": 2,
    "ideal": "Count provisioned disk against an explicit overcommit ratio per host, and stop placement at a pool-use threshold. See [F12].",
    "evidence": "T31 on the local site and development hosts."
+  },
+  {
+   "area": "Migration",
+   "scenario": "The destination host dies for good after the source stopped the VM for cutover.",
+   "behavior": "The source VM stays stopped and locked: Metal never expires a stopped source. Atlas keeps the migration `canceling` and keeps the VM action lock, so the customer VM stays down and no other action (start, migrate, resize) is allowed. There is no force-rollback action in Atlas.",
+   "status": "Not handled",
+   "score": 1,
+   "ideal": "An operator action (Dangerous Actions) that rolls the source back without the destination after confirming the destination is gone, and an alert for migrations stuck in `canceling`. See [F32].",
+   "evidence": "Code reading, following T28 (Atlas waits in `canceling` while the destination is unreachable)."
   }
  ],
  "findings": [
@@ -681,6 +690,16 @@
    "fix": "Write a state row only when its status changes, keep `synced_at` once per host, and batch the writes in one transaction.",
    "where": "`atlas/vm/core/vm_state.py` `store_reported_states`",
    "verified": "Local benchmark (6 VMs, 5 runs)"
+  },
+  {
+   "id": "F32",
+   "severity": "High",
+   "area": "Migration",
+   "problem": "Source rollback is driven only by the destination. If the destination host is lost after the source stopped, nothing can restart the source, and Atlas has no force action.",
+   "effect": "A hardware failure of the destination during cutover keeps the customer VM down until the destination returns or someone edits host records by hand.",
+   "fix": "Add a Metal source API and an Atlas Dangerous Action to roll back a stopped source when the destination is confirmed gone, plus an alert on migrations in `canceling` for more than 15 min.",
+   "where": "`metal/internal/vm/migration/source.go`, `atlas/vm/core/vm_migration.py`",
+   "verified": "Code reading"
   }
  ],
  "checklist": [
@@ -885,8 +904,9 @@
   }
  ],
  "next": [
-  "Finish T4: check guest data after the restart.",
-  "More fault injection: root file system full on a host, Redis and MariaDB down in Atlas, network cut during a migration, kill an Atlas worker during create and migration, host reboot.",
-  "Continue the code review: proxy, WG Mesh, public IP moves, image transfer, snapshots."
+  "Fix first (data loss): [F7] never roll back after the destination started the guest; [F12] + [F1] limit disk overcommit and reserve pool space; [F25] off-host copies of VM disks.",
+  "Fix next (stuck or silent outages): [F2] start limit, [F24] watchdog, [F21] mesh hook after wg0 restart, [F27] stale capacity blocks creates, [F20] errors cleared between retries, [F32] stuck migration with lost destination, [F23] IPv6 router single point of failure.",
+  "Then: [F14] Redis timeouts, [F31] VM state writes per sync, [F29] masquerade rule, [F28] Vector start limit, [F6] Error Log flood, [F5] row lock across Metal calls.",
+  "Not injected yet: disk failure under ZFS (needs zinject or a device-mapper layer), Atlas database restore, HTTP proxy node loss with 3 nodes, provider API outage during host provisioning."
  ]
 }
