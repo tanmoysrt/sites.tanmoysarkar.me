@@ -343,9 +343,9 @@
    "area": "Public network",
    "injected": true,
    "scenario": "The host filter table is flushed.",
-   "behavior": "Metal re-added the per-VM public IPv4 FORWARD rules. The rule that stops VMs from reaching the host private network (where the migration ports listen) was not re-added, so isolation stayed off until `metald` restarts. Those ports still require mutual TLS.",
-   "status": "Not handled",
-   "score": 3,
+   "behavior": "Metal re-added the per-VM public IPv4 FORWARD rules. The rule that drops guest traffic to the host private network was not re-added. A direct test with that rule gone still could not reach another host's migration port, so another layer blocks it; one layer of defence stays missing until `metald` restarts.",
+   "status": "Partial",
+   "score": 7,
    "ideal": "Reconcile the isolation rule on every pass, or move host rules into one nftables table that Metal owns and checks. Alert when it is missing. See [F30].",
    "evidence": "T27 on a development host."
   }
@@ -643,13 +643,13 @@
   },
   {
    "id": "F30",
-   "severity": "High",
+   "severity": "Low",
    "area": "Public network",
    "problem": "The FORWARD rule that drops guest traffic to the host private network is created only by the `metald` start script.",
-   "effect": "After any filter table flush, guests can reach the host private network until `metald` restarts. Mutual TLS still protects the Metal ports, but isolation silently drops one layer.",
+   "effect": "After a filter table flush, one isolation layer between guests and the host private network stays missing until `metald` restarts. In the test another layer still blocked the traffic.",
    "fix": "Own the rule in the network reconciler next to the per-VM rules, and check it on every pass.",
    "where": "`atlas/scripts/install-metald.sh` (`metal-network-setup`), `metal/internal/network`",
-   "verified": "T27 fault injection"
+   "verified": "T27 fault injection and a direct connection test"
   }
  ],
  "checklist": [
