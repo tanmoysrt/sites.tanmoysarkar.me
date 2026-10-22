@@ -1,6 +1,6 @@
 {
- "status": "Fault injection in progress. 12 tests done on development hosts. Next: guest network faults, Metal stopped during Atlas actions, WireGuard loss, longer code review.",
- "updated": "2026-10-22 22:35 UTC",
+ "status": "23 fault tests done on development hosts, plus code review of Atlas, Metal, proxy, mesh and IPv6 router. Confirmed data-loss path: migration abort after the destination booted ([F7]).",
+ "updated": "2026-10-22 22:45 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -279,6 +279,26 @@
    "score": 7,
    "ideal": "Retention for SSH Task and Metal Server Console Log, and an alert on database size.",
    "evidence": "Local site: Log Settings and table sizes."
+  },
+  {
+   "area": "Migration",
+   "injected": true,
+   "scenario": "`metald` on the destination is killed during cutover (after the source stopped).",
+   "behavior": "The daemon restarted, continued from its checkpoint, and the migration completed 4 s later with intact data.",
+   "status": "Handled",
+   "score": 10,
+   "ideal": "Same as now.",
+   "evidence": "T22 on development hosts."
+  },
+  {
+   "area": "Migration",
+   "injected": true,
+   "scenario": "`metald` on the source is killed while it stops the VM for cutover.",
+   "behavior": "The migration completed 6 s later. Data intact, and the source disk and records were removed.",
+   "status": "Handled",
+   "score": 10,
+   "ideal": "Same as now.",
+   "evidence": "T23 on development hosts."
   }
  ],
  "findings": [
