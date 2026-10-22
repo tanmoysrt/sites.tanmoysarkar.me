@@ -241,6 +241,43 @@
    "score": 4,
    "ideal": "Add `WatchdogSec` and notify from the reconciler and API loops, so systemd restarts a hung daemon (VMs survive restarts, T1). Do not hold database row locks across Metal calls ([F5]). See [F24].",
    "evidence": "T19 on a development host."
+  },
+  {
+   "area": "Guest VM",
+   "injected": true,
+   "scenario": "Many conflicting operations reach one VM at the same time (stop, start, restart, resize, metadata, keys).",
+   "behavior": "All requests returned in under 1 s (resize 4 s). Metal serialized them with its per-VM lock and generations, and converged in under 30 s with no stuck phase or error. The last stored power request wins.",
+   "status": "Handled",
+   "score": 9,
+   "ideal": "Same. Clients that need ordering must wait for the generation they caused.",
+   "evidence": "T20 on a development host."
+  },
+  {
+   "area": "Data durability",
+   "scenario": "A host is lost for good (both disks fail, the provider reclaims the machine, or an operator wipes it).",
+   "behavior": "VM disks exist only on that host's ZFS pool. Atlas keeps the VM records, but there is no off-host copy to restore from. Data is lost unless the application inside the VM keeps its own backups.",
+   "status": "Not handled",
+   "score": 1,
+   "ideal": "Scheduled, incremental ZFS snapshots sent off the host (to object storage or a peer host), with a restore-to-new-host action. Machine images already upload snapshots, so the transfer path exists. See [F25].",
+   "evidence": "Code reading: no backup or replica feature for VM disks."
+  },
+  {
+   "area": "Data durability",
+   "scenario": "The Atlas database is lost or restored from an old backup.",
+   "behavior": "Hosts keep running every VM. Atlas forgets VMs created after the backup, and reuses their names; placement does not count them. Restoring needs the site backup together with `site_config.json` (encryption key). There is no tool to rebuild Atlas records from the hosts.",
+   "status": "Not handled",
+   "score": 3,
+   "ideal": "Frequent Atlas database backups off the Atlas VM, a tested restore runbook, and a command that lists host VMs unknown to Atlas and imports or flags them. See [F9] and [F26].",
+   "evidence": "Code reading and host access handbook."
+  },
+  {
+   "area": "Atlas dependencies",
+   "scenario": "Log tables grow without limit and fill the Atlas database disk.",
+   "behavior": "Error Log (14 days), Scheduled Job Log (7 days), Webhook Request Log (30 days) and capacity samples (3 h) have retention. SSH Task rows, which keep command output, have none. A flood of errors ([F6]) still fills Error Log within its 14 days.",
+   "status": "Partial",
+   "score": 7,
+   "ideal": "Retention for SSH Task and Metal Server Console Log, and an alert on database size.",
+   "evidence": "Local site: Log Settings and table sizes."
   }
  ],
  "findings": [
@@ -483,6 +520,26 @@
    "fix": "Set `WatchdogSec=` and send `WATCHDOG=1` from a loop that proves the reconciler and API still make progress.",
    "where": "Host install unit for `metal.service`, `metal/internal/platform/systemd*`",
    "verified": "T19 fault injection"
+  },
+  {
+   "id": "F25",
+   "severity": "Critical",
+   "area": "Data durability",
+   "problem": "There is no off-host copy of VM disks: no scheduled snapshot shipping, no replica, no restore-to-new-host flow.",
+   "effect": "Losing one host's pool loses the data of every VM on it. RAID 1 protects only against one disk failure, not against host loss, provider reclaim, operator error, or pool corruption.",
+   "fix": "Add scheduled incremental snapshot shipping (the machine image upload path already streams ZFS data to object storage) with a retention policy and a restore action. Make it at least opt-in per VM, and on by default for tenant data VMs.",
+   "where": "Metal storage and Atlas VM module",
+   "verified": "Code reading"
+  },
+  {
+   "id": "F26",
+   "severity": "Medium",
+   "area": "Data durability",
+   "problem": "Atlas cannot rebuild its VM records from the hosts.",
+   "effect": "After an Atlas database loss or old restore, operators cannot find or adopt VMs that exist only on hosts.",
+   "fix": "Add a reconcile command that compares `GET /v1/vms` on every host with Atlas records and reports or imports the differences.",
+   "where": "`atlas/metal_server`",
+   "verified": "Code reading"
   }
  ],
  "checklist": [
