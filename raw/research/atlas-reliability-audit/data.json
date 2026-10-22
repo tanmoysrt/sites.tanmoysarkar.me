@@ -15,11 +15,12 @@
   {
    "area": "Metal daemon",
    "scenario": "`metald` fails at startup 5 times in 10 s (bad config, pool not imported yet, wg0 not up).",
-   "behavior": "systemd stops restarting it and leaves the unit failed. VMs keep running, but nothing manages them until an operator acts.",
+   "behavior": "Confirmed in T29: 5 restarts in about 6 s, then systemd left the unit failed. After the cause was fixed, `metald` stayed down until `systemctl reset-failed` and a manual start. VMs kept running, unmanaged. `metald` also exits at start when WG Mesh setup fails (for example `wg0` not up yet at boot).",
    "status": "Not handled",
    "score": 4,
    "ideal": "Restart forever with a growing delay (`StartLimitIntervalSec=0`, `RestartSec=5`), and alert on a failed unit. See [F2].",
-   "evidence": "`systemctl show metal.service`: default start limit, `RestartSec=1`."
+   "evidence": "T29 on a development host.",
+   "injected": true
   },
   {
    "area": "Metal daemon",
@@ -383,13 +384,13 @@
   },
   {
    "id": "F2",
-   "severity": "Medium",
+   "severity": "High",
    "area": "Metal daemon",
    "problem": "`metal.service` uses the default start limit (5 starts in 10 s) with `RestartSec=1`.",
-   "effect": "A transient startup failure at boot can leave the unit failed for good.",
+   "effect": "A transient startup failure (for example WG Mesh setup before `wg0` is ready at boot) leaves the daemon failed for good. Nothing on the host manages VMs until an operator runs `systemctl reset-failed metal`.",
    "fix": "Set `StartLimitIntervalSec=0` and a longer `RestartSec`, and alert on a failed unit.",
    "where": "Host install unit for `metal.service`",
-   "verified": "`systemctl show metal.service`"
+   "verified": "T29 fault injection"
   },
   {
    "id": "F3",
