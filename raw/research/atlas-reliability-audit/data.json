@@ -299,6 +299,25 @@
    "score": 10,
    "ideal": "Same as now.",
    "evidence": "T23 on development hosts."
+  },
+  {
+   "area": "Host daemon (metald)",
+   "injected": true,
+   "scenario": "An operator stops `metal.service` for maintenance, then starts it.",
+   "behavior": "All VMs kept running without a pause. On start, `metald` adopted every serial console from the systemd descriptor store.",
+   "status": "Handled",
+   "score": 10,
+   "ideal": "Same as now.",
+   "evidence": "T24 on a development host."
+  },
+  {
+   "area": "Fleet operations",
+   "scenario": "A new `metald` build fails on a host during a rollout.",
+   "behavior": "`upgrade-metald.sh` checks the binary hash and version, waits up to 120 s for ready, checks that no VM stopped, and restores the previous build otherwise. The rollout stops at the first failed host (canary first).",
+   "status": "Handled",
+   "score": 9,
+   "ideal": "Same. A build with new state patches cannot roll back by design; ship those with extra care.",
+   "evidence": "Code reading of the upgrade script and Metald Update."
   }
  ],
  "findings": [
