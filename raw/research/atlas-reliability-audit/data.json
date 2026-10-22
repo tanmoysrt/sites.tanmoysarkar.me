@@ -318,6 +318,16 @@
    "score": 9,
    "ideal": "Same. A build with new state patches cannot roll back by design; ship those with extra care.",
    "evidence": "Code reading of the upgrade script and Metald Update."
+  },
+  {
+   "area": "Placement",
+   "injected": true,
+   "scenario": "The Atlas scheduler stops, or the default job queue falls more than 2 min behind.",
+   "behavior": "Host sync stops, every capacity sample becomes older than 2 min, and placement rejects every create with `No Metal Server has capacity. Retry later.` Existing VMs are not affected. Creates recover 10 s after sync resumes. Host syncs share the default queue with 15-min image transfers and provider calls, and an unreachable host holds a worker for up to 30 s, so a few bad hosts can starve sync for all hosts.",
+   "status": "Not handled",
+   "score": 4,
+   "ideal": "Run host sync on its own queue and workers with a short timeout. Return a distinct `capacity_data_stale` error. Alert when the newest capacity sample is older than 1 min. See [F27].",
+   "evidence": "T25 on the local site."
   }
  ],
  "findings": [
@@ -580,6 +590,16 @@
    "fix": "Add a reconcile command that compares `GET /v1/vms` on every host with Atlas records and reports or imports the differences.",
    "where": "`atlas/metal_server`",
    "verified": "Code reading"
+  },
+  {
+   "id": "F27",
+   "severity": "High",
+   "area": "Placement",
+   "problem": "Placement uses only capacity samples newer than 2 min, and those samples depend on the scheduler plus the shared default queue.",
+   "effect": "Any scheduler stop or queue backlog over 2 min turns into a region-wide create outage with a misleading out-of-capacity error. Nothing alerts on stale samples.",
+   "fix": "Give host sync a dedicated queue and worker pool with a short job timeout; return a separate stale-data error; alert on sample age and on a disabled scheduler.",
+   "where": "`atlas/metal_server/usage.py`, `atlas/vm/core/placement/context.py`",
+   "verified": "T25 fault injection"
   }
  ],
  "checklist": [
