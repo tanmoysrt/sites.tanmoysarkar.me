@@ -140,10 +140,10 @@
    "area": "Host daemon (metald)",
    "injected": true,
    "scenario": "The host root file system is 100 % full.",
-   "behavior": "VM restart and records kept working: VM state, chroots and disks live on ZFS. Only logs and package updates use the root file system.",
-   "status": "Handled",
-   "score": 9,
-   "ideal": "Same, plus a disk alert so `upgrade-metald` does not fail on a full root file system.",
+   "behavior": "VM restart and records kept working: VM state, chroots and disks live on ZFS. Only logs and package updates use the root file system. But Vector, the host log and metric shipper, failed with ENOSPC, hit its systemd start limit, and stayed dead after space came back. Host telemetry and logs stopped silently.",
+   "status": "Partial",
+   "score": 6,
+   "ideal": "Restart Vector without a start limit and alert when a host stops sending telemetry. Alert on root disk use. See [F28].",
    "evidence": "T11 on a development host."
   },
   {
@@ -600,6 +600,16 @@
    "fix": "Give host sync a dedicated queue and worker pool with a short job timeout; return a separate stale-data error; alert on sample age and on a disabled scheduler.",
    "where": "`atlas/metal_server/usage.py`, `atlas/vm/core/placement/context.py`",
    "verified": "T25 fault injection"
+  },
+  {
+   "id": "F28",
+   "severity": "Medium",
+   "area": "Observability",
+   "problem": "Vector on hosts uses the default systemd start limit. One transient failure (for example a full disk) leaves it dead for good.",
+   "effect": "Host logs and metrics, including the metald push to Datum, stop with no alert. Operators lose visibility exactly when a host has problems.",
+   "fix": "Set `StartLimitIntervalSec=0` and `Restart=always` with a delay for Vector, and alert in Atlas or Insights when a host has sent no telemetry for 5 min.",
+   "where": "Host install (Vector unit), telemetry alerting",
+   "verified": "Seen after T11 on a development host"
   }
  ],
  "checklist": [
