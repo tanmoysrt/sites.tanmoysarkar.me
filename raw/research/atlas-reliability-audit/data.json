@@ -1,6 +1,6 @@
 {
- "status": "Fault injection in progress. Done: daemon crash, guest crash, Atlas cut off from a host, full ZFS pool, Redis hang, two migration faults. Running: host reboot.",
- "updated": "2026-10-22 22:00 UTC",
+ "status": "Fault injection in progress. 12 tests done on development hosts. Next: guest network faults, Metal stopped during Atlas actions, WireGuard loss, longer code review.",
+ "updated": "2026-10-22 22:15 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -134,6 +134,55 @@
    "score": 6,
    "ideal": "Accept writes with a majority and let the stale node catch up from the leader snapshot, or run 4 or more nodes so one can be down. See [F17].",
    "evidence": "Code: `control-cluster` `_required_acknowledgements`."
+  },
+  {
+   "area": "Host daemon (metald)",
+   "injected": true,
+   "scenario": "The host root file system is 100 % full.",
+   "behavior": "VM restart and records kept working: VM state, chroots and disks live on ZFS. Only logs and package updates use the root file system.",
+   "status": "Handled",
+   "score": 9,
+   "ideal": "Same, plus a disk alert so `upgrade-metald` does not fail on a full root file system.",
+   "evidence": "T11 on a development host."
+  },
+  {
+   "area": "Host daemon (metald)",
+   "injected": true,
+   "scenario": "A whole host reboots.",
+   "behavior": "The host was gone for 4 min 42 s. metald was ready 3 s after boot and all 6 VMs ran 5 s after boot. WireGuard peers and WG Mesh came back; cross-host mesh traffic worked.",
+   "status": "Handled",
+   "score": 9,
+   "ideal": "Same. Customers still see the full hardware restart time; a planned reboot should drain the host first.",
+   "evidence": "T8 on a development host."
+  },
+  {
+   "area": "Placement",
+   "injected": true,
+   "scenario": "20 creates arrive at the same moment on a 3-host region.",
+   "behavior": "7 were placed across all hosts, 13 were rejected at once with `placement_busy`. No duplicates and no double booking.",
+   "status": "Handled",
+   "score": 8,
+   "ideal": "Same; clients retry `placement_busy`. This is the accepted fixed placement deadline.",
+   "evidence": "T9 on the local site."
+  },
+  {
+   "area": "Images",
+   "injected": true,
+   "scenario": "Object storage is unreachable while a host needs an image it has not cached.",
+   "behavior": "Metal retries the download forever with backoff and the VM starts within a minute after storage returns. For the whole outage the API shows state `unknown` with no error, because each retry clears the last error.",
+   "status": "Partial",
+   "score": 6,
+   "ideal": "Keep the last error visible until a pass succeeds, and report a clear phase such as `downloading image`. Cache every image that running VMs use. See [F20].",
+   "evidence": "T12 on a development host."
+  },
+  {
+   "area": "Atlas dependencies",
+   "scenario": "Central is down for hours.",
+   "behavior": "Token checks keep the last valid key set. VM state webhooks retry 3 times (5 min, 30 min, 2 h), then stop for good.",
+   "status": "Partial",
+   "score": 6,
+   "ideal": "Periodic full state resync to Central, and ordering by `observed_at`. See [F19].",
+   "evidence": "Code reading."
   }
  ],
  "findings": [
@@ -306,9 +355,239 @@
    "fix": "Use a majority for writes and rely on snapshot catch-up for the stale node, or require at least 4 nodes in production.",
    "where": "`services/control-cluster/atlas_control/cluster.py`",
    "verified": "Code reading"
+  },
+  {
+   "id": "F18",
+   "severity": "Medium",
+   "area": "Images",
+   "problem": "Machine image transfer marks the image `Failed` on any Metal client error, including timeouts and 502/503. The pending-transfer job skips Failed images.",
+   "effect": "A short host or network problem during an image upload fails the image for good. The staged snapshot on the host is pruned after 48 h.",
+   "fix": "Keep the status and retry when the error is retryable; fail only on a definite error.",
+   "where": "`atlas/vm/core/vm_image_transfer.py` `transfer`",
+   "verified": "Code reading"
+  },
+  {
+   "id": "F19",
+   "severity": "Medium",
+   "area": "Atlas dependencies",
+   "problem": "VM state reaches Central only through Frappe webhooks with 3 retries (5 min, 30 min, 2 h). Retries can deliver an older state after a newer one.",
+   "effect": "A Central outage longer than about 2.5 h loses state events for good. A late retry can make Central show a stale state.",
+   "fix": "Have Central drop events older than its stored `observed_at`, and add a periodic full state resync between Atlas and Central.",
+   "where": "`atlas/vm/core/state_webhook.py`",
+   "verified": "Code reading (Frappe webhook retry schedule)"
+  },
+  {
+   "id": "F20",
+   "severity": "Medium",
+   "area": "Host daemon (metald)",
+   "problem": "Every reconcile phase sets the observed error to empty before it runs. A VM whose start fails on each pass shows no error between passes.",
+   "effect": "During a 5-min image download outage the API showed only `unknown` with no reason. Operators and customers cannot see why a VM does not start.",
+   "fix": "Clear the stored error only after a phase succeeds, and keep a failure count and the time of the last failure.",
+   "where": "`metal/internal/vm/reconcile.go` `runOperation`",
+   "verified": "T12 fault injection"
   }
  ],
- "checklist": [],
+ "checklist": [
+  {
+   "feature": "VM create",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Draft is committed before the Metal call; the VM name is the Metal ID, so a retry is idempotent (T3)."
+    },
+    {
+     "state": "yes",
+     "text": "A draft whose create never reached Metal is deleted after a confirmed 404 (T3)."
+    },
+    {
+     "state": "yes",
+     "text": "Concurrent creates do not double-book a host (T9)."
+    },
+    {
+     "state": "partial",
+     "text": "Placement can pick a host that stopped answering less than 2 min ago (T3)."
+    },
+    {
+     "state": "no",
+     "text": "Placement does not count provisioned thin disk, so disk can be oversold without limit ([F12])."
+    },
+    {
+     "state": "partial",
+     "text": "While an image downloads, Atlas shows state `unknown` instead of a clear starting phase (T12)."
+    }
+   ]
+  },
+  {
+   "feature": "VM delete",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Destroy runs in checkpointed steps (runtime, network, storage) and resumes after a crash."
+    },
+    {
+     "state": "yes",
+     "text": "Atlas deletes the record only after Metal confirms absence; all host resources were removed (T9)."
+    },
+    {
+     "state": "partial",
+     "text": "A host that cannot write state (full pool) cannot destroy a VM to free space ([F1])."
+    }
+   ]
+  },
+  {
+   "feature": "Power and restart",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Metal stores desired state and the reconciler converges; a killed guest restarts in 2 s (T2)."
+    },
+    {
+     "state": "partial",
+     "text": "A guest that cannot shut down costs the full 30 s graceful timeout per restart (T4)."
+    },
+    {
+     "state": "no",
+     "text": "No crash-loop limit or crash counter for a guest that keeps failing."
+    }
+   ]
+  },
+  {
+   "feature": "Migration",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Destination daemon crash during copy: resumed and completed with intact data (T6)."
+    },
+    {
+     "state": "yes",
+     "text": "2-min network cut during copy: stream resumed, data intact (T7)."
+    },
+    {
+     "state": "yes",
+     "text": "Atlas commits ownership before Metal destroys the source; finish and abort are exclusive."
+    },
+    {
+     "state": "partial",
+     "text": "Abort after the destination booted discards destination writes ([F7])."
+    },
+    {
+     "state": "no",
+     "text": "Stall and throughput are not visible in Atlas ([F15], [F16])."
+    }
+   ]
+  },
+  {
+   "feature": "Host sync and control",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Hosts keep running VMs and last sync when Atlas is down or cut off (T3)."
+    },
+    {
+     "state": "yes",
+     "text": "Controller sets (peers, images, privileged addresses) are complete and replace the old set, so a missed sync heals on the next one."
+    },
+    {
+     "state": "no",
+     "text": "A host that cannot reach Atlas is not marked unreachable; errors go to Error Log every 10 s ([F6])."
+    }
+   ]
+  },
+  {
+   "feature": "Host daemon (metald)",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Crash and reboot recovery: ready in 3 s, VMs restarted after boot (T1, T8)."
+    },
+    {
+     "state": "yes",
+     "text": "State files are written atomically with fsync."
+    },
+    {
+     "state": "no",
+     "text": "Start limit can leave the daemon failed after 5 quick failures ([F2])."
+    },
+    {
+     "state": "no",
+     "text": "One corrupt record stops the whole daemon ([F3])."
+    }
+   ]
+  },
+  {
+   "feature": "Host storage",
+   "items": [
+    {
+     "state": "yes",
+     "text": "fsync-acknowledged guest writes survive a full pool (T4b)."
+    },
+    {
+     "state": "no",
+     "text": "No reservation for Metal state, no pool alert, no placement stop near full ([F1])."
+    }
+   ]
+  },
+  {
+   "feature": "Machine images",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Downloads verify SHA-256 and retry transient errors; partial imports are removed."
+    },
+    {
+     "state": "no",
+     "text": "Archived images lose artifacts while VMs still use them ([F8])."
+    },
+    {
+     "state": "no",
+     "text": "A transient Metal error during image upload marks the image Failed for good ([F18])."
+    }
+   ]
+  },
+  {
+   "feature": "Atlas dependencies",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Central outage: the last valid key set stays in use for token checks."
+    },
+    {
+     "state": "no",
+     "text": "Queue Redis hang blocks requests with no timeout ([F14])."
+    },
+    {
+     "state": "partial",
+     "text": "VM state webhooks to Central stop after 3 retries (about 2.5 h) and can arrive out of order ([F19])."
+    }
+   ]
+  },
+  {
+   "feature": "HTTP proxy",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Each node serves from its local route map; DNS health checks drop a bad node."
+    },
+    {
+     "state": "partial",
+     "text": "With 3 or fewer nodes, one bad node blocks route writes ([F17])."
+    }
+   ]
+  },
+  {
+   "feature": "Fleet operations",
+   "items": [
+    {
+     "state": "yes",
+     "text": "metald rollouts use a canary batch, health checks, and stop on the first failure."
+    },
+    {
+     "state": "yes",
+     "text": "Daemon upgrade restarts in place; VMs keep running."
+    }
+   ]
+  }
+ ],
  "next": [
   "Finish T4: check guest data after the restart.",
   "More fault injection: root file system full on a host, Redis and MariaDB down in Atlas, network cut during a migration, kill an Atlas worker during create and migration, host reboot.",
