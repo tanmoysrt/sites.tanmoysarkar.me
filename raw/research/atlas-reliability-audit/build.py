@@ -31,6 +31,39 @@ def badge(value: str) -> str:
 	return f'<span class="badge {BADGE_CLASS.get(value, "muted")}">{inline(value)}</span>'
 
 
+def score(value: float | None) -> str:
+	if value is None:
+		return '<span class="score">-</span>'
+	css = "s-hi" if value >= 8 else "s-mid" if value >= 5 else "s-lo"
+	return f'<span class="score {css}">{value:g}/10</span>'
+
+
+def matrix_rows(scenarios: list[dict]) -> str:
+	areas: dict[str, list[tuple[int, dict]]] = {}
+	for index, scenario in enumerate(scenarios, start=1):
+		areas.setdefault(scenario["area"], []).append((index, scenario))
+	rows = []
+	for area, items in sorted(areas.items(), key=lambda pair: (average(pair[1]) is None, average(pair[1]) or 0)):
+		statuses = [item["status"] for _, item in items]
+		scored = [(item["score"], index, item) for index, item in items if item.get("score") is not None]
+		weakest = min(scored, key=lambda entry: entry[0]) if scored else None
+		weakest_text = f'[S{weakest[1]}] {weakest[2]["scenario"]}' if weakest else ""
+		values = [
+			inline(area),
+			score(average(items)),
+			str(len(items)),
+			*(str(statuses.count(status)) for status in ("Handled", "Partial", "Not handled", "Untested")),
+			inline(weakest_text),
+		]
+		rows.append(f"<tr>{cells(values)}</tr>")
+	return "\n".join(rows)
+
+
+def average(items: list[tuple[int, dict]]) -> float | None:
+	values = [item["score"] for _, item in items if item.get("score") is not None]
+	return round(sum(values) / len(values), 1) if values else None
+
+
 def cells(values: list[str]) -> str:
 	return "".join(f"<td>{value}</td>" for value in values)
 
@@ -44,8 +77,9 @@ def scenario_rows(scenarios: list[dict]) -> str:
 			inline(scenario["scenario"]),
 			inline(scenario["behavior"]),
 			badge(scenario["status"]),
+			score(scenario.get("score")),
+			inline(scenario.get("ideal", "")),
 			inline(scenario.get("evidence", "")),
-			inline(scenario.get("fallback", "")),
 		]
 		rows.append(f'<tr id="{identifier}"><td class="id">{identifier}</td>{cells(values)}</tr>')
 	return "\n".join(rows)
@@ -100,6 +134,7 @@ def main() -> None:
 		"{{updated}}": inline(data["updated"]),
 		"{{status}}": inline(data["status"]),
 		"{{stats}}": stat_cards(data, len(entries)),
+		"{{matrix}}": matrix_rows(data["scenarios"]),
 		"{{scenarios}}": scenario_rows(data["scenarios"]),
 		"{{findings}}": finding_rows(data["findings"]),
 		"{{checklist}}": checklist_items(data["checklist"]),
