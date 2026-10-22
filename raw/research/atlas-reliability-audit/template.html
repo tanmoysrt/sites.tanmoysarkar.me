@@ -6,94 +6,88 @@
 <title>Atlas Reliability Audit</title>
 <meta name="description" content="A reliability audit of Atlas and Metal: failure scenarios, fault injection results, bugs, and missing fallbacks.">
 <style>
-:root {
-  --bg: #ffffff; --ink: #1c2228; --muted: #5e6873; --rule: #dfe3e7; --soft: #f4f6f8;
-  --accent: #2b5f8a; --good: #237a4b; --warn: #9a6400; --bad: #a83a2f;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-}
+:root { --fg:#1f2328; --muted:#59636e; --line:#e3e6ea; --bg:#fff; --soft:#f6f8fa; --code:#eff1f3; --accent:#0b6bcb; --ok:#1a7f37; --warn:#9a6700; --bad:#cf222e; }
+@media (prefers-color-scheme: dark) { :root { --fg:#e6e8eb; --muted:#9aa3ad; --line:#30363d; --bg:#0f1115; --soft:#161a20; --code:#1b1f26; --accent:#5aa9f5; --ok:#3fb950; --warn:#d29922; --bad:#f85149; } }
 * { box-sizing: border-box; }
-html { color-scheme: light; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); }
-main { max-width: 1100px; margin: 0 auto; padding: 40px 16px 80px; }
-.narrow { max-width: 740px; }
-.kicker { font: 13px/1.4 var(--mono); color: var(--muted); margin: 0 0 8px; }
-h1 { font-size: clamp(28px, 5vw, 38px); line-height: 1.15; margin: 0 0 12px; }
-h2 { font-size: 22px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--rule); }
-h3 { font-size: 16px; margin: 22px 0 6px; }
-p, li { max-width: 72ch; }
-p { margin: 0 0 12px; }
-code { font: 0.86em var(--mono); background: var(--soft); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
-.lede { font-size: 18px; color: var(--muted); }
-.status { background: var(--soft); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; margin: 18px 0; }
-.status b { font-family: var(--mono); font-size: 13px; color: var(--muted); font-weight: 600; margin-right: 6px; }
-nav a { margin-right: 14px; font-size: 14px; }
-a { color: var(--accent); }
-.table { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--rule); border-radius: 6px; }
-table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 900px; }
-th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--rule); }
-th { font-weight: 600; font-size: 12px; color: var(--muted); background: var(--soft); position: sticky; top: 0; }
-td:first-child { white-space: nowrap; font-weight: 600; }
-.badge { display: inline-block; font: 600 12px/1.5 var(--sans); padding: 0 7px; border-radius: 10px; border: 1px solid currentColor; white-space: nowrap; }
-.badge.ok { color: var(--good); } .badge.warn { color: var(--warn); } .badge.bad { color: var(--bad); } .badge.muted { color: var(--muted); }
-.finding { border-left: 3px solid var(--rule); padding: 2px 0 2px 14px; margin: 18px 0; }
-.finding h3 { margin-top: 0; }
-.fid { font: 13px var(--mono); color: var(--muted); }
-.where { font: 13px/1.5 var(--mono); color: var(--muted); }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 32px 16px 96px; }
+h1 { font-size: 28px; margin: 0 0 6px; }
+h2 { font-size: 20px; margin: 44px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); scroll-margin-top: 56px; }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p { margin: 8px 0; max-width: 80ch; }
+.meta { color: var(--muted); font-size: 13px; }
+.stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 20px 0; }
+.stat { border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+.stat b { display:block; font-size:24px; }
+.stat span { color:var(--muted); font-size:13px; }
+.note { background:var(--soft); border:1px solid var(--line); border-radius:8px; padding:12px 16px; }
+.note ul { margin: 6px 0; padding-left: 20px; }
+nav { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 0; margin-top: 8px; z-index: 1; overflow-x: auto; white-space: nowrap; }
+nav a { margin-right: 16px; font-size: 14px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+th { font-weight: 600; white-space: nowrap; }
+td.id { white-space: nowrap; font-weight: 600; }
+code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 12.5px; word-break: break-word; }
+.badge { display:inline-block; font-size:12px; font-weight:600; padding:0 7px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.badge.ok { color:var(--ok); } .badge.warn { color:var(--warn); } .badge.bad { color:var(--bad); } .badge.muted { color:var(--muted); }
+.filter input { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; width: min(340px, 100%); background: var(--bg); color: var(--fg); margin: 6px 0 10px; }
 ul.check { list-style: none; padding-left: 0; }
-ul.check li span { display: inline-block; width: 1.4em; font-weight: 700; }
-.c-yes span { color: var(--good); } .c-no span { color: var(--bad); } .c-partial span { color: var(--warn); }
-ol.log { font-size: 14px; padding-left: 20px; }
-ol.log li { margin-bottom: 4px; }
-.filter { margin: 8px 0 12px; font-size: 14px; }
-.filter input { font: inherit; padding: 4px 8px; border: 1px solid var(--rule); border-radius: 4px; width: min(320px, 100%); }
-footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--muted); }
+ul.check li span { display:inline-block; width:1.4em; font-weight:700; }
+.c-yes span { color:var(--ok); } .c-no span { color:var(--bad); } .c-partial span { color:var(--warn); }
+#log-body ul { list-style: none; padding: 0; margin: 0; }
+#log-body li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+a { color: var(--accent); }
 </style>
 </head>
 <body>
 <main>
-<header class="narrow">
-  <p class="kicker">research · Atlas · October 2026 · living document</p>
-  <h1>Atlas and Metal reliability audit</h1>
-  <p class="lede">Atlas is the control plane that places and manages customer virtual machines (VMs). Metal (<code>metald</code>) is the daemon on each bare-metal host that runs the VMs. This page records what breaks when a part of the system fails, what the system does then, and which fallbacks are missing.</p>
-  <p>The audit has two parts. First, a review of the Atlas and Metal source code for failure paths. Second, fault injection on development hosts: the audit stops services, fills disks, and cuts the network, then records what the system does. Each result goes into the scenario table below. The log at the end is append-only and shows progress.</p>
-  <div class="status"><b>STATUS</b>{{status}}<br><b>UPDATED</b>{{updated}}<br><b>SCENARIOS</b>{{summary}}</div>
-  <nav><a href="#scenarios">Scenarios</a><a href="#findings">Findings</a><a href="#checklist">Checklist</a><a href="#log">Log</a></nav>
-</header>
+<h1>Atlas and Metal reliability audit</h1>
+<p class="meta">A live record of a reliability audit of Atlas (the region control plane) and Metal (<code>metald</code>, the daemon on each VM host). Code review plus fault injection on development hosts. Updated {{updated}}.</p>
+<div class="stats">
+{{stats}}
+</div>
+<div class="note">
+<b>How to read this</b>
+<ul>
+<li><b>Status:</b> {{status}}</li>
+<li><a href="#scenarios">Scenarios</a> has one row per failure: what breaks, what the system does, and whether it recovers. "Handled" means it recovers without an operator and without data loss. "Partial" means it recovers with a gap. "Not handled" means an operator must act, or state or data can be lost. "Untested" means code reading only.</li>
+<li><a href="#findings">Findings</a> lists bugs and missing fallbacks, most severe first. Critical means data loss or a stuck system with no automatic recovery. High means a customer outage or a stuck operation that needs an operator.</li>
+<li>Fault injection ran only on development hosts and the local development Atlas site. No code in the Atlas repository was changed. Host names and addresses are left out on purpose.</li>
+</ul>
+</div>
+<nav><a href="#scenarios">Scenarios</a><a href="#findings">Findings</a><a href="#checklist">Checklist</a><a href="#next">Next</a><a href="#log">Log</a></nav>
 
-<section id="scenarios">
-  <h2>Failure scenarios</h2>
-  <p class="narrow">Each row is one failure. "Handled" means the system recovers without data loss and without an operator. "Partial" means it recovers, but with a gap. "Not handled" means an operator must act, or data or state can be lost. "Untested" means code reading only so far.</p>
-  <div class="filter"><input id="q" type="search" placeholder="Filter rows (for example: disk, Atlas down)" aria-label="Filter scenarios"></div>
-  <div class="table"><table id="scenario-table">
-    <thead><tr><th>Area</th><th>Failure</th><th>What the system does</th><th>Status</th><th>Evidence</th><th>Fallback to add</th></tr></thead>
-    <tbody>
+<h2 id="scenarios">Failure scenarios</h2>
+<div class="filter"><input id="q" type="search" placeholder="Filter rows (for example: disk, Atlas down)" aria-label="Filter scenarios"></div>
+<div class="table-wrap"><table id="scenario-table">
+<thead><tr><th>#</th><th>Area</th><th>Failure</th><th>What the system does</th><th>Status</th><th>Evidence</th><th>Fallback to add</th></tr></thead>
+<tbody>
 {{scenarios}}
-    </tbody>
-  </table></div>
-</section>
+</tbody>
+</table></div>
 
-<section id="findings" class="narrow">
-  <h2>Findings ({{finding_count}})</h2>
-  <p>Bugs and missing fallbacks, most severe first. "Critical" means data loss or a stuck system with no automatic recovery. "High" means a customer-visible outage or a stuck operation that needs an operator.</p>
+<h2 id="findings">Findings</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>Severity</th><th>Area</th><th>Problem</th><th>Effect</th><th>Fallback or fix</th><th>Where</th><th>Verified</th></tr></thead>
+<tbody>
 {{findings}}
-</section>
+</tbody>
+</table></div>
 
-<section id="checklist" class="narrow">
-  <h2>Reliability checklist per feature</h2>
-  <p>✓ the feature has this property. ~ partly. ✗ missing.</p>
+<h2 id="checklist">Reliability checklist per feature</h2>
+<p>✓ the feature has this property. ~ partly. ✗ missing.</p>
 {{checklist}}
-</section>
 
-<section id="log" class="narrow">
-  <h2>Progress log</h2>
-  <p>Append-only. Newest entry first.</p>
-  <ol class="log" reversed>
+<h2 id="next">Next</h2>
+{{next}}
+
+<h2 id="log">Log</h2>
+<p class="meta">Append-only. Newest entry first.</p>
+<div id="log-body"><ul>
 {{log}}
-  </ol>
-</section>
-
-<footer class="narrow">Source of truth: the Atlas repository (<code>atlas/</code> Frappe app, <code>metal/</code> Go daemon). Tests ran on development hosts only. Host names and addresses are left out on purpose.</footer>
+</ul></div>
 </main>
 <script>
 const input = document.getElementById("q");

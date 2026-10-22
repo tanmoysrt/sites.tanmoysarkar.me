@@ -8,85 +8,107 @@ import re
 HERE = pathlib.Path(__file__).parent
 OUT = HERE.parents[2] / "research" / "atlas-reliability-audit" / "index.html"
 
-STATUS_CLASS = {"Handled": "ok", "Partial": "warn", "Not handled": "bad", "Bug": "bad", "Untested": "muted"}
-SEVERITY_CLASS = {"Critical": "bad", "High": "bad", "Medium": "warn", "Low": "muted"}
+BADGE_CLASS = {
+	"Handled": "ok",
+	"Partial": "warn",
+	"Not handled": "bad",
+	"Untested": "muted",
+	"Critical": "bad",
+	"High": "bad",
+	"Medium": "warn",
+	"Low": "muted",
+}
 SEVERITY_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 
 
 def inline(text: str) -> str:
 	text = html.escape(text)
-	return re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+	text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+	return re.sub(r"\[(F\d+|S\d+)\]", r'<a href="#\1">\1</a>', text)
 
 
 def badge(value: str) -> str:
-	css = STATUS_CLASS.get(value) or SEVERITY_CLASS.get(value, "muted")
-	return f'<span class="badge {css}">{inline(value)}</span>'
+	return f'<span class="badge {BADGE_CLASS.get(value, "muted")}">{inline(value)}</span>'
+
+
+def cells(values: list[str]) -> str:
+	return "".join(f"<td>{value}</td>" for value in values)
 
 
 def scenario_rows(scenarios: list[dict]) -> str:
 	rows = []
-	for scenario in scenarios:
-		rows.append(
-			"<tr>"
-			f"<td>{inline(scenario['area'])}</td>"
-			f"<td>{inline(scenario['scenario'])}</td>"
-			f"<td>{inline(scenario['behavior'])}</td>"
-			f"<td>{badge(scenario['status'])}</td>"
-			f"<td>{inline(scenario.get('evidence', ''))}</td>"
-			f"<td>{inline(scenario.get('fallback', ''))}</td>"
-			"</tr>"
-		)
+	for index, scenario in enumerate(scenarios, start=1):
+		identifier = f"S{index}"
+		values = [
+			inline(scenario["area"]),
+			inline(scenario["scenario"]),
+			inline(scenario["behavior"]),
+			badge(scenario["status"]),
+			inline(scenario.get("evidence", "")),
+			inline(scenario.get("fallback", "")),
+		]
+		rows.append(f'<tr id="{identifier}"><td class="id">{identifier}</td>{cells(values)}</tr>')
 	return "\n".join(rows)
 
 
-def finding_items(findings: list[dict]) -> str:
-	items = []
-	for finding in sorted(findings, key=lambda item: (SEVERITY_ORDER.get(item["severity"], 9), item["id"])):
-		items.append(
-			f'<article class="finding" id="{finding["id"]}">'
-			f'<h3><span class="fid">{finding["id"]}</span> {inline(finding["title"])} {badge(finding["severity"])}</h3>'
-			f'<p class="where">{inline(finding["where"])}</p>'
-			f"<p><b>What breaks.</b> {inline(finding['problem'])}</p>"
-			f"<p><b>Effect.</b> {inline(finding['effect'])}</p>"
-			f"<p><b>Fallback to add.</b> {inline(finding['fix'])}</p>"
-			f'<p class="where">Verified by: {inline(finding.get("verified", "code reading"))}</p>'
-			"</article>"
-		)
-	return "\n".join(items)
+def finding_rows(findings: list[dict]) -> str:
+	rows = []
+	for finding in sorted(findings, key=lambda item: (SEVERITY_ORDER[item["severity"]], int(item["id"][1:]))):
+		values = [
+			badge(finding["severity"]),
+			inline(finding["area"]),
+			inline(finding["problem"]),
+			inline(finding["effect"]),
+			inline(finding["fix"]),
+			inline(finding["where"]),
+			inline(finding.get("verified", "Code reading")),
+		]
+		rows.append(f'<tr id="{finding["id"]}"><td class="id">{finding["id"]}</td>{cells(values)}</tr>')
+	return "\n".join(rows)
 
 
 def checklist_items(checklist: list[dict]) -> str:
+	marks = {"yes": "✓", "no": "✗", "partial": "~"}
 	parts = []
 	for group in checklist:
 		parts.append(f"<h3>{inline(group['feature'])}</h3><ul class='check'>")
 		for item in group["items"]:
-			mark = {"yes": "✓", "no": "✗", "partial": "~"}[item["state"]]
-			parts.append(f'<li class="c-{item["state"]}"><span>{mark}</span> {inline(item["text"])}</li>')
+			parts.append(f'<li class="c-{item["state"]}"><span>{marks[item["state"]]}</span> {inline(item["text"])}</li>')
 		parts.append("</ul>")
 	return "\n".join(parts)
 
 
-def log_items(log_text: str) -> str:
-	entries = [line[2:] for line in log_text.splitlines() if line.startswith("- ")]
-	return "\n".join(f"<li>{inline(entry)}</li>" for entry in reversed(entries))
+def stat_cards(data: dict, log_count: int) -> str:
+	scenarios = data["scenarios"]
+	findings = data["findings"]
+	cards = [
+		(len(scenarios), "failure scenarios"),
+		(sum(1 for s in scenarios if s["status"] == "Handled"), "handled"),
+		(sum(1 for s in scenarios if s["status"] in ("Partial", "Not handled")), "with a gap"),
+		(sum(1 for s in scenarios if s.get("injected")), "tested by fault injection"),
+		(len(findings), "findings"),
+		(sum(1 for f in findings if f["severity"] in ("Critical", "High")), "critical or high"),
+		(log_count, "log entries"),
+	]
+	return "\n".join(f'<div class="stat"><b>{count}</b><span>{label}</span></div>' for count, label in cards)
 
 
 def main() -> None:
 	data = json.loads((HERE / "data.json").read_text())
-	template = (HERE / "template.html").read_text()
-	scenarios = data["scenarios"]
-	counts = {status: sum(1 for s in scenarios if s["status"] == status) for status in STATUS_CLASS}
-	summary = " · ".join(f"{count} {status.lower()}" for status, count in counts.items() if count)
-	page = (
-		template.replace("{{status}}", inline(data["status"]))
-		.replace("{{updated}}", inline(data["updated"]))
-		.replace("{{summary}}", summary)
-		.replace("{{scenarios}}", scenario_rows(scenarios))
-		.replace("{{findings}}", finding_items(data["findings"]))
-		.replace("{{finding_count}}", str(len(data["findings"])))
-		.replace("{{checklist}}", checklist_items(data["checklist"]))
-		.replace("{{log}}", log_items((HERE / "log.md").read_text()))
-	)
+	entries = [line[2:] for line in (HERE / "log.md").read_text().splitlines() if line.startswith("- ")]
+	replacements = {
+		"{{updated}}": inline(data["updated"]),
+		"{{status}}": inline(data["status"]),
+		"{{stats}}": stat_cards(data, len(entries)),
+		"{{scenarios}}": scenario_rows(data["scenarios"]),
+		"{{findings}}": finding_rows(data["findings"]),
+		"{{checklist}}": checklist_items(data["checklist"]),
+		"{{next}}": "<ul>" + "".join(f"<li>{inline(item)}</li>" for item in data["next"]) + "</ul>",
+		"{{log}}": "\n".join(f"<li>{inline(entry)}</li>" for entry in reversed(entries)),
+	}
+	page = (HERE / "template.html").read_text()
+	for key, value in replacements.items():
+		page = page.replace(key, value)
 	OUT.parent.mkdir(parents=True, exist_ok=True)
 	OUT.write_text(page)
 
