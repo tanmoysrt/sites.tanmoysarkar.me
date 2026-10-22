@@ -1,6 +1,6 @@
 {
  "status": "Fault injection in progress. 12 tests done on development hosts. Next: guest network faults, Metal stopped during Atlas actions, WireGuard loss, longer code review.",
- "updated": "2026-10-22 22:15 UTC",
+ "updated": "2026-10-22 22:35 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -202,6 +202,45 @@
    "score": 4,
    "ideal": "Give ZFS the 2 disks as a mirror so it can repair bad blocks; alert on md and ZFS health (metrics exist); keep API health and sync paths free of ZFS calls that can block forever.",
    "evidence": "Code reading and host layout. Not injected: no `zinject` on hosts."
+  },
+  {
+   "area": "Images",
+   "injected": true,
+   "scenario": "`metald` is killed while a new VM's image downloads.",
+   "behavior": "On restart Metal removed the unfinished import (no manifest), downloaded again, verified SHA-256, and started the VM 23 s after the kill.",
+   "status": "Handled",
+   "score": 10,
+   "ideal": "Same as now.",
+   "evidence": "T15 on a development host."
+  },
+  {
+   "area": "Public network",
+   "scenario": "The host of the IPv6 router VM fails, or the router service stops.",
+   "behavior": "Each IPv6 block has one router VM, and the provider routes the block to one host. All public IPv6 traffic for that block stops until the host or VM returns. Atlas keeps showing the router as `Active`; the handbook says Active does not prove forwarding works.",
+   "status": "Not handled",
+   "score": 3,
+   "ideal": "Health-check forwarding through the router and alert. Document and automate the block move to a standby router on another host where the provider allows it. See [F23].",
+   "evidence": "Code reading and IPv6 router handbook."
+  },
+  {
+   "area": "Guest VM",
+   "injected": true,
+   "scenario": "`metald` restarts while a VM sleeps (idle stop with saved memory).",
+   "behavior": "After the restart the traffic watch was armed again. A TCP connection woke the VM and it answered in 7 s with its memory restored.",
+   "status": "Handled",
+   "score": 9,
+   "ideal": "Same. The first packet can be lost while the VM wakes; clients retry.",
+   "evidence": "T16 on a development host."
+  },
+  {
+   "area": "Host daemon (metald)",
+   "injected": true,
+   "scenario": "`metald` hangs (process alive, not answering), for example a deadlock or a ZFS call stuck in the kernel.",
+   "behavior": "systemd still shows the unit active and does not restart it: there is no watchdog. VMs keep running, but nothing is managed. In Atlas, a network change held the VM row lock for 17 s while Metal reads timed out, and another writer waited for the row the whole time.",
+   "status": "Not handled",
+   "score": 4,
+   "ideal": "Add `WatchdogSec` and notify from the reconciler and API loops, so systemd restarts a hung daemon (VMs survive restarts, T1). Do not hold database row locks across Metal calls ([F5]). See [F24].",
+   "evidence": "T19 on a development host."
   }
  ],
  "findings": [
@@ -263,7 +302,7 @@
    "effect": "A slow host holds the row lock for up to about 90 s, so other writers hit lock wait timeouts.",
    "fix": "Do not hold a row lock across a Metal call. Compare Metal generations instead.",
    "where": "`atlas/vm/core/vm_service.py` `lock_network`",
-   "verified": "Code reading"
+   "verified": "T19: a second writer waited 17 s for the row while Metal hung"
   },
   {
    "id": "F6",
@@ -424,6 +463,26 @@
    "fix": "Create the pool as a ZFS mirror of the 2 partitions for new hosts. Plan a migration path for existing hosts (drain, rebuild).",
    "where": "`atlas/scripts/install-metal-storage.sh`, provider disk layout",
    "verified": "Host layout on development hosts"
+  },
+  {
+   "id": "F23",
+   "severity": "High",
+   "area": "Public network",
+   "problem": "Each public IPv6 block depends on one router VM on one host, with no health check of forwarding.",
+   "effect": "One host failure stops public IPv6 for every VM that uses the block, and Atlas still shows the router as Active.",
+   "fix": "Add a forwarding health check that marks the router unhealthy and alerts. Keep a runbook (or automation) to move the block to a standby router.",
+   "where": "`atlas/service/core/ipv6_router`, `services/ipv6-router`",
+   "verified": "Code reading and handbook"
+  },
+  {
+   "id": "F24",
+   "severity": "Medium",
+   "area": "Host daemon (metald)",
+   "problem": "`metal.service` has no systemd watchdog.",
+   "effect": "A hung daemon stays hung: no restart, no alert from systemd. All VM management on the host stops until someone notices.",
+   "fix": "Set `WatchdogSec=` and send `WATCHDOG=1` from a loop that proves the reconciler and API still make progress.",
+   "where": "Host install unit for `metal.service`, `metal/internal/platform/systemd*`",
+   "verified": "T19 fault injection"
   }
  ],
  "checklist": [
