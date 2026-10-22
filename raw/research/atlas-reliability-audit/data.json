@@ -359,6 +359,16 @@
    "score": 0,
    "ideal": "After the destination started the guest, never roll back automatically: keep retrying finish (the destination already holds the newest disk). Abort only before the source stops. See [F7].",
    "evidence": "T28 on development hosts."
+  },
+  {
+   "area": "Placement",
+   "injected": true,
+   "scenario": "Customers create VMs with large disks.",
+   "behavior": "Placement put 8 VMs of 512 GiB each (4 TiB) on one host with an 864 GiB pool, because it reads physical free space and new thin disks use almost none. Nothing limits overcommit, so the host pool fills as guests write ([S7]).",
+   "status": "Not handled",
+   "score": 2,
+   "ideal": "Count provisioned disk against an explicit overcommit ratio per host, and stop placement at a pool-use threshold. See [F12].",
+   "evidence": "T31 on the local site and development hosts."
   }
  ],
  "findings": [
@@ -374,13 +384,13 @@
   },
   {
    "id": "F12",
-   "severity": "High",
+   "severity": "Critical",
    "area": "Placement",
    "problem": "Hosts report pool free space from `zpool list` as available storage. Thin VM disks use little space at first, so placement can sell the same space many times.",
    "effect": "No limit on disk overcommit. Together with [F1] this leads to a full pool as guests grow. During T4 the host reported 880 GiB free while every dataset had 0 bytes available.",
    "fix": "Report storage as pool size minus provisioned volume sizes (or apply an explicit overcommit ratio), and read `available` from `zfs get`, not `zpool list`.",
    "where": "`metal/internal/storage/zfs_pool.go` `Capacity`, `metal/internal/host/service.go`",
-   "verified": "T4 fault injection and code reading"
+   "verified": "T4 and T31: 4 TiB of disks placed on an 864 GiB pool"
   },
   {
    "id": "F2",
