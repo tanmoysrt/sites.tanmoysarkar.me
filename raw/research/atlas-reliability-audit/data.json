@@ -1,36 +1,317 @@
 {
-  "status": "Fault injection in progress on one development host. 4 tests done (daemon crash, guest crash, Atlas cut off from a host, full ZFS pool).",
-  "updated": "2026-10-22 21:45 UTC",
-  "scenarios": [
-    {"area": "Metal daemon", "injected": true, "scenario": "`metald` crashes or is killed (`kill -9`).", "behavior": "VMs run in their own `metal-vm@` systemd units and keep running. systemd restarts `metald`; it was ready again in 3 s. A guest writing every 0.2 s saw no pause above 0.4 s.", "status": "Handled", "score": 10, "ideal": "Same as now.", "evidence": "T1 on a development host."},
-    {"area": "Metal daemon", "scenario": "`metald` fails at startup 5 times in 10 s (bad config, pool not imported yet, wg0 not up).", "behavior": "systemd stops restarting it and leaves the unit failed. VMs keep running, but nothing manages them until an operator acts.", "status": "Not handled", "score": 4, "ideal": "Restart forever with a growing delay (`StartLimitIntervalSec=0`, `RestartSec=5`), and alert on a failed unit. See [F2].", "evidence": "`systemctl show metal.service`: default start limit, `RestartSec=1`."},
-    {"area": "Metal daemon", "scenario": "One VM or migration record on a host is corrupt.", "behavior": "Startup validation fails for the whole daemon, so no VM on the host is managed.", "status": "Not handled", "score": 3, "ideal": "Quarantine only the bad record, start the daemon, and report the record in sync and the API. See [F3].", "evidence": "Code: `recordStore.validateAll` returns the first error."},
-    {"area": "Guest VM", "injected": true, "scenario": "A guest Firecracker process exits (kill or guest crash).", "behavior": "The VM unit has `Restart=no`. The reconciler saw desired running, observed stopped, and started the VM 2 s later. ext4 journal recovery ran; all synced writes were present.", "status": "Handled", "score": 9, "ideal": "Same, plus a crash-loop limit and a visible crash count on the VM.", "evidence": "T2 on a development host."},
-    {"area": "Atlas control plane", "injected": true, "scenario": "Atlas cannot reach one host (network cut or host API down).", "behavior": "VMs on the host keep running. Power changes fail in 5 s with a clear error. Reading a VM takes 19 s and fails, so Desk forms hang. A create placed on the host in the first 2 min becomes a draft; after recovery the draft check gets 404 and deletes it. After 2 min without a capacity sample, placement skips the host. Sync writes one Error Log row every 10 s.", "status": "Partial", "score": 7, "ideal": "Mark the host unreachable after the first failed sync, skip it in placement at once, fail VM reads fast with a cached last-known state, and log only state changes. See [F6].", "evidence": "T3 on a development host."},
-    {"area": "Atlas control plane", "scenario": "Atlas web, workers, and scheduler are down for hours.", "behavior": "Hosts keep the last complete sync (peers, image policies, privileged addresses) and keep running every VM. No create, change, or migration is possible. Proxy routes and telemetry stop updating.", "status": "Untested", "score": 8, "ideal": "Same, plus an external health check that pages when the scheduler stops.", "evidence": "Code reading: Metal does not need Atlas to run VMs."},
-    {"area": "Host storage", "injected": true, "scenario": "The host ZFS pool fills up (guests write more than the pool holds).", "behavior": "Every guest on the host got I/O errors at once, even guests that did not write. Every reconcile failed because Metal could not write its state file. A stop request returned a bare HTTP 500. The host kept reporting 880 GiB free to placement. When space came back, Metal recovered by itself, but the guests stayed broken (SSH dead) until a restart, and each restart waited 30 s for a guest that could not shut down.", "status": "Not handled", "score": 2, "ideal": "Never overcommit physical space without a limit: count provisioned disk in placement, reserve space for Metal state, alert at 80 % pool use, and stop placement on the host. See [F1] and [F12].", "evidence": "T4 on a development host."},
-    {"area": "Migration", "scenario": "An operator or an error aborts a disk-only migration after the destination VM booted, before Atlas commits.", "behavior": "Metal removes the destination disk and restores the source from its final snapshot. Writes the guest made on the destination are discarded.", "status": "Untested", "score": 5, "ideal": "Keep the destination paused or offline until finish, or allow only finish after the destination starts. See [F7].", "evidence": "Code reading and the migration handbook."},
-    {"area": "Images", "scenario": "A VM uses an image that was archived more than 6 h ago, then restarts on a host that pruned the image.", "behavior": "The VM cannot start: the kernel download fails.", "status": "Not handled", "score": 2, "ideal": "Keep image artifacts while any VM references the image. See [F8].", "evidence": "Seen on a pre-production host."}
-  ],
-  "findings": [
-    {"id": "F1", "severity": "Critical", "area": "Host storage", "problem": "VM volumes are thin ZFS clones with no reservation. The Metal state dataset has no reservation either. The pool is shared.", "effect": "A full pool breaks every guest on the host at the same time (I/O errors, then dead services until restart). Metal cannot write records, so every reconcile fails and an API stop returns HTTP 500.", "fix": "Reserve space for `metal/state`. Alert and stop placement at a pool-use threshold. Count provisioned disk in placement ([F12]).", "where": "`metal/internal/storage/disk.go`, host install", "verified": "T4 fault injection"},
-    {"id": "F12", "severity": "High", "area": "Placement", "problem": "Hosts report pool free space from `zpool list` as available storage. Thin VM disks use little space at first, so placement can sell the same space many times.", "effect": "No limit on disk overcommit. Together with [F1] this leads to a full pool as guests grow. During T4 the host reported 880 GiB free while every dataset had 0 bytes available.", "fix": "Report storage as pool size minus provisioned volume sizes (or apply an explicit overcommit ratio), and read `available` from `zfs get`, not `zpool list`.", "where": "`metal/internal/storage/zfs_pool.go` `Capacity`, `metal/internal/host/service.go`", "verified": "T4 fault injection and code reading"},
-    {"id": "F2", "severity": "Medium", "area": "Metal daemon", "problem": "`metal.service` uses the default start limit (5 starts in 10 s) with `RestartSec=1`.", "effect": "A transient startup failure at boot can leave the unit failed for good.", "fix": "Set `StartLimitIntervalSec=0` and a longer `RestartSec`, and alert on a failed unit.", "where": "Host install unit for `metal.service`", "verified": "`systemctl show metal.service`"},
-    {"id": "F3", "severity": "Medium", "area": "Metal daemon", "problem": "One unreadable VM or migration record stops daemon startup.", "effect": "Blast radius is the whole host instead of one VM.", "fix": "Quarantine the bad record and start the daemon for the other VMs.", "where": "`metal/internal/vm/records.go` `validateAll`", "verified": "Code reading"},
-    {"id": "F4", "severity": "Medium", "area": "Metal daemon", "problem": "The VM reconciler runs 4 workers and waits for the whole pass. One VM operation can take up to 35 min (for example an image download).", "effect": "4 slow VMs delay stop, restart, and delete for every other VM on the host.", "fix": "Track in-flight VMs and start work for idle VMs without waiting for the slowest one.", "where": "`metal/internal/reconciler/virtual_machines.go`", "verified": "Code reading"},
-    {"id": "F5", "severity": "Medium", "area": "Atlas control plane", "problem": "Network and route changes lock the Virtual Machine row (`FOR UPDATE`) and then call Metal twice.", "effect": "A slow host holds the row lock for up to about 90 s, so other writers hit lock wait timeouts.", "fix": "Do not hold a row lock across a Metal call. Compare Metal generations instead.", "where": "`atlas/vm/core/vm_service.py` `lock_network`", "verified": "Code reading"},
-    {"id": "F6", "severity": "Medium", "area": "Atlas control plane", "problem": "Each failed host sync, draft check, and termination check writes an Error Log row on every pass.", "effect": "One unreachable host writes about 8,640 rows a day for sync alone, plus rows per VM.", "fix": "Log the first failure and state changes. Keep the last error and a failure count on the Metal Server.", "where": "`atlas/metal_server/usage.py`, `atlas/vm/core/reconciliation.py`", "verified": "T3: 30 rows in 5 min for one host"},
-    {"id": "F7", "severity": "Medium", "area": "Migration", "problem": "A disk-only migration cold-boots the destination before Atlas commits. An abort in that window restores the source from the final snapshot.", "effect": "Writes made by the guest on the destination are lost.", "fix": "Keep the destination paused or offline until finish, or reject abort after the destination started.", "where": "`metal/internal/vm/migration`", "verified": "Code reading and handbook"},
-    {"id": "F8", "severity": "High", "area": "Images", "problem": "Archived images lose their artifacts after the retention time even while VMs use them.", "effect": "A VM with an archived image cannot start again after a restart, resize, or migration.", "fix": "Keep the kernel and root file system artifacts while any VM references the image.", "where": "Image reclaim in Atlas, `ensureImage` in Metal", "verified": "Known open issue, seen on a pre-production host"},
-    {"id": "F9", "severity": "Low", "area": "Atlas control plane", "problem": "No check compares the VMs on each host with Atlas records.", "effect": "After an Atlas database restore, VMs created after the backup run on hosts without Atlas records. Placement does not count them.", "fix": "Report unknown VM IDs from sync and show them on the Metal Server.", "where": "`atlas/metal_server/usage.py`", "verified": "Code reading"},
-    {"id": "F10", "severity": "Low", "area": "Atlas control plane", "problem": "A disk resize stores `disk_mib` in Atlas in a later write after Metal accepts it.", "effect": "If the Atlas write fails, placement counts the old, smaller disk.", "fix": "Write the reservation before the Metal call, or read it from Metal state.", "where": "`atlas/vm/core/vm_service.py` `update_disk`", "verified": "Code reading"},
-    {"id": "F11", "severity": "Low", "area": "Migration", "problem": "Terminal destination records stay on the host with no cleanup.", "effect": "Directories collect over time. Seen 8 days after an aborted migration.", "fix": "Remove terminal records after a retention time.", "where": "`metal/internal/vm/migration/records.go`", "verified": "Seen on a development host"},
-    {"id": "F13", "severity": "Medium", "area": "Metal daemon", "problem": "When Metal cannot write its state, API mutations return a bare `internal server error`.", "effect": "Atlas shows `Metal request failed: internal server error`. The operator cannot see that the host disk is full.", "fix": "Map `ENOSPC` to a stable error code such as `host_storage_full` with a clear message.", "where": "`metal/internal/api`", "verified": "T4 fault injection"}
-  ],
-  "checklist": [],
-  "next": [
-    "Finish T4: check guest data after the restart.",
-    "More fault injection: root file system full on a host, Redis and MariaDB down in Atlas, network cut during a migration, kill an Atlas worker during create and migration, host reboot.",
-    "Continue the code review: proxy, WG Mesh, public IP moves, image transfer, snapshots."
-  ]
+ "status": "Fault injection in progress. Done: daemon crash, guest crash, Atlas cut off from a host, full ZFS pool, Redis hang, two migration faults. Running: host reboot.",
+ "updated": "2026-10-22 22:00 UTC",
+ "scenarios": [
+  {
+   "area": "Metal daemon",
+   "injected": true,
+   "scenario": "`metald` crashes or is killed (`kill -9`).",
+   "behavior": "VMs run in their own `metal-vm@` systemd units and keep running. systemd restarts `metald`; it was ready again in 3 s. A guest writing every 0.2 s saw no pause above 0.4 s.",
+   "status": "Handled",
+   "score": 10,
+   "ideal": "Same as now.",
+   "evidence": "T1 on a development host."
+  },
+  {
+   "area": "Metal daemon",
+   "scenario": "`metald` fails at startup 5 times in 10 s (bad config, pool not imported yet, wg0 not up).",
+   "behavior": "systemd stops restarting it and leaves the unit failed. VMs keep running, but nothing manages them until an operator acts.",
+   "status": "Not handled",
+   "score": 4,
+   "ideal": "Restart forever with a growing delay (`StartLimitIntervalSec=0`, `RestartSec=5`), and alert on a failed unit. See [F2].",
+   "evidence": "`systemctl show metal.service`: default start limit, `RestartSec=1`."
+  },
+  {
+   "area": "Metal daemon",
+   "scenario": "One VM or migration record on a host is corrupt.",
+   "behavior": "Startup validation fails for the whole daemon, so no VM on the host is managed.",
+   "status": "Not handled",
+   "score": 3,
+   "ideal": "Quarantine only the bad record, start the daemon, and report the record in sync and the API. See [F3].",
+   "evidence": "Code: `recordStore.validateAll` returns the first error."
+  },
+  {
+   "area": "Guest VM",
+   "injected": true,
+   "scenario": "A guest Firecracker process exits (kill or guest crash).",
+   "behavior": "The VM unit has `Restart=no`. The reconciler saw desired running, observed stopped, and started the VM 2 s later. ext4 journal recovery ran; all synced writes were present.",
+   "status": "Handled",
+   "score": 9,
+   "ideal": "Same, plus a crash-loop limit and a visible crash count on the VM.",
+   "evidence": "T2 on a development host."
+  },
+  {
+   "area": "Atlas control plane",
+   "injected": true,
+   "scenario": "Atlas cannot reach one host (network cut or host API down).",
+   "behavior": "VMs on the host keep running. Power changes fail in 5 s with a clear error. Reading a VM takes 19 s and fails, so Desk forms hang. A create placed on the host in the first 2 min becomes a draft; after recovery the draft check gets 404 and deletes it. After 2 min without a capacity sample, placement skips the host. Sync writes one Error Log row every 10 s.",
+   "status": "Partial",
+   "score": 7,
+   "ideal": "Mark the host unreachable after the first failed sync, skip it in placement at once, fail VM reads fast with a cached last-known state, and log only state changes. See [F6].",
+   "evidence": "T3 on a development host."
+  },
+  {
+   "area": "Atlas control plane",
+   "scenario": "Atlas web, workers, and scheduler are down for hours.",
+   "behavior": "Hosts keep the last complete sync (peers, image policies, privileged addresses) and keep running every VM. No create, change, or migration is possible. Proxy routes and telemetry stop updating.",
+   "status": "Untested",
+   "score": 8,
+   "ideal": "Same, plus an external health check that pages when the scheduler stops.",
+   "evidence": "Code reading: Metal does not need Atlas to run VMs."
+  },
+  {
+   "area": "Host storage",
+   "injected": true,
+   "scenario": "The host ZFS pool fills up (guests write more than the pool holds).",
+   "behavior": "Every guest on the host got I/O errors at once, even guests that did not write. Every reconcile failed because Metal could not write its state file. A stop request returned a bare HTTP 500. The host kept reporting 880 GiB free to placement. When space came back, Metal recovered by itself, but the guests stayed broken (SSH dead) until a restart, and each restart waited 30 s for a guest that could not shut down. A writer that waits for fsync got a clean EIO; all 93 acknowledged writes survived the event.",
+   "status": "Not handled",
+   "score": 2,
+   "ideal": "Never overcommit physical space without a limit: count provisioned disk in placement, reserve space for Metal state, alert at 80 % pool use, and stop placement on the host. See [F1] and [F12].",
+   "evidence": "T4 and T4b on a development host."
+  },
+  {
+   "area": "Migration",
+   "scenario": "An operator or an error aborts a disk-only migration after the destination VM booted, before Atlas commits.",
+   "behavior": "Metal removes the destination disk and restores the source from its final snapshot. Writes the guest made on the destination are discarded.",
+   "status": "Untested",
+   "score": 5,
+   "ideal": "Keep the destination paused or offline until finish, or allow only finish after the destination starts. See [F7].",
+   "evidence": "Code reading and the migration handbook."
+  },
+  {
+   "area": "Images",
+   "scenario": "A VM uses an image that was archived more than 6 h ago, then restarts on a host that pruned the image.",
+   "behavior": "The VM cannot start: the kernel download fails.",
+   "status": "Not handled",
+   "score": 2,
+   "ideal": "Keep image artifacts while any VM references the image. See [F8].",
+   "evidence": "Seen on a pre-production host."
+  },
+  {
+   "area": "Atlas dependencies",
+   "injected": true,
+   "scenario": "The Atlas queue Redis hangs (accepts connections but does not answer).",
+   "behavior": "Every code path that enqueues a job blocks for as long as Redis hangs. In the test an enqueue took the full 60 s pause. Web requests that enqueue (migrate, public IP changes) and scheduler ticks pile up.",
+   "status": "Not handled",
+   "score": 4,
+   "ideal": "Set a socket timeout (for example 5 s) on the queue and cache Redis clients so a request fails fast with a retry-later error. Alert on Redis latency. See [F14].",
+   "evidence": "T5 on the local site (`CLIENT PAUSE 60000`)."
+  },
+  {
+   "area": "Atlas dependencies",
+   "scenario": "MariaDB for Atlas is down or full.",
+   "behavior": "Atlas web and jobs stop. Hosts keep running VMs with their last sync. When MariaDB returns, the scheduler and reconcilers continue from stored state; no host data depends on Atlas being up.",
+   "status": "Untested",
+   "score": 7,
+   "ideal": "Alert on database errors and free disk. Keep large log tables (Error Log, Metal Server Usage, Scheduled Job Log) under retention so a slow leak cannot fill the disk.",
+   "evidence": "Code reading. Not injected: no root access to the local database service."
+  },
+  {
+   "area": "Migration",
+   "injected": true,
+   "scenario": "`metald` on the destination is killed during the disk copy.",
+   "behavior": "The source stream broke. The destination restarted in 2 s, resumed the migration from its records, and completed. Data checksum and the guest counter were intact.",
+   "status": "Handled",
+   "score": 10,
+   "ideal": "Same as now.",
+   "evidence": "T6 on development hosts."
+  },
+  {
+   "area": "Migration",
+   "injected": true,
+   "scenario": "The network between source and destination drops all transfer packets for 2 min during the copy.",
+   "behavior": "The TCP stream stalled and resumed after the block (stall limit is 2 min). The migration completed in 172 s with a correct checksum. Atlas showed `copying` with no sign of the stall.",
+   "status": "Handled",
+   "score": 8,
+   "ideal": "Show stalled progress in Atlas (for example `no progress for 60 s`). See [F16].",
+   "evidence": "T7 on development hosts."
+  },
+  {
+   "area": "HTTP proxy",
+   "scenario": "One node of a 3-node proxy cluster is down.",
+   "behavior": "Existing routes keep working on the healthy nodes and DNS health checks remove the bad node. Route writes (new site, domain change) fail with 503, because clusters of 3 or fewer nodes need an acknowledgement from every node.",
+   "status": "Partial",
+   "score": 6,
+   "ideal": "Accept writes with a majority and let the stale node catch up from the leader snapshot, or run 4 or more nodes so one can be down. See [F17].",
+   "evidence": "Code: `control-cluster` `_required_acknowledgements`."
+  }
+ ],
+ "findings": [
+  {
+   "id": "F1",
+   "severity": "Critical",
+   "area": "Host storage",
+   "problem": "VM volumes are thin ZFS clones with no reservation. The Metal state dataset has no reservation either. The pool is shared.",
+   "effect": "A full pool breaks every guest on the host at the same time (I/O errors, then dead services until restart). Metal cannot write records, so every reconcile fails and an API stop returns HTTP 500.",
+   "fix": "Reserve space for `metal/state`. Alert and stop placement at a pool-use threshold. Count provisioned disk in placement ([F12]).",
+   "where": "`metal/internal/storage/disk.go`, host install",
+   "verified": "T4 fault injection"
+  },
+  {
+   "id": "F12",
+   "severity": "High",
+   "area": "Placement",
+   "problem": "Hosts report pool free space from `zpool list` as available storage. Thin VM disks use little space at first, so placement can sell the same space many times.",
+   "effect": "No limit on disk overcommit. Together with [F1] this leads to a full pool as guests grow. During T4 the host reported 880 GiB free while every dataset had 0 bytes available.",
+   "fix": "Report storage as pool size minus provisioned volume sizes (or apply an explicit overcommit ratio), and read `available` from `zfs get`, not `zpool list`.",
+   "where": "`metal/internal/storage/zfs_pool.go` `Capacity`, `metal/internal/host/service.go`",
+   "verified": "T4 fault injection and code reading"
+  },
+  {
+   "id": "F2",
+   "severity": "Medium",
+   "area": "Metal daemon",
+   "problem": "`metal.service` uses the default start limit (5 starts in 10 s) with `RestartSec=1`.",
+   "effect": "A transient startup failure at boot can leave the unit failed for good.",
+   "fix": "Set `StartLimitIntervalSec=0` and a longer `RestartSec`, and alert on a failed unit.",
+   "where": "Host install unit for `metal.service`",
+   "verified": "`systemctl show metal.service`"
+  },
+  {
+   "id": "F3",
+   "severity": "Medium",
+   "area": "Metal daemon",
+   "problem": "One unreadable VM or migration record stops daemon startup.",
+   "effect": "Blast radius is the whole host instead of one VM.",
+   "fix": "Quarantine the bad record and start the daemon for the other VMs.",
+   "where": "`metal/internal/vm/records.go` `validateAll`",
+   "verified": "Code reading"
+  },
+  {
+   "id": "F4",
+   "severity": "Medium",
+   "area": "Metal daemon",
+   "problem": "The VM reconciler runs 4 workers and waits for the whole pass. One VM operation can take up to 35 min (for example an image download).",
+   "effect": "4 slow VMs delay stop, restart, and delete for every other VM on the host.",
+   "fix": "Track in-flight VMs and start work for idle VMs without waiting for the slowest one.",
+   "where": "`metal/internal/reconciler/virtual_machines.go`",
+   "verified": "Code reading"
+  },
+  {
+   "id": "F5",
+   "severity": "Medium",
+   "area": "Atlas control plane",
+   "problem": "Network and route changes lock the Virtual Machine row (`FOR UPDATE`) and then call Metal twice.",
+   "effect": "A slow host holds the row lock for up to about 90 s, so other writers hit lock wait timeouts.",
+   "fix": "Do not hold a row lock across a Metal call. Compare Metal generations instead.",
+   "where": "`atlas/vm/core/vm_service.py` `lock_network`",
+   "verified": "Code reading"
+  },
+  {
+   "id": "F6",
+   "severity": "Medium",
+   "area": "Atlas control plane",
+   "problem": "Each failed host sync, draft check, and termination check writes an Error Log row on every pass.",
+   "effect": "One unreachable host writes about 8,640 rows a day for sync alone, plus rows per VM.",
+   "fix": "Log the first failure and state changes. Keep the last error and a failure count on the Metal Server.",
+   "where": "`atlas/metal_server/usage.py`, `atlas/vm/core/reconciliation.py`",
+   "verified": "T3: 30 rows in 5 min for one host"
+  },
+  {
+   "id": "F7",
+   "severity": "Medium",
+   "area": "Migration",
+   "problem": "A disk-only migration cold-boots the destination before Atlas commits. An abort in that window restores the source from the final snapshot.",
+   "effect": "Writes made by the guest on the destination are lost.",
+   "fix": "Keep the destination paused or offline until finish, or reject abort after the destination started.",
+   "where": "`metal/internal/vm/migration`",
+   "verified": "Code reading and handbook"
+  },
+  {
+   "id": "F8",
+   "severity": "High",
+   "area": "Images",
+   "problem": "Archived images lose their artifacts after the retention time even while VMs use them.",
+   "effect": "A VM with an archived image cannot start again after a restart, resize, or migration.",
+   "fix": "Keep the kernel and root file system artifacts while any VM references the image.",
+   "where": "Image reclaim in Atlas, `ensureImage` in Metal",
+   "verified": "Known open issue, seen on a pre-production host"
+  },
+  {
+   "id": "F9",
+   "severity": "Low",
+   "area": "Atlas control plane",
+   "problem": "No check compares the VMs on each host with Atlas records.",
+   "effect": "After an Atlas database restore, VMs created after the backup run on hosts without Atlas records. Placement does not count them.",
+   "fix": "Report unknown VM IDs from sync and show them on the Metal Server.",
+   "where": "`atlas/metal_server/usage.py`",
+   "verified": "Code reading"
+  },
+  {
+   "id": "F10",
+   "severity": "Low",
+   "area": "Atlas control plane",
+   "problem": "A disk resize stores `disk_mib` in Atlas in a later write after Metal accepts it.",
+   "effect": "If the Atlas write fails, placement counts the old, smaller disk.",
+   "fix": "Write the reservation before the Metal call, or read it from Metal state.",
+   "where": "`atlas/vm/core/vm_service.py` `update_disk`",
+   "verified": "Code reading"
+  },
+  {
+   "id": "F11",
+   "severity": "Low",
+   "area": "Migration",
+   "problem": "Terminal destination records stay on the host with no cleanup.",
+   "effect": "Directories collect over time. Seen 8 days after an aborted migration.",
+   "fix": "Remove terminal records after a retention time.",
+   "where": "`metal/internal/vm/migration/records.go`",
+   "verified": "Seen on a development host"
+  },
+  {
+   "id": "F13",
+   "severity": "Medium",
+   "area": "Metal daemon",
+   "problem": "When Metal cannot write its state, API mutations return a bare `internal server error`.",
+   "effect": "Atlas shows `Metal request failed: internal server error`. The operator cannot see that the host disk is full.",
+   "fix": "Map `ENOSPC` to a stable error code such as `host_storage_full` with a clear message.",
+   "where": "`metal/internal/api`",
+   "verified": "T4 fault injection"
+  },
+  {
+   "id": "F14",
+   "severity": "Medium",
+   "area": "Atlas dependencies",
+   "problem": "The Redis clients for the queue have no socket timeout.",
+   "effect": "A hung Redis blocks web requests and scheduler ticks with no limit. Workers are used up and the whole Atlas site stops answering.",
+   "fix": "Set `socket_timeout` and `socket_connect_timeout` on the Redis connections, and map the timeout to a retry-later error.",
+   "where": "Frappe Redis connection setup used by `frappe.enqueue`",
+   "verified": "T5 fault injection"
+  },
+  {
+   "id": "F15",
+   "severity": "Low",
+   "area": "Migration",
+   "problem": "Migration transfer rows store `0` throughput even for a 3.7 GiB transfer.",
+   "effect": "Operators cannot see the copy speed, which makes slow or stalled copies hard to find.",
+   "fix": "Store the measured throughput from Metal, or compute it from bytes and duration.",
+   "where": "`atlas/vm/core/vm_migration.py` `upsert_transfers`",
+   "verified": "T7 fault injection"
+  },
+  {
+   "id": "F16",
+   "severity": "Low",
+   "area": "Migration",
+   "problem": "A stalled copy shows the same `copying` status as a healthy one.",
+   "effect": "During the 2-min stall nothing in Atlas showed a problem.",
+   "fix": "Show the time since the last byte moved and warn after 60 s.",
+   "where": "`atlas/vm/core/vm_migration.py`, Metal migration status",
+   "verified": "T7 fault injection"
+  },
+  {
+   "id": "F17",
+   "severity": "Medium",
+   "area": "HTTP proxy",
+   "problem": "Proxy and gateway clusters with 3 or fewer nodes require an acknowledgement from every node for each route write.",
+   "effect": "One node down or slow blocks all route writes in the region (new sites, domains) until it returns.",
+   "fix": "Use a majority for writes and rely on snapshot catch-up for the stale node, or require at least 4 nodes in production.",
+   "where": "`services/control-cluster/atlas_control/cluster.py`",
+   "verified": "Code reading"
+  }
+ ],
+ "checklist": [],
+ "next": [
+  "Finish T4: check guest data after the restart.",
+  "More fault injection: root file system full on a host, Redis and MariaDB down in Atlas, network cut during a migration, kill an Atlas worker during create and migration, host reboot.",
+  "Continue the code review: proxy, WG Mesh, public IP moves, image transfer, snapshots."
+ ]
 }
