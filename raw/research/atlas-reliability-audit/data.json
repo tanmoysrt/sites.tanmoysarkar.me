@@ -183,6 +183,25 @@
    "score": 6,
    "ideal": "Periodic full state resync to Central, and ordering by `observed_at`. See [F19].",
    "evidence": "Code reading."
+  },
+  {
+   "area": "Private network (WG Mesh)",
+   "injected": true,
+   "scenario": "`wg0` is restarted on a host (`systemctl restart wg-quick@wg0`, a WireGuard package upgrade, or the Configure WireGuard action).",
+   "behavior": "Host WireGuard peers come back at the next Atlas sync (10 s), but the WG Mesh eBPF program on `wg0` is lost. Cross-host VM private traffic to and from that host stops and stays down. No error or metric shows it. A `metald` restart attaches the program again and traffic recovers at once.",
+   "status": "Not handled",
+   "score": 2,
+   "ideal": "`metald` checks the `wg0` hooks on every sync (or reacts to the interface coming back) and attaches them again. Alert when the hook is missing. See [F21].",
+   "evidence": "T14 on development hosts. Also seen earlier on a pre-production region."
+  },
+  {
+   "area": "Host storage",
+   "scenario": "The pool disk stops answering or fails (single vdev on software RAID 1).",
+   "behavior": "The pool uses `failmode=wait`, so all pool I/O blocks: guests freeze and `zfs` commands from Metal hang in the kernel where timeouts cannot stop them. Reconciler workers and API calls that touch ZFS can hang until the pool returns. ZFS sits on top of mdadm RAID 1, so ZFS can detect but not repair a bad block.",
+   "status": "Untested",
+   "score": 4,
+   "ideal": "Give ZFS the 2 disks as a mirror so it can repair bad blocks; alert on md and ZFS health (metrics exist); keep API health and sync paths free of ZFS calls that can block forever.",
+   "evidence": "Code reading and host layout. Not injected: no `zinject` on hosts."
   }
  ],
  "findings": [
@@ -385,6 +404,26 @@
    "fix": "Clear the stored error only after a phase succeeds, and keep a failure count and the time of the last failure.",
    "where": "`metal/internal/vm/reconcile.go` `runOperation`",
    "verified": "T12 fault injection"
+  },
+  {
+   "id": "F21",
+   "severity": "High",
+   "area": "Private network (WG Mesh)",
+   "problem": "WG Mesh attaches its eBPF program to `wg0` only when `metald` starts. Recreating `wg0` removes the program and nothing attaches it again.",
+   "effect": "Any `wg0` restart cuts the private network of every VM on the host until someone restarts `metald`. Nothing reports it.",
+   "fix": "Make the mesh hook check part of each sync: if the program is missing, attach it again (the attach is already safe to repeat). Export a metric for hook presence.",
+   "where": "`metal/cmd/metald/main.go` `connectMesh`, `metal/internal/network/mesh.go`",
+   "verified": "T14 fault injection"
+  },
+  {
+   "id": "F22",
+   "severity": "Medium",
+   "area": "Host storage",
+   "problem": "The ZFS pool is created on a single md RAID 1 device instead of a ZFS mirror of the 2 disks.",
+   "effect": "ZFS detects checksum errors but cannot repair them, and md RAID 1 cannot tell which copy is good. Silent corruption on one disk can reach guests.",
+   "fix": "Create the pool as a ZFS mirror of the 2 partitions for new hosts. Plan a migration path for existing hosts (drain, rebuild).",
+   "where": "`atlas/scripts/install-metal-storage.sh`, provider disk layout",
+   "verified": "Host layout on development hosts"
   }
  ],
  "checklist": [
