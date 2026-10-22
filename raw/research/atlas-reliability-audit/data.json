@@ -1,6 +1,6 @@
 {
- "status": "28 fault tests done on development hosts, plus code review. Two confirmed data-loss paths in migration rollback ([F7]): an operator abort, and a network cut between Atlas and the destination at cutover.",
- "updated": "2026-10-22 23:25 UTC",
+ "status": "First pass complete: 31 fault tests on development hosts and a code review of Atlas, Metal, WG Mesh, the HTTP proxy cluster and the IPv6 router. 4 critical findings, 3 of them confirmed by fault injection. Development hosts are back to their normal state.",
+ "updated": "2026-10-22 23:35 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -782,12 +782,20 @@
      "text": "Atlas commits ownership before Metal destroys the source; finish and abort are exclusive."
     },
     {
+     "state": "no",
+     "text": "A 10-min Atlas-to-destination network cut at cutover makes Atlas roll back and lose the guest's writes (T28)."
+    },
+    {
      "state": "partial",
      "text": "Abort after the destination booted discards destination writes ([F7])."
     },
     {
      "state": "no",
      "text": "Stall and throughput are not visible in Atlas ([F15], [F16])."
+    },
+    {
+     "state": "no",
+     "text": "No operator action to recover a source when the destination host is lost ([F32])."
     }
    ]
   },
@@ -899,6 +907,40 @@
     {
      "state": "yes",
      "text": "Daemon upgrade restarts in place; VMs keep running."
+    }
+   ]
+  },
+  {
+   "feature": "Host provisioning",
+   "items": [
+    {
+     "state": "yes",
+     "text": "Provider create is idempotent by name; setup runs as one deduplicated job and each step is safe to repeat."
+    },
+    {
+     "state": "yes",
+     "text": "Storage setup refuses a device that has any partition table, file system or signature, so it cannot wipe data."
+    },
+    {
+     "state": "no",
+     "text": "The state dataset gets no space reservation ([F1]); the pool is one md device, not a ZFS mirror ([F22])."
+    }
+   ]
+  },
+  {
+   "feature": "Host networking",
+   "items": [
+    {
+     "state": "yes",
+     "text": "WireGuard peers are re-applied on every sync, so a `wg0` restart heals peers in 10 s (T14)."
+    },
+    {
+     "state": "no",
+     "text": "The WG Mesh program is not re-attached after a `wg0` restart ([F21])."
+    },
+    {
+     "state": "partial",
+     "text": "Per-VM NAT and FORWARD rules are reconciled; the shared masquerade and isolation rules are not ([F29], [F30])."
     }
    ]
   }
