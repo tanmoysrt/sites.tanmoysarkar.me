@@ -328,6 +328,16 @@
    "score": 4,
    "ideal": "Run host sync on its own queue and workers with a short timeout. Return a distinct `capacity_data_stale` error. Alert when the newest capacity sample is older than 1 min. See [F27].",
    "evidence": "T25 on the local site."
+  },
+  {
+   "area": "Public network",
+   "injected": true,
+   "scenario": "The host NAT table is flushed (`iptables -t nat -F`, a firewall package reload, or an operator mistake).",
+   "behavior": "Metal re-added the per-VM public IPv4 SNAT and DNAT rules within 12 s. The shared masquerade rule for `10.0.0.0/8` is added only by the `metald` start script, so VMs without a public IPv4 had no IPv4 internet until `metald` restarts.",
+   "status": "Partial",
+   "score": 5,
+   "ideal": "Let the reconciler own the masquerade rule too and check it on every pass, like the per-VM rules. See [F29].",
+   "evidence": "T26 on a development host."
   }
  ],
  "findings": [
@@ -610,6 +620,16 @@
    "fix": "Set `StartLimitIntervalSec=0` and `Restart=always` with a delay for Vector, and alert in Atlas or Insights when a host has sent no telemetry for 5 min.",
    "where": "Host install (Vector unit), telemetry alerting",
    "verified": "Seen after T11 on a development host"
+  },
+  {
+   "id": "F29",
+   "severity": "Medium",
+   "area": "Public network",
+   "problem": "The shared IPv4 masquerade rule is created only by `ExecStartPre=network-setup` when `metald` starts.",
+   "effect": "Any flush of the NAT table cuts IPv4 internet for every VM on the host without a public IPv4, and nothing repairs it until `metald` restarts.",
+   "fix": "Ensure the masquerade rule in the network reconcile path (it already re-creates per-VM rules) and export a metric when it is missing.",
+   "where": "`metal/internal/network/nat.go`, `metal-network-setup` in `atlas/scripts/install-metald.sh`",
+   "verified": "T26 fault injection"
   }
  ],
  "checklist": [
