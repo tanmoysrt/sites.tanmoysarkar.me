@@ -1,6 +1,6 @@
 {
- "status": "23 fault tests done on development hosts, plus code review of Atlas, Metal, proxy, mesh and IPv6 router. Confirmed data-loss path: migration abort after the destination booted ([F7]).",
- "updated": "2026-10-22 22:45 UTC",
+ "status": "28 fault tests done on development hosts, plus code review. Two confirmed data-loss paths in migration rollback ([F7]): an operator abort, and a network cut between Atlas and the destination at cutover.",
+ "updated": "2026-10-22 23:15 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -189,7 +189,7 @@
    "area": "Private network (WG Mesh)",
    "injected": true,
    "scenario": "`wg0` is restarted on a host (`systemctl restart wg-quick@wg0`, a WireGuard package upgrade, or the Configure WireGuard action).",
-   "behavior": "Host WireGuard peers come back at the next Atlas sync (10 s), but the WG Mesh eBPF program on `wg0` is lost. Cross-host VM private traffic to and from that host stops and stays down. No error or metric shows it. A `metald` restart attaches the program again and traffic recovers at once.",
+   "behavior": "Host WireGuard peers come back at the next Atlas sync (10 s), but the WG Mesh eBPF program on `wg0` is lost. Cross-host VM private traffic to and from that host stops and stays down. No error or metric shows it. A `metald` restart attaches the program again and traffic recovers at once. The 2026-10-16 incident fix covers only the Configure WireGuard script.",
    "status": "Not handled",
    "score": 2,
    "ideal": "`metald` checks the `wg0` hooks on every sync (or reacts to the interface coming back) and attaches them again. Alert when the hook is missing. See [F21].",
@@ -348,6 +348,16 @@
    "score": 7,
    "ideal": "Reconcile the isolation rule on every pass, or move host rules into one nftables table that Metal owns and checks. Alert when it is missing. See [F30].",
    "evidence": "T27 on a development host."
+  },
+  {
+   "area": "Migration",
+   "injected": true,
+   "scenario": "Atlas loses contact with the destination host at cutover for longer than 10 min (network partition, Atlas outage, destination API hang).",
+   "behavior": "The destination finished cutover by itself and ran the guest for 11 min. Atlas hit its 10-min visibility timeout, marked the migration `canceling`, and sent abort when the network returned. Metal deleted the destination disk and restarted the source from its old disk. 11 min of synced guest writes were lost, with no operator action. The migration ended `failed` with `destination_unreachable`.",
+   "status": "Not handled",
+   "score": 0,
+   "ideal": "After the destination started the guest, never roll back automatically: keep retrying finish (the destination already holds the newest disk). Abort only before the source stops. See [F7].",
+   "evidence": "T28 on development hosts."
   }
  ],
  "findings": [
@@ -425,17 +435,17 @@
    "id": "F7",
    "severity": "Critical",
    "area": "Migration",
-   "problem": "A disk-only migration cold-boots the destination before Atlas commits. An abort in that window restores the source from the final snapshot.",
+   "problem": "A disk-only migration cold-boots the guest on the destination before Atlas commits ownership. Abort is still allowed in that window, and Atlas aborts by itself when the destination is silent for 10 min. Abort deletes the destination disk and restores the source from the pre-cutover snapshot.",
    "effect": "Writes that the guest made and synced on the destination are lost after an abort, silently. The guest goes back in time by the length of the window.",
    "fix": "Once the destination has started the guest, allow only finish: reject abort in Atlas and Metal, and make the worker retry commit instead of failing. Or keep the destination guest paused (and with no network) until Atlas commits, so it cannot write.",
    "where": "`metal/internal/vm/migration`",
-   "verified": "T21 fault injection: synced guest writes lost"
+   "verified": "T21 (operator abort) and T28 (11-min Atlas-to-destination network cut, no operator): synced guest writes lost"
   },
   {
    "id": "F8",
    "severity": "High",
    "area": "Images",
-   "problem": "Archived images lose their artifacts after the retention time even while VMs use them.",
+   "problem": "Archived images lose their artifacts after the retention time even while VMs use them. Image cleanup counts a VM as a user of its image only while its reported state is running, stopped or paused, so a VM that is failing to start does not protect its image.",
    "effect": "A VM with an archived image cannot start again after a restart, resize, or migration.",
    "fix": "Keep the kernel and root file system artifacts while any VM references the image.",
    "where": "Image reclaim in Atlas, `ensureImage` in Metal",
@@ -555,11 +565,11 @@
    "id": "F21",
    "severity": "High",
    "area": "Private network (WG Mesh)",
-   "problem": "WG Mesh attaches its eBPF program to `wg0` only when `metald` starts. Recreating `wg0` removes the program and nothing attaches it again.",
+   "problem": "WG Mesh attaches its eBPF program to `wg0` only when `metald` starts. The fix for the 2026-10-16 incident makes `configure-wireguard.sh` restart `metald`, but any other `wg0` restart (manual `systemctl restart wg-quick@wg0`, a package upgrade hook, a unit dependency restart) still removes the program for good.",
    "effect": "Any `wg0` restart cuts the private network of every VM on the host until someone restarts `metald`. Nothing reports it.",
    "fix": "Make the mesh hook check part of each sync: if the program is missing, attach it again (the attach is already safe to repeat). Export a metric for hook presence.",
    "where": "`metal/cmd/metald/main.go` `connectMesh`, `metal/internal/network/mesh.go`",
-   "verified": "T14 fault injection"
+   "verified": "T14 fault injection (repeats the root cause of the 2026-10-16 incident through another path)"
   },
   {
    "id": "F22",
@@ -650,6 +660,16 @@
    "fix": "Own the rule in the network reconciler next to the per-VM rules, and check it on every pass.",
    "where": "`atlas/scripts/install-metald.sh` (`metal-network-setup`), `metal/internal/network`",
    "verified": "T27 fault injection and a direct connection test"
+  },
+  {
+   "id": "F31",
+   "severity": "Medium",
+   "area": "Placement",
+   "problem": "Each host sync (every 10 s) saves the `Virtual Machine State` document of every VM on the host, with a commit each, even when nothing changed.",
+   "effect": "Measured 3.5 ms per VM on the local site. At 100 hosts with 200 VMs each that is about 70 s of database work every 10 s. Sync then falls behind, and stale capacity blocks every create ([F27]).",
+   "fix": "Write a state row only when its status changes, keep `synced_at` once per host, and batch the writes in one transaction.",
+   "where": "`atlas/vm/core/vm_state.py` `store_reported_states`",
+   "verified": "Local benchmark (6 VMs, 5 runs)"
   }
  ],
  "checklist": [
