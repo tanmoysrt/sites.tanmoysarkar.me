@@ -1,6 +1,6 @@
 {
- "status": "First pass complete: 30 fault tests on development hosts (T1 to T31; disk failure T13 could not be injected) and a code review of Atlas, Metal, WG Mesh, the HTTP proxy cluster and the IPv6 router. 4 critical findings, 3 of them confirmed by fault injection. Development hosts are back to their normal state.",
- "updated": "2026-10-22 23:35 UTC",
+ "status": "Fix pass on a branch: 21 commits fix 22 findings; 2 are partly fixed, 2 stay open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass.",
+ "updated": "2026-10-23 06:40 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -20,7 +20,10 @@
    "score": 4,
    "ideal": "Restart forever with a growing delay (`StartLimitIntervalSec=0`, `RestartSec=5`), and alert on a failed unit. See [F2].",
    "evidence": "T29 on a development host.",
-   "injected": true
+   "injected": true,
+   "after_status": "Handled",
+   "after_score": 9,
+   "after_note": "metald restarts every 5 s with no start limit (unit properties checked on two hosts)."
   },
   {
    "area": "Metal daemon",
@@ -29,7 +32,10 @@
    "status": "Not handled",
    "score": 3,
    "ideal": "Quarantine only the bad record, start the daemon, and report the record in sync and the API. See [F3].",
-   "evidence": "Code: `recordStore.validateAll` returns the first error."
+   "evidence": "Code: `recordStore.validateAll` returns the first error.",
+   "after_status": "Not handled",
+   "after_score": 3,
+   "after_note": "Kept on purpose: skipping an unreadable record could reuse its user ID and addresses. metald now retries every 5 s until an operator fixes the file."
   },
   {
    "area": "Guest VM",
@@ -49,7 +55,10 @@
    "status": "Partial",
    "score": 7,
    "ideal": "Mark the host unreachable after the first failed sync, skip it in placement at once, fail VM reads fast with a cached last-known state, and log only state changes. See [F6].",
-   "evidence": "T3 on a development host."
+   "evidence": "T3 on a development host.",
+   "after_status": "Partial",
+   "after_score": 8,
+   "after_note": "Failures are logged once an hour instead of on every pass. VM reads still wait for the Metal timeout."
   },
   {
    "area": "Atlas control plane",
@@ -68,7 +77,10 @@
    "status": "Not handled",
    "score": 2,
    "ideal": "Never overcommit physical space without a limit: count provisioned disk in placement, reserve space for Metal state, alert at 80 % pool use, and stop placement on the host. See [F1] and [F12].",
-   "evidence": "T4 and T4b on a development host."
+   "evidence": "T4 and T4b on a development host.",
+   "after_status": "Partial",
+   "after_score": 7,
+   "after_note": "No overcommit: available storage is pool size less every provisioned disk. The state dataset keeps 1 GiB, and a full disk returns `507 host_storage_full`. Snapshots and image data can still fill a pool."
   },
   {
    "area": "Migration",
@@ -78,7 +90,10 @@
    "score": 2,
    "ideal": "Keep the destination paused or offline until finish, or allow only finish after the destination starts. See [F7].",
    "evidence": "T21 on development hosts (Atlas worker frozen at cutover, abort sent while the destination ran).",
-   "injected": true
+   "injected": true,
+   "after_status": "Handled",
+   "after_score": 9,
+   "after_note": "Retested T21: Metal refused rollback, Atlas finished the migration, the marker written on the destination survived."
   },
   {
    "area": "Images",
@@ -87,7 +102,10 @@
    "status": "Not handled",
    "score": 2,
    "ideal": "Keep image artifacts while any VM references the image. See [F8].",
-   "evidence": "Seen on a pre-production host."
+   "evidence": "Seen on a pre-production host.",
+   "after_status": "Handled",
+   "after_score": 8,
+   "after_note": "Archived images keep their artifacts while any VM names them (unit tests)."
   },
   {
    "area": "Atlas dependencies",
@@ -97,7 +115,10 @@
    "status": "Not handled",
    "score": 4,
    "ideal": "Set a socket timeout (for example 5 s) on the queue and cache Redis clients so a request fails fast with a retry-later error. Alert on Redis latency. See [F14].",
-   "evidence": "T5 on the local site (`CLIENT PAUSE 60000`)."
+   "evidence": "T5 on the local site (`CLIENT PAUSE 60000`).",
+   "after_status": "Not handled",
+   "after_score": 4,
+   "after_note": "Needs a socket timeout on the queue Redis URL in the bench config (Pilot and Frappe own it)."
   },
   {
    "area": "Atlas dependencies",
@@ -145,7 +166,10 @@
    "status": "Partial",
    "score": 6,
    "ideal": "Restart Vector without a start limit and alert when a host stops sending telemetry. Alert on root disk use. See [F28].",
-   "evidence": "T11 on a development host."
+   "evidence": "T11 on a development host.",
+   "after_status": "Handled",
+   "after_score": 8,
+   "after_note": "Vector now restarts every 5 s with no start limit (checked on a host)."
   },
   {
    "area": "Host daemon (metald)",
@@ -175,7 +199,10 @@
    "status": "Partial",
    "score": 6,
    "ideal": "Keep the last error visible until a pass succeeds, and report a clear phase such as `downloading image`. Cache every image that running VMs use. See [F20].",
-   "evidence": "T12 on a development host."
+   "evidence": "T12 on a development host.",
+   "after_status": "Handled",
+   "after_score": 8,
+   "after_note": "The last VM error stays visible until the operation completes (unit test fails on the old code)."
   },
   {
    "area": "Atlas dependencies",
@@ -194,7 +221,10 @@
    "status": "Not handled",
    "score": 2,
    "ideal": "`metald` checks the `wg0` hooks on every sync (or reacts to the interface coming back) and attaches them again. Alert when the hook is missing. See [F21].",
-   "evidence": "T14 on development hosts. Also seen earlier on a pre-production region."
+   "evidence": "T14 on development hosts. Also seen earlier on a pre-production region.",
+   "after_status": "Handled",
+   "after_score": 9,
+   "after_note": "Retested T14: host sync attached the mesh hook again 18 s after the wg0 restart."
   },
   {
    "area": "Host storage",
@@ -242,7 +272,10 @@
    "status": "Not handled",
    "score": 4,
    "ideal": "Add `WatchdogSec` and notify from the reconciler and API loops, so systemd restarts a hung daemon (VMs survive restarts, T1). Do not hold database row locks across Metal calls ([F5]). See [F24].",
-   "evidence": "T19 on a development host."
+   "evidence": "T19 on a development host.",
+   "after_status": "Handled",
+   "after_score": 9,
+   "after_note": "Retested T19: the systemd watchdog restarted a frozen metald after 55 s; all VMs kept running."
   },
   {
    "area": "Guest VM",
@@ -270,7 +303,10 @@
    "status": "Not handled",
    "score": 3,
    "ideal": "Frequent Atlas database backups off the Atlas VM, a tested restore runbook, and a command that lists host VMs unknown to Atlas and imports or flags them. See [F9] and [F26].",
-   "evidence": "Code reading and host access handbook."
+   "evidence": "Code reading and host access handbook.",
+   "after_status": "Partial",
+   "after_score": 4,
+   "after_note": "Host sync now logs VMs that have no Atlas record. Importing them back is not built."
   },
   {
    "area": "Atlas dependencies",
@@ -328,7 +364,10 @@
    "status": "Not handled",
    "score": 4,
    "ideal": "Run host sync on its own queue and workers with a short timeout. Return a distinct `capacity_data_stale` error. Alert when the newest capacity sample is older than 1 min. See [F27].",
-   "evidence": "T25 on the local site."
+   "evidence": "T25 on the local site.",
+   "after_status": "Partial",
+   "after_score": 6,
+   "after_note": "Placement now says hosts have not reported capacity and does not order a new host. Creates still wait for host sync."
   },
   {
    "area": "Public network",
@@ -338,7 +377,10 @@
    "status": "Partial",
    "score": 5,
    "ideal": "Let the reconciler own the masquerade rule too and check it on every pass, like the per-VM rules. See [F29].",
-   "evidence": "T26 on a development host."
+   "evidence": "T26 on a development host.",
+   "after_status": "Handled",
+   "after_score": 9,
+   "after_note": "Retested: a timer restored the masquerade rule within 30 s."
   },
   {
    "area": "Public network",
@@ -348,7 +390,10 @@
    "status": "Partial",
    "score": 7,
    "ideal": "Reconcile the isolation rule on every pass, or move host rules into one nftables table that Metal owns and checks. Alert when it is missing. See [F30].",
-   "evidence": "T27 on a development host."
+   "evidence": "T27 on a development host.",
+   "after_status": "Handled",
+   "after_score": 9,
+   "after_note": "Retested: a timer restored the private-network drop rule after 23 s."
   },
   {
    "area": "Migration",
@@ -358,7 +403,10 @@
    "status": "Not handled",
    "score": 0,
    "ideal": "After the destination started the guest, never roll back automatically: keep retrying finish (the destination already holds the newest disk). Abort only before the source stops. See [F7].",
-   "evidence": "T28 on development hosts."
+   "evidence": "T28 on development hosts.",
+   "after_status": "Handled",
+   "after_score": 8,
+   "after_note": "Same path as the T21 retest: at `ready` the destination refuses rollback, so Atlas finishes once contact returns."
   },
   {
    "area": "Placement",
@@ -368,7 +416,10 @@
    "status": "Not handled",
    "score": 2,
    "ideal": "Count provisioned disk against an explicit overcommit ratio per host, and stop placement at a pool-use threshold. See [F12].",
-   "evidence": "T31 on the local site and development hosts."
+   "evidence": "T31 on the local site and development hosts.",
+   "after_status": "Handled",
+   "after_score": 9,
+   "after_note": "Checked on a host: 53,248 MiB of provisioned disks now lower available storage from 837,557 MiB to 804,096 MiB."
   },
   {
    "area": "Migration",
@@ -377,7 +428,10 @@
    "status": "Not handled",
    "score": 1,
    "ideal": "An operator action (Dangerous Actions) that rolls the source back without the destination after confirming the destination is gone, and an alert for migrations stuck in `canceling`. See [F32].",
-   "evidence": "Code reading, following T28 (Atlas waits in `canceling` while the destination is unreachable)."
+   "evidence": "Code reading, following T28 (Atlas waits in `canceling` while the destination is unreachable).",
+   "after_status": "Not handled",
+   "after_score": 1,
+   "after_note": "Open: needs a design decision (a forced source restore risks two running copies if the destination host returns)."
   }
  ],
  "findings": [
@@ -389,7 +443,8 @@
    "effect": "A full pool breaks every guest on the host at the same time (I/O errors, then dead services until restart). Metal cannot write records, so every reconcile fails and an API stop returns HTTP 500.",
    "fix": "Reserve space for `metal/state`. Alert and stop placement at a pool-use threshold. Count provisioned disk in placement ([F12]).",
    "where": "`metal/internal/storage/disk.go`, host install",
-   "verified": "T4 fault injection"
+   "verified": "T4 fault injection",
+   "resolution": "Fixed: metald counts provisioned disks, and the state dataset keeps a 1 GiB reservation."
   },
   {
    "id": "F12",
@@ -399,7 +454,8 @@
    "effect": "No limit on disk overcommit. Together with [F1] this leads to a full pool as guests grow. During T4 the host reported 880 GiB free while every dataset had 0 bytes available.",
    "fix": "Report storage as pool size minus provisioned volume sizes (or apply an explicit overcommit ratio), and read `available` from `zfs get`, not `zpool list`.",
    "where": "`metal/internal/storage/zfs_pool.go` `Capacity`, `metal/internal/host/service.go`",
-   "verified": "T4 and T31: 4 TiB of disks placed on an 864 GiB pool"
+   "verified": "T4 and T31: 4 TiB of disks placed on an 864 GiB pool",
+   "resolution": "Fixed: available storage is the smaller of free pool space and pool size less every provisioned disk. Verified on a host."
   },
   {
    "id": "F2",
@@ -409,7 +465,8 @@
    "effect": "A transient startup failure (for example WG Mesh setup before `wg0` is ready at boot) leaves the daemon failed for good. Nothing on the host manages VMs until an operator runs `systemctl reset-failed metal`.",
    "fix": "Set `StartLimitIntervalSec=0` and a longer `RestartSec`, and alert on a failed unit.",
    "where": "Host install unit for `metal.service`",
-   "verified": "T29 fault injection"
+   "verified": "T29 fault injection",
+   "resolution": "Fixed: `StartLimitIntervalSec=0`, `RestartSec=5`."
   },
   {
    "id": "F3",
@@ -419,7 +476,8 @@
    "effect": "Blast radius is the whole host instead of one VM.",
    "fix": "Quarantine the bad record and start the daemon for the other VMs.",
    "where": "`metal/internal/vm/records.go` `validateAll`",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Not changed on purpose: skipping a bad record could hand its user ID and addresses to a new VM. With F2 fixed, metald retries every 5 s until an operator fixes the file."
   },
   {
    "id": "F4",
@@ -429,7 +487,8 @@
    "effect": "4 slow VMs delay stop, restart, and delete for every other VM on the host.",
    "fix": "Track in-flight VMs and start work for idle VMs without waiting for the slowest one.",
    "where": "`metal/internal/reconciler/virtual_machines.go`",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Fixed: VM operations share slots across passes; a pass does not wait for slow VMs."
   },
   {
    "id": "F5",
@@ -439,7 +498,8 @@
    "effect": "A slow host holds the row lock for up to about 90 s, so other writers hit lock wait timeouts.",
    "fix": "Do not hold a row lock across a Metal call. Compare Metal generations instead.",
    "where": "`atlas/vm/core/vm_service.py` `lock_network`",
-   "verified": "T19: a second writer waited 17 s for the row while Metal hung"
+   "verified": "T19: a second writer waited 17 s for the row while Metal hung",
+   "resolution": "Fixed: a per-VM file lock serializes network changes; no row lock waits on Metal."
   },
   {
    "id": "F6",
@@ -449,7 +509,8 @@
    "effect": "One unreachable host writes about 8,640 rows a day for sync alone, plus rows per VM.",
    "fix": "Log the first failure and state changes. Keep the last error and a failure count on the Metal Server.",
    "where": "`atlas/metal_server/usage.py`, `atlas/vm/core/reconciliation.py`",
-   "verified": "T3: 30 rows in 5 min for one host"
+   "verified": "T3: 30 rows in 5 min for one host",
+   "resolution": "Fixed: repeated sync and reconcile failures are logged once an hour."
   },
   {
    "id": "F7",
@@ -459,7 +520,8 @@
    "effect": "Writes that the guest made and synced on the destination are lost after an abort, silently. The guest goes back in time by the length of the window.",
    "fix": "Once the destination has started the guest, allow only finish: reject abort in Atlas and Metal, and make the worker retry commit instead of failing. Or keep the destination guest paused (and with no network) until Atlas commits, so it cannot write.",
    "where": "`metal/internal/vm/migration`",
-   "verified": "T21 (operator abort) and T28 (11-min Atlas-to-destination network cut, no operator): synced guest writes lost"
+   "verified": "T21 (operator abort) and T28 (11-min Atlas-to-destination network cut, no operator): synced guest writes lost",
+   "resolution": "Fixed: a disk-only destination refuses abort at `ready`, and Atlas finishes the migration instead. Retested T21."
   },
   {
    "id": "F8",
@@ -469,7 +531,8 @@
    "effect": "A VM with an archived image cannot start again after a restart, resize, or migration.",
    "fix": "Keep the kernel and root file system artifacts while any VM references the image.",
    "where": "Image reclaim in Atlas, `ensureImage` in Metal",
-   "verified": "Known open issue, seen on a pre-production host"
+   "verified": "Known open issue, seen on a pre-production host",
+   "resolution": "Fixed: artifacts are deleted only with the image record, after the last VM record."
   },
   {
    "id": "F9",
@@ -479,7 +542,8 @@
    "effect": "After an Atlas database restore, VMs created after the backup run on hosts without Atlas records. Placement does not count them.",
    "fix": "Report unknown VM IDs from sync and show them on the Metal Server.",
    "where": "`atlas/metal_server/usage.py`",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Fixed: host sync logs VMs that have no Atlas record."
   },
   {
    "id": "F10",
@@ -489,7 +553,8 @@
    "effect": "If the Atlas write fails, placement counts the old, smaller disk.",
    "fix": "Write the reservation before the Metal call, or read it from Metal state.",
    "where": "`atlas/vm/core/vm_service.py` `update_disk`",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Fixed: a retried resize repairs the stored disk size."
   },
   {
    "id": "F11",
@@ -499,7 +564,8 @@
    "effect": "Directories collect over time. Seen 8 days after an aborted migration.",
    "fix": "Remove terminal records after a retention time.",
    "where": "`metal/internal/vm/migration/records.go`",
-   "verified": "Seen on a development host"
+   "verified": "Seen on a development host",
+   "resolution": "Fixed: clean aborted destination records are removed after 7 days."
   },
   {
    "id": "F13",
@@ -509,7 +575,8 @@
    "effect": "Atlas shows `Metal request failed: internal server error`. The operator cannot see that the host disk is full.",
    "fix": "Map `ENOSPC` to a stable error code such as `host_storage_full` with a clear message.",
    "where": "`metal/internal/api`",
-   "verified": "T4 fault injection"
+   "verified": "T4 fault injection",
+   "resolution": "Fixed: `ENOSPC` returns `507 host_storage_full`."
   },
   {
    "id": "F14",
@@ -519,7 +586,8 @@
    "effect": "A hung Redis blocks web requests and scheduler ticks with no limit. Workers are used up and the whole Atlas site stops answering.",
    "fix": "Set `socket_timeout` and `socket_connect_timeout` on the Redis connections, and map the timeout to a retry-later error.",
    "where": "Frappe Redis connection setup used by `frappe.enqueue`",
-   "verified": "T5 fault injection"
+   "verified": "T5 fault injection",
+   "resolution": "Open: owned by the bench Redis configuration (Pilot and Frappe). Not changed in Atlas."
   },
   {
    "id": "F15",
@@ -529,7 +597,8 @@
    "effect": "Operators cannot see the copy speed, which makes slow or stalled copies hard to find.",
    "fix": "Store the measured throughput from Metal, or compute it from bytes and duration.",
    "where": "`atlas/vm/core/vm_migration.py` `upsert_transfers`",
-   "verified": "T7 fault injection"
+   "verified": "T7 fault injection",
+   "resolution": "Fixed: Atlas measures throughput from copied MiB and elapsed time."
   },
   {
    "id": "F16",
@@ -539,7 +608,8 @@
    "effect": "During the 2-min stall nothing in Atlas showed a problem.",
    "fix": "Show the time since the last byte moved and warn after 60 s.",
    "where": "`atlas/vm/core/vm_migration.py`, Metal migration status",
-   "verified": "T7 fault injection"
+   "verified": "T7 fault injection",
+   "resolution": "Fixed: the migration status shows live bytes for the interval in flight."
   },
   {
    "id": "F17",
@@ -549,7 +619,8 @@
    "effect": "One node down or slow blocks all route writes in the region (new sites, domains) until it returns.",
    "fix": "Use a majority for writes and rely on snapshot catch-up for the stale node, or require at least 4 nodes in production.",
    "where": "`services/control-cluster/atlas_control/cluster.py`",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Deferred: needs a quorum design for the control cluster."
   },
   {
    "id": "F18",
@@ -559,7 +630,8 @@
    "effect": "A short host or network problem during an image upload fails the image for good. The staged snapshot on the host is pruned after 48 h.",
    "fix": "Keep the status and retry when the error is retryable; fail only on a definite error.",
    "where": "`atlas/vm/core/vm_image_transfer.py` `transfer`",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Fixed: a retryable Metal error keeps the transfer running and shows the error."
   },
   {
    "id": "F19",
@@ -569,7 +641,8 @@
    "effect": "A Central outage longer than about 2.5 h loses state events for good. A late retry can make Central show a stale state.",
    "fix": "Have Central drop events older than its stored `observed_at`, and add a periodic full state resync between Atlas and Central.",
    "where": "`atlas/vm/core/state_webhook.py`",
-   "verified": "Code reading (Frappe webhook retry schedule)"
+   "verified": "Code reading (Frappe webhook retry schedule)",
+   "resolution": "Deferred: owned by Central."
   },
   {
    "id": "F20",
@@ -579,7 +652,8 @@
    "effect": "During a 5-min image download outage the API showed only `unknown` with no reason. Operators and customers cannot see why a VM does not start.",
    "fix": "Clear the stored error only after a phase succeeds, and keep a failure count and the time of the last failure.",
    "where": "`metal/internal/vm/reconcile.go` `runOperation`",
-   "verified": "T12 fault injection"
+   "verified": "T12 fault injection",
+   "resolution": "Fixed: the stored error stays until the operation completes."
   },
   {
    "id": "F21",
@@ -589,7 +663,8 @@
    "effect": "Any `wg0` restart cuts the private network of every VM on the host until someone restarts `metald`. Nothing reports it.",
    "fix": "Make the mesh hook check part of each sync: if the program is missing, attach it again (the attach is already safe to repeat). Export a metric for hook presence.",
    "where": "`metal/cmd/metald/main.go` `connectMesh`, `metal/internal/network/mesh.go`",
-   "verified": "T14 fault injection (repeats the root cause of the 2026-10-16 incident through another path)"
+   "verified": "T14 fault injection (repeats the root cause of the 2026-10-16 incident through another path)",
+   "resolution": "Fixed: each host sync checks the mesh hooks and configures the mesh again when one is missing. Retested T14."
   },
   {
    "id": "F22",
@@ -599,7 +674,8 @@
    "effect": "ZFS detects checksum errors but cannot repair them, and md RAID 1 cannot tell which copy is good. Silent corruption on one disk can reach guests.",
    "fix": "Create the pool as a ZFS mirror of the 2 partitions for new hosts. Plan a migration path for existing hosts (drain, rebuild).",
    "where": "`atlas/scripts/install-metal-storage.sh`, provider disk layout",
-   "verified": "Host layout on development hosts"
+   "verified": "Host layout on development hosts",
+   "resolution": "Deferred: needs host rebuilds."
   },
   {
    "id": "F23",
@@ -609,7 +685,8 @@
    "effect": "One host failure stops public IPv6 for every VM that uses the block, and Atlas still shows the router as Active.",
    "fix": "Add a forwarding health check that marks the router unhealthy and alerts. Keep a runbook (or automation) to move the block to a standby router.",
    "where": "`atlas/service/core/ipv6_router`, `services/ipv6-router`",
-   "verified": "Code reading and handbook"
+   "verified": "Code reading and handbook",
+   "resolution": "Deferred: needs a standby router design."
   },
   {
    "id": "F24",
@@ -619,7 +696,8 @@
    "effect": "A hung daemon stays hung: no restart, no alert from systemd. All VM management on the host stops until someone notices.",
    "fix": "Set `WatchdogSec=` and send `WATCHDOG=1` from a loop that proves the reconciler and API still make progress.",
    "where": "Host install unit for `metal.service`, `metal/internal/platform/systemd*`",
-   "verified": "T19 fault injection"
+   "verified": "T19 fault injection",
+   "resolution": "Fixed: metald pings the systemd watchdog; `WatchdogSec=60`. Retested T19."
   },
   {
    "id": "F25",
@@ -629,7 +707,8 @@
    "effect": "Losing one host's pool loses the data of every VM on it. RAID 1 protects only against one disk failure, not against host loss, provider reclaim, operator error, or pool corruption.",
    "fix": "Add scheduled incremental snapshot shipping (the machine image upload path already streams ZFS data to object storage) with a retention policy and a restore action. Make it at least opt-in per VM, and on by default for tenant data VMs.",
    "where": "Metal storage and Atlas VM module",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Deferred: needs off-host storage and an architecture."
   },
   {
    "id": "F26",
@@ -639,7 +718,8 @@
    "effect": "After an Atlas database loss or old restore, operators cannot find or adopt VMs that exist only on hosts.",
    "fix": "Add a reconcile command that compares `GET /v1/vms` on every host with Atlas records and reports or imports the differences.",
    "where": "`atlas/metal_server`",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Partial: unknown VMs are now reported (F9). Import is not built."
   },
   {
    "id": "F27",
@@ -649,7 +729,8 @@
    "effect": "Any scheduler stop or queue backlog over 2 min turns into a region-wide create outage with a misleading out-of-capacity error. Nothing alerts on stale samples.",
    "fix": "Give host sync a dedicated queue and worker pool with a short job timeout; return a separate stale-data error; alert on sample age and on a disabled scheduler.",
    "where": "`atlas/metal_server/usage.py`, `atlas/vm/core/placement/context.py`",
-   "verified": "T25 fault injection"
+   "verified": "T25 fault injection",
+   "resolution": "Partial: stale samples no longer order a new host and the error says why. A separate queue does not help, because one worker group serves all queues."
   },
   {
    "id": "F28",
@@ -659,7 +740,8 @@
    "effect": "Host logs and metrics, including the metald push to Datum, stop with no alert. Operators lose visibility exactly when a host has problems.",
    "fix": "Set `StartLimitIntervalSec=0` and `Restart=always` with a delay for Vector, and alert in Atlas or Insights when a host has sent no telemetry for 5 min.",
    "where": "Host install (Vector unit), telemetry alerting",
-   "verified": "Seen after T11 on a development host"
+   "verified": "Seen after T11 on a development host",
+   "resolution": "Fixed: Vector drop-in with no start limit and `RestartSec=5`."
   },
   {
    "id": "F29",
@@ -669,7 +751,8 @@
    "effect": "Any flush of the NAT table cuts IPv4 internet for every VM on the host without a public IPv4, and nothing repairs it until `metald` restarts.",
    "fix": "Ensure the masquerade rule in the network reconcile path (it already re-creates per-VM rules) and export a metric when it is missing.",
    "where": "`metal/internal/network/nat.go`, `metal-network-setup` in `atlas/scripts/install-metald.sh`",
-   "verified": "T26 fault injection"
+   "verified": "T26 fault injection",
+   "resolution": "Fixed: a 30-second timer runs the host network setup again."
   },
   {
    "id": "F30",
@@ -679,7 +762,8 @@
    "effect": "After a filter table flush, one isolation layer between guests and the host private network stays missing until `metald` restarts. In the test another layer still blocked the traffic.",
    "fix": "Own the rule in the network reconciler next to the per-VM rules, and check it on every pass.",
    "where": "`atlas/scripts/install-metald.sh` (`metal-network-setup`), `metal/internal/network`",
-   "verified": "T27 fault injection and a direct connection test"
+   "verified": "T27 fault injection and a direct connection test",
+   "resolution": "Fixed: the same timer restores the drop rule."
   },
   {
    "id": "F31",
@@ -689,7 +773,8 @@
    "effect": "Measured 3.5 ms per VM on the local site. At 100 hosts with 200 VMs each that is about 70 s of database work every 10 s. Sync then falls behind, and stale capacity blocks every create ([F27]).",
    "fix": "Write a state row only when its status changes, keep `synced_at` once per host, and batch the writes in one transaction.",
    "where": "`atlas/vm/core/vm_state.py` `store_reported_states`",
-   "verified": "Local benchmark (6 VMs, 5 runs)"
+   "verified": "Local benchmark (6 VMs, 5 runs)",
+   "resolution": "Fixed: only new or changed VM states are saved as documents; unchanged ones get one update per host."
   },
   {
    "id": "F32",
@@ -699,7 +784,8 @@
    "effect": "A hardware failure of the destination during cutover keeps the customer VM down until the destination returns or someone edits host records by hand.",
    "fix": "Add a Metal source API and an Atlas Dangerous Action to roll back a stopped source when the destination is confirmed gone, plus an alert on migrations in `canceling` for more than 15 min.",
    "where": "`metal/internal/vm/migration/source.go`, `atlas/vm/core/vm_migration.py`",
-   "verified": "Code reading"
+   "verified": "Code reading",
+   "resolution": "Open: needs a design decision."
   }
  ],
  "checklist": [
@@ -946,9 +1032,9 @@
   }
  ],
  "next": [
-  "Fix first (data loss): [F7] never roll back after the destination started the guest; [F12] + [F1] limit disk overcommit and reserve pool space; [F25] off-host copies of VM disks.",
-  "Fix next (stuck or silent outages): [F2] start limit, [F24] watchdog, [F21] mesh hook after wg0 restart, [F27] stale capacity blocks creates, [F20] errors cleared between retries, [F32] stuck migration with lost destination, [F23] IPv6 router single point of failure.",
-  "Then: [F14] Redis timeouts, [F31] VM state writes per sync, [F29] masquerade rule, [F28] Vector start limit, [F6] Error Log flood, [F5] row lock across Metal calls.",
-  "Not injected yet: disk failure under ZFS (needs zinject or a device-mapper layer), Atlas database restore, HTTP proxy node loss with 3 nodes, provider API outage during host provisioning."
+  "Decide the design for [F32]: how to restore a stopped source when the destination host is gone for good.",
+  "Set a socket timeout on the queue Redis connection in the bench configuration ([F14]).",
+  "Deferred architecture work: off-host disk copies ([F25]), ZFS mirror ([F22]), IPv6 router standby ([F23]), proxy quorum ([F17]), Central event ordering ([F19]).",
+  "Build an import for VMs that hosts run without an Atlas record ([F26])."
  ]
 }

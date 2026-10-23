@@ -55,15 +55,15 @@ a { color: var(--accent); }
 <li><b>Status:</b> {{status}}</li>
 <li><a href="#scenarios">Scenarios</a> has one row per failure: what breaks, what the system does, and whether it recovers. "Handled" means it recovers without an operator and without data loss. "Partial" means it recovers with a gap. "Not handled" means an operator must act, or state or data can be lost. "Untested" means code reading only.</li>
 <li><a href="#findings">Findings</a> lists bugs and missing fallbacks, most severe first. Critical means data loss or a stuck system with no automatic recovery. High means a customer outage or a stuck operation that needs an operator.</li>
-<li>Fault injection ran only on development hosts and the local development Atlas site. No code in the Atlas repository was changed. Host names and addresses are left out on purpose.</li>
+<li>Fault injection ran only on development hosts and the local development Atlas site. The fix pass is on a branch of the Atlas repository; "After fixes" and "Resolution" show its result. Host names and addresses are left out on purpose.</li>
 </ul>
 </div>
 <nav><a href="#matrix">Matrix</a><a href="#scenarios">Scenarios</a><a href="#findings">Findings</a><a href="#checklist">Checklist</a><a href="#next">Next</a><a href="#log">Log</a></nav>
 
 <h2 id="matrix">Reliability matrix</h2>
-<p>One row per area. The score is the average of its scenario scores. A score is out of 10: 10 means the system recovers by itself with no data loss and no customer impact; 7 to 9 means it recovers with a short impact or a small gap; 4 to 6 means an operator must act, but no data is lost; 0 to 3 means data can be lost or the area stays broken.</p>
+<p>One row per area. The score is the average of its scenario scores at audit time; "After fixes" is the same average after the fix pass on 2026-10-23. A score is out of 10: 10 means the system recovers by itself with no data loss and no customer impact; 7 to 9 means it recovers with a short impact or a small gap; 4 to 6 means an operator must act, but no data is lost; 0 to 3 means data can be lost or the area stays broken.</p>
 <div class="table-wrap"><table>
-<thead><tr><th>Area</th><th>Score</th><th>Scenarios</th><th>Handled</th><th>Partial</th><th>Not handled</th><th>Untested</th><th>Weakest scenario</th></tr></thead>
+<thead><tr><th>Area</th><th>Score</th><th>After fixes</th><th>Scenarios</th><th>Handled</th><th>Partial</th><th>Not handled</th><th>Untested</th><th>Weakest scenario</th></tr></thead>
 <tbody>
 {{matrix}}
 </tbody>
@@ -72,7 +72,7 @@ a { color: var(--accent); }
 <h2 id="scenarios">Failure scenarios</h2>
 <div class="filter"><input id="q" type="search" placeholder="Filter rows (for example: disk, Atlas down)" aria-label="Filter scenarios"></div>
 <div class="table-wrap"><table id="scenario-table">
-<thead><tr><th>#</th><th>Area</th><th>Failure</th><th>What the system does now</th><th>Status</th><th>Score</th><th>What it should do (fallback)</th><th>Evidence</th></tr></thead>
+<thead><tr><th>#</th><th>Area</th><th>Failure</th><th>What the system did at audit time</th><th>Status</th><th>Score</th><th>After fixes</th><th>What it should do (fallback)</th><th>Evidence</th></tr></thead>
 <tbody>
 {{scenarios}}
 </tbody>
@@ -80,7 +80,7 @@ a { color: var(--accent); }
 
 <h2 id="findings">Findings</h2>
 <div class="table-wrap"><table>
-<thead><tr><th>#</th><th>Severity</th><th>Area</th><th>Problem</th><th>Effect</th><th>Fallback or fix</th><th>Where</th><th>Verified</th></tr></thead>
+<thead><tr><th>#</th><th>Severity</th><th>Area</th><th>Problem</th><th>Effect</th><th>Fallback or fix</th><th>Where</th><th>Verified</th><th>Resolution</th></tr></thead>
 <tbody>
 {{findings}}
 </tbody>

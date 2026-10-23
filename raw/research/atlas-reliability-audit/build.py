@@ -38,6 +38,11 @@ def score(value: float | None) -> str:
 	return f'<span class="score {css}">{value:g}/10</span>'
 
 
+def after(scenario: dict) -> dict:
+	"""Return the scenario as it stands after the fix pass."""
+	return {**scenario, "status": scenario.get("after_status", scenario["status"]), "score": scenario.get("after_score", scenario.get("score"))}
+
+
 def matrix_rows(scenarios: list[dict]) -> str:
 	areas: dict[str, list[tuple[int, dict]]] = {}
 	for index, scenario in enumerate(scenarios, start=1):
@@ -51,6 +56,7 @@ def matrix_rows(scenarios: list[dict]) -> str:
 		values = [
 			inline(area),
 			score(average(items)),
+			score(average([(index, after(item)) for index, item in items])),
 			str(len(items)),
 			*(str(statuses.count(status)) for status in ("Handled", "Partial", "Not handled", "Untested")),
 			inline(weakest_text),
@@ -78,11 +84,18 @@ def scenario_rows(scenarios: list[dict]) -> str:
 			inline(scenario["behavior"]),
 			badge(scenario["status"]),
 			score(scenario.get("score")),
+			after_cell(scenario),
 			inline(scenario.get("ideal", "")),
 			inline(scenario.get("evidence", "")),
 		]
 		rows.append(f'<tr id="{identifier}"><td class="id">{identifier}</td>{cells(values)}</tr>')
 	return "\n".join(rows)
+
+
+def after_cell(scenario: dict) -> str:
+	if "after_status" not in scenario:
+		return '<span class="meta">No change</span>'
+	return f'{badge(scenario["after_status"])} {score(scenario["after_score"])}<br>{inline(scenario["after_note"])}'
 
 
 def finding_rows(findings: list[dict]) -> str:
@@ -96,6 +109,7 @@ def finding_rows(findings: list[dict]) -> str:
 			inline(finding["fix"]),
 			inline(finding["where"]),
 			inline(finding.get("verified", "Code reading")),
+			inline(finding.get("resolution", "")),
 		]
 		rows.append(f'<tr id="{finding["id"]}"><td class="id">{finding["id"]}</td>{cells(values)}</tr>')
 	return "\n".join(rows)
@@ -120,7 +134,9 @@ def stat_cards(data: dict, log_count: int) -> str:
 		(sum(1 for s in scenarios if s["status"] == "Handled"), "handled"),
 		(sum(1 for s in scenarios if s["status"] in ("Partial", "Not handled")), "with a gap"),
 		(sum(1 for s in scenarios if s.get("injected")), "tested by fault injection"),
+		(sum(1 for s in scenarios if after(s)["status"] == "Handled"), "handled after fixes"),
 		(len(findings), "findings"),
+		(sum(1 for f in findings if f.get("resolution", "").startswith("Fixed")), "findings fixed"),
 		(sum(1 for f in findings if f["severity"] in ("Critical", "High")), "critical or high"),
 		(log_count, "log entries"),
 	]
