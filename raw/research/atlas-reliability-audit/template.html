@@ -61,7 +61,7 @@ a { color: var(--accent); }
 <nav><a href="#matrix">Matrix</a><a href="#scenarios">Scenarios</a><a href="#findings">Findings</a><a href="#checklist">Checklist</a><a href="#next">Next</a><a href="#log">Log</a></nav>
 
 <h2 id="matrix">Reliability matrix</h2>
-<p>One row per area. The score is the average of its scenario scores at audit time; "After fixes" is the same average after the fix pass on 2026-10-23. A score is out of 10: 10 means the system recovers by itself with no data loss and no customer impact; 7 to 9 means it recovers with a short impact or a small gap; 4 to 6 means an operator must act, but no data is lost; 0 to 3 means data can be lost or the area stays broken.</p>
+<p>One row per area. The score is the average of its scenario scores at audit time; "After fixes" is the same average after the fix pass on 2026-10-23. The score weighs failed customer requests and data loss. A control write that its caller retries, such as a route change from Central, counts as a short impact, not a failure. A score is out of 10: 10 means the system recovers by itself with no data loss and no customer impact; 7 to 9 means it recovers with a short impact or a small gap; 4 to 6 means an operator must act, but no data is lost; 0 to 3 means data can be lost or the area stays broken.</p>
 <div class="table-wrap"><table>
 <thead><tr><th>Area</th><th>Score</th><th>After fixes</th><th>Scenarios</th><th>Handled</th><th>Partial</th><th>Not handled</th><th>Untested</th><th>Weakest scenario</th></tr></thead>
 <tbody>

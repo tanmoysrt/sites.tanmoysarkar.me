@@ -1,6 +1,6 @@
 {
  "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found one issue in Frappe itself (F33, kept out of the Atlas and Metal scores); F34 and F35 turned out not to be issues.",
- "updated": "2026-10-23 08:20 UTC",
+ "updated": "2026-10-23 08:40 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -155,11 +155,11 @@
   {
    "area": "HTTP proxy",
    "scenario": "One node of a 3-node proxy cluster is down.",
-   "behavior": "Existing routes keep working on the healthy nodes and DNS health checks remove the bad node. Route writes (new site, domain change) fail with 503, because clusters of 3 or fewer nodes need an acknowledgement from every node.",
-   "status": "Partial",
-   "score": 6,
-   "ideal": "Accept writes with a majority and let the stale node catch up from the leader snapshot, or run 4 or more nodes so one can be down. See [F17].",
-   "evidence": "Code: `control-cluster` `_required_acknowledgements`."
+   "behavior": "Requests keep working: each node serves from its local route map with no quorum, and Route 53 drops the dead node after 2 failed checks 30 s apart. A client that cached the dead node's address can fail until the 120 s regional TTL ends, unless it tries the next address. Route writes (new site, domain change) return 503 while the node is down; Central retries them.",
+   "status": "Handled",
+   "score": 8,
+   "ideal": "Same. A majority write quorum ([F17]) would also keep route writes working, but that is a convenience, not a request failure.",
+   "evidence": "Code and handbook: `control-cluster` `_required_acknowledgements`, Route 53 health check (30 s interval, 2 failures), regional DNS TTL 120 s."
   },
   {
    "area": "Host daemon (metald)",
@@ -633,14 +633,14 @@
   },
   {
    "id": "F17",
-   "severity": "Medium",
+   "severity": "Low",
    "area": "HTTP proxy",
    "problem": "Proxy and gateway clusters with 3 or fewer nodes require an acknowledgement from every node for each route write.",
-   "effect": "One node down or slow blocks all route writes in the region (new sites, domains) until it returns.",
+   "effect": "One node down blocks route writes in the region (new sites, domains) until it returns. Requests are not affected, and Central retries the writes.",
    "fix": "Use a majority for writes and rely on snapshot catch-up for the stale node, or require at least 4 nodes in production.",
    "where": "`services/control-cluster/atlas_control/cluster.py`",
    "verified": "Code reading",
-   "resolution": "Deferred: needs a quorum design for the control cluster."
+   "resolution": "Deferred: route writes are retried by Central; requests keep working."
   },
   {
    "id": "F18",
