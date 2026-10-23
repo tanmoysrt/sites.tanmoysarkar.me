@@ -1,6 +1,6 @@
 {
- "status": "Fix pass on a branch: 21 commits fix 22 findings; 2 are partly fixed, 2 stay open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass.",
- "updated": "2026-10-23 06:40 UTC",
+ "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass.",
+ "updated": "2026-10-23 07:10 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -429,9 +429,9 @@
    "score": 1,
    "ideal": "An operator action (Dangerous Actions) that rolls the source back without the destination after confirming the destination is gone, and an alert for migrations stuck in `canceling`. See [F32].",
    "evidence": "Code reading, following T28 (Atlas waits in `canceling` while the destination is unreachable).",
-   "after_status": "Not handled",
-   "after_score": 1,
-   "after_note": "Open: needs a design decision (a forced source restore risks two running copies if the destination host returns)."
+   "after_status": "Partial",
+   "after_score": 7,
+   "after_note": "An operator runs Dangerous Actions > Restore Source once the destination has not reported for 15 minutes. Metal starts and unlocks the source; a destination that returns is discarded. Tested end to end on development hosts. Writes on the lost destination after cutover are gone."
   }
  ],
  "findings": [
@@ -785,7 +785,7 @@
    "fix": "Add a Metal source API and an Atlas Dangerous Action to roll back a stopped source when the destination is confirmed gone, plus an alert on migrations in `canceling` for more than 15 min.",
    "where": "`metal/internal/vm/migration/source.go`, `atlas/vm/core/vm_migration.py`",
    "verified": "Code reading",
-   "resolution": "Open: needs a design decision."
+   "resolution": "Fixed as a manual Dangerous Action: Restore Source, allowed only before commit and after 15 minutes without a destination report. A returning destination is discarded. Tested end to end."
   }
  ],
  "checklist": [
@@ -1032,7 +1032,6 @@
   }
  ],
  "next": [
-  "Decide the design for [F32]: how to restore a stopped source when the destination host is gone for good.",
   "Set a socket timeout on the queue Redis connection in the bench configuration ([F14]).",
   "Deferred architecture work: off-host disk copies ([F25]), ZFS mirror ([F22]), IPv6 router standby ([F23]), proxy quorum ([F17]), Central event ordering ([F19]).",
   "Build an import for VMs that hosts run without an Atlas record ([F26])."
