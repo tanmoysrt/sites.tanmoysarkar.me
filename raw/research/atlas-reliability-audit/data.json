@@ -1,6 +1,6 @@
 {
  "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found one issue in Frappe itself (F33, kept out of the Atlas and Metal scores); F34 and F35 turned out not to be issues.",
- "updated": "2026-10-23 09:20 UTC",
+ "updated": "2026-10-23 09:40 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -449,7 +449,7 @@
   {
    "area": "Frappe (external)",
    "scenario": "The cache Redis hangs, or answers with errors.",
-   "behavior": "A hang freezes every web request and stops host sync until Redis answers. With a socket timeout, requests fail fast, but the timeout error kills the scheduler thread of the Frappe runner for good.",
+   "behavior": "A hang freezes every web request and stops host sync until Redis answers. With a socket timeout, requests fail fast, but in lite mode the runner's scheduler thread stopped and was not started again ([F33]).",
    "status": "Not handled",
    "score": 3,
    "ideal": "Requests fail fast and the scheduler survives a Redis error: catch errors per scheduler tick, and restart a dead scheduler thread. Alert on the scheduler heartbeat.",
@@ -816,9 +816,9 @@
    "id": "F33",
    "severity": "High",
    "area": "Frappe (external)",
-   "problem": "The scheduler loop of Frappe (`start_scheduler`) has no error handling. A Redis error in it ends the scheduler thread. The lite-mode runner never starts it again; the worker-pool starts it again only at the RQ maintenance interval (about 10 minutes). The process stays alive, so systemd does not restart it.",
-   "effect": "Host sync stops, every capacity sample goes stale, and placement rejects every create until the scheduler comes back (7+ minutes in the test, until a manual reload).",
-   "fix": "In Frappe: catch and log errors per scheduler tick and keep looping; have the runner watch its scheduler thread. In Atlas: alert on the scheduler heartbeat and `atlas_host_sync_age_seconds`.",
+   "problem": "During a Redis outage with a socket timeout set, the scheduler thread of the lite-mode Frappe runner stopped and was never started again. Frappe's scheduler loop catches errors for each site, so the exact cause is not confirmed; the runner sends a dying thread's traceback only to its terminal. The runner turns off the restart that the worker-pool has: `FrappeWorker.run_maintenance_tasks` starts a missing scheduler again at the RQ maintenance interval (10 minutes).",
+   "effect": "Lite mode: host sync stops until the runner restarts (7+ minutes in the test). Worker-pool (production with systemd): at most about 10 minutes without host sync, and placement rejects creates meanwhile.",
+   "fix": "In Frappe: let the runner start its scheduler thread again when it ends, as the worker-pool does. Production does not use lite mode.",
    "where": "`frappe/utils/scheduler.py` `start_scheduler`, `frappe/runner.py` `Scheduler` (frappe/frappe)",
    "verified": "D2b fault injection",
    "resolution": "Open: tracked for a fix in frappe/frappe. Not counted in the Atlas and Metal scores.",
