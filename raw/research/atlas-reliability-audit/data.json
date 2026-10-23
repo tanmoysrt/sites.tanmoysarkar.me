@@ -1,6 +1,6 @@
 {
  "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found one issue in Frappe itself (F33, kept out of the Atlas and Metal scores); F34 and F35 turned out not to be issues.",
- "updated": "2026-10-23 08:40 UTC",
+ "updated": "2026-10-23 08:50 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -374,9 +374,9 @@
    "score": 4,
    "ideal": "Run host sync on its own queue and workers with a short timeout. Return a distinct `capacity_data_stale` error. Alert when the newest capacity sample is older than 1 min. See [F27].",
    "evidence": "T25 on the local site.",
-   "after_status": "Partial",
-   "after_score": 6,
-   "after_note": "Placement now says hosts have not reported capacity and does not order a new host. Creates still wait for host sync."
+   "after_status": "Handled",
+   "after_score": 8,
+   "after_note": "Placement fails fast with \"Some Metal Servers have not reported their capacity\" and orders no new host (D8). Creates work again within 20 s of the scheduler coming back. The usual way the scheduler stops is [F33], an issue in Frappe that is not scored here."
   },
   {
    "area": "Public network",
