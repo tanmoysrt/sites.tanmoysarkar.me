@@ -611,7 +611,7 @@
    "fix": "Set `socket_timeout` and `socket_connect_timeout` on the Redis connections, and map the timeout to a retry-later error.",
    "where": "Frappe Redis connection setup used by `frappe.enqueue`",
    "verified": "T5 fault injection",
-   "resolution": "Open: owned by the bench Redis configuration (Pilot and Frappe). Not changed in Atlas."
+   "resolution": "Open: tracked in frappe/pilot#686 (socket timeouts on the Redis URLs that Pilot writes)."
   },
   {
    "id": "F15",
@@ -1091,8 +1091,8 @@
   }
  ],
  "next": [
-  "Fix [F33] in Frappe: keep the scheduler alive after a Redis error. Then add the socket timeout for [F14].",
-  "Set a socket timeout on the queue Redis connection in the bench configuration ([F14]).",
+  "Add socket timeouts to the Redis URLs that Pilot writes ([F14], frappe/pilot#686). Production uses the worker-pool, which starts a stopped scheduler again within 10 minutes.",
+  "Add socket timeouts to the Redis URLs that Pilot writes ([F14], frappe/pilot#686). Production uses the worker-pool, which starts a stopped scheduler again within 10 minutes.",
   "Deferred architecture work: off-host disk copies ([F25]), ZFS mirror ([F22]), IPv6 router standby ([F23]), proxy quorum ([F17]), Central event ordering ([F19]).",
   "Build an import for VMs that hosts run without an Atlas record ([F26])."
  ]
