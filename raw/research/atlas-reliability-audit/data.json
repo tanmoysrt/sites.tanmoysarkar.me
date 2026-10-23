@@ -1,6 +1,6 @@
 {
  "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found one issue in Frappe itself (F33, kept out of the Atlas and Metal scores); F34 and F35 turned out not to be issues.",
- "updated": "2026-10-23 08:50 UTC",
+ "updated": "2026-10-23 09:00 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -252,13 +252,14 @@
    "evidence": "T15 on a development host."
   },
   {
-   "area": "Public network",
+   "area": "IPv6 router (not in production)",
    "scenario": "The host of the IPv6 router VM fails, or the router service stops.",
    "behavior": "Each IPv6 block has one router VM, and the provider routes the block to one host. All public IPv6 traffic for that block stops until the host or VM returns. Atlas keeps showing the router as `Active`; the handbook says Active does not prove forwarding works.",
    "status": "Not handled",
    "score": 3,
    "ideal": "Health-check forwarding through the router and alert. Document and automate the block move to a standby router on another host where the provider allows it. See [F23].",
-   "evidence": "Code reading and IPv6 router handbook."
+   "evidence": "Code reading and IPv6 router handbook.",
+   "unscored": true
   },
   {
    "area": "Guest VM",
@@ -451,7 +452,7 @@
    "ideal": "Requests fail fast and the scheduler survives a Redis error: catch errors per scheduler tick, and restart a dead scheduler thread. Alert on the scheduler heartbeat.",
    "evidence": "D2 and D2b on the local site.",
    "injected": true,
-   "external": true
+   "unscored": true
   }
  ],
  "findings": [
@@ -700,13 +701,14 @@
   {
    "id": "F23",
    "severity": "High",
-   "area": "Public network",
+   "area": "IPv6 router (not in production)",
    "problem": "Each public IPv6 block depends on one router VM on one host, with no health check of forwarding.",
    "effect": "One host failure stops public IPv6 for every VM that uses the block, and Atlas still shows the router as Active.",
    "fix": "Add a forwarding health check that marks the router unhealthy and alerts. Keep a runbook (or automation) to move the block to a standby router.",
    "where": "`atlas/service/core/ipv6_router`, `services/ipv6-router`",
    "verified": "Code reading and handbook",
-   "resolution": "Deferred: needs a standby router design."
+   "resolution": "Deferred: the IPv6 router is not used in production yet. Not counted in the scores.",
+   "unscored": true
   },
   {
    "id": "F24",
@@ -817,7 +819,7 @@
    "where": "`frappe/utils/scheduler.py` `start_scheduler`, `frappe/runner.py` `Scheduler` (frappe/frappe)",
    "verified": "D2b fault injection",
    "resolution": "Open: tracked for a fix in frappe/frappe. Not counted in the Atlas and Metal scores.",
-   "external": true
+   "unscored": true
   },
   {
    "id": "F34",

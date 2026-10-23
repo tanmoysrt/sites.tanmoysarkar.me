@@ -46,7 +46,7 @@ def after(scenario: dict) -> dict:
 def matrix_rows(scenarios: list[dict]) -> str:
 	areas: dict[str, list[tuple[int, dict]]] = {}
 	for index, scenario in enumerate(scenarios, start=1):
-		if not scenario.get("external"):
+		if not scenario.get("unscored"):
 			areas.setdefault(scenario["area"], []).append((index, scenario))
 	rows = []
 	for area, items in sorted(areas.items(), key=lambda pair: (average(pair[1]) is None, average(pair[1]) or 0)):
@@ -128,9 +128,9 @@ def checklist_items(checklist: list[dict]) -> str:
 
 
 def stat_cards(data: dict, log_count: int) -> str:
-	# Issues in other projects are listed but not scored.
-	scenarios = [scenario for scenario in data["scenarios"] if not scenario.get("external")]
-	findings = [finding for finding in data["findings"] if not finding.get("external")]
+	# Issues in other projects, or in parts not used in production, are listed but not scored.
+	scenarios = [scenario for scenario in data["scenarios"] if not scenario.get("unscored")]
+	findings = [finding for finding in data["findings"] if not finding.get("unscored")]
 	cards = [
 		(len(scenarios), "failure scenarios"),
 		(sum(1 for s in scenarios if s["status"] == "Handled"), "handled"),
