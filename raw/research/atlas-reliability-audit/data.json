@@ -1,6 +1,6 @@
 {
  "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found one issue in Frappe itself (F33, kept out of the Atlas and Metal scores); F34 and F35 turned out not to be issues.",
- "updated": "2026-10-23 09:40 UTC",
+ "updated": "2026-10-23 08:55 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -33,9 +33,9 @@
    "score": 3,
    "ideal": "Quarantine only the bad record, start the daemon, and report the record in sync and the API. See [F3].",
    "evidence": "Code: `recordStore.validateAll` returns the first error.",
-   "after_status": "Not handled",
-   "after_score": 3,
-   "after_note": "Kept on purpose: skipping an unreadable record could reuse its user ID and addresses. metald now retries every 5 s until an operator fixes the file."
+   "after_status": "Handled",
+   "after_score": 8,
+   "after_note": "metald now starts and leaves only that VM unmanaged; the other VMs stay managed. Host sync lists it in `invalid_virtual_machines`, the host offers no capacity, and Atlas logs it. Allocation refuses while a desired record is unreadable, and metald no longer writes a record that a read would reject. Tested on a development host by corrupting a VM's observed record."
   },
   {
    "area": "Guest VM",
@@ -501,7 +501,7 @@
    "fix": "Quarantine the bad record and start the daemon for the other VMs.",
    "where": "`metal/internal/vm/records.go` `validateAll`",
    "verified": "Code reading",
-   "resolution": "Not changed on purpose: skipping a bad record could hand its user ID and addresses to a new VM. With F2 fixed, metald retries every 5 s until an operator fixes the file."
+   "resolution": "Fixed: records are checked per VM, invalid writes are refused, and the bad VM is reported. Tested on a development host."
   },
   {
    "id": "F4",
