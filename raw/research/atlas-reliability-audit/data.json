@@ -242,7 +242,7 @@
    "evidence": "Code reading and host layout. Not injected: no `zinject` on hosts.",
    "after_status": "Handled",
    "after_score": 8,
-   "after_note": "Rescored: the pool sits on md RAID 1 (checked on a host), so one failed disk is absorbed by md with no guest impact, and mdmonitor logs the event. Only a loss of both disks or a hung md device freezes the pool. Without a ZFS mirror ([F22]), ZFS can detect but not repair a corrupted block."
+   "after_note": "Rescored: the pool sits on md RAID 1 (checked on a host), so one failed disk is absorbed by md with no guest impact, and mdmonitor logs the event; the monitoring alert tells operators to replace the disk. Only a loss of both disks or a hung md device freezes the pool. Without a ZFS mirror ([F22]), ZFS can detect but not repair a corrupted block."
   },
   {
    "area": "Images",
