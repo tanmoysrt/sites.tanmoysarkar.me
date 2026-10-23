@@ -1,6 +1,6 @@
 {
- "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found 3 new issues (F33 to F35).",
- "updated": "2026-10-23 08:05 UTC",
+ "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found one issue in Frappe itself (F33, kept out of the Atlas and Metal scores); F34 and F35 turned out not to be issues.",
+ "updated": "2026-10-23 08:20 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -129,8 +129,8 @@
    "ideal": "Alert on database errors and free disk. Keep large log tables (Error Log, Metal Server Usage, Scheduled Job Log) under retention so a slow leak cannot fill the disk.",
    "evidence": "Code reading. Not injected: no root access to the local database service.",
    "after_status": "Handled",
-   "after_score": 8,
-   "after_note": "Tested D3, D3b, D4: with the database unreachable or read-only, web failed fast (no hang), host sync paused, a migration in copy finished, and all recovered within 10 s. Gap: [F34]."
+   "after_score": 9,
+   "after_note": "Tested D3, D3b, D4: with the database unreachable or read-only, web failed fast (no hang), host sync paused, a migration in copy finished, and all recovered within 10 s."
   },
   {
    "area": "Migration",
@@ -217,7 +217,7 @@
    "evidence": "Code reading.",
    "after_status": "Partial",
    "after_score": 5,
-   "after_note": "Tested D6: failed state events are kept and retried, but a retried old event arrived after a newer one and left Central with the wrong state. See [F19] and [F35]."
+   "after_note": "Tested D6: failed state events are kept and retried, but a retried old event arrived after a newer one and left Central with the wrong state until the next change. See [F19]."
   },
   {
    "area": "Private network (WG Mesh)",
@@ -443,14 +443,15 @@
    "after_note": "An operator runs Dangerous Actions > Restore Source once the destination has not reported for 15 minutes. Metal starts and unlocks the source; a destination that returns is discarded. Tested end to end on development hosts. Writes on the lost destination after cutover are gone."
   },
   {
-   "area": "Atlas dependencies",
+   "area": "Frappe (external)",
    "scenario": "The cache Redis hangs, or answers with errors.",
    "behavior": "A hang freezes every web request and stops host sync until Redis answers. With a socket timeout, requests fail fast, but the timeout error kills the scheduler thread of the Frappe runner for good.",
    "status": "Not handled",
    "score": 3,
    "ideal": "Requests fail fast and the scheduler survives a Redis error: catch errors per scheduler tick, and restart a dead scheduler thread. Alert on the scheduler heartbeat.",
    "evidence": "D2 and D2b on the local site.",
-   "injected": true
+   "injected": true,
+   "external": true
   }
  ],
  "findings": [
@@ -809,13 +810,14 @@
   {
    "id": "F33",
    "severity": "High",
-   "area": "Atlas dependencies",
+   "area": "Frappe (external)",
    "problem": "The scheduler loop of Frappe (`start_scheduler`) has no error handling. A Redis error in it ends the scheduler thread. The lite-mode runner never starts it again; the worker-pool starts it again only at the RQ maintenance interval (about 10 minutes). The process stays alive, so systemd does not restart it.",
    "effect": "Host sync stops, every capacity sample goes stale, and placement rejects every create until the scheduler comes back (7+ minutes in the test, until a manual reload).",
    "fix": "In Frappe: catch and log errors per scheduler tick and keep looping; have the runner watch its scheduler thread. In Atlas: alert on the scheduler heartbeat and `atlas_host_sync_age_seconds`.",
    "where": "`frappe/utils/scheduler.py` `start_scheduler`, `frappe/runner.py` `Scheduler` (frappe/frappe)",
    "verified": "D2b fault injection",
-   "resolution": "Open: owned by frappe/frappe."
+   "resolution": "Open: tracked for a fix in frappe/frappe. Not counted in the Atlas and Metal scores.",
+   "external": true
   },
   {
    "id": "F34",
@@ -826,7 +828,7 @@
    "fix": "Treat lost-connection errors (2003, 2006, 2013, interface errors) as transient.",
    "where": "`atlas/vm/core/vm_migration.py` `is_transient_error`",
    "verified": "D3b fault injection and code reading",
-   "resolution": "Open."
+   "resolution": "Not reachable: Frappe does not reconnect inside a job, so after a lost connection the worker's `frappe.db.rollback()` raises (`2006`) before it can fail the migration. The next reconcile resumes it (D3b). Checked by killing a live connection. No change."
   },
   {
    "id": "F35",
@@ -837,7 +839,7 @@
    "fix": "Add an optional field with a time zone (for example Unix seconds) and have Central order by it.",
    "where": "`atlas/vm/core/state_webhook.py`",
    "verified": "D6 fault injection",
-   "resolution": "Open: needs agreement with Central."
+   "resolution": "Not an issue: Atlas sites run in UTC, and Central reads `observed_at` as UTC."
   }
  ],
  "checklist": [
