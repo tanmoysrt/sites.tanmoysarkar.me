@@ -1,6 +1,6 @@
 {
  "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found one issue in Frappe itself (F33, kept out of the Atlas and Metal scores); F34 and F35 turned out not to be issues.",
- "updated": "2026-10-23 09:00 UTC",
+ "updated": "2026-10-23 09:20 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -239,7 +239,10 @@
    "status": "Untested",
    "score": 4,
    "ideal": "Give ZFS the 2 disks as a mirror so it can repair bad blocks; alert on md and ZFS health (metrics exist); keep API health and sync paths free of ZFS calls that can block forever.",
-   "evidence": "Code reading and host layout. Not injected: no `zinject` on hosts."
+   "evidence": "Code reading and host layout. Not injected: no `zinject` on hosts.",
+   "after_status": "Handled",
+   "after_score": 8,
+   "after_note": "Rescored: the pool sits on md RAID 1 (checked on a host), so one failed disk is absorbed by md with no guest impact, and mdmonitor logs the event. Only a loss of both disks or a hung md device freezes the pool. Without a ZFS mirror ([F22]), ZFS can detect but not repair a corrupted block."
   },
   {
    "area": "Images",
