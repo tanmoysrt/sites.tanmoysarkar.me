@@ -1,6 +1,6 @@
 {
  "status": "Fix pass on a branch: 23 commits fix 23 findings; 2 are partly fixed, 1 stays open, 1 is unchanged on purpose, and 5 are deferred. Fault tests T14, T19, T21, T26 and T27 were run again on development hosts and now pass. Atlas dependency tests D1 to D8 ran on the local site; they found one issue in Frappe itself (F33, kept out of the Atlas and Metal scores); F34 and F35 turned out not to be issues.",
- "updated": "2026-10-23 08:55 UTC",
+ "updated": "2026-10-23 08:57 UTC",
  "scenarios": [
   {
    "area": "Metal daemon",
@@ -116,9 +116,9 @@
    "score": 4,
    "ideal": "Set a socket timeout (for example 5 s) on the queue and cache Redis clients so a request fails fast with a retry-later error. Alert on Redis latency. See [F14].",
    "evidence": "T5 on the local site (`CLIENT PAUSE 60000`).",
-   "after_status": "Not handled",
-   "after_score": 4,
-   "after_note": "Retested D1: an enqueue blocked for the full 120 s and host sync stopped; all recovered at once. A socket timeout alone is not a fix, because of [F33]."
+   "after_status": "Partial",
+   "after_score": 7,
+   "after_note": "Retested D1: an enqueue blocked for the full 120 s and host sync stopped. VMs kept running, no data changed, and all recovered at once when Redis answered. Central retries its calls. The socket timeout in frappe/pilot#686 ([F14]) makes requests fail fast; in production the worker-pool starts a stopped scheduler again within about 10 minutes ([F33])."
   },
   {
    "area": "Atlas dependencies",
@@ -216,8 +216,8 @@
    "ideal": "Periodic full state resync to Central, and ordering by `observed_at`. See [F19].",
    "evidence": "Code reading.",
    "after_status": "Partial",
-   "after_score": 5,
-   "after_note": "Tested D6: failed state events are kept and retried, but a retried old event arrived after a newer one and left Central with the wrong state until the next change. See [F19]."
+   "after_score": 7,
+   "after_note": "Tested D6: VMs are not affected and failed state events are kept and retried. A retried old event can arrive after a newer one and leave Central with the wrong state until the next change. Central owns the ordering fix ([F19])."
   },
   {
    "area": "Private network (WG Mesh)",
