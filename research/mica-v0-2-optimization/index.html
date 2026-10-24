@@ -247,6 +247,17 @@
   <tr><td>1. Attach</td><td>Attach of one disk, p50 of 10</td><td class="n">1,035 ms</td><td class="n">24 ms</td></tr>
   <tr><td>1. Attach</td><td>4 disks attached at the same time</td><td class="n">4,160–4,210 ms</td><td class="n">45–64 ms</td></tr>
   <tr><td>1. Attach</td><td>Warm Firecracker boot, attach until ssh answers</td><td class="n">3.29 s</td><td class="n">2.33–2.39 s</td></tr>
+  <tr><td>2. Small chunks</td><td>Cold Firecracker boot, attach until ssh answers</td><td class="n">4.61 s</td><td class="n">2.80 s</td></tr>
+  <tr><td>2. Small chunks</td><td>S3 download during a cold boot</td><td class="n">≈ 250 MiB</td><td class="n">136 MiB</td></tr>
+  <tr><td>2. Small chunks</td><td>Cold boot after the 8 GiB fill</td><td class="n">5.5–7.9 s</td><td class="n">3.63 s</td></tr>
+  <tr><td>2. Small chunks</td><td>Host: first byte of a 64 MiB file, cold</td><td class="n">0.16 s</td><td class="n">0.01 s</td></tr>
+  <tr><td>2. Small chunks</td><td>Host: 100 small files one by one, cold</td><td class="n">0.57 s</td><td class="n">0.21–0.24 s</td></tr>
+  <tr><td>2. Small chunks</td><td>Host: read and check all files, 1 reader, cold</td><td class="n">115.2 s</td><td class="n">98.9 s</td></tr>
+  <tr><td>2. Small chunks</td><td>Host: write 7.93 GiB of files (to the page cache)</td><td class="n">13.9 s</td><td class="n">6.0 s</td></tr>
+  <tr><td>2. Small chunks</td><td>Guest fio 4K random read / write, queue depth 32</td><td class="n">48k / 100k IOPS</td><td class="n">129k / 116k IOPS</td></tr>
+  <tr><td>2. Small chunks</td><td>Memory restore, cold: attach / ssh answers / app answers</td><td class="n">2.43 / 2.38 / 6.71 s</td><td class="n">0.30 / 1.89 / 6.19 s</td></tr>
+  <tr><td>2. Small chunks</td><td>Memory restore, cold: S3 download</td><td class="n">630 MiB</td><td class="n">555 MiB</td></tr>
+  <tr><td>2. Small chunks</td><td>Memory disk upload (2 GiB memory file)</td><td class="n">996 MiB</td><td class="n">943 MiB</td></tr>
 </table></div>
 
 <h3>1. Attach: an atomic claim, and no global lock</h3>
@@ -259,6 +270,21 @@
   <li>Each attach logs and returns the time of each stage.</li>
 </ul>
 <p><b>Result.</b> One attach now takes 24 ms (p50). The stages are: claim and metadata load 16 ms, open the disk 2 ms, start the ublk device 2 ms. Four attaches at the same time take 45–64 ms. With <code>conditional_writes = false</code>, an attach still takes 1.03 s, as before.</p>
+
+<h3>2. Small chunks and paged metadata</h3>
+<p><b>Problem.</b> A cold boot downloaded 250 MiB to read a part of a 270 MiB system, because each small read cost a 4 MiB chunk. Smaller chunks fix this, but they make the old manifest large. A manifest listed every chunk: 32 bytes for each chunk, so 12.5 MiB for a 100 GiB disk with 256 KiB chunks. mica uploaded the full manifest on each commit, and downloaded it on each cold attach. The daemon also held a lock and a slot for every chunk in memory.</p>
+<p><b>Change.</b></p>
+<ul>
+  <li><b>Chunk size for each disk.</b> <code>mica disk create --chunk-size</code> takes 64K to 4M. The default is now 256 KiB.</li>
+  <li><b>Paged metadata.</b> A <b>page</b> holds the hashes of 1,024 chunks (32 KiB; it covers 256 MiB). The <b>root</b> holds one hash for each page: 12.5 KiB for 100 GiB. Pages are immutable, and their key is their hash, so checkpoints, snapshots and clones share every page they do not change. A page of zero chunks is not stored. A commit uploads only the changed pages and the new root.</li>
+  <li><b>Lazy state.</b> The daemon loads a page, and makes the slots of its 1,024 chunks, when the guest first uses it. A node-level page store keeps verified pages in memory and in local files.</li>
+  <li><b>Checkpoint.</b> The checkpoint takes the set of local chunks at its start, and freezes and uploads each chunk in one stream. Up to 64 MiB of uploads are in flight. A writer that keeps writing cannot make the checkpoint run for ever.</li>
+  <li><b>No HEAD for each chunk after a commit.</b> v0.1 checked every committed chunk with a HEAD request, in case a GC deleted it during the commit. Now GC writes a record at the end of each run. A checkpoint reads the GC lock and this record before and after it. It checks the chunks and pages only when a GC ran in this time. The cost is four requests for each checkpoint, not one for each chunk.</li>
+  <li><b>No sync for cache downloads.</b> A cold read no longer waits for a sync of the cache file. After a crash, a torn file is found by its hash before its first read.</li>
+  <li><b>No sync for a new chunk file of zeros.</b> A new chunk file without content to copy is no longer synced before its rename. Recovery restores its length after a power loss.</li>
+</ul>
+<p><b>Review.</b> A second model (codex) reviewed the change for crash and race problems. It found four real problems, which are fixed: pages also need the GC check; the GC lock and record must be read one after the other; a failed upload must not stop other chunks in the middle of a freeze; a chunk file can be short after a power loss.</p>
+<p><b>Result.</b> A cold boot downloads 136 MiB instead of about 250 MiB, and takes 2.8 s instead of 4.6 s. Small cold reads are 2–16 times faster. The upload speed does not change, because the link is the limit. The cold memory restore improves less: the app reads 384 MiB of its own memory, and this alone takes about 4 s at 100 MiB/s.</p>
 
 <h2>Still to measure</h2>
 <ul class="pending">
