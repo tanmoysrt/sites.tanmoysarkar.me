@@ -258,6 +258,11 @@
   <tr><td>2. Small chunks</td><td>Memory restore, cold: attach / ssh answers / app answers</td><td class="n">2.43 / 2.38 / 6.71 s</td><td class="n">0.30 / 1.89 / 6.19 s</td></tr>
   <tr><td>2. Small chunks</td><td>Memory restore, cold: S3 download</td><td class="n">630 MiB</td><td class="n">555 MiB</td></tr>
   <tr><td>2. Small chunks</td><td>Memory disk upload (2 GiB memory file)</td><td class="n">996 MiB</td><td class="n">943 MiB</td></tr>
+  <tr><td>3. Prefetch</td><td>Host: read and check all files, 1 reader, cold</td><td class="n">115.2 s</td><td class="n">87.3 s</td></tr>
+  <tr><td>3. Prefetch</td><td>Host: whole disk local after a cold attach (background fill)</td><td class="n">–</td><td class="n">84 s (link limit)</td></tr>
+  <tr><td>3. Prefetch</td><td>Guest: read and check all files, 1 reader, cold</td><td class="n">92.3 s</td><td class="n">88.3 s</td></tr>
+  <tr><td>3. Prefetch</td><td>Clone: read and check all files, 8 readers</td><td class="n">26.5 s</td><td class="n">23.2 s</td></tr>
+  <tr><td>3. Prefetch</td><td>Memory restore, cold: app answers / S3 download</td><td class="n">6.71 s / 630 MiB</td><td class="n">6.60 s / 652 MiB (worse than step 2)</td></tr>
 </table></div>
 
 <h3>1. Attach: an atomic claim, and no global lock</h3>
@@ -285,6 +290,19 @@
 </ul>
 <p><b>Review.</b> A second model (codex) reviewed the change for crash and race problems. It found four real problems, which are fixed: pages also need the GC check; the GC lock and record must be read one after the other; a failed upload must not stop other chunks in the middle of a freeze; a chunk file can be short after a power loss.</p>
 <p><b>Result.</b> A cold boot downloads 136 MiB instead of about 250 MiB, and takes 2.8 s instead of 4.6 s. Small cold reads are 2–16 times faster. The upload speed does not change, because the link is the limit. The cold memory restore improves less: the app reads 384 MiB of its own memory, and this alone takes about 4 s at 100 MiB/s.</p>
+
+<h3>3. Prefetch, read-ahead and background fill</h3>
+<p><b>Problem.</b> mica downloaded a chunk only when a read touched it. A single reader waited for one download after the other, and a disk never became fully local.</p>
+<p><b>Change.</b></p>
+<ul>
+  <li><b>Read-ahead.</b> When reads continue each other, mica fetches the next chunks: 1 MiB ahead at first, then twice as much each time, up to 8 MiB.</li>
+  <li><b>Startup prefetch, on by default.</b> At attach, mica fetches the chunks of the read profile: the first 64 MiB that the disk read in its last session.</li>
+  <li><b>Background fill.</b> After that, mica downloads every other chunk of the disk, in disk order, until the cache is nearly full. Then all reads are local, also if the link goes down.</li>
+  <li><b>An order of priority for downloads.</b> Reads by the guest come first (64 at a time). Likely reads, from read-ahead and the profile, start only while no read waits. The fill starts only while no read and no likely read is in flight.</li>
+</ul>
+<p><b>Review.</b> codex found six problems in this step, all fixed: a cancelled read could leave a counter high for ever; read-ahead could pile up tasks without limit; fetches could continue after a detach; the fill could hold the slots that read-ahead needs; a shutdown time-out could cancel a checkpoint in the middle of a freeze; and a repair check could run before a running GC sent its last delete.</p>
+<p><b>Result.</b> One cold reader is now at the link speed: 87 s for 7.9 GiB, which is 91 MiB/s. After a cold attach, the background fill makes the full disk local in 84 s, which is also the link limit. Boot times do not change.</p>
+<p><b>A regression.</b> The cold memory restore became slower: 6.60 s, with 652 MiB downloaded. The startup prefetch of the root disk downloaded its 64 MiB boot profile in 0.6 s. A restored guest does not read its boot files again, so this download only took bandwidth from the restore. Small fill downloads in the gaps between reads also took some. The fix for step 4: likely reads start only while fewer than 8 read downloads are in flight, and the fill starts only after 250 ms without a new read download.</p>
 
 <h2>Still to measure</h2>
 <ul class="pending">
