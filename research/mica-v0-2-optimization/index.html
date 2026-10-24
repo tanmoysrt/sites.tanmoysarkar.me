@@ -225,6 +225,27 @@
 </ul>
 <p class="pending">Next: two restore variants with a userfaultfd handler (pages on demand, and a recorded page profile that loads first). These need one more permission on the lab machine.</p>
 
+<h2>Optimizations</h2>
+<p>Each step below changes mica, then measures again in the same lab, with the same S3 link (100 MiB/s, 1 ms) and the same disk limit (300 MiB/s). "Before" is v0.1, measured with the same script.</p>
+
+<div class="table-wrap"><table id="summary">
+  <tr><th>Step</th><th>Metric</th><th>Before (v0.1)</th><th>After</th></tr>
+  <tr><td>1. Attach</td><td>Attach of one disk, p50 of 10</td><td class="n">1,035 ms</td><td class="n">24 ms</td></tr>
+  <tr><td>1. Attach</td><td>4 disks attached at the same time</td><td class="n">4,160–4,210 ms</td><td class="n">45–64 ms</td></tr>
+  <tr><td>1. Attach</td><td>Warm Firecracker boot, attach until ssh answers</td><td class="n">3.29 s</td><td class="n">2.33–2.39 s</td></tr>
+</table></div>
+
+<h3>1. Attach: an atomic claim, and no global lock</h3>
+<p><b>Problem.</b> An attach took about 1 s, also with a warm cache. Of this, 1 s was a fixed wait. mica writes a marker to S3 to claim the disk. Without conditional writes, two nodes can claim at the same moment. So mica waits 1 s, then reads the marker back. Also, the daemon held one global lock during the full attach, so attaches of different disks ran one after the other.</p>
+<p><b>Change.</b></p>
+<ul>
+  <li>A new setting, <code>s3.conditional_writes</code>. When the store supports it, the claim is one atomic create (<code>PUT</code> with <code>If-None-Match: *</code>). Of two nodes that claim at the same moment, only one can create the marker, so there is no wait. RustFS, R2, AWS S3 and MinIO support this. Garage does not, so the old claim with the 1 s wait stays as the default.</li>
+  <li>With the old claim, mica now loads the disk metadata during the 1 s wait, not after it.</li>
+  <li>Each disk has its own attach lock. The global registry is locked only for short updates. Two attaches of the same disk wait for each other and get the same device.</li>
+  <li>Each attach logs and returns the time of each stage.</li>
+</ul>
+<p><b>Result.</b> One attach now takes 24 ms (p50). The stages are: claim and metadata load 16 ms, open the disk 2 ms, start the ublk device 2 ms. Four attaches at the same time take 45–64 ms. With <code>conditional_writes = false</code>, an attach still takes 1.03 s, as before.</p>
+
 <h2>Still to measure</h2>
 <ul class="pending">
   <li>S3 object size: 64 KiB, 256 KiB and 4 MiB objects.</li>
