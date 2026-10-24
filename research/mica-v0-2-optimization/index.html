@@ -136,7 +136,55 @@
 </ul>
 
 <h2>Firecracker on a mica disk</h2>
-<p class="pending">In progress: cold and warm boot until ssh answers, bytes fetched during a boot, fio in the guest, a fill in the guest, and a boot of a clone from a snapshot.</p>
+<p>The VM has 2 vCPUs and 2 GiB RAM. Its root disk is a 100 GiB mica disk with ext4. The guest is Ubuntu 24.04 with systemd, sshd and the test tools: 270 MiB of files. The disk device goes straight to Firecracker as a virtio block device (<code>io_engine = Async</code>, <code>cache_type = Writeback</code>).</p>
+
+<h3>Boot</h3>
+<p>A boot time here is the time from <code>mica disk attach</code> until ssh in the guest answers. It includes the attach (about 1.1 s), the Firecracker start, the kernel boot and systemd (about 0.6 s of user space).</p>
+<div class="table-wrap"><table>
+  <tr><th>Test</th><th>Time</th><th>S3 download</th></tr>
+  <tr><td>Make the disk: <code>disk create</code> + <code>mke2fs -d</code> with the root filesystem</td><td class="n">3.9 s</td><td class="n">–</td></tr>
+  <tr><td>First detach (uploads the root filesystem)</td><td class="n">5.7 s</td><td class="n">–</td></tr>
+  <tr class="key"><td>Cold boot, empty cache</td><td class="n">4.61 s</td><td class="n">≈ 250 MiB</td></tr>
+  <tr class="key"><td>Warm boot, all chunks in the cache</td><td class="n">3.29 s</td><td class="n">0</td></tr>
+  <tr><td>Cold boot of the same disk after the 8 GiB fill</td><td class="n">5.5–7.9 s</td><td class="n">≈ 200–400 MiB</td></tr>
+  <tr><td>Snapshot of the disk / clone from the snapshot</td><td class="n">0.02 s / 0.04 s</td><td class="n">–</td></tr>
+  <tr><td>Boot of the clone (the cache already has the chunks)</td><td class="n">3.35 s</td><td class="n">0</td></tr>
+  <tr><td>Guest reboot until Firecracker exits</td><td class="n">0.7–1.1 s</td><td class="n">–</td></tr>
+</table></div>
+<p>The cold boot downloads about 250 MiB, but the root filesystem has only 270 MiB of files. The boot reads only a part of these files. With 4 MiB chunks, each small read of ext4 metadata or of a file downloads a full 4 MiB chunk. At 100 MiB/s, these 250 MiB cost about 1.3 s of the 4.6 s cold boot. Smaller chunks can remove most of this download.</p>
+
+<h3>I/O in the guest</h3>
+<p>fio runs in the guest on a 4 GiB file in the root filesystem, with direct I/O. Firecracker opens the mica device without <code>O_DIRECT</code>, so the host page cache also holds the disk data. Thus the read numbers show the host page cache, not the mica disk limits.</p>
+<div class="table-wrap"><table>
+  <tr><th>Test</th><th>Result</th></tr>
+  <tr><td>4K random read / write, queue depth 32</td><td class="n">48k IOPS / 100k IOPS</td></tr>
+  <tr><td>4K random read / write, queue depth 1</td><td class="n">24.7k IOPS, 40 µs / 15.5k IOPS, 64 µs</td></tr>
+  <tr><td>1M sequential read / write, queue depth 16</td><td class="n">9.7 GiB/s / 3.7 GiB/s (host page cache)</td></tr>
+  <tr><td>4K write with <code>fdatasync</code></td><td class="n">427 per second</td></tr>
+</table></div>
+
+<h3>Fill the guest, save, read back</h3>
+<p>The guest writes the same 7.93 GiB data set into its root filesystem. Then it shuts down, and <code>mica disk detach</code> uploads the disk.</p>
+<div class="table-wrap"><table>
+  <tr><th>Step</th><th>Time</th></tr>
+  <tr><td>Write 7.93 GiB of files in the guest</td><td class="n">17.1 s</td></tr>
+  <tr><td><code>sync</code> in the guest</td><td class="n">15.5 s</td></tr>
+  <tr><td>Record checksums in the guest (2 readers)</td><td class="n">23.5 s</td></tr>
+  <tr><td>Guest reboot, then <code>mica disk detach</code> (uploads 12.2 GiB)</td><td class="n">113.5 s</td></tr>
+  <tr class="key"><td>Start of the write until all data is in S3</td><td class="n">169.5 s</td></tr>
+  <tr><td>Cold boot, then read and check all files in the guest, 1 reader</td><td class="n">7.9 s + 92.3 s</td></tr>
+  <tr><td>Cold boot, then read and check all files in the guest, 8 readers</td><td class="n">5.5 s + 85.6 s</td></tr>
+  <tr><td>Clone boot, then read and check all files, 8 readers (warm cache)</td><td class="n">3.4 s + 26.5 s</td></tr>
+</table></div>
+<p>The detach uploads 12.2 GiB, not 8 GiB. The other 4 GiB is the fio test file. The guest deleted it, but <code>fstrim</code> in the guest fails: "the discard operation is not supported". Firecracker's virtio block device does not pass discard to the host. Thus, space that a guest frees on a mica disk stays in the disk, and mica uploads and stores it.</p>
+
+<h3>What these numbers show</h3>
+<ul>
+  <li><b>A cold boot downloads almost the full root filesystem.</b> 250 MiB for a 270 MiB system, because each small read costs a 4 MiB chunk.</li>
+  <li><b>Attach is about a third of a warm boot.</b> A warm boot takes 3.3 s, and the attach takes about 1.1 s of this.</li>
+  <li><b>Freed guest space is never released.</b> Without discard from Firecracker, deleted data stays in S3. A fix needs discard support in the VMM, or a periodic trim through another path.</li>
+  <li><b>A clone of a snapshot is free.</b> The snapshot and the clone take less than 0.05 s, and the clone boots warm from the shared cache.</li>
+</ul>
 
 <h2>Memory snapshots</h2>
 <p class="pending">In progress. A Firecracker memory snapshot stores the guest RAM in a file. The test stores this file on a mica disk and compares three ways to restore it:</p>
