@@ -187,12 +187,43 @@
 </ul>
 
 <h2>Memory snapshots</h2>
-<p class="pending">In progress. A Firecracker memory snapshot stores the guest RAM in a file. The test stores this file on a mica disk and compares three ways to restore it:</p>
-<ul class="pending">
-  <li>A: the File backend, with mica's own read profile for prefetch.</li>
-  <li>B: a userfaultfd handler that loads pages on demand.</li>
-  <li>C: a userfaultfd handler that loads a recorded set of pages first: the pages used in two restore runs.</li>
+<p>A Firecracker <b>memory snapshot</b> stores the full guest RAM in a file, and the device state in a small second file. A <b>restore</b> starts a new Firecracker process from these files. The guest continues from the moment of the snapshot, without a boot.</p>
+<p>The test VM runs an app before the snapshot: an HTTP server that holds 384 MiB of random data in RAM. Each GET returns a hash of all 384 MiB. Thus the first answer after a restore needs all app memory back in RAM, and the hash shows that the memory is correct. All restores returned the correct hash.</p>
+
+<h3>Make the snapshot</h3>
+<ol>
+  <li>Pause the VM.</li>
+  <li>Write the snapshot files to an ext4 filesystem on a second mica disk (4 GiB). The memory file is 2,048 MiB.</li>
+  <li>Make a mica snapshot of the root disk while the VM is paused. Thus the disk and the memory are from the same moment.</li>
+  <li>Detach both disks. Each restore starts from a new clone of the root disk snapshot.</li>
+</ol>
+<div class="table-wrap"><table>
+  <tr><th>Step</th><th>Time</th><th>Note</th></tr>
+  <tr><td>Pause</td><td class="n">0.01 s</td><td></td></tr>
+  <tr><td>Firecracker snapshot to the mica disk</td><td class="n">5.81 s</td><td>2,048 MiB memory file</td></tr>
+  <tr><td>mica snapshot of the root disk</td><td class="n">6.01 s</td><td>Includes a checkpoint of the root disk</td></tr>
+  <tr><td>Detach the memory disk</td><td class="n">10.8 s</td><td>Uploads 996 MiB. mica does not store the all-zero chunks.</td></tr>
+</table></div>
+
+<h3>Restore with the File backend</h3>
+<p>With the File backend, Firecracker maps the memory file into the guest. A page loads from the file when the guest first uses it. On a mica disk, this read goes through ext4 and the mica device. On a cache miss, mica downloads the full 4 MiB chunk from S3.</p>
+<p>The times start at the snapshot load request. "Attach" is the time before it: a clone of the root disk, the attach of both disks, and the mount of the memory disk.</p>
+<div class="table-wrap"><table>
+  <tr><th>Variant</th><th>Attach</th><th>Load</th><th>ssh answers</th><th>App answers</th><th>S3 download</th></tr>
+  <tr class="key"><td>Cold cache</td><td class="n">2.43 s</td><td class="n">0.23 s</td><td class="n">2.38 s</td><td class="n">6.71 s</td><td class="n">630 MiB</td></tr>
+  <tr><td>Cold cache, with mica read-profile prefetch (512 chunks)</td><td class="n">2.84 s</td><td class="n">0.03 s</td><td class="n">2.40 s</td><td class="n">5.87 s</td><td class="n">630 MiB</td></tr>
+  <tr class="key"><td>Warm cache</td><td class="n">2.22 s</td><td class="n">0.02 s</td><td class="n">0.20 s</td><td class="n">0.63 s</td><td class="n">3 MiB</td></tr>
+  <tr><td><code>mica disk warm</code> of the memory disk first (10.5 s), then restore</td><td class="n">2.27 s</td><td class="n">0.02 s</td><td class="n">0.21 s</td><td class="n">0.65 s</td><td class="n">27 MiB</td></tr>
+</table></div>
+
+<h3>What these numbers show</h3>
+<ul>
+  <li><b>A warm restore is 5 times faster than a warm boot.</b> ssh answers 0.20 s after the load, and the app 0.63 s after the load. A warm boot needs 2.2 s until ssh, and then the app must start.</li>
+  <li><b>A cold restore is limited by the bytes it downloads.</b> The app answer needs 630 MiB: at 95 MiB/s that is 6.6 s, and the measured time is 6.7 s. The guest uses only a part of each 4 MiB chunk, but mica downloads the full chunk.</li>
+  <li><b>The mica read profile does not help here.</b> The profile has 157 chunks (628 MiB), and the prefetch downloads them in about 6 s. These are the same chunks that the page faults need, so the link is the limit again. Only fewer bytes for each page fault can help: smaller chunks, or a handler that knows which pages are in use.</li>
+  <li><b>The attach takes more time than a warm restore.</b> Two disks attach one after the other, and with the clone and the mount this takes 2.2–2.8 s. Parallel attach and a faster attach path are important for a fast wake.</li>
 </ul>
+<p class="pending">Next: two restore variants with a userfaultfd handler (pages on demand, and a recorded page profile that loads first). These need one more permission on the lab machine.</p>
 
 <h2>Still to measure</h2>
 <ul class="pending">
