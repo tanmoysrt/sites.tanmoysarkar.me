@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mica v0.2 optimization</title>
+<meta name="description" content="Baseline measurements of mica v0.1 on a small cloud VM, before the v0.2 optimization work.">
+<style>
+  :root {
+    --bg: #ffffff; --text: #1d1f23; --muted: #5d636e; --line: #e3e5e9;
+    --soft: #f6f7f9; --accent: #2457c5; --warn: #b4521a; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.3rem; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p, ul, ol { margin: 0 0 14px; }
+  li { margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 1.05rem; }
+  .meta { color: var(--muted); font-size: .9rem; margin-bottom: 28px; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  pre { font-family: var(--mono); font-size: .84rem; line-height: 1.5; background: var(--soft);
+    border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  .table-wrap { overflow-x: auto; margin: 0 0 18px; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .85rem; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.key td { font-weight: 600; }
+  .note { border-left: 3px solid var(--accent); padding: 8px 14px; background: var(--soft); margin: 0 0 18px; }
+  .note.warn { border-left-color: var(--warn); }
+  figure { margin: 18px 0 24px; }
+  figcaption { color: var(--muted); font-size: .88rem; margin-top: 6px; }
+  svg text { font-family: system-ui, sans-serif; }
+  .tag { display: inline-block; font-size: .78rem; padding: 0 7px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>mica v0.2 optimization</h1>
+<p class="lede">Part 1: the baseline. These are measurements of mica v0.1 on a small cloud VM, before we change any code.</p>
+<p class="meta">Measured 25 October 2026 · <span class="tag">baseline only</span></p>
+
+<h2>Context</h2>
+<p>mica gives a VM or a container a disk that lives in an S3 bucket. mica keeps the shared copy of the disk in the bucket. It uses the local SSD of the machine as a cache. A <b>chunk</b> is a 4 MiB part of the disk. mica downloads a chunk when a reader needs it. It uploads changed chunks in the background. The upload is a <b>checkpoint</b>.</p>
+<p>The speed of mica depends on three things: the network link to S3, the local disk, and the CPU. Before we optimize mica, we must know how fast each of these is, and how fast mica is on top of them. This page records that baseline. Later parts compare each optimization against these numbers.</p>
+
+<h2>Test setup</h2>
+<div class="table-wrap"><table>
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>Machine</td><td>Cloud VM: 1 vCPU (AMD EPYC), 3.8 GiB RAM, 50 GiB virtual disk, Ubuntu 26.04, Linux 7.0</td></tr>
+  <tr><td>S3</td><td>An S3-compatible object store in the same data centre (round trip 0.55 ms)</td></tr>
+  <tr><td>mica</td><td>v0.1 (commit <code>3e56460</code>), release build</td></tr>
+  <tr><td>mica data folder</td><td>XFS (for reflink copies) in a 30 GiB loop file on the root disk</td></tr>
+  <tr><td>mica settings</td><td><code>cache_limit_gib = 15</code>, <code>dirty_limit_gib = 10</code>, <code>checkpoint_interval_secs = 180</code></td></tr>
+  <tr><td>mica disk</td><td>20 GiB, ext4, mounted with <code>mica disk mount</code></td></tr>
+  <tr><td>Nested virtualization</td><td>Not available (no <code>svm</code> CPU flag). Thus, no Firecracker test on this machine.</td></tr>
+</table></div>
+
+<h3>The data</h3>
+<p>A script writes 42,048 files with random content: 7.93 GiB in total. The content comes from an AES-CTR stream, so no two chunks are equal and no chunk is all zeros. mica cannot skip or share any of the data.</p>
+<div class="table-wrap"><table>
+  <tr><th>Class</th><th>Files</th><th>Size of each file</th><th>Total</th></tr>
+  <tr><td>Large</td><td class="n">48</td><td class="n">64 MiB</td><td class="n">3,072 MiB</td></tr>
+  <tr><td>Medium</td><td class="n">2,000</td><td class="n">256 KiB – 2 MiB</td><td class="n">2,274 MiB</td></tr>
+  <tr><td>Small</td><td class="n">40,000</td><td class="n">4 KiB – 128 KiB</td><td class="n">2,585 MiB</td></tr>
+</table></div>
+<p>After the write, the script records an xxHash3 checksum of each file. Each later read pass checks every file against its checksum. All passes found all 42,048 files correct.</p>
+
+<h2>Raw capacity of the machine</h2>
+<p>These numbers show the limits that mica works within.</p>
+<div class="table-wrap"><table>
+  <tr><th>Test</th><th>Tool</th><th>Result</th></tr>
+  <tr><td>Internet download / upload</td><td>speedtest, 3 runs</td><td class="n">450–506 Mbit/s / 1.08–1.37 Gbit/s</td></tr>
+  <tr><td>S3 PUT, 4 MiB objects, 4–16 at a time</td><td>warp</td><td class="n">42–55 MiB/s (CPU 100% busy)</td></tr>
+  <tr><td>S3 GET, 4 MiB objects, 4–16 at a time</td><td>warp</td><td class="n">38–42 MiB/s (CPU 20–25% busy)</td></tr>
+  <tr><td>S3 upload of one 1 GiB object, 1 / 4 / 16 streams</td><td>s5cmd</td><td class="n">51 s / 28 s / 23 s</td></tr>
+  <tr><td>S3 download of one 1 GiB object, 1 / 4 / 16 streams</td><td>s5cmd</td><td class="n">90 s / 33 s / 19 s</td></tr>
+  <tr><td>Disk 4K random read, queue depth 32</td><td>fio, direct I/O</td><td class="n">105k IOPS (410 MiB/s)</td></tr>
+  <tr><td>Disk 4K random write, queue depth 32</td><td>fio, direct I/O</td><td class="n">32k IOPS (125 MiB/s)</td></tr>
+  <tr><td>Disk 1M sequential read / write</td><td>fio, direct I/O</td><td class="n">1,065 MiB/s / 286 MiB/s</td></tr>
+  <tr><td>Disk 4K random read / write, queue depth 1</td><td>fio, direct I/O</td><td class="n">8.6k IOPS, 114 µs / 8.9k IOPS, 110 µs</td></tr>
+  <tr><td>Disk 4K write with <code>fdatasync</code></td><td>fio</td><td class="n">869 per second</td></tr>
+</table></div>
+<p>The best S3 rate is about 45–55 MiB/s, and only with many requests at the same time. One stream gets much less: 11–20 MiB/s. The single vCPU is the limit for PUT, because TLS and request signing use it fully. The disk is much faster than S3. Thus, on this machine, S3 and the CPU set the limits for mica, not the disk.</p>
+<div class="note warn">The first disk tests showed only 12 MiB/s for all block sizes. The provider's throttle counted each request as size ÷ 4 KiB operations against a limit of 3,000 IOPS. The provider removed the limits and rebooted the VM. All numbers on this page come from after that change.</div>
+
+<h2>mica results</h2>
+
+<h3>Write the data and save it in S3</h3>
+<div class="table-wrap"><table>
+  <tr><th>Step</th><th>Time</th><th>Note</th></tr>
+  <tr><td><code>mica disk create</code> (20 GiB)</td><td class="n">0.22 s</td><td>Writes only metadata to S3</td></tr>
+  <tr><td>First <code>mica disk mount</code></td><td class="n">1.57 s</td><td>Includes the ext4 format</td></tr>
+  <tr><td>Write 7.93 GiB of files</td><td class="n">50.8 s</td><td>156 MiB/s. The file script uses most of the CPU.</td></tr>
+  <tr><td><code>sync</code></td><td class="n">3.2 s</td><td>Data is safe on the local disk</td></tr>
+  <tr><td>Read all files for checksums (local data)</td><td class="n">45.2 s</td><td>175 MiB/s; the upload runs at the same time</td></tr>
+  <tr><td><code>mica disk unmount</code></td><td class="n">136.1 s</td><td>Waits for the rest of the upload</td></tr>
+  <tr class="key"><td>Start of the write until all data is in S3</td><td class="n">235.7 s</td><td>Upload rate ≈ 46 MiB/s</td></tr>
+</table></div>
+
+<figure>
+  <svg id="timeline" viewBox="0 0 800 330" width="100%" role="img"
+       aria-label="Line chart over 245 seconds. Local data not in S3 rises from 0 to 8.4 GiB during the first 54 seconds while uploads stay at zero. Uploads start at about 55 seconds and rise steadily to 8.0 GiB at about 233 seconds. Then the local data not in S3 drops to zero."></svg>
+  <figcaption>Write and upload of the 7.93 GiB data set, sampled every 2 s. The upload does not start until the write and the <code>sync</code> are complete.</figcaption>
+</figure>
+
+<h3>Read the data</h3>
+<p>A <b>cold</b> read is a read with an empty local cache: every chunk comes from S3. A <b>warm</b> read is a read with all chunks in the local cache. Before each pass, the script empties the page cache of the machine.</p>
+<div class="table-wrap"><table>
+  <tr><th>Test</th><th>Cold</th><th>Warm</th></tr>
+  <tr><td><code>mica disk mount</code></td><td class="n">2.3–2.5 s</td><td class="n">1.7–1.8 s</td></tr>
+  <tr><td>First byte of a 64 MiB file</td><td class="n">0.44–0.46 s</td><td class="n">0.008–0.020 s</td></tr>
+  <tr><td>Read one 64 MiB file</td><td class="n">2.9–3.2 s (≈ 22 MiB/s)</td><td class="n">0.7–1.1 s</td></tr>
+  <tr><td>Read 100 small files, one after the other</td><td class="n">1.1–1.3 s</td><td class="n">0.31 s</td></tr>
+  <tr class="key"><td>Read and check all files, 1 reader</td><td class="n">365.7 s (22 MiB/s)</td><td class="n">74.6 s (106 MiB/s)</td></tr>
+  <tr class="key"><td>Read and check all files, 8 readers</td><td class="n">205.7 s (39 MiB/s)</td><td class="n">72.6 s (109 MiB/s)</td></tr>
+  <tr><td><code>mica disk unmount</code>, no changes</td><td class="n">1.2–1.3 s</td><td class="n">1.1–1.4 s</td></tr>
+</table></div>
+
+<h3>Fill the cache before the reads</h3>
+<p><code>mica disk warm</code> downloads all chunks of a disk into the local cache, with many downloads at the same time.</p>
+<div class="table-wrap"><table>
+  <tr><th>Command</th><th>Time for 2,029 chunks (7.9 GiB)</th><th>Rate</th></tr>
+  <tr><td><code>mica disk warm bench-1</code> (8 at a time)</td><td class="n">112.0 s</td><td class="n">72 MiB/s</td></tr>
+  <tr><td><code>mica disk warm bench-1 --parallel 32</code></td><td class="n">96.0 s</td><td class="n">85 MiB/s</td></tr>
+</table></div>
+<p>Warm, then read: 96 s + 73 s = 169 s. This is faster than the best cold read (206 s with 8 readers), and much faster than one cold reader (366 s).</p>
+
+<h2>What the baseline shows</h2>
+
+<h3>1. The upload does not overlap with the write</h3>
+<p>mica must start a checkpoint early when local data not in S3 reaches half of <code>dirty_limit_gib</code>. Here that is 5 GiB, at about 33 s. But the first PUT goes out at about 55 s, after the write and the <code>sync</code> are complete. The first checkpoint then contains all 2,101 chunks. The second contains only 15.</p>
+<p>The cause is in the freeze step of the checkpoint (<code>src/checkpoint.rs</code>). It goes through all chunk slots in order. For each changed chunk, it waits for <code>sync_data()</code>, then renames the file. The upload starts only after the loop ends:</p>
+<pre><code>for index in 0..self.slots.len() {
+    let mut slot = self.slots[index].lock().await;
+    if let Some(working) = slot.working.clone() {
+        ...
+        blocking(move || Ok(file.sync_data()?)).await?;   // one chunk at a time
+        blocking(move || folder.freeze(index)).await?;
+        ...
+    }
+}
+// upload_all(frozen) starts here</code></pre>
+<p>A sequential write fills chunks in index order. The loop syncs the chunks one at a time, and the writer adds new chunks ahead of the loop. Thus the loop does not end until the writer stops. The write phase and the upload phase run one after the other. If the two phases overlapped, the total time could go down from 236 s to about the upload time alone. This is an estimate: about 180 s.</p>
+
+<h3>2. One cold reader gets one chunk at a time</h3>
+<p>One cold reader gets 22 MiB/s. S3 gives 39 MiB/s to 8 readers, and 85 MiB/s to <code>disk warm</code> with 32 downloads. mica downloads a chunk only when a read touches it. Thus one sequential reader waits for one S3 GET after the other, about 180 ms for each 4 MiB chunk. A read-ahead of the next chunks for sequential reads can close most of this gap.</p>
+
+<h3>3. Warm reads are CPU-bound on this machine</h3>
+<p>Warm reads reach about 107 MiB/s with 1 reader and with 8 readers. The single vCPU runs the reader, the checksum and mica together. The disk can do much more. This number will change on a machine with more CPUs.</p>
+
+<h3>4. A mount without writes still makes a checkpoint</h3>
+<p>Each mount writes the ext4 superblock. Thus each mount and unmount cycle uploads a few chunks and commits a new manifest, also when no file changed. The cost is small (about 1.2 s for each unmount), but it adds S3 requests.</p>
+
+<h2>Not yet measured</h2>
+<ul>
+  <li>fio on a mica disk (random and sequential I/O, <code>fdatasync</code>), compared with the raw disk.</li>
+  <li>A daemon restart under load.</li>
+  <li>Snapshot and clone times.</li>
+  <li>Firecracker on a 100 GiB mica disk. This needs a machine with KVM. It runs in a local lab: RustFS in Docker behind a 500 Mbit/s down, 1 Gbit/s up link with a 1 ms round trip, and a local disk limit of 300 MiB/s.</li>
+</ul>
+<p>The next parts of this page add these results and then the v0.2 optimizations, each one compared with the baseline above.</p>
+
+<h2>Sources</h2>
+<ul>
+  <li><a href="https://github.com/tanmoysrt/mica">mica on GitHub</a> (commit <code>3e56460</code>)</li>
+  <li><a href="https://github.com/minio/warp">warp</a>, <a href="https://github.com/peak/s5cmd">s5cmd</a>, <a href="https://github.com/axboe/fio">fio</a></li>
+</ul>
+
+</main>
+<script>
+(() => {
+  // [seconds from the start of the write, MiB not in S3, MiB uploaded]
+  const raw = "-3 136 0;-1 160 0;1 180 0;3 320 0;5 468 0;7 648 0;9 804 0;11 996 0;13 1360 0;16 1780 0;18 2200 0;20 2624 0;22 3028 0;24 3436 0;26 3816 0;28 4192 0;30 4548 0;32 4960 0;35 5372 0;37 5744 0;39 6068 0;41 6376 0;43 6700 0;45 7024 0;47 7360 0;50 7688 0;52 8044 0;54 8404 0;56 8404 64;58 8404 164;60 8404 288;63 8404 376;65 8404 504;68 8404 644;70 8404 772;72 8404 840;77 8404 1068;79 8404 1076;81 8404 1160;83 8404 1252;86 8404 1352;91 8404 1588;93 8408 1724;95 8408 1792;97 8412 1792;99 8412 1868;102 8412 1952;104 8416 2108;106 8416 2240;108 8416 2356;110 8416 2424;112 8416 2460;114 8416 2576;116 8416 2716;118 8416 2852;120 8416 2956;123 8416 3096;125 8416 3228;127 8416 3292;129 8416 3360;131 8416 3440;133 8416 3544;135 8416 3672;137 8416 3780;139 8416 3904;142 8416 4012;144 8416 4096;146 8416 4160;148 8416 4224;150 8416 4320;152 8416 4420;154 8416 4544;156 8416 4596;158 8416 4672;160 8416 4764;162 8416 4916;164 8416 5036;166 8416 5164;170 8416 5276;173 8416 5428;175 8416 5496;177 8416 5560;179 8416 5696;181 8416 5828;183 8416 5900;185 8416 5992;187 8416 6000;189 8416 6128;191 8416 6252;193 8416 6372;195 8416 6464;197 8416 6592;199 8416 6668;202 8416 6764;204 8416 6840;206 8416 6872;208 8416 7016;210 8416 7152;212 8416 7264;214 8416 7368;216 8416 7500;219 8416 7580;221 8416 7664;223 8416 7776;225 8416 7900;227 8416 7992;229 8416 8064;231 8416 8108;233 60 8164;235 0 8164;237 0 8164;241 0 8164";
+  const pts = raw.split(";").map(r => r.split(" ").map(Number));
+  const svg = document.getElementById("timeline");
+  const W = 800, H = 330, L = 58, R = 16, T = 40, B = 44;
+  const x = t => L + (Math.max(t, 0) / 245) * (W - L - R);
+  const y = m => T + (1 - m / 9000) * (H - T - B);
+  const ns = "http://www.w3.org/2000/svg";
+  const el = (name, attrs, text) => {
+    const n = document.createElementNS(ns, name);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text !== undefined) n.textContent = text;
+    svg.appendChild(n);
+    return n;
+  };
+  // Phases of the run.
+  const phases = [[0, 50.8, "write"], [50.8, 54, ""], [54, 99.5, "checksum read"], [99.5, 235.7, "unmount: wait for upload"]];
+  phases.forEach(([a, b, label], i) => {
+    el("rect", { x: x(a), y: T, width: x(b) - x(a), height: H - T - B, fill: i % 2 ? "#f6f7f9" : "#fbfbfc" });
+    if (label) el("text", { x: (x(a) + x(b)) / 2, y: T - 8, "text-anchor": "middle", "font-size": 12, fill: "#5d636e" }, label);
+  });
+  // Axes and grid.
+  for (let m = 0; m <= 9000; m += 2000) {
+    el("line", { x1: L, x2: W - R, y1: y(m), y2: y(m), stroke: "#e3e5e9" });
+    el("text", { x: L - 8, y: y(m) + 4, "text-anchor": "end", "font-size": 12, fill: "#5d636e" }, (m / 1024).toFixed(1));
+  }
+  for (let t = 0; t <= 240; t += 30) {
+    el("text", { x: x(t), y: H - B + 18, "text-anchor": "middle", "font-size": 12, fill: "#5d636e" }, t);
+  }
+  el("text", { x: (L + W - R) / 2, y: H - 6, "text-anchor": "middle", "font-size": 12, fill: "#5d636e" }, "seconds from the start of the write");
+  el("text", { x: 14, y: T + (H - T - B) / 2, "text-anchor": "middle", "font-size": 12, fill: "#5d636e",
+               transform: `rotate(-90 14 ${T + (H - T - B) / 2})` }, "GiB");
+  const line = (col, color) => el("polyline", {
+    points: pts.map(p => `${x(p[0]).toFixed(1)},${y(p[col]).toFixed(1)}`).join(" "),
+    fill: "none", stroke: color, "stroke-width": 2.2, "stroke-linejoin": "round"
+  });
+  line(1, "#b4521a");
+  line(2, "#2457c5");
+  // Direct labels.
+  el("text", { x: x(60), y: y(8404) - 8, "font-size": 12.5, fill: "#b4521a" }, "local data not in S3");
+  el("text", { x: x(150), y: y(4320) + 22, "font-size": 12.5, fill: "#2457c5" }, "uploaded to S3");
+  el("line", { x1: x(33), x2: x(33), y1: y(5000) - 6, y2: y(5000) + 26, stroke: "#1d1f23", "stroke-dasharray": "3 3" });
+  el("text", { x: x(33) + 4, y: y(5000) + 38, "font-size": 11.5, fill: "#1d1f23" }, "5 GiB: early checkpoint wanted");
+})();
+</script>
+</body>
+</html>
