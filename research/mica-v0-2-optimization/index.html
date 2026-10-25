@@ -488,10 +488,25 @@
 </table></div>
 <p>The first run found a bug that was there since v0.1: the node ID file was written without a sync. After a power cut it was empty, so the node took its own disks for another node's and kept their data as orphaned. Now the file is synced and renamed into place, and an empty ID stops the daemon with an error. A first version of the harness also counted FLUSHes that ended after the cut as durable; the writer now stops before the cut, as power would stop it.</p>
 
+<h3>10. FLUSH: early writeback, and the idle gap</h3>
+<p><b>The problem after a large write.</b> Linux starts writeback late: after 10% of free memory is dirty (about 1.3 GB on this host), or after 30 s. After a 2 GiB write with no FLUSH, almost all of it was still in the page cache, so the next FLUSH wrote all of it. With the lab's 300 MiB/s disk that FLUSH took 3.6–4.7 s, in every build. On a 125 MiB/s cloud disk it would take about 16 s.</p>
+<p><b>The change.</b> After each 16 MiB of writes, mica starts writeback of the data files that the next FLUSH must sync, with <code>sync_file_range(SYNC_FILE_RANGE_WRITE)</code>. The call does not wait, makes nothing durable, and does not take the writeback error that the FLUSH <code>fdatasync</code> must see. It works on any Linux filesystem.</p>
+<p><b>Results on the host</b>, the mean of 3 rounds, with the builds alternating. Each run started only when the host's I/O pressure was under 2%:</p>
+<div class="table-wrap"><table>
+  <tr><th>Test</th><th>v0.2a</th><th>v0.2, data files</th><th>v0.2, data files + early writeback</th></tr>
+  <tr><td>Write + <code>fdatasync</code>, idle disk</td><td class="n">1,515 per second (p50 574 µs)</td><td class="n">1,473 per second (p50 624 µs)</td><td class="n">1,438 per second (p50 631 µs)</td></tr>
+  <tr class="key"><td>Longest FLUSH right after a 2 GiB write</td><td class="n">3.6–4.6 s</td><td class="n">3.6–4.7 s</td><td class="n">0.46–0.95 s</td></tr>
+  <tr><td>Write + <code>fdatasync</code>, during the 2 GiB upload</td><td class="n">586 per second</td><td class="n">611 per second</td><td class="n">695 per second</td></tr>
+  <tr><td>Random write + <code>fdatasync</code> to chunks the last checkpoint saved</td><td class="n">265 per second</td><td class="n">437 per second</td><td class="n">584 per second</td></tr>
+  <tr><td>Random write to chunks the last checkpoint saved, no sync</td><td class="n">512 per second</td><td class="n">19,985 per second</td><td class="n">19,290 per second</td></tr>
+</table></div>
+<p><b>The idle gap is 3%, not 19%.</b> The 19% came from runs while the host was busy. On a quiet host the data files are 3% slower in rate, and 50 µs slower at p50. Timers in the daemon put almost all of a FLUSH in the data file's <code>fdatasync</code> (p50 550 µs). mica's own steps take about 25 µs. A test without mica shows the same 50 µs on this btrfs: a synced 4 KiB write into a large file costs more than one into a new 256 KiB file, with 1 GiB and 64 MiB files alike. So the gap comes from btrfs, for a guest that syncs each 4 KiB write, and smaller data files do not close it.</p>
+<p><b>Tried and reverted:</b> RustFS keeps its data on the same btrfs as the lab daemon, and its writes slow the daemon's syncs: a plain <code>fdatasync</code> loop ran at 0.64 of its quiet rate during a 2 GiB upload. RustFS on its own XFS, on a loop device, gave 0.65, because the loop file is on the same btrfs and the same SSD. The lab keeps its old setup.</p>
+
 <h2>Open problems</h2>
 <ul>
-  <li><b>A FLUSH during a large upload is still slow:</b> 636 per second on the host against 1,150 for v0.1, and about 70 per second in the guest. The cost moved: no folder sync any more, but the data file's sync waits behind the writeback of the large write that the upload reads.</li>
-  <li><b>An idle FLUSH is 19% slower than v0.2a</b> on the host (1,317 against 1,629 per second). The cause is not known yet. It is not the data file size: 64 MiB data files gave the same.</li>
+  <li><b>A FLUSH during a large upload</b> still shares the SSD with the upload's writeback and RustFS. Early writeback took the longest FLUSH from 4.7 s to under 1 s (section 10).</li>
+  <li><b>On btrfs, a synced 4 KiB write costs 50 µs more</b> in a data file than in a chunk file (section 10).</li>
   <li><b>A page that GC deletes between a commit and its repair</b> is lost if the node loses power in that window. This gap was in v0.2a too.</li>
   <li><b>Firecracker does not pass discard to the disk.</b> Space that a guest frees stays in mica and in S3. This is a limit of the VMM, not of mica.</li>
 </ul>
