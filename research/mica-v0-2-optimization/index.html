@@ -273,6 +273,34 @@
 </table></div>
 <p>Where v0.2 is not faster, the link is the limit: 8 readers already used the full 100 MiB/s in v0.1. The warm restore and the fsync rate are slower; the next section explains both.</p>
 
+<h2>v0.1 against v0.2 at 20 ms round trip</h2>
+<p>The same suite with a 20 ms round trip to S3, closer to an S3 service in the same region. v0.1 runs with its own defaults (a checkpoint every 3 minutes, no fill). The v0.2 build is from before the last fixes of step 5.</p>
+<div class="table-wrap"><table>
+  <tr><th>Test (20 ms)</th><th>v0.1</th><th>v0.2</th></tr>
+  <tr class="key"><td>Cold Firecracker boot, Ubuntu: attach until ssh answers</td><td class="n">7.46 s</td><td class="n">3.96 s</td></tr>
+  <tr><td>Cold boot of a disk after the 8 GiB fill</td><td class="n">8.2–9.5 s</td><td class="n">4.0 s</td></tr>
+  <tr><td>Warm boot, Ubuntu</td><td class="n">3.52 s</td><td class="n">2.37 s</td></tr>
+  <tr><td>Cold / warm boot, Alpine</td><td class="n">4.01 s / 2.64 s</td><td class="n">2.68 s / 1.51 s</td></tr>
+  <tr class="key"><td>Cold memory restore: attach / ssh answers / app answers</td><td class="n">3.02 / 3.27 / 8.04 s</td><td class="n">0.57 / 1.56 / 5.77 s</td></tr>
+  <tr><td>Warm memory restore: ssh / app answers</td><td class="n">0.21 / 0.67 s</td><td class="n">0.20 / 0.64 s</td></tr>
+  <tr><td>Memory disk upload</td><td class="n">996 MiB in 11.3 s</td><td class="n">361 MiB in 7.9 s</td></tr>
+  <tr><td>Host: attach and mount</td><td class="n">1.65 s</td><td class="n">0.18–0.25 s</td></tr>
+  <tr><td>Host: first byte of a 64 MiB file / 100 small files, cold</td><td class="n">0.21 s / 0.96 s</td><td class="n">0.03–0.10 s / 0.49–0.67 s</td></tr>
+  <tr><td>Host: 7.9 GiB write until all data is in S3</td><td class="n">119.9 s</td><td class="n">117.9 s</td></tr>
+  <tr><td>Guest: 7.9 GiB write until all data is in S3</td><td class="n">173.2 s</td><td class="n">147.5 s</td></tr>
+  <tr><td>Host: read and check all files, 1 reader, cold</td><td class="n">136.1 s</td><td class="n">140.0 s</td></tr>
+  <tr><td>Guest: read and check all files, 1 reader, cold</td><td class="n">149.6 s</td><td class="n">109.6 s</td></tr>
+  <tr><td>Read and check all files, 8 readers, cold (host / guest)</td><td class="n">85.7 / 89.4 s</td><td class="n">86.7 / 87.5 s</td></tr>
+  <tr><td>Host: whole disk local after a cold attach</td><td class="n">– (no fill)</td><td class="n">366 s (too slow; fixed)</td></tr>
+  <tr><td>Guest fio: 4K write + <code>fdatasync</code> / 4K write at queue depth 1</td><td class="n">388/s / 16.4k IOPS</td><td class="n">205/s / 8.6k IOPS</td></tr>
+</table></div>
+<p>At 20 ms the gains are larger than at 1 ms: a cold boot is 1.9 times faster, and a cold restore answers ssh 2 times faster. Three results need more work:</p>
+<ul>
+  <li><b>The background fill was slow:</b> 2 downloads in flight for each disk give only 22 MiB/s at 20 ms. The fill now has 8 MiB in flight for each disk.</li>
+  <li><b>One host reader of many small files did not gain.</b> The files are close together on the disk, but not end to end, so read-ahead did not start. Now a read that starts up to 1 MiB after the last one also counts as sequential.</li>
+  <li><b>Writes while an upload runs are slower,</b> as at 1 ms. See step 5.</li>
+</ul>
+
 <h2>Optimizations</h2>
 <p>Each step below changes mica, then measures again in the same lab, with the same S3 link (100 MiB/s, 1 ms) and the same disk limit (300 MiB/s). "Before" is v0.1, measured with the same script.</p>
 
