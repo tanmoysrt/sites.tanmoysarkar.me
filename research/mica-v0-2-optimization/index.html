@@ -236,8 +236,16 @@
 <ul>
   <li><b>A PUT has a fixed cost of about 4 ms</b> in RustFS. With one PUT at a time, small objects are slow: 13.8 MiB/s at 64 KiB. With 8 PUTs at a time, 256 KiB objects reach 85 MiB/s, and with 32 they fill the link.</li>
   <li><b>A GET of 256 KiB fills the link with one request at a time</b> at 1 ms round trip. A GET of 64 KiB needs about 8 at a time.</li>
-  <li>Thus, 256 KiB chunks need about 32 uploads at the same time to fill this link. mica v0.1 uploads 16 at a time. At a higher round trip, more are needed. The 20 ms test will show this.</li>
+  <li>Thus, 256 KiB chunks need about 32 uploads at the same time to fill this link. mica v0.1 uploads 16 at a time. At a higher round trip, more are needed.</li>
 </ul>
+<p>The same GET test with a 20 ms round trip, which is closer to an S3 service in the same region:</p>
+<div class="table-wrap"><table>
+  <tr><th>Object size</th><th>GET, 1 at a time</th><th>GET, 8 at a time</th><th>GET, 32 at a time</th></tr>
+  <tr><td>64 KiB</td><td class="n">2.9 MiB/s (21.5 ms)</td><td class="n">24 MiB/s</td><td class="n">95 MiB/s</td></tr>
+  <tr><td>256 KiB</td><td class="n">11.6 MiB/s (21.7 ms)</td><td class="n">95 MiB/s</td><td class="n">96 MiB/s</td></tr>
+  <tr><td>4 MiB</td><td class="n">65 MiB/s (62.5 ms)</td><td class="n">97 MiB/s</td><td class="n">–</td></tr>
+</table></div>
+<p>At 20 ms, one request at a time is slow for small objects: 11.6 MiB/s at 256 KiB. With 8 at a time, 256 KiB objects fill the link. So small chunks need many downloads at the same time: read-ahead for one reader, and parallel fetches for the prefetch and the fill.</p>
 
 <h2>v0.1 against v0.2, all steps</h2>
 <p>The same lab and the same scripts: 100 MiB/s, 1 ms round trip, 300 MiB/s disk. v0.2 is the build after all the steps below, with the review fixes. Every read pass checked all 42,048 files.</p>
