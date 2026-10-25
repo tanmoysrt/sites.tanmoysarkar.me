@@ -418,6 +418,32 @@
   <tr><td>4K write + <code>fdatasync</code></td><td class="n">680 per second</td><td class="n">466 per second</td><td class="n">0 per second</td></tr>
 </table></div>
 
+<h3>7. Memory restores with userfaultfd</h3>
+<p>With the <b>File</b> backend, the kernel loads guest pages from the memory file. With the <b>Uffd</b> backend, a separate process, the handler, gets each page fault of the guest and copies the page in. The handler can also install pages before the guest asks for them. The lab handler has four modes:</p>
+<ul>
+  <li><b>On demand:</b> copy each page at its first fault.</li>
+  <li><b>Record:</b> on demand, and write down each page in the order of its first fault.</li>
+  <li><b>Profile:</b> install a recorded set of pages first, from a second thread, while the guest runs. The set is the pages that two recorded restores both used, in their average order. This is the method that E2B uses.</li>
+  <li><b>Fetch only:</b> read the recorded pages into the page cache (and so into the mica cache) without installing them.</li>
+</ul>
+<p>The memory file is on a mica disk in all cases, so a page that is not in the cache comes from S3. Results at 1 ms, v0.2:</p>
+<div class="table-wrap"><table>
+  <tr><th>Restore</th><th>ssh answers</th><th>App answers</th><th>S3 download</th></tr>
+  <tr><td>File backend, cold cache</td><td class="n">0.73 s</td><td class="n">4.82 s</td><td class="n">455 MiB</td></tr>
+  <tr><td>Uffd on demand, cold cache</td><td class="n">0.80 s</td><td class="n">5.29 s</td><td class="n">461 MiB</td></tr>
+  <tr><td>Uffd with profile, cold cache</td><td class="n">0.81 s</td><td class="n">4.77 s</td><td class="n">453 MiB</td></tr>
+  <tr><td>Uffd, fetch only, cold cache</td><td class="n">0.78 s</td><td class="n">4.61 s</td><td class="n">450 MiB</td></tr>
+  <tr><td>File backend, warm cache</td><td class="n">0.23 s</td><td class="n">0.77 s</td><td class="n">–</td></tr>
+  <tr><td>Uffd on demand, warm cache</td><td class="n">0.38 s</td><td class="n">3.19 s</td><td class="n">–</td></tr>
+  <tr><td>Uffd with profile, warm cache</td><td class="n">0.24 s</td><td class="n">0.84 s</td><td class="n">–</td></tr>
+</table></div>
+<p>The profile kept 106,921 pages (417 MiB) of the 2 GiB of guest RAM. The two recorded restores used 107,244 and 107,316 pages, so almost all pages that a restore uses are stable.</p>
+<ul>
+  <li><b>Cold, the link is the limit for all backends.</b> This app reads all its 384 MiB of random data, so a restore needs about 450 MiB, which takes 4.6–4.8 s at 95 MiB/s. A profile cannot change how many bytes are needed, only their order. An app that uses a smaller part of its memory at the start would show a larger difference.</li>
+  <li><b>Warm, the handler costs time for each page.</b> On demand, each of the about 100,000 page faults is a round trip to the handler: 3.19 s, against 0.77 s for the File backend. With the profile, the handler installs the pages in 0.27 s before the guest needs them, and the app answers in 0.84 s.</li>
+  <li><b>So, for mica:</b> the File backend is the simple default. A handler with a profile is worth it only when it can do more than the kernel: for example, load pages straight from mica chunks without the filesystem, or start the restore before all chunks arrive.</li>
+</ul>
+
 <h2>Open problems</h2>
 <ul>
   <li><b>A FLUSH waits for seconds while a large upload runs.</b> In the test above, the guest finished no <code>fdatasync</code> in 15 s while mica uploaded 4 GiB. Each write to a chunk that the checkpoint already moved to the cache makes a new chunk file. The FLUSH must then sync the folder, and on btrfs this sync waits behind the writeback and the renames of the checkpoint. Possible fixes: keep the chunk file in place after its upload, so that a write does not make a new file; or slow the clean-up of the checkpoint while the guest flushes. This needs work before v0.2 is ready for databases.</li>
@@ -427,7 +453,6 @@
 
 <h2>Not done yet</h2>
 <ul>
-  <li><b>Memory restores with userfaultfd.</b> The lab has a handler with three modes: load pages on demand, record the pages that a restore uses, and load a recorded set first (the method of E2B: keep only the pages that two restores both used). It is built, but the lab user cannot use userfaultfd yet. This needs one more verb in the root helper.</li>
   <li><b>ublk zero-copy</b> (the last step of the plan).</li>
   <li><b>A crash test.</b> The reviews checked the crash paths by reading the code. A test that cuts power in the middle of a checkpoint, and checks every file after recovery, would show it.</li>
 </ul>
