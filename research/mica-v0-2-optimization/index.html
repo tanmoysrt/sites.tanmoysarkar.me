@@ -239,6 +239,32 @@
   <li>Thus, 256 KiB chunks need about 32 uploads at the same time to fill this link. mica v0.1 uploads 16 at a time. At a higher round trip, more are needed. The 20 ms test will show this.</li>
 </ul>
 
+<h2>v0.1 against v0.2, all steps</h2>
+<p>The same lab and the same scripts: 100 MiB/s, 1 ms round trip, 300 MiB/s disk. v0.2 is the build after all the steps below, with the review fixes. Every read pass checked all 42,048 files.</p>
+<div class="table-wrap"><table>
+  <tr><th>Test</th><th>v0.1</th><th>v0.2</th></tr>
+  <tr class="key"><td>Attach of one disk (p50 of 10)</td><td class="n">1,035 ms</td><td class="n">24 ms</td></tr>
+  <tr><td>4 disks attached at the same time</td><td class="n">4.2 s</td><td class="n">0.05 s</td></tr>
+  <tr class="key"><td>Cold Firecracker boot, Ubuntu: attach until ssh answers</td><td class="n">4.61 s</td><td class="n">2.33 s</td></tr>
+  <tr><td>Warm Firecracker boot, Ubuntu / Alpine</td><td class="n">3.29 s / –</td><td class="n">2.28 s / 1.44 s</td></tr>
+  <tr><td>Cold boot of a disk after an 8 GiB fill</td><td class="n">5.5–7.9 s</td><td class="n">2.39 s</td></tr>
+  <tr><td>Upload of a new root filesystem (Ubuntu, 270 MiB of files)</td><td class="n">5.7 s</td><td class="n">1.5 s</td></tr>
+  <tr class="key"><td>Cold memory restore: ssh answers</td><td class="n">2.38 s</td><td class="n">0.64 s</td></tr>
+  <tr class="key"><td>Cold memory restore: app answers (384 MiB of random data in RAM)</td><td class="n">6.71 s</td><td class="n">4.63 s</td></tr>
+  <tr><td>Cold memory restore: attach of root disk and memory disk</td><td class="n">2.43 s</td><td class="n">0.26 s</td></tr>
+  <tr><td>Cold memory restore: S3 download</td><td class="n">630 MiB</td><td class="n">453 MiB</td></tr>
+  <tr><td>Memory disk in S3 (2 GiB memory file)</td><td class="n">996 MiB</td><td class="n">307 MiB</td></tr>
+  <tr><td>Warm memory restore: ssh / app answers</td><td class="n">0.20 / 0.63 s</td><td class="n">0.23 / 0.71 s</td></tr>
+  <tr><td>Host: 7.9 GiB write until all data is in S3</td><td class="n">122.4 s</td><td class="n">111.3 s</td></tr>
+  <tr><td>Guest: 7.9 GiB write until all data is in S3</td><td class="n">169.5 s</td><td class="n">148.6 s</td></tr>
+  <tr><td>Host: first byte of a 64 MiB file / 100 small files, cold</td><td class="n">0.16 s / 0.57 s</td><td class="n">0.01 s / 0.28 s</td></tr>
+  <tr><td>Host: read and check 7.9 GiB, 1 reader, cold</td><td class="n">115.2 s</td><td class="n">87.6 s</td></tr>
+  <tr><td>Host: read and check 7.9 GiB, 8 readers, cold</td><td class="n">83.8 s</td><td class="n">82.4 s</td></tr>
+  <tr><td>Host: whole disk local after a cold attach</td><td class="n">– (no fill)</td><td class="n">84 s</td></tr>
+  <tr><td>Guest fio 4K write + <code>fdatasync</code>, while an upload runs</td><td class="n">427 per second</td><td class="n">112–169 per second (worse; see step 5)</td></tr>
+</table></div>
+<p>Where v0.2 is not faster, the link is the limit: 8 readers already used the full 100 MiB/s in v0.1. The warm restore and the fsync rate are slower; the next section explains both.</p>
+
 <h2>Optimizations</h2>
 <p>Each step below changes mica, then measures again in the same lab, with the same S3 link (100 MiB/s, 1 ms) and the same disk limit (300 MiB/s). "Before" is v0.1, measured with the same script.</p>
 
@@ -326,6 +352,17 @@
   <li><b>The Alpine guest did not get a network address</b>, because its network service needs a package that the image does not have. Fixed with a start script. ssh now answers 1.34 s after the start of Firecracker, against 2.17 s for Ubuntu.</li>
 </ul>
 <p><b>Review.</b> codex found one more bug, also present in v0.1: with <code>wait_when_behind</code>, a checkpoint woke the waiting writers before it cleared the "behind" state, so a writer could wait for ever. Fixed.</p>
+
+<h3>5. Durability fixes and the cost of uploads during writes</h3>
+<p>A fourth review by codex looked only at durability: does every FLUSH still survive a power loss? It found four problems. Two came from the freeze without a sync. Two were already in v0.1:</p>
+<ul>
+  <li><b>Chunks found at recovery were not in the list of the next FLUSH.</b> A guest that wrote before a daemon restart, and flushed after it, could lose that write in a later power loss. Now recovered chunks are in the list.</li>
+  <li><b>A move into the cache could expose a torn file.</b> A committed <code>.frozen</code> file was moved into the cache without a sync. If a power loss undid the move, recovery would trust the torn file over S3. Now clean-up syncs each frozen file first, outside the chunk locks.</li>
+  <li><b>A FUA write could trust a folder sync that was still running</b> (v0.1). The folder state is now a count of changes and a count of synced changes, checked with the chunk locks held.</li>
+  <li><b>Two sync failures did not stop the disk</b> (v0.1): the folder sync of a clean-up, and the sync of a new chunk copy. Now they stop it.</li>
+</ul>
+<p><b>The cost of uploads during writes.</b> v0.2 uploads while the guest writes. A write to a chunk that a checkpoint has frozen must first copy it, and the copy must be synced. In the fio test, the 4 GiB test file is still uploading while fio runs. So 4K writes at queue depth 1 drop from 15.5k to 9.4–9.9k IOPS, and <code>fdatasync</code> from 427 to 112–169 per second. v0.1 never checkpointed during this test (3 minutes, 10 GiB), so it shows no such cost.</p>
+<p>Part of the fsync loss was a mistake: after the change above, each freeze counted as a folder change, so each guest FLUSH synced the folder. A rename from <code>.chunk</code> to <code>.frozen</code> needs no folder sync, because recovery takes either name. This is fixed. A separate test now measures guest fio twice: right after a 4 GiB write, while its upload runs, and again when nothing waits for upload.</p>
 
 <h2>Still to measure</h2>
 <ul class="pending">
