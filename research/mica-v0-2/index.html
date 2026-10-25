@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mica v0.2: how it works and how fast it is</title>
+<meta name="description" content="mica gives a VM or a container a disk whose data lives in S3. How it works, and measured results on the host and in Firecracker.">
+<style>
+:root{--ink:#1d2329;--muted:#5d6670;--line:#dde1e5;--wash:#f5f6f7;--accent:#2457a6;--good:#1f6b43;--paper:#fff;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.62 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:920px;margin:auto;padding:44px 20px 70px}
+a{color:var(--accent);text-underline-offset:3px}
+h1{font-size:clamp(30px,4.5vw,42px);line-height:1.15;letter-spacing:-.03em;margin:0 0 14px;font-weight:700}
+h2{font-size:24px;line-height:1.3;letter-spacing:-.02em;margin:52px 0 12px;padding-top:26px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:30px 0 8px}
+p,ul,ol{margin:0 0 14px}
+li{margin:0 0 6px}
+.dek{font-size:19px;color:#3c4550;max-width:720px}
+.meta{font-size:14px;color:var(--muted);margin-top:10px}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px;margin-top:22px}
+nav.toc a{color:var(--muted);text-decoration:none}
+nav.toc a:hover{color:var(--accent);text-decoration:underline}
+code{font:14px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--wash);padding:1px 5px;border-radius:4px}
+pre{font:13.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--wash);padding:14px 16px;border-radius:6px;overflow-x:auto;margin:0 0 16px}
+pre code{background:none;padding:0}
+figure{margin:18px 0 22px}
+figure svg{display:block;width:100%;height:auto;background:var(--wash);border-radius:8px}
+figcaption{font-size:14px;color:var(--muted);margin-top:8px}
+.table-wrap{overflow-x:auto;margin:0 0 16px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:650;background:var(--wash)}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.key td{background:#eef4fb}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;color:#3c4550;margin:0 0 16px}
+.big{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:18px 0 22px}
+.big div{border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.big b{display:block;font-size:26px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.big span{font-size:14px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<h1>mica v0.2: how it works and how fast it is</h1>
+<p class="dek">mica gives a VM or a container a disk whose data lives in an S3 bucket. The disk runs at local SSD speed, and it can move to another machine in a few seconds. This page explains how mica does that, and shows what it measures on a host and in Firecracker.</p>
+<p class="meta">October 2026. All numbers come from one lab machine, described in <a href="#lab">the lab</a>. The full log of each change is in <a href="../mica-v0-2-optimization/">mica v0.2 optimization</a>. The <a href="../mica/">v0.1 deck</a> explains the first design.</p>
+<nav class="toc" aria-label="Contents">
+<a href="#why">Why</a><a href="#picture">The parts</a><a href="#s3">A disk in S3</a><a href="#write">Writes and FLUSH</a><a href="#read">Reads</a><a href="#checkpoint">Checkpoints</a><a href="#move">Moving a disk</a><a href="#safe">Crash safety</a><a href="#lab">The lab</a><a href="#host">Host results</a><a href="#fc">Firecracker results</a><a href="#snap">Memory snapshots</a><a href="#limits">Limits</a><a href="#sources">Sources</a>
+</nav>
+
+<div class="big" aria-label="Key results">
+<div><b>24 ms</b><span>to attach a disk (p50)</span></div>
+<div><b>2.3 s</b><span>cold Firecracker boot, from attach until ssh answers</span></div>
+<div><b>0.64 s</b><span>cold memory restore, until ssh answers</span></div>
+<div><b>0 of 24</b><span>power cuts and daemon kills that lost a flushed write</span></div>
+</div>
+
+<h2 id="why">Why a disk in S3</h2>
+<p>A sandbox is a small VM or a container that runs one user's work. A platform stops idle sandboxes and starts them again when the user comes back. If the disk is on the SSD of one machine, the sandbox can start only on that machine. If that machine is full or down, the user waits.</p>
+<p>mica keeps the shared copy of each disk in S3, and uses the local SSD as a cache. Any machine can attach the disk. The guest reads and writes at SSD speed, because writes go to the SSD first, and mica uploads changes in the background.</p>
+<p>Three rules hold in every part of mica:</p>
+<ol>
+<li><b>A write never waits for S3.</b> Writes and FLUSH go to the local SSD only.</li>
+<li><b>A read never waits for data that it does not need.</b> An attach copies nothing. Prefetch runs behind the guest's reads.</li>
+<li><b>After a detach, S3 has everything.</b> Then the disk can attach on any machine.</li>
+</ol>
+
+<h2 id="picture">The parts</h2>
+<p>A machine runs one mica daemon. For each attached disk, the daemon makes a block device, <code>/dev/mica/&lt;disk&gt;</code>. It uses <a href="https://docs.kernel.org/block/ublk.html">ublk</a>: a Linux driver that sends each block request of a device to a program in user space. A VM, a container or the host uses the device like any other disk.</p>
+<figure>
+<svg id="d-parts" viewBox="0 0 870 330" role="img" aria-labelledby="d-parts-t">
+<title id="d-parts-t">The guest sends block requests to /dev/mica, ublk passes them to the mica daemon. The daemon writes data files and a chunk cache on the local SSD, gets missing chunks from S3, and uploads changed chunks to S3 in checkpoints.</title>
+</svg>
+<figcaption>The guest talks only to a block device. Only the daemon talks to S3.</figcaption>
+</figure>
+<p>The local SSD holds two kinds of data:</p>
+<ul>
+<li><b>Local chunks</b> of each disk, in sparse <b>data files</b>. A data file covers 1 GiB of the disk, and each chunk sits at its own offset. Some local chunks are not in S3 yet.</li>
+<li><b>The cache</b>: clean chunks that S3 also has. All disks on the machine share it, so a base image downloads once.</li>
+</ul>
+
+<h2 id="s3">A disk in S3</h2>
+<p>mica splits each disk into <b>chunks</b> of one size, 256 KiB by default (64 KiB to 4 MiB). A 100 GiB disk has 409,600 chunks. A chunk is stored as an S3 object. Its key is the SHA-256 of its content, and its body is a zstd frame. So:</p>
+<ul>
+<li>Two equal chunks are one object. Disks made from one image share their chunks.</li>
+<li>mica checks each downloaded chunk against its key.</li>
+<li>An all-zero chunk is not stored. A new disk stores nothing.</li>
+</ul>
+<p>A <b>page</b> lists the hashes of 1,024 chunks (256 MiB of disk). A <b>root</b> lists the hashes of all pages of a disk: 12.5 KiB for 100 GiB. The <b>head</b> of a disk names its current root. Pages and roots are immutable and named by their hash, so a change writes only new pages, a new root and the head.</p>
+<figure>
+<svg id="d-s3" viewBox="0 0 860 300" role="img" aria-labelledby="d-s3-t">
+<title id="d-s3-t">The head of disk-1 points to root 42. A snapshot points to root 41. Both roots share page 0. Root 42 has a new page 1 prime, which names one changed chunk. A clone, disk-2, points to root 41.</title>
+</svg>
+<figcaption>A snapshot and a clone are pointers. They copy no chunk and no page.</figcaption>
+</figure>
+<pre><code>chunks/&lt;xx&gt;/&lt;chunk hash&gt;     one chunk, zstd, immutable
+pages/&lt;xx&gt;/&lt;page hash&gt;       the hashes of 1,024 chunks, immutable
+manifests/&lt;root hash&gt;        one root: the hash of each page
+disks/&lt;disk&gt;/head            the current root and the read profile
+disks/&lt;disk&gt;/attached        the machine that owns the disk now
+snapshots/&lt;name&gt;             a named root</code></pre>
+
+<h2 id="write">Writes and FLUSH</h2>
+<p>A guest write goes into the disk's data file, at the chunk's offset, and returns. It does not sync. If the chunk was not local yet and the write covers only part of it, mica first copies the chunk's content from the cache into the data file. On XFS and btrfs, that copy is a reflink. On ext4 it is a copy. A chunk of zeros needs no copy, because every range that is not local is a hole.</p>
+<p>Most writes never leave the ublk queue thread: an <a href="https://man7.org/linux/man-pages/man7/io_uring.7.html">io_uring</a> write into the data file, and an update in memory. Writes to new chunks, FUA writes and FLUSH go to the disk engine.</p>
+<p>A <b>FLUSH</b> is the guest's request for durability, for example at <code>fsync</code> or at a journal commit. On FLUSH, mica:</p>
+<ol>
+<li>Syncs the data files written since the last FLUSH.</li>
+<li>Appends the chunks that became local to the <b>dirty log</b>, and syncs it. The dirty log lists the local chunks of a disk.</li>
+</ol>
+<p>The order matters: the log never lists a chunk whose data a power cut can lose. Most FLUSHes are one <code>fdatasync</code>. <b>A FLUSH never touches S3.</b></p>
+<p>Linux starts writeback late: after 10% of free memory is dirty, or after 30 s. So after each 16 MiB of writes, mica starts writeback of the data files itself, with <a href="https://man7.org/linux/man-pages/man2/sync_file_range.2.html"><code>sync_file_range</code></a>. Then a FLUSH after a large write finds little left to write.</p>
+<figure>
+<svg id="d-write" viewBox="0 0 860 260" role="img" aria-labelledby="d-write-t">
+<title id="d-write-t">A write goes into the data file and sets a bit in the recent bitmap. A FLUSH syncs the data files, then appends to the dirty log and syncs it. A checkpoint later reads chunks from the data files and uploads them to S3.</title>
+</svg>
+<figcaption>A write and a FLUSH stay on the local SSD. The checkpoint is a separate step.</figcaption>
+</figure>
+<p>A write that returned also survives a crash of the daemon before any FLUSH. The kernel's page cache keeps the data, and a bitmap in <code>/run</code> (<code>recent</code>) lists the chunks that became local since their last FLUSH. <code>/run</code> is a tmpfs: it survives a daemon crash, as the page cache does, and a reboot clears it, as it clears the page cache.</p>
+
+<h3>One local layout for every filesystem</h3>
+<p>mica needs only plain Linux file calls: sparse files, <code>fdatasync</code>, <code>copy_file_range</code> and hole punching. It works on ext4, XFS and btrfs. A reflink only makes the first copy of a chunk cheaper.</p>
+
+<h2 id="read">Reads</h2>
+<p>mica splits a read by chunk. For each part, the first match wins:</p>
+<ol>
+<li>A local chunk: read the data file.</li>
+<li>A zero chunk: return zeros.</li>
+<li>A chunk in the cache: read the cache file.</li>
+<li>Else: get the chunk from S3, decompress it, check its hash, store it in the cache, then read it.</li>
+</ol>
+<p>Many reads that miss the same chunk share one GET. Steps 1 to 3 run on the queue thread with io_uring, with no lock wait and no other thread.</p>
+<p>Three kinds of download run behind the guest's reads, in this order of priority:</p>
+<ul>
+<li><b>Reads</b> by the guest come first.</li>
+<li><b>Likely reads.</b> When reads follow each other, mica fetches the next chunks: 1 MiB ahead first, then up to 8 MiB (read-ahead). At attach, mica also fetches the <b>read profile</b>: the chunks that the guest read first in its last session, up to 64 MiB.</li>
+<li><b>Fill.</b> When the link has nothing else to do, mica downloads the rest of the disk, in disk order. Then every read is local.</li>
+</ul>
+
+<h2 id="checkpoint">Checkpoints</h2>
+<p>A <b>checkpoint</b> uploads the local chunks that S3 does not have, then commits a new root. It starts 30 s after the last one, or earlier when 512 MiB of changes wait. It also runs at detach and at snapshot.</p>
+<ol>
+<li>Take the list of unsaved chunks. Later changes go to the next checkpoint, so a busy writer cannot make a checkpoint last for ever.</li>
+<li>For each chunk, read it into memory and PUT it. Up to 64 MiB are in flight. The guest keeps writing in place.</li>
+<li>PUT the changed pages and the new root.</li>
+<li>Check that this machine still owns the disk. Then write the head.</li>
+</ol>
+<p>A chunk stays local after its upload, so the next write to it costs nothing extra. Saved chunks leave the data files only when local data passes its limit, and at detach. They go into the cache.</p>
+<p><b>Garbage collection</b> (GC) deletes objects that no root needs and that are older than 24 hours. A GC can see a new upload as old only if it runs while the PUT ends. So during an upload, mica reads the GC state once a second. Until a check shows that no GC ran, the first write to an uploaded chunk keeps a copy of the uploaded content. If a GC ran, the checkpoint checks every committed chunk and page, and uploads a deleted one again.</p>
+
+<h2 id="move">Moving a disk</h2>
+<p>This is the main use of mica. A sandbox stops on machine A and starts on machine B.</p>
+<figure>
+<svg id="d-move" viewBox="0 0 860 330" role="img" aria-labelledby="d-move-t">
+<title id="d-move-t">Machine A unmounts, runs a last checkpoint and deletes the attached marker. Machine B creates the marker, reads the head and the root, makes the device and boots. Then it fetches the read profile and fills the rest of the disk when the link is idle.</title>
+</svg>
+<figcaption>Machine B copies nothing before the guest starts. The attach is three small requests.</figcaption>
+</figure>
+<p>Only one machine may write a disk. With S3 conditional writes, the claim is one atomic create: a <code>PUT</code> with <code>If-None-Match: *</code>. Of two machines that claim at the same moment, only one creates the marker. RustFS, AWS S3, R2 and MinIO support this. For a store without it, such as Garage, mica writes a claim, waits 1 s and reads it back. Then an attach takes about 1 s.</p>
+
+<h2 id="safe">Crash safety</h2>
+<ul>
+<li><b>After a FLUSH returns,</b> its writes survive a crash of mica and a power cut.</li>
+<li><b>After a write returns,</b> it survives a crash of mica, also without a FLUSH. The daemon restarts with <a href="https://docs.kernel.org/block/ublk.html">ublk user recovery</a>: the kernel holds the device's I/O, and the new daemon takes the device over. The guest sees a pause of about 1 s.</li>
+<li><b>After a detach,</b> S3 has all data, and the disk can attach anywhere.</li>
+</ul>
+<p>A test harness checks the first two promises. A writer fills a 256 MiB area with 4 KiB blocks that each name their block, their write and a CRC. It FLUSHes now and then. At a random moment, a device-mapper target under the data folder drops every write: a power cut. Then the daemon dies, and the folder is mounted again as after a reboot. Every block must hold its last write before the last completed FLUSH, or a later one.</p>
+<div class="table-wrap"><table>
+<tr><th>Test</th><th>Data folder</th><th>Runs</th><th>Runs that lost a write</th></tr>
+<tr><td>Power cut</td><td>btrfs</td><td class="n">6</td><td class="n">0</td></tr>
+<tr><td>Power cut</td><td>XFS</td><td class="n">6</td><td class="n">0</td></tr>
+<tr><td>Power cut</td><td>ext4</td><td class="n">6</td><td class="n">0</td></tr>
+<tr><td>Daemon killed while the guest writes (every returned write must survive)</td><td>btrfs</td><td class="n">6</td><td class="n">0</td></tr>
+</table></div>
+
+<h2 id="lab">The lab</h2>
+<p>All tests ran on one machine. S3 is local, but its link is limited, so the numbers show how mica behaves on a slow link.</p>
+<div class="table-wrap"><table>
+<tr><th>Part</th><th>Setup</th></tr>
+<tr><td>Machine</td><td>16 CPUs, 27 GiB RAM, NVMe SSD, Fedora 44, Linux 7.0</td></tr>
+<tr><td>S3</td><td>RustFS 1.0.1 in Docker, 100 MiB/s down and up, 1 ms round trip (also 20 ms in one series)</td></tr>
+<tr><td>Local disk</td><td>btrfs on the NVMe, limited to 300 MiB/s read and write for the mica daemon (cgroup <code>io.max</code>)</td></tr>
+<tr><td>VM</td><td>Firecracker 1.16.1, 2 vCPUs, 2 GiB RAM, Ubuntu 24.04 or Alpine 3.22 on a 100 GiB mica disk</td></tr>
+<tr><td>mica</td><td>256 KiB chunks, checkpoints every 30 s or at 512 MiB, conditional writes on</td></tr>
+</table></div>
+<p>The limits of the lab, measured without mica: a 4 MiB GET or PUT stream gets 91–97 MiB/s. The disk does 300 MiB/s, and 1,799 4 KiB writes with <code>fdatasync</code> per second.</p>
+<p class="note">The test data is random (AES-CTR), so it does not compress and no two chunks are equal. Real system files compress: <code>/usr/bin</code> and Python libraries (2.0 GiB) uploaded as 675 MiB.</p>
+
+<h2 id="host">Results on the host</h2>
+<p>A script writes 42,048 files (7.93 GiB) into a 20 GiB mica disk with ext4: 48 files of 64 MiB, 2,000 files of 256 KiB to 2 MiB, and 40,000 files of 4 KiB to 128 KiB. Every read pass checks every file against its checksum. All passes found all files correct. "Cold" means an empty cache: every chunk comes from S3.</p>
+<div class="table-wrap"><table>
+<tr><th>Step</th><th>v0.1</th><th>v0.2</th></tr>
+<tr class="key"><td>Attach one disk (p50 of 10)</td><td class="n">1,035 ms</td><td class="n">24 ms</td></tr>
+<tr><td>Attach 4 disks at the same time</td><td class="n">4.2 s</td><td class="n">0.05 s</td></tr>
+<tr><td>Write 7.93 GiB of files (into the page cache), then <code>sync</code></td><td class="n">13.9 s + 16.0 s</td><td class="n">17.3 s + 15.0 s</td></tr>
+<tr><td>Start of the write until all data is in S3</td><td class="n">122.4 s</td><td class="n">120.4 s</td></tr>
+<tr><td>Cold: attach and mount</td><td class="n">1.29–1.31 s</td><td class="n">0.14–0.19 s</td></tr>
+<tr><td>Cold: first byte of a 64 MiB file</td><td class="n">0.16 s</td><td class="n">0.00–0.02 s</td></tr>
+<tr><td>Cold: read 100 small files, one after the other</td><td class="n">0.57 s</td><td class="n">0.23–0.41 s</td></tr>
+<tr><td>Cold: read and check all files, 1 reader</td><td class="n">115.2 s</td><td class="n">89.5 s</td></tr>
+<tr><td>Cold: read and check all files, 8 readers</td><td class="n">83.8 s</td><td class="n">82.6 s</td></tr>
+<tr><td>Whole disk local after a cold attach (background fill)</td><td class="n">never</td><td class="n">86 s</td></tr>
+<tr><td>Warm: read and check all files, 1 reader</td><td class="n">26.8 s</td><td class="n">27.3 s</td></tr>
+</table></div>
+<p>The link sets the cold limit: 7.93 GiB at 95 MiB/s takes at least 85 s. v0.2 comes close with one reader, because read-ahead keeps several downloads in flight. The disk limit (300 MiB/s) sets the warm limit. The upload also needs at least 85 s. Checkpoints start it while the files are written, but the host writes much faster than the link, so the link sets this time too.</p>
+
+<h3>Writes and FLUSH on the host</h3>
+<p>A small tool writes 4 KiB blocks with <code>O_DIRECT</code> straight on the mica device, for 15 s each. The first five rows are the mean of 3 rounds on a quiet machine. The last two come from one earlier run of both builds, one after the other. v0.2a is v0.2 with one file per local chunk, the layout before the data files.</p>
+<div class="table-wrap"><table>
+<tr><th>Test</th><th>v0.2a</th><th>v0.2</th></tr>
+<tr><td>Write + <code>fdatasync</code>, idle disk</td><td class="n">1,515 per s</td><td class="n">1,438 per s</td></tr>
+<tr class="key"><td>Longest FLUSH right after a 2 GiB write</td><td class="n">3.6–4.6 s</td><td class="n">0.46–0.95 s</td></tr>
+<tr><td>Write + <code>fdatasync</code> while that 2 GiB uploads</td><td class="n">586 per s</td><td class="n">695 per s</td></tr>
+<tr><td>Random write + <code>fdatasync</code> to chunks the last checkpoint saved</td><td class="n">265 per s</td><td class="n">584 per s</td></tr>
+<tr class="key"><td>Random write to saved chunks, no sync</td><td class="n">512 per s</td><td class="n">19,290 per s</td></tr>
+<tr><td>Random 4K read of saved local chunks, queue depth 1</td><td class="n">56,326 per s</td><td class="n">84,853 per s</td></tr>
+<tr><td>4 parallel writers, 1 GiB each, 1 MiB direct writes</td><td class="n">1,651 MiB/s</td><td class="n">1,651 MiB/s</td></tr>
+</table></div>
+<p>The idle FLUSH rate is 80% of the raw disk's 1,799 per second. It is 5% lower than with one file per chunk. A test without mica shows the cause: on btrfs, a synced 4 KiB write into a large file costs about 50 µs more than one into a new small file.</p>
+
+<h2 id="fc">Results in Firecracker</h2>
+<p>The VM's root disk is a 100 GiB mica disk with ext4. The mica device goes straight to Firecracker as a virtio block device (<code>io_engine = Async</code>). A boot time is from <code>mica disk attach</code> until ssh in the guest answers. It includes the attach, the start of Firecracker, the kernel and the init system.</p>
+<p class="note">These Firecracker numbers come from the v0.2 build before the data-file layout. Boots and restores were not measured again after that change. Guest <code>fdatasync</code> measured the same for both layouts.</p>
+<div class="table-wrap"><table>
+<tr><th>Test (1 ms round trip)</th><th>v0.1</th><th>v0.2</th></tr>
+<tr class="key"><td>Cold boot, Ubuntu (empty cache)</td><td class="n">4.61 s</td><td class="n">2.33 s</td></tr>
+<tr><td>Warm boot, Ubuntu / Alpine</td><td class="n">3.29 s / –</td><td class="n">2.28 s / 1.44 s</td></tr>
+<tr><td>Cold boot of a disk after an 8 GiB fill</td><td class="n">5.5–7.9 s</td><td class="n">2.39 s</td></tr>
+<tr><td>S3 download during a cold boot</td><td class="n">≈ 250 MiB</td><td class="n">136 MiB (before compression)</td></tr>
+<tr><td>Upload of a new root filesystem (270 MiB of files)</td><td class="n">5.7 s</td><td class="n">1.5 s</td></tr>
+<tr><td>Guest: write 7.9 GiB of files until all data is in S3</td><td class="n">169.5 s</td><td class="n">148.6 s</td></tr>
+</table></div>
+<div class="table-wrap"><table>
+<tr><th>Test (20 ms round trip, closer to S3 in the same region)</th><th>v0.1</th><th>v0.2</th></tr>
+<tr class="key"><td>Cold boot, Ubuntu</td><td class="n">7.46 s</td><td class="n">3.96 s</td></tr>
+<tr><td>Cold boot of a disk after an 8 GiB fill</td><td class="n">8.2–9.5 s</td><td class="n">4.0 s</td></tr>
+<tr><td>Warm boot, Ubuntu</td><td class="n">3.52 s</td><td class="n">2.37 s</td></tr>
+<tr><td>Cold / warm boot, Alpine</td><td class="n">4.01 s / 2.64 s</td><td class="n">2.68 s / 1.51 s</td></tr>
+<tr><td>Guest: read and check 7.9 GiB, 1 reader, cold</td><td class="n">149.6 s</td><td class="n">109.6 s</td></tr>
+</table></div>
+<p>Two changes give most of the gain. 256 KiB chunks cut the download of a cold boot nearly in half: with 4 MiB chunks, each small read of a file or of ext4 metadata cost 4 MiB. The attach went from about 1 s to 24 ms, because the claim is one atomic create, and each disk has its own lock.</p>
+
+<h3>I/O in the guest</h3>
+<p><code>fio</code> in the guest, on a 4 GiB file, with direct I/O. "Nothing waits" means that a checkpoint ran before each test. "During upload" runs right after the 4 GiB file is written, while its checkpoint uploads.</p>
+<div class="table-wrap"><table>
+<tr><th>fio in the guest</th><th>v0.1</th><th>v0.2, nothing waits</th><th>v0.2, during upload</th></tr>
+<tr><td>4K random read, queue depth 32</td><td class="n">166.5k IOPS</td><td class="n">159.7k IOPS</td><td class="n">47.3k IOPS</td></tr>
+<tr><td>4K random read, queue depth 1</td><td class="n">26.8k IOPS</td><td class="n">27.8k IOPS</td><td class="n">20.9k IOPS</td></tr>
+<tr><td>4K random write, queue depth 32</td><td class="n">124.8k IOPS</td><td class="n">110.0k IOPS</td><td class="n">100.0k IOPS</td></tr>
+<tr><td>4K random write, queue depth 1</td><td class="n">16.5k IOPS</td><td class="n">11.5k IOPS</td><td class="n">12.8k IOPS</td></tr>
+</table></div>
+<p>Firecracker opens the device without <code>O_DIRECT</code>, so guest reads also hit the host page cache. v0.1 never uploaded during these tests, because it checkpointed only every 3 minutes. While an upload runs, reads share the SSD with the upload.</p>
+<p>Guest <code>fdatasync</code> rates moved by up to 2 times between runs on this loaded machine. In one session, both local layouts did 355 per second. Right after a 4 GiB write, while its upload ran, the data-file layout did 68 per second and the older layout none. The early writeback above came after these runs, and is not measured in the guest yet.</p>
+
+<h2 id="snap">Memory snapshots</h2>
+<p>A Firecracker <a href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md">memory snapshot</a> stores the guest RAM in a file. A restore starts a new Firecracker from that file. The guest continues without a boot. In the test, the guest runs an HTTP server that holds 384 MiB of random data in RAM, and each GET returns a hash of all of it. So the first answer needs all app memory back, and the hash proves that it is correct. Every restore returned the correct hash.</p>
+<p>The memory file (2 GiB) is an ordinary file on a second mica disk. mica stores it in 307 MiB: zero chunks are not stored, and the rest is compressed. Each restore uses a new clone of the root disk's snapshot.</p>
+<div class="table-wrap"><table>
+<tr><th>Restore</th><th>v0.1</th><th>v0.2, 1 ms</th><th>v0.2, 20 ms</th></tr>
+<tr><td>Cold: attach of the root disk clone and the memory disk</td><td class="n">2.43 s</td><td class="n">0.26 s</td><td class="n">0.57 s</td></tr>
+<tr class="key"><td>Cold: ssh answers</td><td class="n">2.38 s</td><td class="n">0.64 s</td><td class="n">1.56 s</td></tr>
+<tr><td>Cold: app answers</td><td class="n">6.71 s</td><td class="n">4.63 s</td><td class="n">5.77 s</td></tr>
+<tr><td>Cold: S3 download</td><td class="n">630 MiB</td><td class="n">453 MiB</td><td class="n">–</td></tr>
+<tr class="key"><td>Warm: ssh / app answers</td><td class="n">0.20 / 0.63 s</td><td class="n">0.23 / 0.71 s</td><td class="n">0.20 / 0.64 s</td></tr>
+<tr><td>Memory disk in S3</td><td class="n">996 MiB</td><td class="n">307 MiB</td><td class="n">361 MiB</td></tr>
+</table></div>
+<p>Warm, ssh answers 0.23 s after the snapshot load. A warm boot needs 2.28 s from attach until ssh. A cold restore is limited by bytes: the app's 384 MiB of random data does not compress, and alone it takes about 4 s on a 95 MiB/s link. A restore that touches less memory starts faster.</p>
+<p>mica uses Firecracker's File backend: the kernel loads each page from the memory file when the guest first uses it. A test with a userfaultfd handler, which installs a recorded set of pages first, was no faster cold (4.77 s against 4.82 s, both limited by the link), and slower warm on demand (3.19 s against 0.77 s). So mica stays a plain block device, not tied to Firecracker. VMs that restore from one snapshot on one machine share mica's chunk cache, so each chunk downloads once.</p>
+
+<h2 id="limits">Limits</h2>
+<ul>
+<li><b>The link sets the cold speed.</b> mica can change the order of downloads, not the bytes that the guest needs. Compression and small chunks lower the bytes.</li>
+<li><b>Firecracker does not pass discard to the disk.</b> Space that a guest frees stays in mica and in S3. In the guest fill test, 4 GiB of deleted data uploaded.</li>
+<li><b>An attach takes about 1 s without conditional writes,</b> for example on Garage.</li>
+<li><b>Writes during a large upload share the SSD</b> with the upload and with its writeback.</li>
+<li><b>Two GC gaps.</b> A page that GC deletes between a commit and its repair is lost if the machine loses power in that window. Without conditional writes, two GCs at the same time can hide each other.</li>
+<li><b>One lab machine.</b> S3 runs on the same SSD as mica, and the machine also ran other work, so tail latencies here are worse than on a dedicated node.</li>
+</ul>
+
+<h2 id="sources">Sources</h2>
+<ul>
+<li><a href="../mica-v0-2-optimization/">mica v0.2 optimization</a>: each change, its measurement and its review.</li>
+<li><a href="../mica/">mica v0.1 deck</a>: the first design.</li>
+<li><a href="https://docs.kernel.org/block/ublk.html">Linux ublk documentation</a>, including user recovery.</li>
+<li><a href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md">Firecracker snapshot support</a>.</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html">S3 conditional writes</a>.</li>
+<li><a href="https://man7.org/linux/man-pages/man2/sync_file_range.2.html"><code>sync_file_range(2)</code></a> and <a href="https://docs.kernel.org/core-api/errseq.html">errseq</a>, for how Linux reports writeback errors.</li>
+<li><a href="https://github.com/rustfs/rustfs">RustFS</a>, the S3 server of the lab.</li>
+</ul>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  if (!window.rough) return;
+  const NS = "http://www.w3.org/2000/svg";
+  const INK = "#1d2329", MUTED = "#5d6670", ACCENT = "#2457a6";
+  function setup(id) {
+    const svg = document.getElementById(id);
+    return { svg, rc: rough.svg(svg) };
+  }
+  function text(d, x, y, s, opt = {}) {
+    const t = document.createElementNS(NS, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y);
+    t.setAttribute("text-anchor", opt.anchor || "middle");
+    t.setAttribute("font-family", "system-ui,-apple-system,sans-serif");
+    t.setAttribute("font-size", opt.size || 14);
+    t.setAttribute("fill", opt.color || INK);
+    if (opt.bold) t.setAttribute("font-weight", "650");
+    String(s).split("\n").forEach((line, i) => {
+      const span = document.createElementNS(NS, "tspan");
+      span.setAttribute("x", x); span.setAttribute("dy", i ? "1.25em" : "0");
+      span.textContent = line; t.appendChild(span);
+    });
+    d.svg.appendChild(t);
+  }
+  function box(d, x, y, w, h, label, opt = {}) {
+    d.svg.appendChild(d.rc.rectangle(x, y, w, h, {
+      roughness: 1.1, stroke: opt.stroke || INK, strokeWidth: 1.3,
+      fill: opt.fill || "#fff", fillStyle: "solid", seed: opt.seed || 3
+    }));
+    const lines = String(label).split("\n").length;
+    text(d, x + w / 2, y + h / 2 - (lines - 1) * 8.5 + 5, label, { bold: opt.bold, size: opt.size, color: opt.color });
+  }
+  function arrow(d, x1, y1, x2, y2, label, opt = {}) {
+    const color = opt.color || INK;
+    d.svg.appendChild(d.rc.line(x1, y1, x2, y2, { roughness: 0.9, stroke: color, strokeWidth: 1.3, seed: 7 }));
+    const a = Math.atan2(y2 - y1, x2 - x1), l = 10;
+    d.svg.appendChild(d.rc.linearPath([
+      [x2 - l * Math.cos(a - 0.45), y2 - l * Math.sin(a - 0.45)], [x2, y2],
+      [x2 - l * Math.cos(a + 0.45), y2 - l * Math.sin(a + 0.45)]
+    ], { roughness: 0.6, stroke: color, strokeWidth: 1.3, seed: 9 }));
+    if (label) text(d, opt.lx ?? (x1 + x2) / 2, opt.ly ?? (y1 + y2) / 2 - 8, label,
+      { size: 12.5, color: opt.labelColor || MUTED, anchor: opt.anchor });
+  }
+
+  // The parts
+  let d = setup("d-parts");
+  box(d, 20, 30, 170, 64, "Guest\nVM · container · host");
+  box(d, 20, 170, 170, 64, "/dev/mica/disk\nublk driver (kernel)");
+  box(d, 280, 140, 210, 124, "mica daemon\nqueue threads\ndisk engine\ncheckpoint", { stroke: ACCENT });
+  box(d, 680, 30, 170, 96, "Local SSD\ndata files\nchunk cache");
+  box(d, 680, 240, 170, 70, "S3 bucket\nchunks · pages · roots", { fill: "#eef4fb" });
+  arrow(d, 105, 94, 105, 170, "read · write · FLUSH", { lx: 118, ly: 136, anchor: "start" });
+  arrow(d, 190, 202, 280, 202);
+  arrow(d, 490, 160, 680, 90, "write in place,\nsync on FLUSH", { lx: 560, ly: 92 });
+  arrow(d, 680, 255, 490, 215, "GET on a cache miss", { lx: 590, ly: 216 });
+  arrow(d, 490, 245, 680, 290, "checkpoint: PUT", { lx: 575, ly: 296, color: ACCENT, labelColor: ACCENT });
+
+  // A disk in S3
+  d = setup("d-s3");
+  box(d, 20, 30, 150, 50, "disks/disk-1/head");
+  box(d, 20, 120, 150, 50, "snapshots/base");
+  box(d, 20, 210, 150, 50, "disks/disk-2/head");
+  box(d, 250, 30, 130, 50, "root 42", { stroke: ACCENT });
+  box(d, 250, 160, 130, 50, "root 41");
+  box(d, 470, 30, 120, 46, "page 1′", { stroke: ACCENT });
+  box(d, 470, 120, 120, 46, "page 0");
+  box(d, 470, 210, 120, 46, "page 1");
+  box(d, 680, 20, 150, 40, "chunk c′", { stroke: ACCENT, size: 13 });
+  box(d, 680, 100, 150, 40, "chunk a · chunk b", { size: 13 });
+  box(d, 680, 220, 150, 40, "chunk c", { size: 13 });
+  arrow(d, 170, 55, 250, 55);
+  arrow(d, 170, 145, 250, 180);
+  arrow(d, 170, 235, 250, 195);
+  arrow(d, 380, 50, 470, 50, null, { color: ACCENT });
+  arrow(d, 380, 62, 470, 138);
+  arrow(d, 380, 178, 470, 148);
+  arrow(d, 380, 195, 470, 230);
+  arrow(d, 590, 46, 680, 40, null, { color: ACCENT });
+  arrow(d, 590, 140, 680, 122);
+  arrow(d, 590, 236, 680, 240);
+  text(d, 430, 290, "Root 42 changed one chunk: it has one new page. All else is shared.", { size: 13, color: MUTED });
+
+  // Writes and FLUSH
+  d = setup("d-write");
+  box(d, 20, 30, 130, 56, "Guest write");
+  box(d, 220, 20, 200, 76, "Data file\n(page cache)\n+ bit in recent");
+  box(d, 20, 160, 130, 56, "Guest FLUSH");
+  box(d, 220, 150, 200, 76, "1. fdatasync data files\n2. append to dirty log\n3. fdatasync the log");
+  box(d, 520, 20, 140, 76, "Checkpoint\nevery 30 s\nor 512 MiB", { stroke: ACCENT });
+  box(d, 730, 30, 110, 56, "S3", { fill: "#eef4fb" });
+  arrow(d, 150, 58, 220, 58, "returns, no sync", { ly: 112 });
+  arrow(d, 150, 188, 220, 188);
+  arrow(d, 320, 96, 320, 150, "every 16 MiB:\nstart writeback", { lx: 334, ly: 116, anchor: "start" });
+  arrow(d, 420, 58, 520, 58, "read chunk", { ly: 48 });
+  arrow(d, 660, 58, 730, 58, "PUT", { ly: 48, color: ACCENT, labelColor: ACCENT });
+  text(d, 640, 178, "A FLUSH never touches S3.", { size: 14, color: ACCENT, bold: true });
+  text(d, 640, 200, "Its data is on the SSD when it returns.", { size: 13, color: MUTED });
+
+  // Moving a disk
+  d = setup("d-move");
+  text(d, 140, 28, "Machine A", { bold: true });
+  text(d, 430, 28, "S3", { bold: true });
+  text(d, 720, 28, "Machine B", { bold: true });
+  [140, 430, 720].forEach(x => d.svg.appendChild(d.rc.line(x, 40, x, 315, { stroke: "#b7bec6", strokeWidth: 1, roughness: 0.6, seed: 11 })));
+  box(d, 50, 48, 180, 34, "umount (kernel FLUSH)", { size: 13 });
+  arrow(d, 140, 118, 430, 118, "last checkpoint: chunks, pages, root, head", { ly: 110 });
+  arrow(d, 140, 152, 430, 152, "DELETE attached marker", { ly: 144 });
+  arrow(d, 720, 186, 430, 186, "PUT attached (If-None-Match: *)", { ly: 178 });
+  arrow(d, 720, 220, 430, 220, "GET head, GET root", { ly: 212 });
+  box(d, 610, 234, 220, 34, "/dev/mica/disk → guest starts", { size: 13, stroke: ACCENT });
+  arrow(d, 430, 300, 720, 300, "read profile first, then fill when idle", { ly: 292, color: ACCENT, labelColor: ACCENT });
+})();
+</script>
+</body>
+</html>
