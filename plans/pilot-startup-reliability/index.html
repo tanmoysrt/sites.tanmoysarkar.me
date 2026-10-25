@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pilot startup and recovery audit</title>
+<style>
+:root{color-scheme:light;font:16px/1.6 system-ui,sans-serif;color:#202627;background:#fcfcfa}body{max-width:1100px;margin:auto;padding:42px 24px}h1,h2,h3{line-height:1.2}h1{font-size:2.5rem;max-width:800px}h2{margin-top:46px}p{max-width:850px}a{color:#126348}nav{display:flex;gap:20px;flex-wrap:wrap;border-block:1px solid #d9deda;padding:14px 0}table{border-collapse:collapse;width:100%;font-size:.93rem}th,td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #d9deda}th{background:#f0f3ef}code{font-size:.88em;background:#f0f3ef;padding:2px 5px}.status{border-left:4px solid #b47d1c;padding:10px 18px;background:#faf5e8}.log article{border-top:1px solid #d9deda;padding:16px 0}.log p{margin:6px 0}time{font-variant-numeric:tabular-nums;color:#59645e}small{color:#59645e}li{margin:8px 0}@media(max-width:700px){body{padding:24px 16px}h1{font-size:2rem}.scroll{overflow:auto}table{min-width:650px}}
+</style></head><body>
+<small>Engineering audit · started 25 October 2026 · UTC times</small>
+<h1>Pilot startup and recovery audit</h1>
+<p>Pilot must show a usable page while a bench starts or recovers. This audit checks a new self-hosted install, a cloud-managed install, and a warm host that waits for cloud configuration. It also checks whether a user can retry after a task stops.</p>
+<div class="status"><strong>In progress.</strong> No reliability claim yet. The test host is a fresh Ubuntu 26.04 VM with about 2 GB of RAM. Pilot uses <code>develop</code>. Frappe will use <code>version-16-hotfix</code> with lite mode.</div>
+<p><a href="https://sites.tanmoysarkar.me/plans/pilot-stability-hunt/">Previous audit</a> · <a href="https://github.com/frappe/pilot/tree/develop">Pilot source</a></p>
+<nav><a href="#plan">Plan</a><a href="#matrix">Test matrix</a><a href="#findings">Findings</a><a href="#evidence">Evidence and limits</a><a href="#log">Append-only log</a></nav>
+<h2 id="plan">Plan</h2>
+<ol>
+<li><strong>Inventory.</strong> Record the code revision, services, resource limits, and current host state. Preserve existing data and changes.</li>
+<li><strong>Install and observe.</strong> Install Pilot develop. Sample the page and API during first start, setup, and the switch to production services.</li>
+<li><strong>Trace state.</strong> Read setup, cloud configuration, routes, task ownership, process control, and browser recovery code. Find every point where partial work can become visible.</li>
+<li><strong>Inject failures.</strong> Cancel queued and running tasks. Kill a task or worker between steps. Restart Admin and dependencies. Check what the user sees and how retry works.</li>
+<li><strong>Repair and verify.</strong> Make small fixes at the state owner. Add regression tests. Repeat each failed experiment with the patch installed.</li>
+<li><strong>Review and hand over.</strong> List verified behavior, remaining limits, patch locations, and the final host state. Keep the experiment history below.</li>
+</ol>
+<h2 id="matrix">Test matrix</h2>
+<div class="scroll"><table><thead><tr><th>Path</th><th>Checks</th><th>Status</th></tr></thead><tbody>
+<tr><td>Self-hosted setup</td><td>First page, refresh, duplicate start, setup failure, retry, production handoff, login</td><td>Pending</td></tr>
+<tr><td>Cloud setup</td><td>Configuration delivery, Admin route, readiness, delayed dependencies, repeated configuration</td><td>Pending</td></tr>
+<tr><td>Warm host</td><td>Pending page, unavailable cloud metadata, delayed configuration, transition to ready</td><td>Pending</td></tr>
+<tr><td>Task recovery</td><td>Cancel before start, cancel during work, process kill, worker restart, callback recovery, user retry</td><td>Pending</td></tr>
+<tr><td>HTTP continuity</td><td>Sample page, bootstrap, assets, login, and site readiness across transitions</td><td>Pending</td></tr>
+</tbody></table></div>
+<h2 id="findings">Findings</h2><p>No confirmed finding yet. Each finding will state its cause, user effect, fix, and evidence. A suspected issue is not a verified failure.</p>
+<h2 id="evidence">Evidence and limits</h2><p>The audit uses one development VM. It can show a failure and verify a repair under stated test conditions. It cannot prove that every request will succeed under every infrastructure failure. Page responses and API errors are recorded separately. A valid API error must remain an error; a working page must give the user a clear next action.</p>
+<h2 id="log">Append-only log</h2><p>Entries are added at the end. Corrections use a new entry. Credentials, private addresses, account data, and raw host logs are excluded.</p>
+<div class="log">
+<article><time>2026-10-25 13:27 UTC</time><h3>001 · Scope and baseline</h3><p>Read the previous audit, the repository rules, and the publishing instructions. The local Pilot checkout is clean on develop at <code>0c82635f</code>. SSH access works. The target VM has no Pilot install or bench data. Started the host installer from this checkout. The plan covers self-hosted, cloud, warm-host, and task recovery paths.</p></article>
+<!-- Append new log entries above this marker. -->
+</div></body></html>
