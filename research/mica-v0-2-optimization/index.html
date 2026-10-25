@@ -331,6 +331,8 @@
   <tr class="key"><td>4. Compression</td><td>Memory restore, cold: app answers / S3 download</td><td class="n">6.71 s / 630 MiB</td><td class="n">4.66 s / 451 MiB</td></tr>
   <tr><td>4. Continuous checkpoints</td><td>Guest: start of the 8 GiB write until all data is in S3</td><td class="n">169.5 s</td><td class="n">139.3 s</td></tr>
   <tr><td>4. Continuous checkpoints</td><td>Guest fio: 4K write + <code>fdatasync</code></td><td class="n">427 per second</td><td class="n">263 per second (worse)</td></tr>
+  <tr class="key"><td>8. Local storage</td><td>Host: random 4K writes to saved chunks (before: v0.2a)</td><td class="n">1,174 per second</td><td class="n">25,611 per second</td></tr>
+  <tr class="key"><td>8. Local storage</td><td>Host: same, with <code>fdatasync</code> after each (before: v0.2a)</td><td class="n">217 per second</td><td class="n">712 per second</td></tr>
 </table></div>
 
 <h3>1. Attach: an atomic claim, and no global lock</h3>
@@ -445,17 +447,45 @@
 </ul>
 <p><b>Decision.</b> mica uses the File backend only, and has no userfaultfd code. mica stays a plain block device that is not tied to Firecracker: the memory file is an ordinary file on a mica disk. With the File backend, many VMs that restore from one snapshot also share the host page cache of the memory file, so they use less host RAM than with a handler, which copies each page into each VM. The lab handler and its test variants are removed.</p>
 
+<h3>8. Local storage: data files in place of chunk files</h3>
+<p><b>The problem.</b> In v0.2a each local chunk was a file. A checkpoint renamed the file to <code>.frozen</code>, uploaded it, then moved it into the cache. The next guest write to that chunk had to make a new file: a copy, a sync, a rename. The next FLUSH then had to sync the folder, and on btrfs that sync waited behind the checkpoint's own renames. With 256 KiB chunks there are 16 times more such files than with 4 MiB chunks.</p>
+<p><b>The change.</b> Each disk now has sparse data files, one per GiB of the disk, with each local chunk at its disk offset. The guest writes them in place. No write, FLUSH or checkpoint makes, renames or deletes a file.</p>
+<ul>
+  <li><b>A dirty log</b> lists the local chunks. FLUSH syncs the data files that changed, then appends new local chunks to the log, then syncs it. After a power loss, only listed chunks are local, and every other range is punched out. Two log files are used in turn, so one is always whole.</li>
+  <li><b>A bitmap in <code>/run</code></b> lists chunks that became local since their last FLUSH. <code>/run</code> is a tmpfs: the bitmap survives a crash of mica, as the page cache does, and a reboot clears it, as it clears the page cache. So no write that returned is lost in a daemon crash. Setting a bit is one memory store. A first version appended to a file instead, and that cut 4 parallel writers from 1,651 to 421 MiB/s on btrfs.</li>
+  <li><b>A checkpoint reads each chunk into memory</b> and uploads that. The chunk stays in place, and stays local after its upload, so the guest writes it again at once.</li>
+  <li><b>GC safety without frozen files.</b> GC can delete an upload only if a GC was running when the PUT ended. During the upload, mica reads GC activity once a second. An upload that ended before a read with no GC is safe. Until then, the first guest write to its chunk keeps a copy, in memory up to 64 MiB, then in a hold file. The repair after a GC uses the data file or that copy.</li>
+  <li><b>Saved chunks leave</b> the data files only when local data passes <code>dirty_limit_gib</code>, and at detach. They go into the cache first.</li>
+  <li><b>A FUA write</b> syncs its own data file under the same lock as FLUSH. Linux reports a writeback error only once to each open file, so two syncs at the same time could each miss a failure.</li>
+</ul>
+<p>It needs only plain Linux file calls: sparse files, <code>fdatasync</code>, <code>copy_file_range</code> (a reflink on btrfs and XFS, a copy on ext4) and hole punching (zeros where a filesystem has none).</p>
+<p><b>Results on the host</b>, 1 ms round trip, v0.2a (per-chunk files) and the new layout one after the other on the same machine state. A Python tool writes 4 KiB with <code>O_DIRECT</code> straight on the mica device:</p>
+<div class="table-wrap"><table>
+  <tr><th>Test</th><th>v0.1</th><th>v0.2a</th><th>v0.2, data files</th></tr>
+  <tr><td>Write + <code>fdatasync</code>, idle disk</td><td class="n">1,301 per second</td><td class="n">1,629 per second</td><td class="n">1,317 per second</td></tr>
+  <tr><td>Write + <code>fdatasync</code>, during a 2 GiB upload</td><td class="n">1,150 per second</td><td class="n">554 per second</td><td class="n">636 per second</td></tr>
+  <tr class="key"><td>Random write + <code>fdatasync</code> to chunks the last checkpoint saved</td><td class="n">1,457 per second</td><td class="n">217 per second</td><td class="n">712 per second</td></tr>
+  <tr class="key"><td>Random write to chunks the last checkpoint saved, no sync</td><td class="n">32,762 per second</td><td class="n">1,174 per second</td><td class="n">25,611 per second</td></tr>
+  <tr><td>Random 4K read of saved local chunks, queue depth 1</td><td class="n">–</td><td class="n">56,326 per second</td><td class="n">84,853 per second</td></tr>
+  <tr><td>4 parallel 1 GiB writers, 1 MiB direct writes</td><td class="n">–</td><td class="n">1,651 MiB/s</td><td class="n">1,651 MiB/s</td></tr>
+</table></div>
+<p>v0.1 checkpoints only every 180 s, so no upload runs during its 15 s tests. v0.2 uploads at 512 MiB of changes, so its rewrite tests run while chunks upload. With checkpoints off, the new layout does 41,407 rewrites per second without sync, more than v0.1.</p>
+<p><b>In the guest</b>, this host was busy (load average 5 to 18) during these runs, so guest numbers moved by up to 2 times between runs of one build. In the same session, guest <code>fdatasync</code> was 355 per second for both layouts. Right after a 4 GiB write, while its upload ran, the new layout did 68 per second, against none for v0.2a.</p>
+<p><b>Reviews.</b> Five rounds of review by codex found 22 problems in this change, all fixed. Most were orderings between FLUSH, the log rewrite and the freeing of space, and crash windows in the log and the bitmap. Codex also found three gaps that were there before: a GC that outlived the 10-minute wait, two GCs that could hide each other, and a stale GC lock that two GCs could both take. With conditional writes, the GC lock is now an atomic create, and a stale lock needs an operator. Without conditional writes, two GCs at once remain a gap.</p>
+<p><b>Rollback</b> is by binary, not by a setting. The S3 format is the same. A new build refuses a disk folder in the old layout, so a disk is detached with the old build first.</p>
+
 <h2>Open problems</h2>
 <ul>
-  <li><b>A FLUSH waits for seconds while a large upload runs.</b> In the test above, the guest finished no <code>fdatasync</code> in 15 s while mica uploaded 4 GiB. Each write to a chunk that the checkpoint already moved to the cache makes a new chunk file. The FLUSH must then sync the folder, and on btrfs this sync waits behind the writeback and the renames of the checkpoint. Possible fixes: keep the chunk file in place after its upload, so that a write does not make a new file; or slow the clean-up of the checkpoint while the guest flushes. This needs work before v0.2 is ready for databases.</li>
-  <li><b>Random writes right after a checkpoint are slower:</b> 11.5k against 16.5k IOPS at queue depth 1. After a checkpoint each chunk is clean, so the first write to it must copy it into a new file and sync the copy. With 256 KiB chunks there are 16 times more such copies than with 4 MiB chunks. A disk with mostly random writes can use <code>--chunk-size 1M</code> or <code>4M</code>.</li>
+  <li><b>A FLUSH during a large upload is still slow:</b> 636 per second on the host against 1,150 for v0.1, and about 70 per second in the guest. The cost moved: no folder sync any more, but the data file's sync waits behind the writeback of the large write that the upload reads.</li>
+  <li><b>An idle FLUSH is 19% slower than v0.2a</b> on the host (1,317 against 1,629 per second). The cause is not known yet. It is not the data file size: 64 MiB data files gave the same.</li>
+  <li><b>A page that GC deletes between a commit and its repair</b> is lost if the node loses power in that window. This gap was in v0.2a too.</li>
   <li><b>Firecracker does not pass discard to the disk.</b> Space that a guest frees stays in mica and in S3. This is a limit of the VMM, not of mica.</li>
 </ul>
 
 <h2>Not done yet</h2>
 <ul>
   <li><b>ublk zero-copy</b> (the last step of the plan).</li>
-  <li><b>A crash test.</b> The reviews checked the crash paths by reading the code. A test that cuts power in the middle of a checkpoint, and checks every file after recovery, would show it.</li>
+  <li><b>The crash test.</b> The harness is ready (<code>lab/bench/crash.sh</code>): a device-mapper target drops every write to the data folder at a random moment, then the daemon and its devices go, as in a reboot, and every block is checked. A second mode kills only the daemon. It needs a new version of the lab's root helper.</li>
 </ul>
 
 <h2>Sources</h2>
