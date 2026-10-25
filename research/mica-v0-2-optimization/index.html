@@ -477,6 +477,17 @@
 <p><b>Reviews.</b> Five rounds of review by codex found 23 problems in this change, all fixed. The last round found one. Most were orderings between FLUSH, the log rewrite and the freeing of space, and crash windows in the log and the bitmap. Codex also found three gaps that were there before: a GC that outlived the 10-minute wait, two GCs that could hide each other, and a stale GC lock that two GCs could both take. With conditional writes, the GC lock is now an atomic create, and a stale lock needs an operator. Without conditional writes, two GCs at once remain a gap.</p>
 <p><b>Rollback</b> is by binary, not by a setting. The S3 format is the same. A new build refuses a disk folder in the old layout, so a disk is detached with the old build first.</p>
 
+<h3>9. Crash test</h3>
+<p><code>lab/bench/crash.sh</code> runs a second mica daemon whose data folder sits on a device-mapper target. A writer fills a 256 MiB area of a disk with 4 KiB blocks that each name their block, the write that made them, and a CRC. It FLUSHes or writes with FUA now and then, and logs each write and each completed FLUSH. At a random moment (2 to 20 s, while checkpoints run every 3 s) the writer stops, and the target drops every write from then on: a power cut. Then the daemon dies, its ublk device is deleted and the folder is mounted again, as after a reboot. The new daemon uploads what is left and detaches. The disk is attached again, and every block must hold its last write before the last completed FLUSH (or a FUA write), or a later one. A second mode kills only the daemon while the writer runs. The next daemon takes the device over, and every write that returned must be there, flushed or not.</p>
+<div class="table-wrap"><table>
+  <tr><th>Mode</th><th>Data folder</th><th>Runs</th><th>Runs that lost data</th></tr>
+  <tr><td>Power cut</td><td>btrfs</td><td class="n">6</td><td class="n">0</td></tr>
+  <tr><td>Power cut</td><td>XFS</td><td class="n">6</td><td class="n">0</td></tr>
+  <tr><td>Power cut</td><td>ext4</td><td class="n">6</td><td class="n">0</td></tr>
+  <tr><td>Daemon killed, guest writes on</td><td>btrfs</td><td class="n">6</td><td class="n">0</td></tr>
+</table></div>
+<p>The first run found a bug that was there since v0.1: the node ID file was written without a sync. After a power cut it was empty, so the node took its own disks for another node's and kept their data as orphaned. Now the file is synced and renamed into place, and an empty ID stops the daemon with an error. A first version of the harness also counted FLUSHes that ended after the cut as durable; the writer now stops before the cut, as power would stop it.</p>
+
 <h2>Open problems</h2>
 <ul>
   <li><b>A FLUSH during a large upload is still slow:</b> 636 per second on the host against 1,150 for v0.1, and about 70 per second in the guest. The cost moved: no folder sync any more, but the data file's sync waits behind the writeback of the large write that the upload reads.</li>
@@ -488,7 +499,7 @@
 <h2>Not done yet</h2>
 <ul>
   <li><b>ublk zero-copy</b> (the last step of the plan).</li>
-  <li><b>The crash test.</b> The harness is ready (<code>lab/bench/crash.sh</code>): a device-mapper target drops every write to the data folder at a random moment, then the daemon and its devices go, as in a reboot, and every block is checked. A second mode kills only the daemon. It needs a new version of the lab's root helper.</li>
+
 </ul>
 
 <h2>Sources</h2>
