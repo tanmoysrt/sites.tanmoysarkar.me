@@ -263,6 +263,12 @@
   <tr><td>3. Prefetch</td><td>Guest: read and check all files, 1 reader, cold</td><td class="n">92.3 s</td><td class="n">88.3 s</td></tr>
   <tr><td>3. Prefetch</td><td>Clone: read and check all files, 8 readers</td><td class="n">26.5 s</td><td class="n">23.2 s</td></tr>
   <tr><td>3. Prefetch</td><td>Memory restore, cold: app answers / S3 download</td><td class="n">6.71 s / 630 MiB</td><td class="n">6.60 s / 652 MiB (worse than step 2)</td></tr>
+  <tr><td>4. Compression</td><td>Cold Firecracker boot (Ubuntu), attach until ssh answers</td><td class="n">4.61 s</td><td class="n">2.35 s</td></tr>
+  <tr><td>4. Compression</td><td>Memory disk upload (2 GiB memory file)</td><td class="n">996 MiB in 10.8 s</td><td class="n">358 MiB in 4.6 s</td></tr>
+  <tr class="key"><td>4. Compression</td><td>Memory restore, cold: ssh answers</td><td class="n">2.38 s</td><td class="n">0.55 s</td></tr>
+  <tr class="key"><td>4. Compression</td><td>Memory restore, cold: app answers / S3 download</td><td class="n">6.71 s / 630 MiB</td><td class="n">4.66 s / 451 MiB</td></tr>
+  <tr><td>4. Continuous checkpoints</td><td>Guest: start of the 8 GiB write until all data is in S3</td><td class="n">169.5 s</td><td class="n">139.3 s</td></tr>
+  <tr><td>4. Continuous checkpoints</td><td>Guest fio: 4K write + <code>fdatasync</code></td><td class="n">427 per second</td><td class="n">263 per second (worse)</td></tr>
 </table></div>
 
 <h3>1. Attach: an atomic claim, and no global lock</h3>
@@ -303,6 +309,23 @@
 <p><b>Review.</b> codex found six problems in this step, all fixed: a cancelled read could leave a counter high for ever; read-ahead could pile up tasks without limit; fetches could continue after a detach; the fill could hold the slots that read-ahead needs; a shutdown time-out could cancel a checkpoint in the middle of a freeze; and a repair check could run before a running GC sent its last delete.</p>
 <p><b>Result.</b> One cold reader is now at the link speed: 87 s for 7.9 GiB, which is 91 MiB/s. After a cold attach, the background fill makes the full disk local in 84 s, which is also the link limit. Boot times do not change.</p>
 <p><b>A regression.</b> The cold memory restore became slower: 6.60 s, with 652 MiB downloaded. The startup prefetch of the root disk downloaded its 64 MiB boot profile in 0.6 s. A restored guest does not read its boot files again, so this download only took bandwidth from the restore. Small fill downloads in the gaps between reads also took some. The fix for step 4: likely reads start only while fewer than 8 read downloads are in flight, and the fill starts only after 250 ms without a new read download.</p>
+
+<h3>4. Compression and continuous checkpoints</h3>
+<p><b>Problem.</b> After step 3, cold reads and uploads are limited by the link. The only way to make them faster is to send fewer bytes. Also, a disk that the guest fills uploads only at detach, so write, sync and upload run one after the other.</p>
+<p><b>Change.</b></p>
+<ul>
+  <li><b>zstd compression.</b> Each chunk is stored as a zstd frame (level 1), and each page too (level 3). The key stays the SHA-256 of the plain data, so equal chunks still share one object. A download is decompressed, then checked. The local cache keeps plain files, so local reads do not decompress.</li>
+  <li><b>Continuous checkpoints.</b> A checkpoint now starts every 30 s (was 3 minutes), and also when 512 MiB of local data waits. Since step 2, a commit writes only the changed pages and a small root, so frequent checkpoints are cheap.</li>
+  <li><b><code>mica disk checkpoint</code></b> uploads the changes of an attached disk on request.</li>
+  <li>The two scheduling rules from the step 3 regression.</li>
+</ul>
+<p><b>Result.</b> The test data of the file tests is random, so it does not compress, and those numbers do not change. Real system data does compress: a test with <code>/usr/bin</code> and Python libraries (2.0 GiB) uploaded 675 MiB. The memory file of the snapshot shrinks from 996 MiB to 358 MiB in S3. A cold restore answers ssh after 0.55 s instead of 2.38 s. The app answers after 4.66 s. Most of its 451 MiB is the app's own 384 MiB of random data, which does not compress. A cold boot takes 2.35 s, down from 4.61 s in v0.1.</p>
+<p><b>Problems found.</b></p>
+<ul>
+  <li><b>Writes during an upload became slower.</b> The checkpoint synced each chunk before it renamed it to <code>.frozen</code>. Under heavy writes, up to 64 of these syncs at the same time stalled the writer for seconds, and the upload ran at only 17 MiB/s during the write. Also, a write to a frozen chunk must first copy it. Thus <code>fdatasync</code> in the guest went from 427 to 263 per second while an upload ran. The fix: the freeze no longer syncs. The upload reads the file through the page cache, and a guest FLUSH now also syncs the <code>.frozen</code> file of a chunk it wrote. Measured in the next run.</li>
+  <li><b>The Alpine guest did not get a network address</b>, because its network service needs a package that the image does not have. Fixed with a start script. ssh now answers 1.34 s after the start of Firecracker, against 2.17 s for Ubuntu.</li>
+</ul>
+<p><b>Review.</b> codex found one more bug, also present in v0.1: with <code>wait_when_behind</code>, a checkpoint woke the waiting writers before it cleared the "behind" state, so a writer could wait for ever. Fixed.</p>
 
 <h2>Still to measure</h2>
 <ul class="pending">
