@@ -443,6 +443,7 @@
   <li><b>Warm, the handler costs time for each page.</b> On demand, each of the about 100,000 page faults is a round trip to the handler: 3.19 s, against 0.77 s for the File backend. With the profile, the handler installs the pages in 0.27 s before the guest needs them, and the app answers in 0.84 s.</li>
   <li><b>So, for mica:</b> the File backend is the simple default. A handler with a profile is worth it only when it can do more than the kernel: for example, load pages straight from mica chunks without the filesystem, or start the restore before all chunks arrive.</li>
 </ul>
+<p><b>Decision.</b> mica uses the File backend only, and has no userfaultfd code. mica stays a plain block device that is not tied to Firecracker: the memory file is an ordinary file on a mica disk. With the File backend, many VMs that restore from one snapshot also share the host page cache of the memory file, so they use less host RAM than with a handler, which copies each page into each VM. The lab handler and its test variants are removed.</p>
 
 <h2>Open problems</h2>
 <ul>
