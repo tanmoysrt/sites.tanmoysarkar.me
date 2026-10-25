@@ -468,7 +468,10 @@
   <tr class="key"><td>Random write to chunks the last checkpoint saved, no sync</td><td class="n">32,762 per second</td><td class="n">1,174 per second</td><td class="n">25,611 per second</td></tr>
   <tr><td>Random 4K read of saved local chunks, queue depth 1</td><td class="n">–</td><td class="n">56,326 per second</td><td class="n">84,853 per second</td></tr>
   <tr><td>4 parallel 1 GiB writers, 1 MiB direct writes</td><td class="n">–</td><td class="n">1,651 MiB/s</td><td class="n">1,651 MiB/s</td></tr>
+  <tr><td>ext4 on mica: write 7.9 GiB of files (page cache), then <code>sync</code></td><td class="n">–</td><td class="n">13.1 s + 17.0 s</td><td class="n">14.9 s + 13.3 s</td></tr>
+  <tr><td>ext4 on mica: read and hash all files, 16 readers, local data</td><td class="n">–</td><td class="n">7.5 s</td><td class="n">5.0 s</td></tr>
 </table></div>
+<p>All host read rounds checked every file: 0 bad files in 6 full read-backs.</p>
 <p>v0.1 checkpoints only every 180 s, so no upload runs during its 15 s tests. v0.2 uploads at 512 MiB of changes, so its rewrite tests run while chunks upload. With checkpoints off, the new layout does 41,407 rewrites per second without sync, more than v0.1.</p>
 <p><b>In the guest</b>, this host was busy (load average 5 to 18) during these runs, so guest numbers moved by up to 2 times between runs of one build. In the same session, guest <code>fdatasync</code> was 355 per second for both layouts. Right after a 4 GiB write, while its upload ran, the new layout did 68 per second, against none for v0.2a.</p>
 <p><b>Reviews.</b> Five rounds of review by codex found 23 problems in this change, all fixed. The last round found one. Most were orderings between FLUSH, the log rewrite and the freeing of space, and crash windows in the log and the bitmap. Codex also found three gaps that were there before: a GC that outlived the 10-minute wait, two GCs that could hide each other, and a stale GC lock that two GCs could both take. With conditional writes, the GC lock is now an atomic create, and a stale lock needs an operator. Without conditional writes, two GCs at once remain a gap.</p>
