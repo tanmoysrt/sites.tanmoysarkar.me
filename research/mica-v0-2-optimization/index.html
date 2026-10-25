@@ -43,8 +43,8 @@
 <main>
 
 <h1>mica v0.2 optimization</h1>
-<p class="lede">Part 1: the baseline. These are measurements of mica v0.1 in a local lab, before we change any code.</p>
-<p class="meta">Measured 25 October 2026 · <span class="tag">baseline</span> <span class="tag">in progress</span></p>
+<p class="lede">The baseline of mica v0.1 in a local lab, each optimization step of v0.2, and the result at 1 ms and 20 ms round trip to S3.</p>
+<p class="meta">Measured 25 October 2026 · <span class="tag">baseline</span> <span class="tag">optimizations</span></p>
 
 <h2>Context</h2>
 <p>mica gives a VM or a container a disk that lives in an S3 bucket. The bucket holds the shared copy of the disk. The local SSD of the machine is a cache. A <b>chunk</b> is a 4 MiB part of the disk. mica downloads a chunk when a read needs it, and uploads changed chunks in the background. One upload round is a <b>checkpoint</b>.</p>
@@ -400,11 +400,36 @@
 <p><b>The cost of uploads during writes.</b> v0.2 uploads while the guest writes. A write to a chunk that a checkpoint has frozen must first copy it, and the copy must be synced. In the fio test, the 4 GiB test file is still uploading while fio runs. So 4K writes at queue depth 1 drop from 15.5k to 9.4–9.9k IOPS, and <code>fdatasync</code> from 427 to 112–169 per second. v0.1 never checkpointed during this test (3 minutes, 10 GiB), so it shows no such cost.</p>
 <p>Part of the fsync loss was a mistake: after the change above, each freeze counted as a folder change, so each guest FLUSH synced the folder. A rename from <code>.chunk</code> to <code>.frozen</code> needs no folder sync, because recovery takes either name. This is fixed. A separate test now measures guest fio twice: right after a 4 GiB write, while its upload runs, and again when nothing waits for upload.</p>
 
-<h2>Still to measure</h2>
-<ul class="pending">
-  <li>S3 object size: 64 KiB, 256 KiB and 4 MiB objects.</li>
-  <li>All tests again at 20 ms round trip.</li>
-  <li>A small guest OS (Alpine) for cold boot.</li>
+<h3>6. The last fixes</h3>
+<p>The 20 ms run and a separate fio test showed four more problems. All four are fixed.</p>
+<ul>
+  <li><b>Background fill at 20 ms.</b> 2 fill downloads for each disk gave 22 MiB/s. Now each disk has 8 MiB of fill downloads in flight (32 chunks of 256 KiB). At 20 ms the whole 7.9 GiB disk is now local after 85 s instead of 366 s. This is the link limit.</li>
+  <li><b>One reader of many small files.</b> A read that starts up to 1 MiB after the last read now counts as sequential, so read-ahead starts. At 20 ms, one host reader now takes 126.6 s instead of 140.0 s (v0.1: 136.1 s).</li>
+  <li><b>A FLUSH after scattered writes.</b> With 256 KiB chunks, random writes to a 4 GiB file touch about 16,000 chunk files. The next FLUSH synced them one by one, which took longer than the 15 s fio test. Now a FLUSH of more than 32 chunks does one <code>syncfs</code> of the data filesystem.</li>
+  <li><b>Hot chunks.</b> A background checkpoint now leaves out the chunks written in the last second, because the guest would copy them again on its next write. Detach, snapshot and <code>mica disk checkpoint</code> still take all chunks. A fifth review by codex found two problems in this and in the durable list of committed chunks, which are fixed.</li>
+</ul>
+<p>Guest fio after these fixes, 1 ms round trip. "Nothing waits for upload" runs <code>mica disk checkpoint</code> before each test:</p>
+<div class="table-wrap"><table>
+  <tr><th>Guest fio</th><th>v0.1</th><th>v0.2, nothing waits for upload</th><th>v0.2, while a 4 GiB upload runs</th></tr>
+  <tr><td>4K random read, queue depth 32</td><td class="n">166.5k IOPS</td><td class="n">159.7k IOPS</td><td class="n">47.3k IOPS</td></tr>
+  <tr><td>4K random read, queue depth 1</td><td class="n">26.8k IOPS</td><td class="n">27.8k IOPS</td><td class="n">20.9k IOPS</td></tr>
+  <tr><td>4K random write, queue depth 32</td><td class="n">124.8k IOPS</td><td class="n">110.0k IOPS</td><td class="n">100.0k IOPS</td></tr>
+  <tr><td>4K random write, queue depth 1</td><td class="n">16.5k IOPS</td><td class="n">11.5k IOPS</td><td class="n">12.8k IOPS</td></tr>
+  <tr><td>4K write + <code>fdatasync</code></td><td class="n">680 per second</td><td class="n">466 per second</td><td class="n">0 per second</td></tr>
+</table></div>
+
+<h2>Open problems</h2>
+<ul>
+  <li><b>A FLUSH waits for seconds while a large upload runs.</b> In the test above, the guest finished no <code>fdatasync</code> in 15 s while mica uploaded 4 GiB. Each write to a chunk that the checkpoint already moved to the cache makes a new chunk file. The FLUSH must then sync the folder, and on btrfs this sync waits behind the writeback and the renames of the checkpoint. Possible fixes: keep the chunk file in place after its upload, so that a write does not make a new file; or slow the clean-up of the checkpoint while the guest flushes. This needs work before v0.2 is ready for databases.</li>
+  <li><b>Random writes right after a checkpoint are slower:</b> 11.5k against 16.5k IOPS at queue depth 1. After a checkpoint each chunk is clean, so the first write to it must copy it into a new file and sync the copy. With 256 KiB chunks there are 16 times more such copies than with 4 MiB chunks. A disk with mostly random writes can use <code>--chunk-size 1M</code> or <code>4M</code>.</li>
+  <li><b>Firecracker does not pass discard to the disk.</b> Space that a guest frees stays in mica and in S3. This is a limit of the VMM, not of mica.</li>
+</ul>
+
+<h2>Not done yet</h2>
+<ul>
+  <li><b>Memory restores with userfaultfd.</b> The lab has a handler with three modes: load pages on demand, record the pages that a restore uses, and load a recorded set first (the method of E2B: keep only the pages that two restores both used). It is built, but the lab user cannot use userfaultfd yet. This needs one more verb in the root helper.</li>
+  <li><b>ublk zero-copy</b> (the last step of the plan).</li>
+  <li><b>A crash test.</b> The reviews checked the crash paths by reading the code. A test that cuts power in the middle of a checkpoint, and checks every file after recovery, would show it.</li>
 </ul>
 
 <h2>Sources</h2>
