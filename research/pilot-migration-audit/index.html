@@ -23,7 +23,7 @@
 </head>
 <body>
 <h1>Pilot migration audit</h1>
-<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 05:15 IST.</p>
+<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 05:25 IST.</p>
 
 <h2>Summary</h2>
 <table>
@@ -37,10 +37,14 @@
   <tr><td>7</td><td><code>Bench("benches/x")</code> writes relative paths into systemd units, and systemd refuses those units.</td><td><span class="tag ok">fixed</span></td></tr>
   <tr><td>8</td><td>Saving settings restarts the workload with its own fixed 120 s limit, which a draining job can exceed.</td><td><span class="tag ok">fixed, tested</span></td></tr>
   <tr><td>9</td><td>Telemetry reads only <code>worker_pool.log</code>, so the logs of per-group pools would skip the worker parser.</td><td><span class="tag ok">fixed</span></td></tr>
+  <tr><td>10</td><td>Two worker groups with the same queues would give two pool units with the same name.</td><td><span class="tag ok">fixed</span></td></tr>
 </table>
-<p>Branch: <code>fix/migration-reliability</code>, 7 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
+<p>Branch: <code>fix/migration-reliability</code>, 8 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed, plus the tests added after that run. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
 
 <h2>Log</h2>
+
+<h3>05:25 — Groups with the same queues</h3>
+<p>With one pool per group, two groups that both list <code>default</code> would give two units with the same name. Rejecting such a config at load time could stop an existing bench from loading. So Pilot now gives these groups one pool with the sum of their counts. The branch is deployed on the test server, and its units and sites are healthy.</p>
 
 <h3>05:15 — More checks</h3>
 <ul>
@@ -112,7 +116,7 @@
   <li>Supervisor: checked. Its restart has no client limit, and RQ puts the job process in its own process group, so supervisor's group stop does not reach it. No change.</li>
   <li>Restart after a Restore: checked. It already reports a failure as <code>revert_failed</code>. No change.</li>
   <li>A worker pool still gets systemd's default 90 s to stop. A job that runs longer is killed at a restart. Frappe's own supervisor setup allows 1560 s for the long queue. Making this longer would make updates wait longer. This needs a decision.</li>
-  <li>Each extra worker group adds one pool process (about 70 to 90 MB on the test server).</li>
+  <li>Each extra worker group adds one pool process (a pool unit used 60 to 95 MB at peak on the test server, including its workers).</li>
   <li>Pull request: waiting for a go-ahead.</li>
 </ul>
 </body>
