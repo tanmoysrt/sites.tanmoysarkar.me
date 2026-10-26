@@ -23,7 +23,7 @@
 </head>
 <body>
 <h1>Pilot migration audit</h1>
-<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 04:55 IST.</p>
+<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 05:15 IST.</p>
 
 <h2>Summary</h2>
 <table>
@@ -35,10 +35,20 @@
   <tr><td>5</td><td>When the final restart fails, the operation shows only "The task stopped before it finished".</td><td><span class="tag ok">fixed</span></td></tr>
   <tr><td>6</td><td>Retry, Restore and Skip Patch can fail with "Another active task is already using resource 'bench:update'" if the task starts before the API saves its ID.</td><td><span class="tag ok">fixed, tested</span></td></tr>
   <tr><td>7</td><td><code>Bench("benches/x")</code> writes relative paths into systemd units, and systemd refuses those units.</td><td><span class="tag ok">fixed</span></td></tr>
+  <tr><td>8</td><td>Saving settings restarts the workload with its own fixed 120 s limit, which a draining job can exceed.</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>9</td><td>Telemetry reads only <code>worker_pool.log</code>, so the logs of per-group pools would skip the worker parser.</td><td><span class="tag ok">fixed</span></td></tr>
 </table>
-<p>Branch: <code>fix/migration-reliability</code>, 6 local commits on top of develop <code>53b56124</code>. Not pushed yet. Unit tests: all pass (3849 + new tests).</p>
+<p>Branch: <code>fix/migration-reliability</code>, 7 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
 
 <h2>Log</h2>
+
+<h3>05:15 — More checks</h3>
+<ul>
+  <li>Lite mode: a site migration with a 60 s job waited 62 s, then completed. The restart took 11 s.</li>
+  <li>Settings save: the restart now uses the same time budget as other restarts. With a 45 s job running, the restart waited 44 s and the job completed. Before, the job was killed. Note: a settings save can now take up to about 90 s when a long job runs.</li>
+  <li>Telemetry: Fluent Bit now reads <code>worker_pool*.log</code> and still leaves out the <code>.error.log</code> files.</li>
+  <li>The reported 90 s restart included an app process. That app's server ends its open streams on shutdown, so it is not the slow unit. With 9 workers in one pool and the hang rate measured above (5 of 6 per worker), almost every restart would wait the full 90 s.</li>
+</ul>
 
 <h3>04:55 — Full workflows tested on the test server</h3>
 <p>Setup: one bench under systemd, not in lite mode, with 2 <code>default</code>, 1 <code>short</code> and 1 <code>long</code> workers. Frappe was reset 200 merges back, so an update had real patches to run.</p>
@@ -93,13 +103,17 @@
   <li>A failed final restart records its error in the diagnosis and pauses for a retry.</li>
   <li>Retry, Restore and Skip Patch hand over their locks from their own task ID.</li>
   <li><code>Bench(path)</code> makes the path absolute.</li>
+  <li>The settings restart uses <code>restart_processes</code> and its time budget.</li>
+  <li>Fluent Bit reads the log of every worker pool.</li>
 </ul>
 
-<h2>Next</h2>
+<h2>Open points</h2>
 <ul>
-  <li>Check the supervisor process manager for the same restart limits.</li>
-  <li>Check the restart after a Restore, which ignores restart errors now.</li>
-  <li>Open a pull request when this round is complete.</li>
+  <li>Supervisor: checked. Its restart has no client limit, and RQ puts the job process in its own process group, so supervisor's group stop does not reach it. No change.</li>
+  <li>Restart after a Restore: checked. It already reports a failure as <code>revert_failed</code>. No change.</li>
+  <li>A worker pool still gets systemd's default 90 s to stop. A job that runs longer is killed at a restart. Frappe's own supervisor setup allows 1560 s for the long queue. Making this longer would make updates wait longer. This needs a decision.</li>
+  <li>Each extra worker group adds one pool process (about 70 to 90 MB on the test server).</li>
+  <li>Pull request: waiting for a go-ahead.</li>
 </ul>
 </body>
 </html>
