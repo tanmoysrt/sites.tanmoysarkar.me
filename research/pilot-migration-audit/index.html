@@ -6,14 +6,14 @@
 <title>Pilot migration audit: status log</title>
 <style>
   :root { --ink: #1f2328; --muted: #59636e; --line: #d8dee4; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
-  body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); max-width: 760px; margin: 40px auto; padding: 0 20px; }
+  body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); max-width: 780px; margin: 40px auto; padding: 0 20px; }
   h1 { font-size: 1.6rem; margin-bottom: 0; }
   h2 { font-size: 1.15rem; margin-top: 2.2rem; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
   h3 { font-size: 1rem; margin-bottom: 4px; }
   p.meta { color: var(--muted); margin-top: 4px; }
   code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace; background: #f6f8fa; padding: 1px 4px; border-radius: 4px; }
   pre { font: 0.85em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: #f6f8fa; padding: 12px; overflow-x: auto; border-radius: 6px; }
-  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; margin-right: 6px; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; white-space: nowrap; }
   .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
   table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
   th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -23,51 +23,83 @@
 </head>
 <body>
 <h1>Pilot migration audit</h1>
-<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 04:11 IST.</p>
+<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 04:55 IST.</p>
 
 <h2>Summary</h2>
 <table>
-  <tr><th>Issue</th><th>State</th></tr>
-  <tr><td>1. Restart at the end of a migration times out after 90 s</td><td><span class="tag ok">fixed, tested</span></td></tr>
-  <tr><td>2. Migration runs while the site still has background jobs</td><td><span class="tag ok">fixed, tested</span></td></tr>
-  <tr><td>3. Worker groups (for example 4 default, 3 short, 2 long) become one pool with every queue</td><td><span class="tag ok">fixed, tested</span></td></tr>
-  <tr><td>4. An idle worker sometimes ignores the stop signal for 90 s</td><td><span class="tag warn">investigating</span></td></tr>
+  <tr><th>#</th><th>Issue</th><th>State</th></tr>
+  <tr><td>1</td><td>The restart at the end of a migration times out after 90 s (the reported error).</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>2</td><td>A migration starts while the site still has queued or running background jobs.</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>3</td><td>Worker groups (for example 4 default, 3 short, 2 long) become one pool that listens to every queue (the reported settings issue).</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>4</td><td>Every restart kills the running background jobs. An idle worker also often ignores the stop request and holds the restart for 90 s.</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>5</td><td>When the final restart fails, the operation shows only "The task stopped before it finished".</td><td><span class="tag ok">fixed</span></td></tr>
+  <tr><td>6</td><td>Retry, Restore and Skip Patch can fail with "Another active task is already using resource 'bench:update'" if the task starts before the API saves its ID.</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>7</td><td><code>Bench("benches/x")</code> writes relative paths into systemd units, and systemd refuses those units.</td><td><span class="tag ok">fixed</span></td></tr>
 </table>
-<p>Branch: <code>fix/migration-reliability</code> (local commit, not pushed yet). Unit tests: 3849 passed.</p>
+<p>Branch: <code>fix/migration-reliability</code>, 6 local commits on top of develop <code>53b56124</code>. Not pushed yet. Unit tests: all pass (3849 + new tests).</p>
 
 <h2>Log</h2>
 
-<h3>04:20 — An idle worker can hold a restart for 90 s</h3>
-<p>After the fixes, a restart of the worker pools still took 91 s in some runs. In those runs, one idle worker did not react to the stop signal. systemd waited its 90 s stop limit and then killed the worker. Young pools (20 s old) restarted in 2 to 3 s. A capture loop on the test server now restarts the pools every 75 s and records the stack of any worker that does not stop.</p>
-<p>The restart no longer fails because of this, because the restart budget now covers the 90 s stop limit (issue 1). The open question is why the worker ignores the signal.</p>
+<h3>04:55 — Full workflows tested on the test server</h3>
+<p>Setup: one bench under systemd, not in lite mode, with 2 <code>default</code>, 1 <code>short</code> and 1 <code>long</code> workers. Frappe was reset 200 merges back, so an update had real patches to run.</p>
+<table>
+  <tr><th>Workflow</th><th>Result on the branch</th></tr>
+  <tr><td>App update, 2 sites, a 100 s job queued on each site</td><td>Each backup waited for its site's job. Update, both migrations and the restart completed. The restart took 12 s (it took 90 s or more before). Maintenance mode was turned off at the end.</td></tr>
+  <tr><td>Site migration with a patch that fails on purpose (it creates a table and changes a setting)</td><td>Operation went to <code>needs_attention</code> and named the patch. Restore put back the setting, dropped the new table, turned off maintenance mode and removed the snapshot.</td></tr>
+  <tr><td>The same failure, then Skip Patch</td><td>The migration continued on its own and completed.</td></tr>
+  <tr><td>Retry of the operation that failed on develop with the 90 s timeout</td><td>Completed.</td></tr>
+  <tr><td><code>ready-for-migration</code> on a lite-mode bench</td><td>Reports the jobs correctly (READY before a job, NOT READY during it), so the wait also works in lite mode.</td></tr>
+</table>
 
-<h3>04:00 — Fixes tested on a test server</h3>
-<p>Setup: one bench under systemd, not in lite mode, with three worker groups: 2 <code>default</code>, 1 <code>short</code>, 1 <code>long</code>.</p>
+<h3>04:40 — Why restarts killed jobs and why idle workers hung (issue 4)</h3>
+<p>systemd's default <code>KillMode=control-group</code> sends SIGTERM to every process of a unit, and also SIGCONT. For a worker pool, that includes:</p>
+<ul>
+  <li>the job process (RQ calls it the "horse"). It exits at once on SIGTERM. So the running job was lost.</li>
+  <li>each worker. The worker also gets SIGINT from the pool. With these signals at the same moment, the worker often did not run its stop handler and stayed blocked on Redis.</li>
+</ul>
+<p>Evidence:</p>
+<table>
+  <tr><th>Test</th><th>Result</th></tr>
+  <tr><td>SIGTERM only, sent to an idle worker, 6 times</td><td>Exited in 2 s, 6 of 6</td></tr>
+  <tr><td>SIGTERM + SIGCONT + SIGINT (what systemd and the pool send), 6 times</td><td>Stuck after 15 s, 5 of 6</td></tr>
+  <tr><td>Restart with a 60 s job running, develop</td><td>Restart took 1 s. Job failed: <code>Work-horse terminated unexpectedly; waitpid returned 15</code></td></tr>
+  <tr><td>Same test with <code>KillMode=mixed</code></td><td>Restart waited 51 s. Job completed: <code>Job OK</code></td></tr>
+  <tr><td>5 idle restarts of pools that ran for 75 s, with <code>KillMode=mixed</code></td><td>1 to 3 s each (one took 91 s before)</td></tr>
+</table>
+<p>Fix: worker pool units now set <code>KillMode=mixed</code>. systemd sends SIGTERM only to the pool. The pool asks each worker to stop once. A worker finishes its job, then exits. After 90 s, systemd still kills what remains. This is the same as Frappe's supervisor setup, which signals only the main process.</p>
+
+<h3>04:20 — Retry and Restore race (issue 6)</h3>
+<p>Restore failed with <code>TaskConflictError ... 'bench:update'</code> in a test. The action task reads its own ID from the operation record to hand its locks to the next task. The API writes that ID only after the task is queued. The task now uses its own running ID.</p>
+
+<h3>04:00 — First fixes tested</h3>
 <table>
   <tr><th>Test</th><th>Before (develop)</th><th>After (branch)</th></tr>
   <tr><td>Worker processes</td><td>One pool: <code>--num-workers 4 --queue default,short,long</code></td><td>Three pools: <code>2 default</code>, <code>1 short</code>, <code>1 long</code></td></tr>
-  <tr><td>Site migration with a 240 s job running</td><td>Migration ran next to the job. Restart failed: <code>systemctl timed out after 90s</code>. Operation stopped in <code>needs_attention</code>.</td><td>—</td></tr>
-  <tr><td>Retry of that stopped operation</td><td>—</td><td>Completed. Restart took 97 s, inside the new 210 s budget.</td></tr>
-  <tr><td>Site migration with a 150 s job running</td><td>—</td><td>Backup step waited 150 s for the job, then ran. Migration completed.</td></tr>
+  <tr><td>Site migration with a 240 s job running</td><td>Migration ran next to the job. Restart failed: <code>systemctl timed out after 90s</code>. Operation stopped in <code>needs_attention</code>. This is the reported error.</td><td>—</td></tr>
+  <tr><td>Site migration with a 150 s job running</td><td>—</td><td>Backup waited 150 s for the job, then ran. Migration completed.</td></tr>
 </table>
 
-<h3>03:30 — Root causes</h3>
-<p><b>Issue 1 and 2.</b> Pilot puts the sites in maintenance mode and starts the backup, update and migrate at once. It does not wait for running jobs. At the end, Pilot restarts web and the workers. A worker that runs a job finishes the job before it stops. systemd lets a unit take 90 s to stop. Pilot gave the complete <code>systemctl restart</code> only 90 s, so one slow worker made the restart fail.</p>
-<p>The Frappe Cloud agent does this differently. It puts the site in maintenance mode, then runs <code>bench --site X ready-for-migration</code> again and again for up to 300 s. It continues only when the site has no queued or running job.</p>
-<p><b>Issue 3.</b> Under systemd, Pilot runs Frappe's <code>worker-pool</code>. It merged all worker groups into one pool that listens to every queue. So the counts per queue in the settings had no effect. Lite mode already merges groups on purpose and the UI says so; systemd mode did not.</p>
+<h3>03:30 — Root causes of the reported issues</h3>
+<p><b>Issues 1 and 2.</b> Pilot puts the sites in maintenance mode and starts the backup, update and migrate at once. It does not wait for running jobs. At the end, Pilot restarts web and the workers. systemd lets a unit take 90 s to stop. Pilot gave the complete <code>systemctl restart</code> only 90 s, so one slow unit made the restart fail.</p>
+<p>The Frappe Cloud agent puts the site in maintenance mode, then runs <code>bench --site X ready-for-migration</code> again and again for up to 300 s. It continues only when the site has no queued or running job.</p>
+<p><b>Issue 3.</b> Under systemd, Pilot runs Frappe's <code>worker-pool</code>. It merged all worker groups into one pool that listens to every queue. The counts per queue in the settings had no effect.</p>
 
-<h3>03:00 — Changes</h3>
+<h2>Changes on the branch</h2>
 <ul>
-  <li>Before a site's backup, before the app update, and before a site's migrate, Pilot waits until <code>ready-for-migration</code> reports no jobs for that site. The limit is 300 s, the same as the Frappe Cloud agent. If the jobs do not finish, the operation goes to <code>needs_attention</code> before the step starts, with the message "still has background jobs after 300 seconds. The step did not start. Retry later." No code or data changes. Pilot skips the wait when the workload is stopped, because then no worker runs jobs.</li>
-  <li>A systemd restart now gets the slowest unit's stop limit (90 s when the unit sets none) plus 120 s to start. Before, it got 90 s in total.</li>
-  <li>Under systemd, Pilot runs one worker pool per worker group, for example <code>worker_pool_default</code>, <code>worker_pool_short</code>, <code>worker_pool_long</code>. A bench with one group keeps the old <code>worker_pool</code> name, so its units do not change. Frappe's scheduler uses a bench-wide file lock, so several pools still run only one scheduler.</li>
+  <li>Before a site's backup, before the app update, and before a site's migrate, Pilot waits until <code>ready-for-migration</code> reports no jobs for the site, for up to 300 s. If the jobs do not finish, the operation goes to <code>needs_attention</code> before the step starts, and nothing changes. Pilot skips the wait when the workload is stopped.</li>
+  <li>A systemd restart gets the slowest unit's stop limit (90 s when the unit sets none) plus 120 s to start. Before, it got 90 s in total.</li>
+  <li>One worker pool per worker group, for example <code>worker_pool_default</code>. A bench with one group keeps the <code>worker_pool</code> name. Frappe's scheduler takes a bench-wide lock, so several pools still run one scheduler.</li>
+  <li>Worker pool units set <code>KillMode=mixed</code>.</li>
+  <li>A failed final restart records its error in the diagnosis and pauses for a retry.</li>
+  <li>Retry, Restore and Skip Patch hand over their locks from their own task ID.</li>
+  <li><code>Bench(path)</code> makes the path absolute.</li>
 </ul>
 
 <h2>Next</h2>
 <ul>
-  <li>Find why an idle worker ignores the stop signal (issue 4).</li>
-  <li>Test an app update (not only a site migration), a failed migration, and restore.</li>
-  <li>Open a pull request when the audit round is complete.</li>
+  <li>Check the supervisor process manager for the same restart limits.</li>
+  <li>Check the restart after a Restore, which ignores restart errors now.</li>
+  <li>Open a pull request when this round is complete.</li>
 </ul>
 </body>
 </html>
