@@ -23,7 +23,7 @@
 </head>
 <body>
 <h1>Pilot migration audit</h1>
-<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 10:13 IST.</p>
+<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 10:45 IST.</p>
 
 <h2>Summary</h2>
 <table>
@@ -46,10 +46,24 @@
   <tr><td>17</td><td>A failed background-job check put a Python traceback into the diagnosis.</td><td><span class="tag ok">fixed, tested</span></td></tr>
   <tr><td>18</td><td>When a task could not save its own failure (disk full), the diagnosis said only "The task stopped before it finished".</td><td><span class="tag ok">fixed</span></td></tr>
   <tr><td>12</td><td>On a 2 GB host, MariaDB started at 371 MB under a 384 MB <code>MemoryHigh</code>. It reached the limit, then stalled: no new connections, and a restore that takes 5 s took 2 h 20 min.</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>19</td><td>An app install error showed the Python object instead of the app name.</td><td><span class="tag ok">fixed</span></td></tr>
+  <tr><td>20</td><td>After a backup failure, the sites became live again. Retry kept earlier backups. A later Restore erased writes made while the operation was paused.</td><td><span class="tag warn">fixed; live check running</span></td></tr>
+  <tr><td>21</td><td>A missing or empty recovery table inventory made Restore treat every table as new and try to drop it. A missing table dump was silently skipped.</td><td><span class="tag warn">fixed; live check pending</span></td></tr>
+  <tr><td>22</td><td>A failed web restart during a maintenance change was ignored. Backup could proceed, or completion could be reported, even though web had not read the new settings.</td><td><span class="tag ok">fixed, regression tested</span></td></tr>
 </table>
-<p>Branch: <code>fix/migration-reliability</code>, 18 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed, plus the tests added after that run. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
+<p>Branch: <code>fix/migration-reliability</code>, 17 local commits on top of develop <code>53b56124</code>, plus the current fixes in the working tree. Not pushed and no pull request yet. The current focused suite has 88 passing tests. A full suite is running. The earlier full run had 3854 passing tests. One test (<code>test_timeout_actually_terminates_the_process_group</code>) also failed on clean develop.</p>
 
 <h2>Log</h2>
+
+<h3>10:45 — Failure injection, round 4</h3>
+<p>Testing continues without network partition tests, as requested.</p>
+<table>
+  <tr><th>Injection</th><th>Result</th></tr>
+  <tr><td>First site migrates; second site fails; Restore both</td><td><span class="tag ok">pass</span> Both settings and tables returned to the baseline. Both sites answered HTTP 200. Recovery snapshots were removed.</td></tr>
+  <tr><td>Kill the second site's backup; write a value to the first site while it is live; Retry; fail a patch; Restore</td><td><span class="tag bad">found bug 20</span> Restore erased the value. Retry now takes fresh backups of every site. The repeat test is running.</td></tr>
+  <tr><td>Remove the recovery table inventory or a required table dump</td><td><span class="tag bad">found bug 21</span> Regression tests proved the unsafe behavior. Restore now checks the inventory and required dump files before it imports or drops any table. Live checks are next.</td></tr>
+  <tr><td>Make the maintenance web restart fail</td><td><span class="tag bad">found bug 22</span> Two regression tests proved that the error was ignored. The task now fails. It cannot take a backup or report completion after that failure.</td></tr>
+</table>
 
 <h3>10:13 — Failure injection, round 3</h3>
 <table>
