@@ -55,7 +55,7 @@
   <li><a href="#handoff">Central to Atlas handoff</a></li>
   <li><a href="#phases">Phases</a></li>
   <li><a href="#progress">Progress</a></li>
-  <li><a href="#questions">Open questions</a></li>
+  <li><a href="#questions">Decisions</a></li>
 </ol></nav>
 
 <h2 id="problem">1. Problem</h2>
@@ -94,7 +94,7 @@
 </ul>
 <p>Gaps that affect this plan:</p>
 <ul>
-  <li>Approval decisions are not recorded. We record them in our own DocType.</li>
+  <li>Approval decisions are not recorded. Gated tools run as the engineer, so the existing console logs and action records name the person who approved.</li>
   <li>Sessions from triggers always auto-approve. We will not use triggers for investigations.</li>
   <li>The REST API has no completion callback. We start runs from Python with <code>on_complete</code>, so Atlas knows when a run ends.</li>
   <li>A session keeps the tool set from its start. Tool changes apply only to new sessions.</li>
@@ -119,54 +119,70 @@
 <tr><td><code>list_alert_checks</code></td><td>The checks in the existing Insights alerts (P1, P2 Hosts, P2 Platform, P3) and which ones fail now.</td></tr>
 <tr><td><code>list_saved_queries</code></td><td>The queries of the Atlas Insights workbook, with key and title.</td></tr>
 <tr><td><code>run_saved_query</code></td><td>The result of one workbook query, with an optional time range.</td></tr>
-<tr><td><code>query_telemetry</code></td><td>The result of a <code>SELECT</code> on Datum. One statement only, with a row limit and a time limit. A read-only ClickHouse user is preferred.</td></tr>
+<tr><td><code>query_telemetry</code></td><td>The result of a <code>SELECT</code> on Datum. It connects as a read-only ClickHouse user (<code>readonly=1</code>), with a row limit and a time limit.</td></tr>
+<tr><td><code>get_telemetry_freshness</code></td><td>The time of the last metric and the last log line from each host. Old values mean that telemetry is blind for that host.</td></tr>
 </table></div>
 <p>The saved queries come first. They are tested and fast. The skill tells the agent to use them before it writes its own SQL.</p>
+<h3>Telemetry first, host second</h3>
+<p>Vector already sends most logs to Datum. So the agent reads Datum first. It goes to a host only for data that Datum does not have.</p>
+<div class="tablewrap"><table>
+<tr><th>Data</th><th>In Datum</th></tr>
+<tr><td>metald journal (<code>metal.service</code>), all levels</td><td class="yes">Yes</td></tr>
+<tr><td>Other host journal lines, warning and above (includes <code>metal-vm@&lt;id&gt;</code> units)</td><td class="yes">Yes</td></tr>
+<tr><td>Service VM journal, warning and above; proxy nginx errors</td><td class="yes">Yes</td></tr>
+<tr><td>Host and VM metrics</td><td class="yes">Yes</td></tr>
+<tr><td><code>firecracker.log</code>; journal lines below warning; live state (processes, sockets, WireGuard, disk)</td><td class="no">No</td></tr>
+</table></div>
+<p>The agent also goes to the host when <code>get_telemetry_freshness</code> shows old data. Then Vector or the network has failed, and Datum cannot show the problem.</p>
 
 <h3>4.3 Host and VM diagnostics (fixed commands)</h3>
-<p>These tools run a fixed script through <code>SSH Task</code> in background mode. Each run is a record, so there is an audit trail. The agent chooses only the target and the size.</p>
+<p>These tools run a fixed script through <code>SSH Task</code> in background mode. Atlas connects to the host over SSH, not through the metald API, so the tools work when metald is down. Each run is a record, so there is an audit trail. The agent chooses only the target and the size.</p>
 <div class="tablewrap"><table>
 <tr><th>Tool</th><th>Command on the host</th></tr>
 <tr><td><code>get_firecracker_log</code></td><td><code>tail -c</code> of <code>/var/lib/metal/machines/&lt;id&gt;/firecracker/&lt;id&gt;/root/firecracker.log</code></td></tr>
 <tr><td><code>get_vm_unit_journal</code></td><td><code>journalctl -u metal-vm@&lt;id&gt;.service --since</code></td></tr>
-<tr><td><code>get_metald_journal</code></td><td><code>journalctl -u metald --since</code>, with an optional pattern</td></tr>
+<tr><td><code>get_metald_journal</code></td><td><code>journalctl -u metal.service --since</code>. Only for hosts with stale telemetry; otherwise the agent reads this journal from Datum.</td></tr>
 <tr><td><code>get_host_health</code></td><td>Load, memory, disk, failed units, kernel messages (<code>dmesg</code> tail), WireGuard handshakes</td></tr>
 </table></div>
 <p>The same scripts become buttons for operators. <strong>Fetch Firecracker Log</strong> and <strong>Fetch VM Journal</strong> go on Virtual Machine. <strong>Fetch metald Journal</strong> goes on Metal Server. This fills a gap: today no action fetches these logs.</p>
 
 <h3>4.4 Commands and actions (gated)</h3>
+<p>These tools exist only in the engineer agent (see <a href="#policy">section 5</a>). The Central investigation agent does not have them.</p>
 <div class="tablewrap"><table>
 <tr><th>Tool</th><th>Target</th><th>Gate</th></tr>
-<tr><td><code>run_readonly_command</code></td><td>Host or tenant-0 VM</td><td>No approval. Each command must match a read-only allow list (see <a href="#policy">section 5</a>). Other commands are refused.</td></tr>
 <tr><td><code>run_command</code></td><td>Host or tenant-0 VM</td><td>Approval for each call.</td></tr>
 <tr><td><code>run_tenant_vm_command</code></td><td>VM of a customer tenant</td><td>Approval for each call. The prompt names the tenant.</td></tr>
 <tr><td><code>run_action</code></td><td>Metal Server, Virtual Machine, service record</td><td>Approval for each call. Allow list of actions; termination is not in the list.</td></tr>
 </table></div>
+<p>A third command tool, <code>run_readonly_command</code>, is in both agents. It needs no approval, because a parser refuses every command that is not on a read-only allow list (see <a href="#policy">section 5</a>).</p>
 <p>Commands run through the Metal Server Console, which already logs each run in <code>Metal Server Console Log</code>. Tenant-0 VMs are reached with the existing proxy command through the host network namespace.</p>
 
 <h2 id="policy">5. Permission policy</h2>
-<p>Flow sets approval per tool, not per argument. So we split tools by risk. The policy is then fixed in code and the model cannot change it.</p>
+<p>Flow sets approval per tool, not per argument. So we split the tools by risk, and we use two agents with different tool sets. The model cannot change the policy, because it is fixed by which tools an agent has.</p>
+<ul>
+  <li><strong>Atlas Investigator.</strong> Central starts it. It has read-only tools only. It never pauses for approval, because no tool in it needs approval.</li>
+  <li><strong>Atlas Engineer Assistant.</strong> An Atlas engineer starts it in the Atlas desk. It has the read-only tools and the gated tools. The engineer approves each gated call in the chat.</li>
+</ul>
 <div class="tablewrap"><table>
-<tr><th>Action</th><th>Policy</th></tr>
-<tr><td>Read inventory, telemetry, logs, docs</td><td class="yes">Allowed</td></tr>
-<tr><td>Read-only command on a host or tenant-0 VM</td><td class="yes">Allowed, logged</td></tr>
-<tr><td>Other command on a host or tenant-0 VM</td><td class="ask">Ask the user</td></tr>
-<tr><td>Any SSH to a VM of another tenant</td><td class="ask">Ask the user</td></tr>
-<tr><td>Change actions (restart, stop, migrate, reboot, resize, firewall, upgrade)</td><td class="ask">Ask the user</td></tr>
-<tr><td><code>terminate</code>, <code>archive_server</code>, delete of any record</td><td class="no">Not available</td></tr>
+<tr><th>Action</th><th>Central investigation</th><th>Engineer in Atlas</th></tr>
+<tr><td>Read inventory, telemetry, logs, docs</td><td class="yes">Allowed</td><td class="yes">Allowed</td></tr>
+<tr><td>Read-only command on a host or tenant-0 VM (allow list)</td><td class="yes">Allowed, logged</td><td class="yes">Allowed, logged</td></tr>
+<tr><td>Other command on a host or tenant-0 VM</td><td class="no">Not available</td><td class="ask">Engineer approves</td></tr>
+<tr><td>Any SSH to a VM of a customer tenant</td><td class="no">Not available</td><td class="ask">Engineer approves</td></tr>
+<tr><td>Change actions (restart, stop, migrate, reboot, resize, firewall, upgrade)</td><td class="no">Not available</td><td class="ask">Engineer approves</td></tr>
+<tr><td><code>terminate</code>, <code>archive_server</code>, delete of any record</td><td class="no">Not available</td><td class="no">Not available</td></tr>
 </table></div>
 <p>The read-only allow list is a parser, not a prompt. It splits the command on <code>;</code>, <code>&amp;&amp;</code>, <code>||</code> and <code>|</code>. It refuses redirection, command substitution and backticks. Each part must start with an allowed program, for example <code>journalctl</code>, <code>systemctl status</code>, <code>cat</code>, <code>tail</code>, <code>head</code>, <code>grep</code>, <code>ls</code>, <code>df</code>, <code>free</code>, <code>ss</code>, <code>ip</code>, <code>wg show</code>, <code>ps</code>, <code>top -b -n 1</code>, <code>uptime</code>, <code>dmesg</code>. Reads of secret paths, such as <code>/etc/shadow</code> and private keys, are refused.</p>
-<p>Investigations run as a dedicated Atlas user with an <strong>Atlas Investigator</strong> role. Each tool checks this role. The agent does not get System Manager.</p>
+<p>Central investigations run as a dedicated Atlas user with an <strong>Atlas Investigator</strong> role. Each read-only tool checks this role. Gated tools also require System Manager, so the investigator user cannot use them even if a session gets them by mistake. Engineer sessions run as the engineer, so the existing console logs and action records name the person who approved.</p>
 
 <h2 id="scrub">6. Scrubbing output</h2>
 <p>A scrubber is a function that replaces sensitive text with a fixed marker. It is deterministic: the same input always gives the same output, and no model is involved. It lives in one place, <code>atlas/core/scrub.py</code>, and every tool calls it on its return value.</p>
-<p>It replaces, in order:</p>
+<p>It masks credentials only. IP addresses, host names, emails and record names stay, because they are needed to investigate. It replaces, in order:</p>
 <ol>
   <li>PEM blocks (private keys, certificates).</li>
   <li>Known token formats: JWT, <code>Bearer</code> values, cloud access keys, <code>sk-</code> API keys, GitHub tokens, WireGuard keys.</li>
   <li>Values of secret-like keys in <code>key=value</code>, <code>key: value</code> and JSON, for example <code>password</code>, <code>secret</code>, <code>token</code>, <code>api_key</code>.</li>
   <li>Credentials in URLs (user info and signed query strings).</li>
-  <li>Email addresses.</li>
   <li>High-entropy words. A word of 20 or more characters from a base64 or hex alphabet, with Shannon entropy above a limit, becomes <code>[REDACTED:entropy]</code>. UUIDs and Atlas record names are kept, because the agent needs them.</li>
 </ol>
 <pre><code>password=hunter2 token: eyJhbGciOi...   →   password=[REDACTED] token: [REDACTED:jwt]</code></pre>
@@ -174,24 +190,23 @@
 <p>A second layer is possible: Flow's daemon has an extension point for a <code>tool_call</code> hook, with a <code>redact_secrets</code> example. We do not need it at first.</p>
 
 <h2 id="handoff">7. Central to Atlas handoff</h2>
-<p>A new DocType <strong>Atlas Investigation</strong> owns the state of one handoff. Fields: issue, context JSON, requested by, status (Queued, Running, Waiting for Approval, Completed, Failed), Flow Session, summary, findings, and a child table of approval decisions (tool, arguments, decision, decided by, time). This fills Flow's audit gap for approvals.</p>
+<p>A new DocType <strong>Atlas Investigation</strong> owns the state of one handoff. Fields: issue, context JSON, requested by, status (Queued, Running, Completed, Failed), Flow Session and summary. The run uses the read-only agent, so it never waits for approval.</p>
 <div class="tablewrap"><table>
 <tr><th>Route (under <code>/api/atlas</code>)</th><th>Caller</th><th>Does</th></tr>
 <tr><td><code>POST /investigations</code></td><td>Central, tenant 0 only</td><td>Creates the record and starts a Flow run. Returns the ID.</td></tr>
-<tr><td><code>GET /investigations/{id}</code></td><td>Central</td><td>Status, pending question, summary and findings. All scrubbed.</td></tr>
-<tr><td><code>POST /investigations/{id}/answers</code></td><td>Central</td><td>Approve, Deny or a free-text reply to a pending question.</td></tr>
+<tr><td><code>GET /investigations/{id}</code></td><td>Central</td><td>Status, summary and the full transcript: each tool call, its arguments and its scrubbed result.</td></tr>
 </table></div>
 <p>Atlas sends a webhook event on each status change, through the webhook that Central already configures. Central can also poll. Authentication uses the existing Central JWT and <code>require_central_identity</code>. No new token type is needed.</p>
-<p>Central gets three Flow tools: <code>start_region_investigation</code>, <code>get_region_investigation</code> and <code>answer_region_investigation</code>. Central's agent passes the approval question to its user and sends back the answer.</p>
+<p>Central gets two Flow tools: <code>start_region_investigation</code> and <code>get_region_investigation</code>. Central gets the whole investigation, with credentials masked. If the cause needs a change, the summary says so. An Atlas engineer then does the change in the Atlas desk.</p>
 
 <figure>
-<svg id="d-seq" viewBox="0 0 820 400" role="img" aria-label="Sequence: Central agent starts an investigation. Atlas runs Flow, which uses tools. A gated tool pauses the run, Atlas sends a webhook, Central asks the user, and the answer resumes the run. Atlas returns the summary."></svg>
-<figcaption>One investigation with one approval. Central sees only the status, the question and the summary.</figcaption>
+<svg id="d-seq" viewBox="0 0 820 400" role="img" aria-label="Sequence: Central agent starts an investigation. Atlas runs the read-only investigator. It queries Datum first and reads hosts only when needed. Atlas sends a webhook when the run ends, and Central reads the summary and transcript."></svg>
+<figcaption>One investigation. There is no approval step, because the investigator has only read-only tools.</figcaption>
 </figure>
 
 <h3>Knowledge and skill</h3>
 <p>An <code>incident-investigation</code> skill in <code>atlas/skills/</code> gives the method: read the failing alert checks, run the saved queries, find the affected resources, read logs, form a hypothesis, check it, then report. It lists the tools to prefer at each step. A short report template sets the output: symptom, evidence, cause, confidence, and suggested next step.</p>
-<p>The <strong>Atlas</strong> knowledge base takes the Atlas <code>docs/</code> folder, the module <code>SPEC.md</code> files and the incident postmortems. A second source takes Frappe Cloud platform docs. A setup command loads them, so a new region gets the same base.</p>
+<p>The <strong>Atlas</strong> knowledge base uses <code>openai/text-embedding-3-small</code> through OpenRouter (0.02 USD per million tokens). It takes the Atlas <code>docs/</code> folder, the module <code>SPEC.md</code> files and the incident postmortems. A second source takes Frappe Cloud platform docs. A setup command loads them, so a new region gets the same base.</p>
 
 <h2 id="phases">8. Phases</h2>
 <p>Each phase has a check. A phase is done only when its check passes on <code>atlas.localhost</code> with the development region.</p>
@@ -199,11 +214,11 @@
 <tr><th>#</th><th>Phase</th><th>Depends on</th><th>Check</th></tr>
 <tr><td>0</td><td>Flow daemon on the Atlas bench. OpenRouter provider and two models on atlas.localhost.</td><td>None</td><td><code>test_connection</code> passes for both models. A plain chat answers.</td></tr>
 <tr><td>1</td><td>Scrubber module and tests. Scrub Output check on the Metal Server Console.</td><td>None</td><td>Tests with real secret shapes pass. A console run that prints a key stores <code>[REDACTED]</code>.</td></tr>
-<tr><td>2</td><td>Log fetch scripts and buttons: Firecracker log, VM journal, metald journal.</td><td>1</td><td>Each button on a development host gives an SSH Task with scrubbed output.</td></tr>
-<tr><td>3</td><td>Read-only tools: inventory, telemetry, alert checks, saved queries.</td><td>1</td><td>Each tool runs from a Flow chat and returns scrubbed output.</td></tr>
-<tr><td>4</td><td>Read-only command parser and gated tools (<code>run_command</code>, <code>run_tenant_vm_command</code>, <code>run_action</code>).</td><td>1, 2</td><td>Parser tests pass. A gated call pauses the run. Approve runs it; Deny stops it. <code>terminate</code> is refused.</td></tr>
-<tr><td>5</td><td>Investigator role and user, agent, skill and knowledge base.</td><td>3, 4</td><td>The agent finds the cause of a staged fault on a development VM (for example, a stopped metald or a full disk).</td></tr>
-<tr><td>6</td><td>Atlas Investigation DocType, three API routes and webhook event.</td><td>5</td><td>A curl call with a Central token starts a run, answers a question and reads the summary.</td></tr>
+<tr><td>2</td><td>Log fetch scripts and buttons over SSH: Firecracker log, VM journal, metald journal.</td><td>1</td><td>Each button on a development host gives an SSH Task with scrubbed output.</td></tr>
+<tr><td>3</td><td>Read-only ClickHouse user on Datum. Read-only tools: inventory, telemetry, freshness, alert checks, saved queries.</td><td>1</td><td>Each tool runs from a Flow chat and returns scrubbed output. An <code>INSERT</code> through <code>query_telemetry</code> fails in ClickHouse.</td></tr>
+<tr><td>4</td><td>Read-only command parser and gated tools (<code>run_command</code>, <code>run_tenant_vm_command</code>, <code>run_action</code>).</td><td>1, 2</td><td>Parser tests pass. In an engineer session, a gated call pauses the run; Approve runs it, Deny stops it. <code>terminate</code> is refused.</td></tr>
+<tr><td>5</td><td>Investigator role and user. Two agents (investigator, engineer assistant), skill and knowledge base.</td><td>3, 4</td><td>The investigator finds the cause of a staged fault on a development VM (for example, a stopped metald or a full disk). It has no gated tool.</td></tr>
+<tr><td>6</td><td>Atlas Investigation DocType, two API routes and webhook event.</td><td>5</td><td>A curl call with a Central token starts a run and reads the summary and transcript.</td></tr>
 <tr><td>7</td><td>Central client methods and Flow tools.</td><td>6</td><td>Central's agent hands off an issue and shows the Atlas summary.</td></tr>
 <tr><td>8</td><td>Evaluation: replay the causes of past postmortems as staged faults. Record time to cause, tool calls and cost per model.</td><td>7</td><td>A table of measured results for both models. No targets yet.</td></tr>
 </table></div>
@@ -213,7 +228,7 @@
 <div class="tablewrap"><table>
 <tr><th>#</th><th>Phase</th><th>Status</th><th>Notes</th></tr>
 <tr><td>Plan</td><td>Survey of Flow, Atlas and Central</td><td><span class="tag done">Done</span></td><td>This page.</td></tr>
-<tr><td>0</td><td>Flow on Atlas bench, models</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>0</td><td>Flow on Atlas bench, models</td><td><span class="tag doing">In progress</span></td><td>Daemon runs. OpenRouter provider and both models added; <code>test_connection</code> passes. Smoke chat runs complete, but the read output was empty; to check. Embedding model tested.</td></tr>
 <tr><td>1</td><td>Scrubber, console flag</td><td><span class="tag todo">Not started</span></td><td></td></tr>
 <tr><td>2</td><td>Log fetch actions</td><td><span class="tag todo">Not started</span></td><td></td></tr>
 <tr><td>3</td><td>Read-only tools</td><td><span class="tag todo">Not started</span></td><td></td></tr>
@@ -224,14 +239,15 @@
 <tr><td>8</td><td>Evaluation</td><td><span class="tag todo">Not started</span></td><td></td></tr>
 </table></div>
 
-<h2 id="questions">10. Open questions</h2>
+<h2 id="questions">10. Decisions</h2>
 <ol>
-  <li><strong>Read-only commands without approval.</strong> Is the parser-based allow list acceptable for hosts and tenant-0 VMs? The other choice is approval for every free command.</li>
-  <li><strong>Who approves.</strong> The plan sends questions to the Central user. Should an Atlas operator also be able to approve in the Atlas desk?</li>
-  <li><strong>What Central receives.</strong> The plan sends the summary and scrubbed findings. Should Central also get the scrubbed evidence (log excerpts, query rows)?</li>
-  <li><strong>IP addresses and host names.</strong> They help the agent and are kept by the scrubber. Should they be masked in the summary sent to Central?</li>
-  <li><strong>Embedding model.</strong> The knowledge base needs an embedding model through LiteLLM. Which provider do we use for it?</li>
-  <li><strong>Telemetry access.</strong> Can we create a read-only ClickHouse user for <code>query_telemetry</code>, or do we limit it to the saved queries?</li>
+  <li><strong>Who can change things.</strong> Only an Atlas engineer, in an Atlas desk session, and only after approving the call. Central investigations never get gated tools.</li>
+  <li><strong>What Central receives.</strong> The whole investigation: summary and full transcript, with credentials masked.</li>
+  <li><strong>What the scrubber masks.</strong> Credentials only. IP addresses and host names stay.</li>
+  <li><strong>Read-only commands.</strong> Allowed without approval in both agents, through the allow-list parser.</li>
+  <li><strong>Embedding model.</strong> <code>openai/text-embedding-3-small</code> through OpenRouter.</li>
+  <li><strong>Telemetry access.</strong> A read-only ClickHouse user on Datum for <code>query_telemetry</code>.</li>
+  <li><strong>Log access.</strong> SSH from Atlas for data not in Datum. A metald log route can come later if needed.</li>
 </ol>
 
 <h2>Sources</h2>
@@ -295,15 +311,14 @@
   const cols = [["User", 70], ["Central agent", 230], ["Atlas API", 420], ["Investigator", 600], ["Tools", 760]];
   cols.forEach(([n, x]) => { box(rq, q, x - 60, 10, 120, 34, n); q.appendChild(rq.line(x, 44, x, 395, { stroke: "#b7bcc4", strokeLineDash: [4, 5] })); });
   const steps = [
-    [70, 230, "report an issue"], [230, 420, "POST /investigations"], [420, 600, "start run"],
-    [600, 760, "read-only tools"], [760, 600, "scrubbed output"], [600, 420, "gated call: pause"],
-    [420, 230, "webhook: waiting"], [230, 70, "ask: approve?"], [70, 230, "approve"],
-    [230, 420, "POST answers"], [420, 600, "resume"], [600, 420, "run ends: summary"], [420, 230, "webhook: completed"]
+    [70, 230, "report an issue"], [230, 420, "POST /investigations"], [420, 600, "start read-only run"],
+    [600, 760, "Datum queries"], [760, 600, "rows"], [600, 760, "SSH read (if needed)"], [760, 600, "scrubbed output"],
+    [600, 420, "run ends: summary"], [420, 230, "webhook: completed"], [230, 420, "GET investigation"],
+    [420, 230, "summary + transcript"], [230, 70, "report"]
   ];
   steps.forEach(([x1, x2, l], i) => {
     const y = 70 + i * 25;
-    const o = (l.includes("approve") || l.includes("pause") || l.includes("waiting")) ? { stroke: "#9a5b00" } : null;
-    arrow(rq, q, x1, y, x2, y, l, o, y - 5);
+    arrow(rq, q, x1, y, x2, y, l, null, y - 5);
   });
 })();
 </script>
