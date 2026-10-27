@@ -51,7 +51,7 @@
   <tr><td>21</td><td>A missing or empty recovery table inventory made Restore treat every table as new and try to drop it. A missing table dump was silently skipped.</td><td><span class="tag ok">fixed, tested</span></td></tr>
   <tr><td>22</td><td>A failed web restart during a maintenance change was ignored. Backup could proceed, or completion could be reported, even though web had not read the new settings.</td><td><span class="tag ok">fixed, tested</span></td></tr>
 </table>
-<p>Branch: <code>fix/migration-reliability</code>, 17 local commits on top of develop <code>53b56124</code>, plus the current fixes in the working tree. Not pushed and no pull request yet. The final focused suite has 88 passing tests. The full suite had 3877 passing tests and one failure: <code>test_timeout_actually_terminates_the_process_group</code>. This test also failed on clean develop. It checks for the text <code>sleep 5</code> across all host processes, so unrelated processes can fail it. Ruff and the diff whitespace check passed.</p>
+<p>Pull request: <a href="https://github.com/frappe/pilot/pull/704">#704 — Fix worker restarts, maintenance and recovery bugs</a>, against <code>develop</code>. Branch: <code>fix/migration-reliability</code>, 18 commits on top of develop <code>53b56124</code>. All fixes are committed and pushed. The final focused suite has 88 passing tests. The full suite had 3877 passing tests and one failure: <code>test_timeout_actually_terminates_the_process_group</code>. This test also failed on clean develop. It checks for the text <code>sleep 5</code> across all host processes, so unrelated processes can fail it. Ruff and the diff whitespace check passed.</p>
 
 <h2>Log</h2>
 
@@ -183,7 +183,7 @@
   <li>Restart after a Restore: checked. It already reports a failure as <code>revert_failed</code>. No change.</li>
   <li>A worker pool still gets systemd's default 90 s to stop. A job that runs longer is killed at a restart. Frappe's own supervisor setup allows 1560 s for the long queue. Making this longer would make updates wait longer. This needs a decision.</li>
   <li>Each extra worker group adds one pool process (a pool unit used 60 to 95 MB at peak on the test server, including its workers).</li>
-  <li>Pull request: waiting for a go-ahead.</li>
+  <li>Pull request: <a href="https://github.com/frappe/pilot/pull/704">#704</a> is open for review.</li>
 </ul>
 </body>
 </html>
