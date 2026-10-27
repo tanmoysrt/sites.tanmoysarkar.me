@@ -23,7 +23,7 @@
 </head>
 <body>
 <h1>Pilot migration audit</h1>
-<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 09:18 IST.</p>
+<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 10:13 IST.</p>
 
 <h2>Summary</h2>
 <table>
@@ -41,11 +41,29 @@
   <tr><td>11</td><td>Maintenance mode took up to 60 s to take effect. At the start, web kept serving the sites (writes included). At the end, sites answered 503 for up to 60 s after "completed".</td><td><span class="tag ok">fixed, tested</span></td></tr>
   <tr><td>13</td><td>Restore failed with "'origin' does not appear to be a git repository" for an app without a reachable remote. It always fetched the old commit, even when the commit was already local, so it also failed when the network or Git host was down.</td><td><span class="tag ok">fixed, tested</span></td></tr>
   <tr><td>14</td><td>Lost updates on the operation record: a chain task that read the record before its own entry was saved dropped that entry, and the API saved a stale copy after it queued Retry or Restore.</td><td><span class="tag ok">fixed</span></td></tr>
+  <tr><td>15</td><td>An update or Restore stashed the uncommitted edits of an app it did not change, because it checked every app out again.</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>16</td><td>A failed table import during Restore did not say why (for example, MariaDB down).</td><td><span class="tag ok">fixed</span></td></tr>
+  <tr><td>17</td><td>A failed background-job check put a Python traceback into the diagnosis.</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>18</td><td>When a task could not save its own failure (disk full), the diagnosis said only "The task stopped before it finished".</td><td><span class="tag ok">fixed</span></td></tr>
   <tr><td>12</td><td>On a 2 GB host, MariaDB started at 371 MB under a 384 MB <code>MemoryHigh</code>. It reached the limit, then stalled: no new connections, and a restore that takes 5 s took 2 h 20 min.</td><td><span class="tag ok">fixed, tested</span></td></tr>
 </table>
-<p>Branch: <code>fix/migration-reliability</code>, 12 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed, plus the tests added after that run. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
+<p>Branch: <code>fix/migration-reliability</code>, 18 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed, plus the tests added after that run. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
 
 <h2>Log</h2>
+
+<h3>10:13 — Failure injection, round 3</h3>
+<table>
+  <tr><th>Injection</th><th>Result</th></tr>
+  <tr><td>SIGKILL the update during the asset step, then Retry</td><td><span class="tag ok">pass</span> A new update task ran, then both migrations. Completed.</td></tr>
+  <tr><td>SIGKILL the Admin process (it runs the task worker) during a migrate</td><td><span class="tag ok">pass</span> after fix 15. The socket started Admin again on the next request. The running task continued, and the chain completed. (The first try found bug 15: the test app had lost its patch to a stash.)</td></tr>
+  <tr><td>Stop MariaDB during a migrate; Restore while it is down; start it; Restore again</td><td><span class="tag ok">pass</span> Paused, then <code>revert_failed</code>, then reverted. Web came back. Found bug 16.</td></tr>
+  <tr><td>Stop the Redis queue before a migration, then Retry</td><td><span class="tag ok">pass</span> Paused before the backup with maintenance off. Found bug 17.</td></tr>
+  <tr><td>Fill the disk during the backup, then free it and Retry</td><td><span class="tag ok">pass</span> Sites stayed live; Retry completed. Found bug 18.</td></tr>
+  <tr><td>Start a second migration while one runs</td><td><span class="tag ok">pass</span> Refused: "still migrating - resolve it before starting another".</td></tr>
+  <tr><td>Reboot the server during a migrate, then Retry</td><td><span class="tag ok">pass</span> Back in 50 s. All units started. The task worker marked the task stopped, the operation paused with sites in maintenance, and Retry completed.</td></tr>
+  <tr><td>SIGKILL a Restore while it imports tables, then Restore again</td><td><span class="tag ok">pass</span> <code>revert_failed</code> with maintenance on, then reverted.</td></tr>
+  <tr><td>SIGKILL during the final service restart, then Retry</td><td><span class="tag ok">pass</span> Retry ran only the final step and did not migrate the site again.</td></tr>
+</table>
 
 <h3>09:18 — Failure injection, round 2</h3>
 <table>
