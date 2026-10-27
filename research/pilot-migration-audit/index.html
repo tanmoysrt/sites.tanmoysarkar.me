@@ -23,7 +23,7 @@
 </head>
 <body>
 <h1>Pilot migration audit</h1>
-<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 05:25 IST.</p>
+<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 08:50 IST.</p>
 
 <h2>Summary</h2>
 <table>
@@ -38,10 +38,34 @@
   <tr><td>8</td><td>Saving settings restarts the workload with its own fixed 120 s limit, which a draining job can exceed.</td><td><span class="tag ok">fixed, tested</span></td></tr>
   <tr><td>9</td><td>Telemetry reads only <code>worker_pool.log</code>, so the logs of per-group pools would skip the worker parser.</td><td><span class="tag ok">fixed</span></td></tr>
   <tr><td>10</td><td>Two worker groups with the same queues would give two pool units with the same name.</td><td><span class="tag ok">fixed</span></td></tr>
+  <tr><td>11</td><td>Maintenance mode took up to 60 s to take effect. At the start, web kept serving the sites (writes included). At the end, sites answered 503 for up to 60 s after "completed".</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>12</td><td>On a 2 GB host, MariaDB started at 371 MB under a 384 MB <code>MemoryHigh</code>. It reached the limit, then stalled: no new connections, and a restore that takes 5 s took 2 h 20 min.</td><td><span class="tag ok">fixed, tested</span></td></tr>
 </table>
-<p>Branch: <code>fix/migration-reliability</code>, 8 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed, plus the tests added after that run. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
+<p>Branch: <code>fix/migration-reliability</code>, 10 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed, plus the tests added after that run. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
 
 <h2>Log</h2>
+
+<h3>08:50 — Failure injection, round 1</h3>
+<p>Each test breaks the migration on purpose, then checks the operation state, the site data, maintenance mode, and recovery. A test app adds a patch that creates a table, changes a setting, commits, and then sleeps or fails.</p>
+<table>
+  <tr><th>Injection</th><th>Result</th></tr>
+  <tr><td>SIGKILL the migrate task during a patch, then Retry</td><td><span class="tag ok">pass</span> Operation paused in <code>needs_attention</code>. Both sites stayed in maintenance. No orphan <code>frappe migrate</code> process. Retry completed.</td></tr>
+  <tr><td>SIGKILL the migrate task, then Restore</td><td><span class="tag ok">pass</span> The touched-table list was incomplete, so Pilot restored the whole snapshot. Setting and tables back to the start state.</td></tr>
+  <tr><td>SIGKILL the backup task, then Retry</td><td><span class="tag ok">pass</span> Paused, and maintenance mode was turned off because nothing had changed. Retry made a new backup and completed.</td></tr>
+  <tr><td>Cancel the migrate task from the task API, then Restore</td><td><span class="tag ok">pass</span> after fix 12. The first Restore took 2 h 20 min because of the MariaDB stall below.</td></tr>
+</table>
+
+<h3>08:30 — MariaDB stalled on the 2 GB server (issue 12)</h3>
+<p>During the cancel test, the restore of one small site did not finish for over 2 hours. The load average was 14 to 18 on one CPU. MariaDB did not accept new connections.</p>
+<p>Evidence: 18 of 24 MariaDB threads waited on disk reads. The disk did about 3,000 reads of 4 KB per second, all from MariaDB, but they were page faults on its own code, not table reads. The MariaDB service had <code>MemoryHigh=384M</code> and used 383 MB. Its "high" event counter passed one million. <code>Memory_used_initial</code> was 371 MB: MariaDB used almost all of its limit right after it started.</p>
+<p>Cause: Pilot sizes the buffer pool (128 MB) and key buffer (32 MB), but not the Aria page cache. MariaDB's default for it is 128 MB, and MariaDB uses Aria for on-disk temporary tables (19,000 of them on this server). Without swap, the kernel can only take back MariaDB's code pages, so it reads them again and again.</p>
+<p>Fix: Pilot sets <code>aria-pagecache-buffer-size</code> to the key buffer size (8, 32 or 128 MB by host size) and counts it in the budget. A new patch writes it into an existing <code>my.cnf</code>; it applies at MariaDB's next start. After a restart on the test server, <code>Memory_used_initial</code> went from 371 MB to 270 MB.</p>
+<p>Note: an older patch already raises <code>MemoryHigh</code>, but it keeps 384 MB on a 512 MB limit, so it did not help here.</p>
+
+<h3>07:00 — Maintenance mode took up to 60 s (issue 11)</h3>
+<p>Frappe reads a site's config again only every 60 s in each web process. So web kept serving a site for up to a minute after Pilot turned maintenance mode on. At the end, web had restarted while maintenance mode was still on, so the sites answered 503 for up to a minute after the update completed.</p>
+<p>Fix: Pilot restarts web once before the first step of a site, and once after it turns maintenance mode off. Web holds its socket during a restart, so requests wait instead of failing.</p>
+<p>Measured with a ping every 0.5 s during a 2-site migration: 503 started 4 s after the start. The last 503 was 2 s before "completed". Before the fix, 503s went on for about 40 s after "completed".</p>
 
 <h3>05:25 — Groups with the same queues</h3>
 <p>With one pool per group, two groups that both list <code>default</code> would give two units with the same name. Rejecting such a config at load time could stop an existing bench from loading. So Pilot now gives these groups one pool with the sum of their counts. The branch is deployed on the test server, and its units and sites are healthy.</p>
