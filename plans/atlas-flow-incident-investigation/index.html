@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas incident investigation with Flow: plan and progress</title>
+<meta name="description" content="Plan to run the Flow agent harness inside Atlas, with deterministic and scrubbed tools for incident investigation. Central hands off an issue and gets back a summary.">
+<style>
+  :root { --ink:#1d1f23; --muted:#5d636d; --line:#d7dade; --soft:#f5f6f8; --accent:#2b5fc4; --ok:#1f7a4d; --warn:#9a5b00; --bad:#a3262a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  * { box-sizing: border-box; }
+  body { margin:0; color:var(--ink); background:#fff; font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 44px 18px 96px; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 6px; }
+  h2 { font-size: 1.3rem; margin: 48px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.04rem; margin: 24px 0 6px; }
+  p, li { max-width: 72ch; }
+  .lede { color: var(--muted); font-size: 1.06rem; margin: 0 0 18px; }
+  .meta { color: var(--muted); font-size: .88rem; }
+  code, pre { font-family: var(--mono); font-size: .86em; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--soft); padding: 12px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.45; }
+  pre code { background: none; padding: 0; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+  th { background: var(--soft); font-weight: 600; }
+  figure { margin: 18px 0 24px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: .86rem; margin-top: 4px; }
+  .tag { display: inline-block; font-size: .74rem; font-weight: 600; padding: 0 7px; border-radius: 10px; border: 1px solid currentColor; white-space: nowrap; }
+  .todo { color: var(--muted); } .doing { color: var(--accent); } .done { color: var(--ok); } .blocked { color: var(--warn); }
+  .yes { color: var(--ok); font-weight: 600; } .ask { color: var(--warn); font-weight: 600; } .no { color: var(--bad); font-weight: 600; }
+  .note { border-left: 3px solid var(--line); padding: 2px 0 2px 14px; color: var(--muted); }
+  nav.toc { background: var(--soft); border-radius: 6px; padding: 10px 18px; font-size: .92rem; }
+  nav.toc ol { margin: 4px 0; padding-left: 20px; }
+  a { color: var(--accent); }
+  svg text { font-family: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; fill: #1d1f23; font-size: 13px; }
+  svg text.small { font-size: 11px; fill: #5d636d; }
+</style>
+</head>
+<body>
+<main>
+<h1>Atlas incident investigation with Flow</h1>
+<p class="lede">A plan to run the Flow agent harness inside Atlas. Atlas gives the agent a set of deterministic, scrubbed tools. Central hands off an issue to Atlas and gets back a summary. Central never connects to a host.</p>
+<p class="meta">Status page. Started 28 October 2026. The progress table in <a href="#progress">section 9</a> is the live tracker.</p>
+
+<nav class="toc"><ol>
+  <li><a href="#problem">Problem</a></li>
+  <li><a href="#design">Design: where the agent runs</a></li>
+  <li><a href="#flow">What Flow gives us today</a></li>
+  <li><a href="#tools">The tool set</a></li>
+  <li><a href="#policy">Permission policy</a></li>
+  <li><a href="#scrub">Scrubbing output</a></li>
+  <li><a href="#handoff">Central to Atlas handoff</a></li>
+  <li><a href="#phases">Phases</a></li>
+  <li><a href="#progress">Progress</a></li>
+  <li><a href="#questions">Open questions</a></li>
+</ol></nav>
+
+<h2 id="problem">1. Problem</h2>
+<p>Atlas is the regional control plane. It already has dashboards and alerts in Insights. The data comes from Datum, which stores metrics and logs in ClickHouse. When an alert fires, an operator reads the charts, then connects to hosts over SSH to find the cause. This takes time, and the steps are similar each time.</p>
+<p>Flow is the agent harness in the Frappe framework. It can run a model in a loop with tools, skills and a knowledge base. We want Flow to do the first part of an investigation.</p>
+<p>There are three constraints:</p>
+<ul>
+  <li><strong>Small exposure to Central.</strong> Central has only an API contract with Atlas. Central must not connect to a host over SSH. Central gets only the result of an investigation.</li>
+  <li><strong>No secrets to the model.</strong> All command output and log text goes through a deterministic scrubber before the agent reads it.</li>
+  <li><strong>A person approves changes.</strong> The agent asks before any action that changes state. Termination is never available to the agent.</li>
+</ul>
+
+<h2 id="design">2. Design: where the agent runs</h2>
+<p>We considered two options.</p>
+<div class="tablewrap"><table>
+<tr><th>Option</th><th>How it works</th><th>Result</th></tr>
+<tr><td>A. Agent in Central, Atlas exposes raw read APIs</td><td>Central's agent calls many Atlas routes and reads raw output.</td><td>Rejected. Central sees raw host data. Each new tool needs a new public route.</td></tr>
+<tr><td>B. Agent in Atlas, Central hands off an issue</td><td>Each region runs its own investigator. Central sends an issue and reads back a scrubbed summary.</td><td><strong>Chosen.</strong> Raw data stays in the region. The contract is two or three routes.</td></tr>
+</table></div>
+<p>In option B, the Central agent uses the Atlas investigator like a subagent: it gives a task and gets a report back.</p>
+
+<figure>
+<svg id="d-arch" viewBox="0 0 820 330" role="img" aria-label="Central agent sends an issue to the Atlas investigation API. The Atlas Flow investigator uses scrubbed tools to read Datum, Insights, and hosts or tenant-0 VMs over SSH. Only a scrubbed summary goes back to Central."></svg>
+<figcaption>Boundaries. Raw output stays inside the region. Only the issue and a scrubbed summary cross to Central.</figcaption>
+</figure>
+
+<h2 id="flow">3. What Flow gives us today</h2>
+<p>Flow is in <code>frappe/flow</code>. A daemon (<code>flow_harness</code>) runs the agent loop for the bench. Frappe holds the configuration, the transcript and the HTTP API. We checked these facts in the code:</p>
+<ul>
+  <li><strong>Models.</strong> Flow uses LiteLLM. A <code>Flow Provider</code> with <code>provider=openrouter</code> and a <code>Flow Model</code> with <code>model_id=deepseek/deepseek-v4.1-flash-1017</code> or <code>z-ai/glm-5.3-flash</code> is enough. Both model IDs exist on OpenRouter.</li>
+  <li><strong>Tools.</strong> An app declares <code>flow_tools</code> in <code>hooks.py</code>. Each tool is a function with the <code>@tool</code> decorator and a keyword argument <code>ctx: ToolContext</code>. The schema comes from type hints. A tool can set <code>requires_confirmation=True</code>. This value is a plain boolean, not a function of the arguments.</li>
+  <li><strong>Agents.</strong> An app declares <code>flow_agents</code>. The function returns <code>Agent</code> objects with instructions, tools, skills and knowledge bases.</li>
+  <li><strong>Skills.</strong> Flow loads <code>&lt;app&gt;/skills/&lt;name&gt;/SKILL.md</code> from the app repository root.</li>
+  <li><strong>Knowledge base.</strong> <code>Flow Knowledge Base</code> with text, file, URL or DocType sources. Search is hybrid (full text and vector). It needs an embedding model.</li>
+  <li><strong>Approval.</strong> A gated call pauses the <code>Flow Run</code>. The owner answers with <code>frappe.flow.api.resume</code>: Approve, Deny or free text.</li>
+</ul>
+<p>Gaps that affect this plan:</p>
+<ul>
+  <li>Approval decisions are not recorded. We record them in our own DocType.</li>
+  <li>Sessions from triggers always auto-approve. We will not use triggers for investigations.</li>
+  <li>The REST API has no completion callback. We start runs from Python with <code>on_complete</code>, so Atlas knows when a run ends.</li>
+  <li>A session keeps the tool set from its start. Tool changes apply only to new sessions.</li>
+</ul>
+
+<h2 id="tools">4. The tool set</h2>
+<p>Each tool is small and deterministic. The agent cannot send free SQL to the database or free shell to a host without a gate. Tools live in a new Atlas module, <code>atlas/investigation/</code>, grouped by subject. Every tool returns scrubbed text or JSON.</p>
+
+<h3>4.1 Inventory (read only)</h3>
+<div class="tablewrap"><table>
+<tr><th>Tool</th><th>Returns</th></tr>
+<tr><td><code>find_resources</code></td><td>Hosts, VMs and service VMs that match a name, IP, tenant or status.</td></tr>
+<tr><td><code>get_host</code></td><td>Metal Server state, disks, metald version, recent actions.</td></tr>
+<tr><td><code>get_virtual_machine</code></td><td>VM state, host, tenant, network, recent actions and migrations.</td></tr>
+<tr><td><code>list_recent_tasks</code></td><td>Recent SSH Tasks, console logs and failed background jobs for a resource.</td></tr>
+<tr><td><code>list_error_logs</code></td><td>Recent Atlas Error Log rows, grouped by method.</td></tr>
+</table></div>
+
+<h3>4.2 Telemetry (read only)</h3>
+<div class="tablewrap"><table>
+<tr><th>Tool</th><th>Returns</th></tr>
+<tr><td><code>list_alert_checks</code></td><td>The checks in the existing Insights alerts (P1, P2 Hosts, P2 Platform, P3) and which ones fail now.</td></tr>
+<tr><td><code>list_saved_queries</code></td><td>The queries of the Atlas Insights workbook, with key and title.</td></tr>
+<tr><td><code>run_saved_query</code></td><td>The result of one workbook query, with an optional time range.</td></tr>
+<tr><td><code>query_telemetry</code></td><td>The result of a <code>SELECT</code> on Datum. One statement only, with a row limit and a time limit. A read-only ClickHouse user is preferred.</td></tr>
+</table></div>
+<p>The saved queries come first. They are tested and fast. The skill tells the agent to use them before it writes its own SQL.</p>
+
+<h3>4.3 Host and VM diagnostics (fixed commands)</h3>
+<p>These tools run a fixed script through <code>SSH Task</code> in background mode. Each run is a record, so there is an audit trail. The agent chooses only the target and the size.</p>
+<div class="tablewrap"><table>
+<tr><th>Tool</th><th>Command on the host</th></tr>
+<tr><td><code>get_firecracker_log</code></td><td><code>tail -c</code> of <code>/var/lib/metal/machines/&lt;id&gt;/firecracker/&lt;id&gt;/root/firecracker.log</code></td></tr>
+<tr><td><code>get_vm_unit_journal</code></td><td><code>journalctl -u metal-vm@&lt;id&gt;.service --since</code></td></tr>
+<tr><td><code>get_metald_journal</code></td><td><code>journalctl -u metald --since</code>, with an optional pattern</td></tr>
+<tr><td><code>get_host_health</code></td><td>Load, memory, disk, failed units, kernel messages (<code>dmesg</code> tail), WireGuard handshakes</td></tr>
+</table></div>
+<p>The same scripts become buttons for operators. <strong>Fetch Firecracker Log</strong> and <strong>Fetch VM Journal</strong> go on Virtual Machine. <strong>Fetch metald Journal</strong> goes on Metal Server. This fills a gap: today no action fetches these logs.</p>
+
+<h3>4.4 Commands and actions (gated)</h3>
+<div class="tablewrap"><table>
+<tr><th>Tool</th><th>Target</th><th>Gate</th></tr>
+<tr><td><code>run_readonly_command</code></td><td>Host or tenant-0 VM</td><td>No approval. Each command must match a read-only allow list (see <a href="#policy">section 5</a>). Other commands are refused.</td></tr>
+<tr><td><code>run_command</code></td><td>Host or tenant-0 VM</td><td>Approval for each call.</td></tr>
+<tr><td><code>run_tenant_vm_command</code></td><td>VM of a customer tenant</td><td>Approval for each call. The prompt names the tenant.</td></tr>
+<tr><td><code>run_action</code></td><td>Metal Server, Virtual Machine, service record</td><td>Approval for each call. Allow list of actions; termination is not in the list.</td></tr>
+</table></div>
+<p>Commands run through the Metal Server Console, which already logs each run in <code>Metal Server Console Log</code>. Tenant-0 VMs are reached with the existing proxy command through the host network namespace.</p>
+
+<h2 id="policy">5. Permission policy</h2>
+<p>Flow sets approval per tool, not per argument. So we split tools by risk. The policy is then fixed in code and the model cannot change it.</p>
+<div class="tablewrap"><table>
+<tr><th>Action</th><th>Policy</th></tr>
+<tr><td>Read inventory, telemetry, logs, docs</td><td class="yes">Allowed</td></tr>
+<tr><td>Read-only command on a host or tenant-0 VM</td><td class="yes">Allowed, logged</td></tr>
+<tr><td>Other command on a host or tenant-0 VM</td><td class="ask">Ask the user</td></tr>
+<tr><td>Any SSH to a VM of another tenant</td><td class="ask">Ask the user</td></tr>
+<tr><td>Change actions (restart, stop, migrate, reboot, resize, firewall, upgrade)</td><td class="ask">Ask the user</td></tr>
+<tr><td><code>terminate</code>, <code>archive_server</code>, delete of any record</td><td class="no">Not available</td></tr>
+</table></div>
+<p>The read-only allow list is a parser, not a prompt. It splits the command on <code>;</code>, <code>&amp;&amp;</code>, <code>||</code> and <code>|</code>. It refuses redirection, command substitution and backticks. Each part must start with an allowed program, for example <code>journalctl</code>, <code>systemctl status</code>, <code>cat</code>, <code>tail</code>, <code>head</code>, <code>grep</code>, <code>ls</code>, <code>df</code>, <code>free</code>, <code>ss</code>, <code>ip</code>, <code>wg show</code>, <code>ps</code>, <code>top -b -n 1</code>, <code>uptime</code>, <code>dmesg</code>. Reads of secret paths, such as <code>/etc/shadow</code> and private keys, are refused.</p>
+<p>Investigations run as a dedicated Atlas user with an <strong>Atlas Investigator</strong> role. Each tool checks this role. The agent does not get System Manager.</p>
+
+<h2 id="scrub">6. Scrubbing output</h2>
+<p>A scrubber is a function that replaces sensitive text with a fixed marker. It is deterministic: the same input always gives the same output, and no model is involved. It lives in one place, <code>atlas/core/scrub.py</code>, and every tool calls it on its return value.</p>
+<p>It replaces, in order:</p>
+<ol>
+  <li>PEM blocks (private keys, certificates).</li>
+  <li>Known token formats: JWT, <code>Bearer</code> values, cloud access keys, <code>sk-</code> API keys, GitHub tokens, WireGuard keys.</li>
+  <li>Values of secret-like keys in <code>key=value</code>, <code>key: value</code> and JSON, for example <code>password</code>, <code>secret</code>, <code>token</code>, <code>api_key</code>.</li>
+  <li>Credentials in URLs (user info and signed query strings).</li>
+  <li>Email addresses.</li>
+  <li>High-entropy words. A word of 20 or more characters from a base64 or hex alphabet, with Shannon entropy above a limit, becomes <code>[REDACTED:entropy]</code>. UUIDs and Atlas record names are kept, because the agent needs them.</li>
+</ol>
+<pre><code>password=hunter2 token: eyJhbGciOi...   →   password=[REDACTED] token: [REDACTED:jwt]</code></pre>
+<p>The Metal Server Console gets a <strong>Scrub Output</strong> check, on by default. With the check on, the stored output is scrubbed. An operator can turn it off for one run. Agent tools always scrub and cannot turn it off.</p>
+<p>A second layer is possible: Flow's daemon has an extension point for a <code>tool_call</code> hook, with a <code>redact_secrets</code> example. We do not need it at first.</p>
+
+<h2 id="handoff">7. Central to Atlas handoff</h2>
+<p>A new DocType <strong>Atlas Investigation</strong> owns the state of one handoff. Fields: issue, context JSON, requested by, status (Queued, Running, Waiting for Approval, Completed, Failed), Flow Session, summary, findings, and a child table of approval decisions (tool, arguments, decision, decided by, time). This fills Flow's audit gap for approvals.</p>
+<div class="tablewrap"><table>
+<tr><th>Route (under <code>/api/atlas</code>)</th><th>Caller</th><th>Does</th></tr>
+<tr><td><code>POST /investigations</code></td><td>Central, tenant 0 only</td><td>Creates the record and starts a Flow run. Returns the ID.</td></tr>
+<tr><td><code>GET /investigations/{id}</code></td><td>Central</td><td>Status, pending question, summary and findings. All scrubbed.</td></tr>
+<tr><td><code>POST /investigations/{id}/answers</code></td><td>Central</td><td>Approve, Deny or a free-text reply to a pending question.</td></tr>
+</table></div>
+<p>Atlas sends a webhook event on each status change, through the webhook that Central already configures. Central can also poll. Authentication uses the existing Central JWT and <code>require_central_identity</code>. No new token type is needed.</p>
+<p>Central gets three Flow tools: <code>start_region_investigation</code>, <code>get_region_investigation</code> and <code>answer_region_investigation</code>. Central's agent passes the approval question to its user and sends back the answer.</p>
+
+<figure>
+<svg id="d-seq" viewBox="0 0 820 400" role="img" aria-label="Sequence: Central agent starts an investigation. Atlas runs Flow, which uses tools. A gated tool pauses the run, Atlas sends a webhook, Central asks the user, and the answer resumes the run. Atlas returns the summary."></svg>
+<figcaption>One investigation with one approval. Central sees only the status, the question and the summary.</figcaption>
+</figure>
+
+<h3>Knowledge and skill</h3>
+<p>An <code>incident-investigation</code> skill in <code>atlas/skills/</code> gives the method: read the failing alert checks, run the saved queries, find the affected resources, read logs, form a hypothesis, check it, then report. It lists the tools to prefer at each step. A short report template sets the output: symptom, evidence, cause, confidence, and suggested next step.</p>
+<p>The <strong>Atlas</strong> knowledge base takes the Atlas <code>docs/</code> folder, the module <code>SPEC.md</code> files and the incident postmortems. A second source takes Frappe Cloud platform docs. A setup command loads them, so a new region gets the same base.</p>
+
+<h2 id="phases">8. Phases</h2>
+<p>Each phase has a check. A phase is done only when its check passes on <code>atlas.localhost</code> with the development region.</p>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>Phase</th><th>Depends on</th><th>Check</th></tr>
+<tr><td>0</td><td>Flow daemon on the Atlas bench. OpenRouter provider and two models on atlas.localhost.</td><td>None</td><td><code>test_connection</code> passes for both models. A plain chat answers.</td></tr>
+<tr><td>1</td><td>Scrubber module and tests. Scrub Output check on the Metal Server Console.</td><td>None</td><td>Tests with real secret shapes pass. A console run that prints a key stores <code>[REDACTED]</code>.</td></tr>
+<tr><td>2</td><td>Log fetch scripts and buttons: Firecracker log, VM journal, metald journal.</td><td>1</td><td>Each button on a development host gives an SSH Task with scrubbed output.</td></tr>
+<tr><td>3</td><td>Read-only tools: inventory, telemetry, alert checks, saved queries.</td><td>1</td><td>Each tool runs from a Flow chat and returns scrubbed output.</td></tr>
+<tr><td>4</td><td>Read-only command parser and gated tools (<code>run_command</code>, <code>run_tenant_vm_command</code>, <code>run_action</code>).</td><td>1, 2</td><td>Parser tests pass. A gated call pauses the run. Approve runs it; Deny stops it. <code>terminate</code> is refused.</td></tr>
+<tr><td>5</td><td>Investigator role and user, agent, skill and knowledge base.</td><td>3, 4</td><td>The agent finds the cause of a staged fault on a development VM (for example, a stopped metald or a full disk).</td></tr>
+<tr><td>6</td><td>Atlas Investigation DocType, three API routes and webhook event.</td><td>5</td><td>A curl call with a Central token starts a run, answers a question and reads the summary.</td></tr>
+<tr><td>7</td><td>Central client methods and Flow tools.</td><td>6</td><td>Central's agent hands off an issue and shows the Atlas summary.</td></tr>
+<tr><td>8</td><td>Evaluation: replay the causes of past postmortems as staged faults. Record time to cause, tool calls and cost per model.</td><td>7</td><td>A table of measured results for both models. No targets yet.</td></tr>
+</table></div>
+<p class="note">Phases 1 to 4 are useful without the agent. The scrubber and the log buttons help operators today.</p>
+
+<h2 id="progress">9. Progress</h2>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>Phase</th><th>Status</th><th>Notes</th></tr>
+<tr><td>Plan</td><td>Survey of Flow, Atlas and Central</td><td><span class="tag done">Done</span></td><td>This page.</td></tr>
+<tr><td>0</td><td>Flow on Atlas bench, models</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>1</td><td>Scrubber, console flag</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>2</td><td>Log fetch actions</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>3</td><td>Read-only tools</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>4</td><td>Gated tools, command parser</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>5</td><td>Agent, skill, knowledge base</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>6</td><td>Investigation DocType and API</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>7</td><td>Central tools</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>8</td><td>Evaluation</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+</table></div>
+
+<h2 id="questions">10. Open questions</h2>
+<ol>
+  <li><strong>Read-only commands without approval.</strong> Is the parser-based allow list acceptable for hosts and tenant-0 VMs? The other choice is approval for every free command.</li>
+  <li><strong>Who approves.</strong> The plan sends questions to the Central user. Should an Atlas operator also be able to approve in the Atlas desk?</li>
+  <li><strong>What Central receives.</strong> The plan sends the summary and scrubbed findings. Should Central also get the scrubbed evidence (log excerpts, query rows)?</li>
+  <li><strong>IP addresses and host names.</strong> They help the agent and are kept by the scrubber. Should they be masked in the summary sent to Central?</li>
+  <li><strong>Embedding model.</strong> The knowledge base needs an embedding model through LiteLLM. Which provider do we use for it?</li>
+  <li><strong>Telemetry access.</strong> Can we create a read-only ClickHouse user for <code>query_telemetry</code>, or do we limit it to the saved queries?</li>
+</ol>
+
+<h2>Sources</h2>
+<ul>
+  <li><a href="https://github.com/frappe/frappe">Frappe framework</a>: <code>frappe/flow</code> (tools, agents, skills, knowledge base, approval).</li>
+  <li><a href="https://openrouter.ai/models">OpenRouter models</a>: model IDs checked on 28 October 2026.</li>
+  <li>Atlas repository: <code>atlas/core/ssh.py</code>, <code>SSH Task</code>, <code>Metal Server Console</code>, <code>scripts/insights/</code>, <code>metal/internal/firecracker/jailer.go</code>, <code>atlas/auth/</code>.</li>
+  <li>Central repository: <code>central/integrations/atlas.py</code>, <code>central/sso.py</code>.</li>
+</ul>
+</main>
+
+<script src="https://unpkg.com/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  if (!window.rough) return;
+  const NS = "http://www.w3.org/2000/svg";
+  const opt = { roughness: 1.1, stroke: "#1d1f23", strokeWidth: 1.2 };
+  function text(svg, x, y, s, cls, anchor) {
+    const t = document.createElementNS(NS, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y);
+    t.setAttribute("text-anchor", anchor || "middle");
+    if (cls) t.setAttribute("class", cls);
+    t.textContent = s; svg.appendChild(t);
+  }
+  function box(rc, svg, x, y, w, h, label, sub, o) {
+    svg.appendChild(rc.rectangle(x, y, w, h, Object.assign({}, opt, o || {})));
+    text(svg, x + w / 2, y + h / 2 + (sub ? -3 : 4), label);
+    if (sub) text(svg, x + w / 2, y + h / 2 + 13, sub, "small");
+  }
+  function arrow(rc, svg, x1, y1, x2, y2, label, o, ly, lx) {
+    svg.appendChild(rc.line(x1, y1, x2, y2, Object.assign({}, opt, o || {})));
+    const a = Math.atan2(y2 - y1, x2 - x1), s = 9;
+    svg.appendChild(rc.line(x2, y2, x2 - s * Math.cos(a - 0.4), y2 - s * Math.sin(a - 0.4), Object.assign({}, opt, o || {})));
+    svg.appendChild(rc.line(x2, y2, x2 - s * Math.cos(a + 0.4), y2 - s * Math.sin(a + 0.4), Object.assign({}, opt, o || {})));
+    if (label) text(svg, lx || (x1 + x2) / 2, ly || ((y1 + y2) / 2 - 7), label, "small");
+  }
+
+  const a = document.getElementById("d-arch"), ra = rough.svg(a);
+  const dash = { strokeLineDash: [6, 5], stroke: "#8a9099" };
+  a.appendChild(ra.rectangle(10, 20, 200, 290, dash)); text(a, 110, 40, "Central");
+  a.appendChild(ra.rectangle(260, 20, 550, 290, dash)); text(a, 535, 40, "Region (Atlas)");
+  box(ra, a, 30, 120, 160, 60, "Central agent", "Flow");
+  box(ra, a, 290, 120, 150, 60, "Investigation API", "Atlas Investigation");
+  box(ra, a, 490, 120, 150, 60, "Investigator", "Flow + skill", { stroke: "#2b5fc4" });
+  box(ra, a, 490, 220, 150, 50, "Scrubber", "deterministic", { stroke: "#1f7a4d" });
+  box(ra, a, 670, 60, 120, 44, "Datum", "ClickHouse");
+  box(ra, a, 670, 125, 120, 44, "Insights", "saved queries");
+  box(ra, a, 670, 190, 120, 50, "Hosts and", "tenant-0 VMs");
+  box(ra, a, 290, 230, 150, 44, "Knowledge base", "docs, specs");
+  arrow(ra, a, 190, 140, 290, 140, "issue");
+  arrow(ra, a, 290, 165, 190, 165, "summary", { stroke: "#1f7a4d" }, 182);
+  arrow(ra, a, 440, 150, 490, 150);
+  arrow(ra, a, 640, 135, 670, 85);
+  arrow(ra, a, 640, 147, 670, 147);
+  arrow(ra, a, 640, 160, 670, 205, "SSH Task", null, 196, 622);
+  arrow(ra, a, 670, 235, 640, 245, "raw", null, 262);
+  arrow(ra, a, 540, 220, 540, 180, "clean", { stroke: "#1f7a4d" }, 204, 520);
+  arrow(ra, a, 490, 170, 440, 245);
+
+  const q = document.getElementById("d-seq"), rq = rough.svg(q);
+  const cols = [["User", 70], ["Central agent", 230], ["Atlas API", 420], ["Investigator", 600], ["Tools", 760]];
+  cols.forEach(([n, x]) => { box(rq, q, x - 60, 10, 120, 34, n); q.appendChild(rq.line(x, 44, x, 395, { stroke: "#b7bcc4", strokeLineDash: [4, 5] })); });
+  const steps = [
+    [70, 230, "report an issue"], [230, 420, "POST /investigations"], [420, 600, "start run"],
+    [600, 760, "read-only tools"], [760, 600, "scrubbed output"], [600, 420, "gated call: pause"],
+    [420, 230, "webhook: waiting"], [230, 70, "ask: approve?"], [70, 230, "approve"],
+    [230, 420, "POST answers"], [420, 600, "resume"], [600, 420, "run ends: summary"], [420, 230, "webhook: completed"]
+  ];
+  steps.forEach(([x1, x2, l], i) => {
+    const y = 70 + i * 25;
+    const o = (l.includes("approve") || l.includes("pause") || l.includes("waiting")) ? { stroke: "#9a5b00" } : null;
+    arrow(rq, q, x1, y, x2, y, l, o, y - 5);
+  });
+})();
+</script>
+</body>
+</html>
