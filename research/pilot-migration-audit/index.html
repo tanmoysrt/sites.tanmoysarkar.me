@@ -23,7 +23,7 @@
 </head>
 <body>
 <h1>Pilot migration audit</h1>
-<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 08:50 IST.</p>
+<p class="meta">Status log. Newest entry first. Last update: 2026-10-27 09:18 IST.</p>
 
 <h2>Summary</h2>
 <table>
@@ -39,11 +39,20 @@
   <tr><td>9</td><td>Telemetry reads only <code>worker_pool.log</code>, so the logs of per-group pools would skip the worker parser.</td><td><span class="tag ok">fixed</span></td></tr>
   <tr><td>10</td><td>Two worker groups with the same queues would give two pool units with the same name.</td><td><span class="tag ok">fixed</span></td></tr>
   <tr><td>11</td><td>Maintenance mode took up to 60 s to take effect. At the start, web kept serving the sites (writes included). At the end, sites answered 503 for up to 60 s after "completed".</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>13</td><td>Restore failed with "'origin' does not appear to be a git repository" for an app without a reachable remote. It always fetched the old commit, even when the commit was already local, so it also failed when the network or Git host was down.</td><td><span class="tag ok">fixed, tested</span></td></tr>
+  <tr><td>14</td><td>Lost updates on the operation record: a chain task that read the record before its own entry was saved dropped that entry, and the API saved a stale copy after it queued Retry or Restore.</td><td><span class="tag ok">fixed</span></td></tr>
   <tr><td>12</td><td>On a 2 GB host, MariaDB started at 371 MB under a 384 MB <code>MemoryHigh</code>. It reached the limit, then stalled: no new connections, and a restore that takes 5 s took 2 h 20 min.</td><td><span class="tag ok">fixed, tested</span></td></tr>
 </table>
-<p>Branch: <code>fix/migration-reliability</code>, 10 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed, plus the tests added after that run. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
+<p>Branch: <code>fix/migration-reliability</code>, 12 local commits on top of develop <code>53b56124</code>. Not pushed and no pull request yet. Unit tests: 3854 passed, plus the tests added after that run. One test (<code>test_timeout_actually_terminates_the_process_group</code>) fails on the laptop on clean develop too, so it is not related.</p>
 
 <h2>Log</h2>
+
+<h3>09:18 — Failure injection, round 2</h3>
+<table>
+  <tr><th>Injection</th><th>Result</th></tr>
+  <tr><td>SIGKILL the app update during the package install, then Restore</td><td><span class="tag bad">found bug 13</span>, then <span class="tag ok">pass</span>. The kill left the new code and a half-installed environment, with both sites in maintenance. The first Restore failed on the test app, which has no remote. After the fix, Restore again resumed from its checkpoint: both apps back at their old commits, environment rebuilt, sites live, snapshots removed.</td></tr>
+</table>
+<p>Bug 14 came from reading the code after this test. The window is small (the next task needs about a second to start), but a busy host can widen it, and the result is an operation stuck in its phase. Now a chain task waits until its entry is stored, and records itself if the task before it stopped. The API records the action ID by reading the stored record under a lock.</p>
 
 <h3>08:50 — Failure injection, round 1</h3>
 <p>Each test breaks the migration on purpose, then checks the operation state, the site data, maintenance mode, and recovery. A test app adds a patch that creates a table, changes a setting, commits, and then sleeps or fails.</p>
