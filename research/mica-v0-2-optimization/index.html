@@ -44,7 +44,7 @@
 
 <h1>mica v0.2 optimization</h1>
 <p class="lede">The baseline of mica v0.1 in a local lab, each optimization step of v0.2, and the result at 1 ms and 20 ms round trip to S3.</p>
-<p class="meta">Measured 25 October 2026 · <span class="tag">baseline</span> <span class="tag">optimizations</span></p>
+<p class="meta">Measured 25–29 October 2026 · <span class="tag">baseline</span> <span class="tag">optimizations</span></p>
 
 <h2>Context</h2>
 <p>mica gives a VM or a container a disk that lives in an S3 bucket. The bucket holds the shared copy of the disk. The local SSD of the machine is a cache. A <b>chunk</b> is a 4 MiB part of the disk. mica downloads a chunk when a read needs it, and uploads changed chunks in the background. One upload round is a <b>checkpoint</b>.</p>
@@ -503,6 +503,54 @@
 <p><b>The idle gap is 3%, not 19%.</b> The 19% came from runs while the host was busy. On a quiet host the data files are 3% slower in rate, and 50 µs slower at p50. Timers in the daemon put almost all of a FLUSH in the data file's <code>fdatasync</code> (p50 550 µs). mica's own steps take about 25 µs. A test without mica shows the same 50 µs on this btrfs: a synced 4 KiB write into a large file costs more than one into a new 256 KiB file, with 1 GiB and 64 MiB files alike. So the gap comes from btrfs, for a guest that syncs each 4 KiB write, and smaller data files do not close it.</p>
 <p><b>Tried and reverted:</b> RustFS keeps its data on the same btrfs as the lab daemon, and its writes slow the daemon's syncs: a plain <code>fdatasync</code> loop ran at 0.64 of its quiet rate during a 2 GiB upload. RustFS on its own XFS, on a loop device, gave 0.65, because the loop file is on the same btrfs and the same SSD. The lab keeps its old setup.</p>
 
+<h3>11. Limits for each disk, and online growth</h3>
+<p><b>The problem.</b> v0.2 had one cache for all disks on a host. A small disk and a large disk shared it, so one busy disk could push the chunks of all other disks out. Some uses need a large disk with a small local footprint, for example a 50 GB disk with 500 MB of cache. Also, a disk could grow only while it was detached.</p>
+<p><b>The change.</b> Each disk now has two budgets. mica stores both in the disk's head object in S3, so they move with the disk to a different node:</p>
+<ul>
+  <li><b>Cache budget</b> (<code>--cache-size</code>): clean chunks that S3 also has. The default is <code>disk_cache_limit_mib</code>, 1 GiB.</li>
+  <li><b>Pending-write budget</b> (<code>--dirty-size</code>): local chunks that S3 does not have yet. When it is full, writes wait until a checkpoint uploads chunks.</li>
+</ul>
+<p>The two budgets are separate, so writes can continue when the cache is full. <code>mica disk set-limits</code> changes them, also while the disk is attached. The host limit (<code>cache_limit_gib</code>) and a free-space reserve (<code>local_reserve_mib</code>) are now only a safeguard against a full SSD.</p>
+<p>A <b>reconciler</b> runs once a second. It frees local chunks that a checkpoint uploaded, and trims each cache to its budget. When the host total is too high or free space is low, it trims caches until the shortfall is gone. It measures free space once per pass: btrfs shows deleted files as free only after its next commit, so a new measurement after each cache made a first version empty every cache.</p>
+<p><b>Online growth.</b> <code>mica disk resize</code> now grows an attached disk. mica grows its local data files, commits a larger root, then tells the kernel the new size with the ublk command <code>UPDATE_SIZE</code>. If the kernel step fails, the same command again finishes it. A disk cannot get smaller.</p>
+<p><b>Live test in the lab</b>, 1 ms round trip:</p>
+<div class="table-wrap"><table>
+  <tr><th>Test</th><th>Result</th></tr>
+  <tr><td>Grow an attached 1 GiB disk to 3 GiB</td><td>Kernel device size went from 2,097,152 to 6,291,456 sectors at once</td></tr>
+  <tr><td>Make it smaller</td><td>Refused</td></tr>
+  <tr><td>Data before and after growth, after checkpoint, detach and attach</td><td>All blocks correct. New space reads as zeros</td></tr>
+  <tr><td>Write 300 MiB, then read it back, with a 64 MiB cache and a 32 MiB pending-write budget</td><td>Byte-exact. Cache stayed under 64 MiB. Local data fell to 20 KiB after the upload</td></tr>
+  <tr><td>Delete a disk</td><td>Its cache folder is removed (a first version left it on the host)</td></tr>
+</table></div>
+
+<h3>12. Audit fixes, and cold reads of several chunks</h3>
+<p>A code audit by codex found 11 problems, all fixed:</p>
+<ul>
+  <li>Writes that wait for space now fail when the disk loses ownership. Before, they could wait forever.</li>
+  <li>Cache eviction deletes files outside the lock that reads use, in small batches.</li>
+  <li>The queue of saved chunks keeps one entry for each chunk. Before, each checkpoint could add the same chunk again.</li>
+  <li>Two equal pages that save at the same time use different temporary files.</li>
+  <li>A checkpoint hashes a chunk first, and compresses it only when it must upload it.</li>
+  <li>Resize, delete and attach of one disk take the same lock, and a detached resize or delete takes ownership in S3 first.</li>
+  <li>Recovery at startup tries again when S3 is not available.</li>
+  <li>Background fill streams the metadata pages and keeps a fixed number of tasks, so its memory does not grow with the disk.</li>
+  <li>Shutdown checkpoints disks in parallel, with one deadline for all.</li>
+  <li><b>A read that needs several chunks downloads them in parallel.</b> Before, it downloaded one chunk, then the next.</li>
+</ul>
+<p><b>Cold reads, old and new build alternating</b>, 20 ms round trip, empty cache, no background fill, no prefetch, 256 KiB chunks. Each 1 MiB read needs 4 chunks:</p>
+<div class="table-wrap"><table>
+  <tr><th>Run</th><th>Sequential 128 MiB, 1 MiB reads, queue depth 1</th><th>64 random 1 MiB reads, queue depth 1</th></tr>
+  <tr><td>Before</td><td class="n">67.1 MiB/s</td><td class="n">62 ms each</td></tr>
+  <tr><td>After</td><td class="n">72.2 MiB/s</td><td class="n">39 ms each</td></tr>
+  <tr><td>Before</td><td class="n">72.7 MiB/s</td><td class="n">61 ms each</td></tr>
+  <tr class="key"><td>After</td><td class="n">73.7 MiB/s</td><td class="n">46 ms each</td></tr>
+</table></div>
+<ul>
+  <li><b>Random cold reads are about 30% faster</b>, from 61 to 42 ms. The limit is about 30 ms: one 20 ms round trip, then 10 ms to move 1 MiB at 100 MiB/s.</li>
+  <li><b>Sequential cold reads do not change.</b> The read-ahead already downloads the next chunks before the kernel asks for them.</li>
+</ul>
+<p>This was a short test of 2 runs per build. The full suite (fill, upload, all read rounds, FLUSH) was not run again for these changes.</p>
+
 <h2>Open problems</h2>
 <ul>
   <li><b>A FLUSH during a large upload</b> still shares the SSD with the upload's writeback and RustFS. Early writeback took the longest FLUSH from 4.7 s to under 1 s (section 10).</li>
@@ -514,6 +562,7 @@
 <h2>Not done yet</h2>
 <ul>
   <li><b>ublk zero-copy</b> (the last step of the plan).</li>
+  <li><b>The full suite with the changes of sections 11 and 12</b>, and a run with a small cache on a large disk.</li>
 
 </ul>
 
