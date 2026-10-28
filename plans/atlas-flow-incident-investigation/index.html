@@ -225,19 +225,43 @@
 <p class="note">Phases 1 to 4 are useful without the agent. The scrubber and the log buttons help operators today.</p>
 
 <h2 id="progress">9. Progress</h2>
+<p class="meta">Updated 28 October 2026, night. All work is on the development region (<code>atlas.localhost</code>). Nothing is committed.</p>
 <div class="tablewrap"><table>
 <tr><th>#</th><th>Phase</th><th>Status</th><th>Notes</th></tr>
 <tr><td>Plan</td><td>Survey of Flow, Atlas and Central</td><td><span class="tag done">Done</span></td><td>This page.</td></tr>
-<tr><td>0</td><td>Flow on Atlas bench, models</td><td><span class="tag doing">In progress</span></td><td>Daemon runs. OpenRouter provider and both models added; <code>test_connection</code> passes. Smoke chat runs complete, but the read output was empty; to check. Embedding model tested.</td></tr>
-<tr><td>1</td><td>Scrubber, console flag</td><td><span class="tag todo">Not started</span></td><td></td></tr>
-<tr><td>2</td><td>Log fetch actions</td><td><span class="tag todo">Not started</span></td><td></td></tr>
-<tr><td>3</td><td>Read-only tools</td><td><span class="tag todo">Not started</span></td><td></td></tr>
-<tr><td>4</td><td>Gated tools, command parser</td><td><span class="tag todo">Not started</span></td><td></td></tr>
-<tr><td>5</td><td>Agent, skill, knowledge base</td><td><span class="tag todo">Not started</span></td><td></td></tr>
-<tr><td>6</td><td>Investigation DocType and API</td><td><span class="tag todo">Not started</span></td><td></td></tr>
-<tr><td>7</td><td>Central tools</td><td><span class="tag todo">Not started</span></td><td></td></tr>
-<tr><td>8</td><td>Evaluation</td><td><span class="tag todo">Not started</span></td><td></td></tr>
+<tr><td>0</td><td>Flow on Atlas bench, models</td><td><span class="tag done">Done</span></td><td>OpenRouter provider, DeepSeek V4.1 Flash and GLM 5.3 Flash. Embeddings: <code>openai/text-embedding-3-small</code>.</td></tr>
+<tr><td>1</td><td>Scrubber, console flag</td><td><span class="tag done">Done</span></td><td><code>atlas/core/scrub.py</code>. It works line by line, so streamed console output stays stable. <strong>Scrub Output</strong> is on by default.</td></tr>
+<tr><td>2</td><td>Log fetch actions</td><td><span class="tag done">Done</span></td><td>New <strong>Diagnostics</strong> menu: Firecracker Log and VM Journal on a VM; metald Journal and Host Health on a host. Each is a scrubbed console log. Tested on a real host.</td></tr>
+<tr><td>3</td><td>Read-only tools</td><td><span class="tag done">Done</span></td><td>15 tools. A read-only ClickHouse user for Datum. The saved queries come from the workbook scripts, so Atlas does not need Insights.</td></tr>
+<tr><td>4</td><td>Gated tools, command parser</td><td><span class="tag done">Done</span></td><td>Approval pause, Approve and run tested. The investigator user cannot call a change tool.</td></tr>
+<tr><td>5</td><td>Agent, skill, knowledge base</td><td><span class="tag done">Done</span></td><td>Two agents, the <code>incident-investigation</code> skill, and 127 documents in the knowledge base.</td></tr>
+<tr><td>6</td><td>Investigation DocType and API</td><td><span class="tag done">Done</span></td><td><code>POST</code> and <code>GET /api/atlas/investigations</code>. Central polls; there is no webhook. Engineers save a chat with <code>save_investigation</code>.</td></tr>
+<tr><td>7</td><td>Central tools</td><td><span class="tag done">Done</span></td><td><code>start_region_investigation</code> and <code>get_region_investigation</code>. Tested from Central with a real token.</td></tr>
+<tr><td>8</td><td>Evaluation</td><td><span class="tag doing">Started</span></td><td>One real fault found (see below). No model comparison yet.</td></tr>
 </table></div>
+
+<h3>First real result</h3>
+<p>The first investigation used the P1 alert "waw-1 has an unavailable VM". The agent found that a VM on that host has been stuck since 14 October. Its Firecracker API no longer answers, but the process is still alive. Because of this, metald still sees the VM as running and does not restart it. The agent gave medium confidence and listed the next checks.</p>
+<div class="tablewrap"><table>
+<tr><th>Run</th><th>Tool calls</th><th>Model iterations</th><th>Cost</th><th>Result</th></tr>
+<tr><td>First try</td><td>about 110</td><td>60 (limit)</td><td>0.14 USD</td><td>No report: it kept exploring.</td></tr>
+<tr><td>After the fix</td><td>42</td><td>25</td><td>0.016 USD</td><td>Full report with evidence.</td></tr>
+</table></div>
+<p>The fix had two parts. The instructions now give a budget of 30 tool calls. If a run reaches the iteration limit, Atlas asks once for the report.</p>
+
+<h3>Problems found and fixed on the way</h3>
+<ul>
+  <li>Atlas refused every Flow callback with 403, because the Flow server calls back as a guest. Atlas now allows that one path. Flow checks its own token there.</li>
+  <li>Flow has its own <code>run_action</code> tool. The Atlas tool is now <code>run_desk_action</code>.</li>
+  <li>The bench loaded Atlas and Central from older worktrees. It now loads <code>apps/atlas</code> and <code>apps/central</code>. Both old worktrees were already merged.</li>
+</ul>
+
+<h3>Next</h3>
+<ol>
+  <li>Review the diff and split it into commits.</li>
+  <li>Compare DeepSeek and GLM on the same problems.</li>
+  <li>Decide whether Central needs its own agent, or only the two tools on its assistant.</li>
+</ol>
 
 <h2 id="questions">10. Decisions</h2>
 <ol>
