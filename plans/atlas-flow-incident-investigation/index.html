@@ -237,7 +237,7 @@
 <tr><td>5</td><td>Agent, skill, knowledge base</td><td><span class="tag done">Done</span></td><td>Two agents, the <code>incident-investigation</code> skill, and 127 documents in the knowledge base.</td></tr>
 <tr><td>6</td><td>Investigation DocType and API</td><td><span class="tag done">Done</span></td><td><code>POST</code> and <code>GET /api/atlas/investigations</code>. Central polls; there is no webhook. Engineers save a chat with <code>save_investigation</code>.</td></tr>
 <tr><td>7</td><td>Central tools</td><td><span class="tag done">Done</span></td><td><code>start_region_investigation</code> and <code>get_region_investigation</code>. Tested from Central with a real token.</td></tr>
-<tr><td>8</td><td>Evaluation</td><td><span class="tag doing">Started</span></td><td>One real fault found (see below). No model comparison yet.</td></tr>
+<tr><td>8</td><td>Evaluation</td><td><span class="tag doing">Started</span></td><td>Two real findings (see below). No model comparison yet.</td></tr>
 </table></div>
 
 <h3>First real result</h3>
@@ -247,6 +247,7 @@
 <tr><td>First try</td><td>about 110</td><td>60 (limit)</td><td>0.14 USD</td><td>No report: it kept exploring.</td></tr>
 <tr><td>After the fix</td><td>42</td><td>25</td><td>0.016 USD</td><td>Full report with evidence.</td></tr>
 </table></div>
+<p>A second investigation started from Central, through the new API with a real Central token. It used the P2 alert "NIC errors on wg0". The agent found that the alert is false: the error counters did not grow. A manual check found the exact cause. The alert query groups the samples by labels but not by metric. Two metrics with the same labels then look like one counter that went from 0 to 3. This is a bug in the alert scripts, not in the agent. It is not fixed yet.</p>
 <p>The fix had two parts. The instructions now give a budget of 30 tool calls. If a run reaches the iteration limit, Atlas asks once for the report.</p>
 
 <h3>Problems found and fixed on the way</h3>
