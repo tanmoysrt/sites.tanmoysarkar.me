@@ -5,35 +5,75 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mica ublk zero copy</title>
 <style>
-  :root { --text: #1d1d1f; --muted: #6b6b70; --line: #e3e3e6; --accent: #0a6b4f; --warn: #a15c00; --bg: #fff; }
+  :root {
+    color-scheme: light;
+    --bg: #fcfcfb; --text: #0b0b0b; --muted: #52514e; --line: #e4e3df; --code: #f1f0ec;
+    --old: #2a78d6; --new: #eb6834; --good: #0a6b4f; --warn: #9a5800; --status-bg: #f1f8f5; --tip: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --bg: #1a1a19; --text: #f0efec; --muted: #c3c2b7; --line: #383835; --code: #262624;
+      --old: #3987e5; --new: #d95926; --good: #5cc59a; --warn: #e3a64a; --status-bg: #1f2a25; --tip: #262624;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #1a1a19; --text: #f0efec; --muted: #c3c2b7; --line: #383835; --code: #262624;
+    --old: #3987e5; --new: #d95926; --good: #5cc59a; --warn: #e3a64a; --status-bg: #1f2a25; --tip: #262624;
+  }
   body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 820px; margin: 0 auto; padding: 40px 16px 80px; }
   h1 { font-size: 1.9rem; margin: 0 0 4px; }
-  h2 { font-size: 1.25rem; margin: 40px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
-  h3 { font-size: 1.02rem; margin: 24px 0 6px; }
+  h2 { font-size: 1.25rem; margin: 44px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.02rem; margin: 26px 0 4px; }
   p, li { max-width: 70ch; }
+  a { color: inherit; }
   .meta { color: var(--muted); font-size: .92rem; }
-  code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: #f4f4f6; padding: 1px 4px; border-radius: 3px; }
-  pre { background: #f6f6f8; padding: 12px 14px; overflow-x: auto; font-size: .85rem; line-height: 1.45; border-radius: 4px; }
-  pre code { background: none; padding: 0; }
-  table { border-collapse: collapse; width: 100%; font-size: .92rem; margin: 10px 0; }
+  code { font: .88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 4px; border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: 10px 0; }
   .scroll { overflow-x: auto; }
   th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { font-weight: 600; }
-  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .good { color: var(--accent); font-weight: 600; }
-  .warn { color: var(--warn); }
-  .status { border-left: 3px solid var(--accent); padding: 8px 14px; background: #f3faf7; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .good { color: var(--good); font-weight: 600; }
+  .warn { color: var(--warn); font-weight: 600; }
+  .status { border-left: 3px solid var(--good); padding: 8px 14px; background: var(--status-bg); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0; }
+  .kpi { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+  .kpi .label { color: var(--muted); font-size: .85rem; }
+  .kpi .value { font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kpi .delta { font-size: .85rem; color: var(--muted); }
+  figure { margin: 18px 0 8px; }
+  figcaption { font-weight: 600; font-size: .95rem; }
+  figcaption span { display: block; font-weight: 400; color: var(--muted); font-size: .85rem; }
+  .legend { display: flex; gap: 16px; font-size: .85rem; color: var(--muted); margin: 6px 0 2px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .chart { position: relative; overflow-x: auto; }
+  .chart svg { width: 100%; min-width: 540px; height: auto; display: block; overflow: visible; }
+  .chart text { fill: var(--muted); font-size: 12px; font-family: inherit; }
+  .chart text.value { fill: var(--text); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart .ref { stroke: var(--muted); stroke-width: 1; }
+  .tip { position: absolute; pointer-events: none; background: var(--tip); border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; font-size: .82rem; white-space: nowrap; opacity: 0; transition: opacity .1s; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
   ol.log li { margin-bottom: 6px; }
+  details { margin: 6px 0; }
+  summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
 </style>
 </head>
 <body>
 <main>
 <h1>mica: ublk zero copy</h1>
-<p class="meta">Progress report. Updated 2026-10-30 04:10 IST. Local lab only (one laptop, RustFS in Docker).</p>
+<p class="meta">Progress report. Updated 2026-10-30 04:30 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
 
 <div class="status">
-<strong>Now:</strong> the zero-copy build works and passes the data check. A clean A/B benchmark against the old build runs next. Then the crash tests on btrfs, XFS and ext4.
+<strong>Now:</strong> the clean A/B is done. Memory and large reads improve a lot. A focused test of local writes runs now, to check one noisy result. Then the crash tests on btrfs, XFS and ext4.
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="label">Daemon memory, 8 disks, while reading</div><div class="value">732 → 32 MiB</div><div class="delta">−96 %</div></div>
+  <div class="kpi"><div class="label">1 MiB local reads, 8 disks</div><div class="value">7.9 → 17.9 GiB/s</div><div class="delta">2.3× at the same daemon CPU</div></div>
+  <div class="kpi"><div class="label">Daemon CPU per 1 MiB read</div><div class="value">1440 → 656 µs</div><div class="delta">−54 %</div></div>
 </div>
 
 <h2>Context</h2>
@@ -44,7 +84,7 @@
 <p>The device now uses two ublk features:</p>
 <ul>
   <li><code>UBLK_F_AUTO_BUF_REG</code>: before a request reaches the daemon, the kernel registers the request's own pages as a fixed buffer in the queue's io_uring. The daemon reads and writes the pages in place with <code>ReadFixed</code> and <code>WriteFixed</code>. Nothing is copied.</li>
-  <li><code>UBLK_F_USER_COPY</code>: the daemon can also read or write the request's pages through the char device <code>/dev/ublkcN</code>. This is one copy. mica uses it only on the slow paths, where the data is in memory anyway (S3 downloads, FUA writes).</li>
+  <li><code>UBLK_F_USER_COPY</code>: the daemon can also read or write the request's pages through the char device <code>/dev/ublkcN</code>. This is one copy. mica uses it only on the slow paths, where the data is in memory anyway (S3 downloads, FUA writes, writes into chunks that are not local).</li>
 </ul>
 <div class="scroll"><table>
 <tr><th>Path</th><th>Before</th><th>Now</th></tr>
@@ -57,42 +97,69 @@
 <p>If the kernel cannot register the pages (for example, when memory is low), it still sends the request with the flag <code>UBLK_IO_F_NEED_REG_BUF</code>. mica then serves the request through the copy path, and logs a count.</p>
 
 <h2>Kernel probe</h2>
-<p>The lab kernel is Linux 7.0.12. A small test program made a device with both flags. It checked five operations: <code>ReadFixed</code> from a file (two parts at different buffer offsets), <code>ReadFixed</code> from <code>/dev/zero</code>, <code>WriteFixed</code> to a file, and copies in both directions through <code>/dev/ublkcN</code>. <span class="good">All five returned the correct data.</span> Kernels before 6.16 do not have <code>UBLK_F_AUTO_BUF_REG</code>, so they cannot run this build.</p>
+<p>A small test program made a device with both flags. It checked five operations: <code>ReadFixed</code> from a file (two parts at different buffer offsets), <code>ReadFixed</code> from <code>/dev/zero</code>, <code>WriteFixed</code> to a file, and copies in both directions through <code>/dev/ublkcN</code>. <span class="good">All five returned the correct data</span> on the lab kernel (Fedora, Linux 7.0.12) and on a second server (Ubuntu, Linux 7.0.0). Kernels before 6.16 do not have <code>UBLK_F_AUTO_BUF_REG</code>, so they cannot run this build.</p>
 
 <h2>Correctness</h2>
-<p>A wrong buffer offset would corrupt data without an error. A new lab tool, <code>datacheck.py</code>, checks this. It sends random reads and writes of 4 KiB to 1 MiB at any 4 KiB offset, so requests cross chunk borders and touch parts that were never written. It also sends FUA writes, FLUSH, discard and write-zeroes. It compares every read with a model of the disk content. The disk has a 32 MiB cache and a 64 MiB pending-write budget, so many requests take the slow paths. After a detach and a reattach, a full read compares the whole disk again.</p>
+<p>A wrong buffer offset would corrupt data without an error. A new lab tool, <code>datacheck.py</code>, checks this. It sends random reads and writes of 4 KiB to 1 MiB at any 4 KiB offset, so requests cross chunk borders and touch parts that were never written. It also sends FUA writes, FLUSH, discard and write-zeroes. It compares every read with a model of the disk content. The disk has a 32 MiB cache and a 64 MiB pending-write budget, so many requests take the slow paths. After a detach and a reattach, a full read compares the whole disk again, and those reads come from S3.</p>
 <ul>
-  <li>Old build: pass (3 × 3000 operations, 3 full reads).</li>
+  <li>Old build: pass (3 × 3000 operations, 4 full reads).</li>
   <li>First zero-copy build: <span class="warn">failed with I/O errors.</span> Under load, a read from <code>/dev/zero</code> can return fewer bytes than asked. io_uring retries short reads only for files and block devices, not for char devices. Fix: the queue thread now submits the rest of a short transfer again.</li>
   <li>Fixed build: <span class="good">pass</span>, same seeds.</li>
 </ul>
 
-<h2>First numbers (provisional)</h2>
-<p>8 disks at the same time. A Python load tool reads and writes each <code>/dev/mica/*</code> device with <code>O_DIRECT</code>. CPU is the daemon's user and system time, divided by the number of operations. The host was busy during this run (I/O pressure 28–43 %), so only large differences count. A clean back-to-back A/B follows.</p>
+<h2>A/B results</h2>
+<p><strong>Setup.</strong> 8 disks at the same time. A Python tool reads and writes each <code>/dev/mica/*</code> device with <code>O_DIRECT</code>: 4 threads per disk for 1 MiB I/O, 8 threads per disk for 4 KiB I/O, 20 s per phase, over the first 256 MiB of each disk. All chunks are local, so this measures the queue thread, not S3. The disk limit of the lab is off. CPU is the daemon's user and system time. The two builds ran in turns, two rounds each, and each run started only when the host's I/O pressure was below 2 %. Numbers are the mean of the two rounds; the table below has each round.</p>
+
+<figure>
+  <figcaption>Daemon memory (RSS), 8 disks<span>MiB. Lower is better. "Peak" includes checkpoint staging after the write phases.</span></figcaption>
+  <div class="legend"><span><i style="background:var(--old)"></i>v0.2c (copy)</span><span><i style="background:var(--new)"></i>zero copy</span></div>
+  <div class="chart" id="rss"></div>
+</figure>
+<p>The buffers were the memory. With the old build, RSS reaches about 700 MiB as soon as the first writes touch the buffers, and stays there. With zero copy, RSS stays near 30 MiB until the write phases start. After those phases, both builds grow by a similar amount: a checkpoint keeps chunk data in memory while it uploads. That part does not come from I/O buffers.</p>
+
+<figure>
+  <figcaption>1 MiB reads of local chunks, 8 disks<span>GiB/s. Higher is better.</span></figcaption>
+  <div class="legend"><span><i style="background:var(--old)"></i>v0.2c (copy)</span><span><i style="background:var(--new)"></i>zero copy</span></div>
+  <div class="chart" id="readbw"></div>
+</figure>
+
+<figure>
+  <figcaption>Daemon CPU per operation, zero copy as a percentage of v0.2c<span>100 % = same CPU as the old build. Lower is better.</span></figcaption>
+  <div class="chart" id="cpu"></div>
+</figure>
+<p>Large reads gain the most: each 1 MiB read was two copies of 1 MiB, and now it is one (page cache to request). The daemon used the same CPU in both builds, about 11.6 cores, but moved 2.3 times more data. At 4 KiB, the copy is small, so the CPU per request stays the same. 1 MiB writes use 5 % less CPU.</p>
+<p><span class="warn">The fill phase uses about 12 % more CPU per write.</span> These writes go to chunks that are not local yet, so they take the slow path: the queue thread copies the request out through <code>/dev/ublkcN</code>, then tokio writes it. The phase is short (2048 writes, about 1 s), so the figure is not precise. This path waits for the engine anyway; I will look at it again if a profile shows the copy.</p>
+<p><span class="warn">Local write throughput moved in both directions:</span> 1 MiB writes were 1007 vs 791 MiB/s in round 1 and 633 vs 824 MiB/s in round 2 (old vs new). 4 KiB random writes were 57.9k vs 32.6k and then 33.6k vs 54.4k IOPS. The SSD and the checkpoint uploads (RustFS writes to the same SSD) set these numbers, not the daemon. A focused write test with checkpoints held off runs now.</p>
+
+<details>
+<summary>All numbers, per round</summary>
 <div class="scroll"><table>
-<tr><th>Phase</th><th>Old build (v0.2c)</th><th>Zero copy</th></tr>
-<tr><td>Daemon RSS, peak</td><td class="n">1014 MiB</td><td class="n good">325 MiB</td></tr>
-<tr><td>Daemon RSS after reads, before writes</td><td class="n">770 MiB</td><td class="n good">46 MiB</td></tr>
-<tr><td>1 MiB reads of local chunks</td><td class="n">7.7 GiB/s, 1435 µs CPU/op</td><td class="n good">17.5 GiB/s, 595 µs CPU/op</td></tr>
-<tr><td>4 KiB random reads, local</td><td class="n">851k IOPS, 8.0 µs/op</td><td class="n">792k IOPS, 8.3 µs/op</td></tr>
-<tr><td>1 MiB writes, local</td><td class="n">1009 MiB/s, 2017 µs/op</td><td class="n">661 MiB/s, 1950 µs/op</td></tr>
-<tr><td>4 KiB random writes, local</td><td class="n">38.9k IOPS, 40.1 µs/op</td><td class="n">43.1k IOPS, 35.4 µs/op</td></tr>
+<tr><th>Phase</th><th class="n">v0.2c r1</th><th class="n">v0.2c r2</th><th class="n">zero copy r1</th><th class="n">zero copy r2</th></tr>
+<tr><td>RSS after attach (MiB)</td><td class="n">35</td><td class="n">35</td><td class="n">22</td><td class="n">23</td></tr>
+<tr><td>Fill, 1 MiB writes to new chunks (MiB/s; µs CPU/op)</td><td class="n">2595; 2676</td><td class="n">978; 2539</td><td class="n">2279; 2920</td><td class="n">2197; 2940</td></tr>
+<tr><td>1 MiB reads, local (MiB/s; µs CPU/op)</td><td class="n">7822; 1475</td><td class="n">8411; 1406</td><td class="n">18716; 617</td><td class="n">17848; 695</td></tr>
+<tr><td>4 KiB random reads, local (IOPS; µs CPU/op)</td><td class="n">961k; 7.2</td><td class="n">887k; 7.7</td><td class="n">990k; 7.0</td><td class="n">864k; 7.7</td></tr>
+<tr><td>1 MiB writes, local (MiB/s; µs CPU/op)</td><td class="n">1007; 1979</td><td class="n">633; 2014</td><td class="n">791; 1849</td><td class="n">824; 1939</td></tr>
+<tr><td>4 KiB random writes, local (IOPS; µs CPU/op)</td><td class="n">57.9k; 38.2</td><td class="n">33.6k; 40.8</td><td class="n">32.6k; 41.9</td><td class="n">54.4k; 37.8</td></tr>
+<tr><td>RSS after reads (MiB)</td><td class="n">720</td><td class="n">745</td><td class="n">32</td><td class="n">32</td></tr>
+<tr><td>RSS peak (MiB)</td><td class="n">856</td><td class="n">1037</td><td class="n">327</td><td class="n">144</td></tr>
 </table></div>
-<p>After the write phases, RSS grows in both builds. A checkpoint stages chunk data in memory before it uploads, so this growth is not from the I/O buffers.</p>
+</details>
 
 <h2>Log</h2>
 <ol class="log">
   <li>Saved the old build as <code>mica-v0.2c</code> for the A/B and for rollback.</li>
-  <li>Kernel probe: pass.</li>
+  <li>Kernel probe: pass on two kernels.</li>
   <li>Implemented zero copy in <code>src/ublk_queue.rs</code> (new) and <code>src/queue_io.rs</code>. <code>src/disk.rs</code> and <code>src/local_data.rs</code> did not change.</li>
   <li>Unit tests (36) and strict Clippy: pass.</li>
   <li>Data check: found and fixed short reads from <code>/dev/zero</code>.</li>
-  <li>Code review (codex, gpt-6.1-sol): no problems in the Rust change. Four problems in the new bench scripts; fixes next.</li>
+  <li>Code review (codex, gpt-6.1-sol): no problems in the Rust change. Four problems in the new bench scripts (errors not reported, a disk that already existed could be deleted). Fixed.</li>
+  <li>Clean A/B, 2 rounds: memory −96 %, 1 MiB reads 2.3×. Writes need a focused test.</li>
 </ol>
 
 <h2>Next</h2>
 <ol>
-  <li>Clean A/B, two rounds, each run only when host I/O pressure is below 2 %.</li>
+  <li>Focused write A/B, checkpoints held off (running).</li>
   <li>Crash test: power cut and daemon kill, on btrfs, XFS and ext4.</li>
   <li>FLUSH benchmark and cold reads at 20 ms round trip.</li>
   <li>Commit, then a cleanup refactor on its own branch.</li>
@@ -100,5 +167,80 @@
 
 <p class="meta">Sources: <a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/ublk_cmd.h">ublk uapi header</a> · <a href="https://github.com/ublk-org/libublk-rs">libublk-rs</a> · <a href="https://lwn.net/Articles/1020732/">LWN: ublk auto buffer registration</a></p>
 </main>
+
+<script>
+// Horizontal grouped bars. Each series is one color; values sit at the bar tip.
+function bars(id, { categories, series, unit, digits = 0, max, reference }) {
+  const root = document.getElementById(id);
+  const label = 190, right = 64, band = series.length * 20 + 18, top = 6;
+  const width = 720, height = top + categories.length * band + 22;
+  const plot = width - label - right;
+  // Round ticks: a step of 1, 2, 2.5 or 5 times a power of ten.
+  const raw = (max ?? Math.max(...series.flatMap(s => s.values))) / 4;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * power).find(m => m >= raw);
+  const ticks = Math.ceil((max ?? raw * 4) / step);
+  const top_value = ticks * step;
+  const x = v => label + (v / top_value) * plot;
+  const fmt = v => v.toLocaleString("en", { maximumFractionDigits: digits }) + unit;
+  const ns = "http://www.w3.org/2000/svg";
+  const el = (name, attrs, text) => {
+    const node = document.createElementNS(ns, name);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, role: "img" });
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  for (let i = 0; i <= ticks; i++) {
+    const v = step * i, gx = x(v);
+    svg.append(el("line", { x1: gx, x2: gx, y1: top, y2: height - 18, class: "grid" }));
+    svg.append(el("text", { x: gx, y: height - 4, "text-anchor": "middle" }, fmt(v)));
+  }
+  if (reference !== undefined) {
+    svg.append(el("line", { x1: x(reference), x2: x(reference), y1: top, y2: height - 18, class: "ref" }));
+  }
+  categories.forEach((name, c) => {
+    const y0 = top + c * band + 9;
+    svg.append(el("text", { x: label - 10, y: y0 + (series.length * 20) / 2 + 2, "text-anchor": "end", "dominant-baseline": "middle" }, name));
+    series.forEach((s, i) => {
+      const v = s.values[c], y = y0 + i * 20, w = Math.max(x(v) - label, 1), r = Math.min(4, w);
+      const path = `M${label},${y} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${16 - 2 * r} a${r},${r} 0 0 1 ${-r},${r} h${-(w - r)} z`;
+      svg.append(el("path", { d: path, fill: `var(${s.color})` }));
+      svg.append(el("text", { x: label + w + 6, y: y + 8, class: "value", "dominant-baseline": "middle" }, fmt(v)));
+      const hit = el("rect", { x: label, y: y - 2, width: plot + right, height: 20, fill: "transparent" });
+      hit.addEventListener("pointermove", e => {
+        const box = root.getBoundingClientRect();
+        tip.innerHTML = `<b>${name}</b><br>${s.name}: ${fmt(v)}`;
+        tip.style.left = Math.min(e.clientX - box.left + 12, box.width - tip.offsetWidth) + "px";
+        tip.style.top = e.clientY - box.top + 12 + "px";
+        tip.style.opacity = 1;
+      });
+      hit.addEventListener("pointerleave", () => (tip.style.opacity = 0));
+      svg.append(hit);
+    });
+  });
+  svg.setAttribute("aria-label", categories.map((c, i) => `${c}: ` + series.map(s => `${s.name} ${fmt(s.values[i])}`).join(", ")).join("; "));
+  root.append(svg, tip);
+}
+
+const old = { name: "v0.2c (copy)", color: "--old" }, zc = { name: "zero copy", color: "--new" };
+bars("rss", {
+  categories: ["After attach", "During reads", "Peak"],
+  series: [{ ...old, values: [35, 732, 947] }, { ...zc, values: [22.5, 32, 236] }],
+  unit: " MiB",
+});
+bars("readbw", {
+  categories: ["Throughput"],
+  series: [{ ...old, values: [7.93] }, { ...zc, values: [17.85] }],
+  unit: " GiB/s", digits: 1,
+});
+bars("cpu", {
+  categories: ["Fill, 1 MiB, new chunks", "1 MiB reads, local", "4 KiB random reads", "1 MiB writes, local", "4 KiB random writes"],
+  series: [{ name: "zero copy vs v0.2c", color: "--new", values: [112, 46, 99, 95, 101] }],
+  unit: " %", max: 125, reference: 100,
+});
+</script>
 </body>
 </html>
