@@ -64,10 +64,10 @@
 <body>
 <main>
 <h1>mica: ublk zero copy</h1>
-<p class="meta">Progress report. Updated 2026-10-30 04:30 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
+<p class="meta">Progress report. Updated 2026-10-30 05:05 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
 
 <div class="status">
-<strong>Now:</strong> the clean A/B is done. Memory and large reads improve a lot. A focused test of local writes runs now, to check one noisy result. Then the crash tests on btrfs, XFS and ext4.
+<strong>Now:</strong> the A/B tests are done: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU, no regression. The crash tests (power cut on btrfs, XFS and ext4, and daemon kill) run now.
 </div>
 
 <div class="kpis">
@@ -129,7 +129,26 @@
 </figure>
 <p>Large reads gain the most: each 1 MiB read was two copies of 1 MiB, and now it is one (page cache to request). The daemon used the same CPU in both builds, about 11.6 cores, but moved 2.3 times more data. At 4 KiB, the copy is small, so the CPU per request stays the same. 1 MiB writes use 5 % less CPU.</p>
 <p><span class="warn">The fill phase uses about 12 % more CPU per write.</span> These writes go to chunks that are not local yet, so they take the slow path: the queue thread copies the request out through <code>/dev/ublkcN</code>, then tokio writes it. The phase is short (2048 writes, about 1 s), so the figure is not precise. This path waits for the engine anyway; I will look at it again if a profile shows the copy.</p>
-<p><span class="warn">Local write throughput moved in both directions:</span> 1 MiB writes were 1007 vs 791 MiB/s in round 1 and 633 vs 824 MiB/s in round 2 (old vs new). 4 KiB random writes were 57.9k vs 32.6k and then 33.6k vs 54.4k IOPS. The SSD and the checkpoint uploads (RustFS writes to the same SSD) set these numbers, not the daemon. A focused write test with checkpoints held off runs now.</p>
+<p>Local write throughput moved in both directions in this test: 1 MiB writes were 1007 vs 791 MiB/s in round 1 and 633 vs 824 MiB/s in round 2 (old vs new). The SSD and the checkpoint uploads (RustFS writes to the same SSD) set these numbers. So a second test measured writes alone.</p>
+
+<h3>Writes alone</h3>
+<p>Same 8 disks, but checkpoints held off, so nothing uploads during the test. Each build ran 3 rounds, in turns, with two 15 s passes of each load per round: 6 samples for each bar.</p>
+<figure>
+  <figcaption>1 MiB local writes, 8 disks: daemon CPU per write<span>µs. Lower is better. Mean of 6 samples. 4 KiB writes are in the table: the same in both builds.</span></figcaption>
+  <div class="legend"><span><i style="background:var(--old)"></i>v0.2c (copy)</span><span><i style="background:var(--new)"></i>zero copy</span></div>
+  <div class="chart" id="wcpu"></div>
+</figure>
+<div class="scroll"><table>
+<tr><th>Load</th><th class="n">v0.2c</th><th class="n">zero copy</th></tr>
+<tr><td>1 MiB writes: throughput</td><td class="n">704 MiB/s (sd 187)</td><td class="n">699 MiB/s (sd 109)</td></tr>
+<tr><td>1 MiB writes: daemon CPU per write</td><td class="n">1841 µs (sd 109)</td><td class="n good">1626 µs (sd 53), −12 %</td></tr>
+<tr><td>4 KiB random writes: throughput</td><td class="n">46.6k IOPS (sd 7.5k)</td><td class="n">51.6k IOPS (sd 9.8k)</td></tr>
+<tr><td>4 KiB random writes: daemon CPU per write</td><td class="n">38.4 µs (sd 2.0)</td><td class="n">38.4 µs (sd 2.9)</td></tr>
+</table></div>
+<p><span class="good">No write regression.</span> The SSD sets the write throughput, and both builds reach the same speed. A 1 MiB write costs 12 % less daemon CPU, because the copy into the daemon's buffer is gone. At 4 KiB the copy is small, so the cost is the same.</p>
+
+<h3>A lab finding: idle disks look like an I/O stall</h3>
+<p>The first try of the write test waited forever for a quiet host. With 8 disks attached and no load, <code>/proc/pressure/io</code> showed about 95 %, and <code>vmstat</code> showed 32 blocked tasks, but the SSD did almost no I/O. 32 is 8 disks × 4 queue threads. Each queue thread waits in <code>io_uring_enter</code> while requests are in flight (the ublk fetch commands), and the kernel counts that wait as iowait. Both builds do this. On a production host, each attached disk adds up to 4 to the load average, and I/O pressure looks high. io_uring has a flag to stop this (<code>IORING_ENTER_NO_IOWAIT</code>, Linux 6.15), but libublk makes the wait call, and the kernel uses iowait to raise the CPU clock for low-depth I/O. So this needs its own A/B. It is in the to-do list.</p>
 
 <details>
 <summary>All numbers, per round</summary>
@@ -155,12 +174,12 @@
   <li>Data check: found and fixed short reads from <code>/dev/zero</code>.</li>
   <li>Code review (codex, gpt-6.1-sol): no problems in the Rust change. Four problems in the new bench scripts (errors not reported, a disk that already existed could be deleted). Fixed.</li>
   <li>Clean A/B, 2 rounds: memory −96 %, 1 MiB reads 2.3×. Writes need a focused test.</li>
+  <li>Focused write A/B, 3 rounds: same throughput, 1 MiB writes −12 % CPU. Found that idle queue threads count as iowait.</li>
 </ol>
 
 <h2>Next</h2>
 <ol>
-  <li>Focused write A/B, checkpoints held off (running).</li>
-  <li>Crash test: power cut and daemon kill, on btrfs, XFS and ext4.</li>
+  <li>Crash test: power cut on btrfs, XFS and ext4, and daemon kill (running).</li>
   <li>FLUSH benchmark and cold reads at 20 ms round trip.</li>
   <li>Commit, then a cleanup refactor on its own branch.</li>
 </ol>
@@ -240,6 +259,11 @@ bars("cpu", {
   categories: ["Fill, 1 MiB, new chunks", "1 MiB reads, local", "4 KiB random reads", "1 MiB writes, local", "4 KiB random writes"],
   series: [{ name: "zero copy vs v0.2c", color: "--new", values: [112, 46, 99, 95, 101] }],
   unit: " %", max: 125, reference: 100,
+});
+bars("wcpu", {
+  categories: ["1 MiB writes"],
+  series: [{ ...old, values: [1841] }, { ...zc, values: [1626] }],
+  unit: " µs",
 });
 </script>
 </body>
