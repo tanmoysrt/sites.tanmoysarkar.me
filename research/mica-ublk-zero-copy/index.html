@@ -64,10 +64,10 @@
 <body>
 <main>
 <h1>mica: ublk zero copy</h1>
-<p class="meta">Progress report. Updated 2026-10-30 05:45 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
+<p class="meta">Progress report. Updated 2026-10-30 04:58 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
 
 <div class="status">
-<strong>Now:</strong> zero copy is done and committed on <code>main</code>: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU, no regression, 24 of 24 crash runs without data loss. A cleanup refactor is on the branch <code>refactor</code>; its lab check (data check, A/B, crash runs) runs now.
+<strong>Now:</strong> zero copy is done and committed on <code>main</code>: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU, no regression, 24 of 24 crash runs without data loss. A cleanup refactor on the branch <code>refactor</code> passed its lab check. Now: the FLUSH and cold-read A/B, and a test of a fix for the iowait finding.
 </div>
 
 <div class="kpis">
@@ -161,8 +161,9 @@
 </table></div>
 <p><span class="good">No write regression.</span> The SSD sets the write throughput, and both builds reach the same speed. A 1 MiB write costs 12 % less daemon CPU, because the copy into the daemon's buffer is gone. At 4 KiB the copy is small, so the cost is the same.</p>
 
-<h3>A lab finding: idle disks look like an I/O stall</h3>
-<p>The first try of the write test waited forever for a quiet host. With 8 disks attached and no load, <code>/proc/pressure/io</code> showed about 95 %, and <code>vmstat</code> showed 32 blocked tasks, but the SSD did almost no I/O. 32 is 8 disks × 4 queue threads. Each queue thread waits in <code>io_uring_enter</code> while requests are in flight (the ublk fetch commands), and the kernel counts that wait as iowait. Both builds do this. On a production host, each attached disk adds up to 4 to the load average, and I/O pressure looks high. io_uring has a flag to stop this (<code>IORING_ENTER_NO_IOWAIT</code>, Linux 6.15), but libublk makes the wait call, and the kernel uses iowait to raise the CPU clock for low-depth I/O. So this needs its own A/B. It is in the to-do list.</p>
+<h3 id="iowait">A lab finding: idle disks look like an I/O stall</h3>
+<p>The first try of the write test waited forever for a quiet host. With 8 disks attached and no load, <code>/proc/pressure/io</code> showed about 95 %, and <code>vmstat</code> showed 32 blocked tasks, but the SSD did almost no I/O. 32 is 8 disks × 4 queue threads. Each queue thread waits in <code>io_uring_enter</code> while requests are in flight (the ublk fetch commands), and the kernel counts that wait as iowait. Both builds do this. On a production host, each attached disk adds up to 4 to the load average, and I/O pressure looks high. io_uring has a flag to stop this (<code>IORING_ENTER_NO_IOWAIT</code>, Linux 6.15), but libublk makes the wait call, and the kernel uses iowait to raise the CPU clock for low-depth I/O. So this needs its own A/B.</p>
+<p><strong>Prototype</strong> (branch <code>no-iowait</code>): the queue thread runs libublk's event loop with its own wait, the same in every way but with <code>IORING_ENTER_NO_IOWAIT</code>. With 8 idle disks: <span class="good">0 blocked tasks and 0 % iowait</span> (before: 32 and about 95 %). The data check passes. The A/B of queue-depth-1 latency runs now: if the clock boost matters, single reads and writes get slower.</p>
 
 <details>
 <summary>All numbers, per round</summary>
@@ -195,8 +196,7 @@
 
 <h2>Next</h2>
 <ol>
-  <li>Lab check of the refactor build: data check, A/B against zero copy, power-cut and daemon-kill runs (running).</li>
-  <li>FLUSH benchmark and cold reads at 20 ms round trip, zero copy against v0.2c.</li>
+  <li>FLUSH benchmark, cold reads at 20 ms round trip, and queue-depth-1 latency of local chunks: v0.2c, zero copy, and zero copy without iowait, 2 rounds each (running).</li>
 </ol>
 
 <h2>Code changes</h2>
@@ -204,7 +204,8 @@
 <tr><th>Branch</th><th>Commit</th><th>What</th></tr>
 <tr><td><code>main</code></td><td><code>aa97e7d</code></td><td>The zero-copy plan; the lab bucket prefix.</td></tr>
 <tr><td><code>main</code></td><td><code>c89ffb7</code></td><td>Zero copy: <code>src/ublk_queue.rs</code> (new), <code>src/queue_io.rs</code>, <code>src/ublk_device.rs</code>; lab tools <code>load.py</code>, <code>zerocopy.sh</code>, <code>datacheck.py</code>, <code>datacheck.sh</code>; docs.</td></tr>
-<tr><td><code>refactor</code></td><td>6 commits</td><td>rustfmt, three file splits, CI, review fixes. Not merged.</td></tr>
+<tr><td><code>refactor</code></td><td>6 commits</td><td>rustfmt, three file splits, CI, review fixes. Lab check: data check pass; A/B against zero copy within noise (1 MiB reads 659 vs 688 µs CPU per read, 4 KiB reads 8.4 vs 8.6 µs); crash 8 runs (4 power cut, 4 daemon kill), 0 lost data. Not merged.</td></tr>
+<tr><td><code>no-iowait</code></td><td><code>dbfc0c2</code></td><td>Idle queue threads do not count as iowait. Under test. Not merged.</td></tr>
 </table></div>
 
 <p class="meta">Sources: <a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/ublk_cmd.h">ublk uapi header</a> · <a href="https://github.com/ublk-org/libublk-rs">libublk-rs</a> · <a href="https://lwn.net/Articles/1020732/">LWN: ublk auto buffer registration</a></p>
