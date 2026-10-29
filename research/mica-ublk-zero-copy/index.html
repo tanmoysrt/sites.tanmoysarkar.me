@@ -64,10 +64,10 @@
 <body>
 <main>
 <h1>mica: ublk zero copy</h1>
-<p class="meta">Progress report. Updated 2026-10-30 05:05 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
+<p class="meta">Progress report. Updated 2026-10-30 05:45 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
 
 <div class="status">
-<strong>Now:</strong> the A/B tests are done: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU, no regression. The crash tests (power cut on btrfs, XFS and ext4, and daemon kill) run now.
+<strong>Now:</strong> zero copy is done and committed on <code>main</code>: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU, no regression, 24 of 24 crash runs without data loss. A cleanup refactor is on the branch <code>refactor</code>; its lab check (data check, A/B, crash runs) runs now.
 </div>
 
 <div class="kpis">
@@ -106,6 +106,20 @@
   <li>First zero-copy build: <span class="warn">failed with I/O errors.</span> Under load, a read from <code>/dev/zero</code> can return fewer bytes than asked. io_uring retries short reads only for files and block devices, not for char devices. Fix: the queue thread now submits the rest of a short transfer again.</li>
   <li>Fixed build: <span class="good">pass</span>, same seeds.</li>
 </ul>
+
+<h2>Crash tests</h2>
+<p>The crash test writes self-describing 4 KiB blocks to a 1 GiB disk, with FLUSH between some writes, and then breaks the node at a random time (2 to 20 s):</p>
+<ul>
+  <li><strong>Power cut:</strong> the data folder sits on a device-mapper target that drops every later write. The daemon and the writer are killed, the ublk device is deleted, and the folder is mounted again as the SSD had it. The new daemon uploads what is left and detaches. Every block written before the last FLUSH must be there.</li>
+  <li><strong>Daemon kill:</strong> only the daemon dies, mid-write. The new daemon takes over the same <code>/dev/ublkbN</code>, and the writer goes on. Every write that returned must be there, flushed or not. This also checks that a zero-copy device recovers.</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Test</th><th>Filesystem of the data folder</th><th class="n">Runs</th><th class="n">Runs that lost data</th></tr>
+<tr><td>Power cut</td><td>btrfs</td><td class="n">6</td><td class="n good">0</td></tr>
+<tr><td>Power cut</td><td>XFS</td><td class="n">6</td><td class="n good">0</td></tr>
+<tr><td>Power cut</td><td>ext4</td><td class="n">6</td><td class="n good">0</td></tr>
+<tr><td>Daemon kill</td><td>btrfs</td><td class="n">6</td><td class="n good">0</td></tr>
+</table></div>
 
 <h2>A/B results</h2>
 <p><strong>Setup.</strong> 8 disks at the same time. A Python tool reads and writes each <code>/dev/mica/*</code> device with <code>O_DIRECT</code>: 4 threads per disk for 1 MiB I/O, 8 threads per disk for 4 KiB I/O, 20 s per phase, over the first 256 MiB of each disk. All chunks are local, so this measures the queue thread, not S3. The disk limit of the lab is off. CPU is the daemon's user and system time. The two builds ran in turns, two rounds each, and each run started only when the host's I/O pressure was below 2 %. Numbers are the mean of the two rounds; the table below has each round.</p>
@@ -175,14 +189,23 @@
   <li>Code review (codex, gpt-6.1-sol): no problems in the Rust change. Four problems in the new bench scripts (errors not reported, a disk that already existed could be deleted). Fixed.</li>
   <li>Clean A/B, 2 rounds: memory −96 %, 1 MiB reads 2.3×. Writes need a focused test.</li>
   <li>Focused write A/B, 3 rounds: same throughput, 1 MiB writes −12 % CPU. Found that idle queue threads count as iowait.</li>
+  <li>Crash tests: 24 runs, 0 lost data. Committed zero copy on <code>main</code> (<code>c89ffb7</code>).</li>
+  <li>Refactor on the branch <code>refactor</code>: rustfmt for the whole tree; <code>disk.rs</code> (900 lines), <code>local_data.rs</code> (800) and <code>chunk_cache.rs</code> (580) split by job into child modules; a CI workflow (format, strict Clippy, tests, lab script parse). The code does the same thing; codex found two small differences (an error text, a lint), both fixed.</li>
 </ol>
 
 <h2>Next</h2>
 <ol>
-  <li>Crash test: power cut on btrfs, XFS and ext4, and daemon kill (running).</li>
-  <li>FLUSH benchmark and cold reads at 20 ms round trip.</li>
-  <li>Commit, then a cleanup refactor on its own branch.</li>
+  <li>Lab check of the refactor build: data check, A/B against zero copy, power-cut and daemon-kill runs (running).</li>
+  <li>FLUSH benchmark and cold reads at 20 ms round trip, zero copy against v0.2c.</li>
 </ol>
+
+<h2>Code changes</h2>
+<div class="scroll"><table>
+<tr><th>Branch</th><th>Commit</th><th>What</th></tr>
+<tr><td><code>main</code></td><td><code>aa97e7d</code></td><td>The zero-copy plan; the lab bucket prefix.</td></tr>
+<tr><td><code>main</code></td><td><code>c89ffb7</code></td><td>Zero copy: <code>src/ublk_queue.rs</code> (new), <code>src/queue_io.rs</code>, <code>src/ublk_device.rs</code>; lab tools <code>load.py</code>, <code>zerocopy.sh</code>, <code>datacheck.py</code>, <code>datacheck.sh</code>; docs.</td></tr>
+<tr><td><code>refactor</code></td><td>6 commits</td><td>rustfmt, three file splits, CI, review fixes. Not merged.</td></tr>
+</table></div>
 
 <p class="meta">Sources: <a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/ublk_cmd.h">ublk uapi header</a> · <a href="https://github.com/ublk-org/libublk-rs">libublk-rs</a> · <a href="https://lwn.net/Articles/1020732/">LWN: ublk auto buffer registration</a></p>
 </main>
