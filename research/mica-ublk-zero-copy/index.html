@@ -64,10 +64,10 @@
 <body>
 <main>
 <h1>mica: ublk zero copy</h1>
-<p class="meta">Progress report. Updated 2026-10-30 05:55 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
+<p class="meta">Progress report. Updated 2026-10-30 12:51 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
 
 <div class="status">
-<strong>Done.</strong> Zero copy is committed on <code>main</code>: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU. Cold reads, FLUSH and queue-depth-1 latency did not change. 32 of 32 crash runs without data loss. A cleanup refactor is on the branch <code>refactor</code>, and an iowait fix on <code>no-iowait</code>; neither is merged.
+<strong>Done.</strong> Zero copy is committed on <code>main</code>: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU. Cold reads, FLUSH and queue-depth-1 latency did not change. 32 of 32 crash runs without data loss. The iowait fix is merged on <code>main</code> too. A cleanup refactor is on the branch <code>refactor</code>, not merged.
 </div>
 
 <div class="kpis">
@@ -181,8 +181,8 @@
 <p><span class="good">Zero copy: no change</span> in cold reads, FLUSH or single requests, as the plan expected. The FLUSH throughput moves with rare slow syncs of btrfs (p99 up to 9 ms, max up to 3 s), not with the build: the median is the same.</p>
 
 <h3 id="iowait">A lab finding: idle disks look like an I/O stall</h3>
-<p>The first try of the write test waited forever for a quiet host. With 8 disks attached and no load, <code>/proc/pressure/io</code> showed about 95 %, and <code>vmstat</code> showed 32 blocked tasks, but the SSD did almost no I/O. 32 is 8 disks × 4 queue threads. Each queue thread waits in <code>io_uring_enter</code> while requests are in flight (the ublk fetch commands), and the kernel counts that wait as iowait. Both builds do this. On a production host, each attached disk adds up to 4 to the load average, and I/O pressure looks high. io_uring has a flag to stop this (<code>IORING_ENTER_NO_IOWAIT</code>, Linux 6.15), but libublk makes the wait call, and the kernel uses iowait to raise the CPU clock for low-depth I/O. So this needs its own A/B.</p>
-<p><strong>Prototype</strong> (branch <code>no-iowait</code>): the queue thread runs libublk's event loop with its own wait, the same in every way but with <code>IORING_ENTER_NO_IOWAIT</code>. With 8 idle disks: <span class="good">0 blocked tasks and 0 % iowait</span> (before: 32 and about 95 %). The data check passes. In the A/B above, single requests are the same or faster, and FLUSH p50 is the same. But the mean of idle write + fdatasync was lower in 5 of 5 runs (833/s against 922/s), from a heavier tail. The fix improves host metrics, not speed, and adds an <code>unsafe</code> wait loop, so it is not merged. It needs a decision, and a quiet-host test of the FLUSH tail first.</p>
+<p>The first try of the write test waited forever for a quiet host. With 8 disks attached and no load, <code>/proc/pressure/io</code> showed about 95 %, and <code>vmstat</code> showed 32 blocked tasks, but the SSD did almost no I/O. 32 is 8 disks × 4 queue threads. Each queue thread waits in <code>io_uring_enter</code> while requests are in flight (the ublk fetch commands), and the kernel counts that wait as iowait. Both builds do this. On a production host, each attached disk adds up to 4 blocked tasks, and I/O pressure and iowait look high. The load average does not change, because io_uring waits are interruptible. An earlier version of this page said that it did. io_uring has a flag to stop this (<code>IORING_ENTER_NO_IOWAIT</code>, Linux 6.15), but libublk makes the wait call, and the kernel uses iowait to raise the CPU clock for low-depth I/O. So this needs its own A/B.</p>
+<p><strong>Fix, merged</strong> (<code>38f770d</code>): the queue thread runs libublk's event loop with its own wait, the same in every way but with <code>IORING_ENTER_NO_IOWAIT</code>. With 8 idle disks: <span class="good">0 blocked tasks and 0 % iowait</span> (before: 32 and about 95 %). The data check passes. In the A/B above, single requests are the same or faster, and FLUSH p50 is the same. The mean of idle write + fdatasync was lower (833/s against 922/s, lower in 4 of 5 paired runs), from a heavier tail, but the spread between runs is wide. The fix improves host metrics, not speed, and adds a small <code>unsafe</code> wait loop. It is merged because host monitoring must not see a stall that does not exist. The write + fdatasync tail stays on the watch list.</p>
 
 <details>
 <summary>All numbers, per round</summary>
@@ -211,13 +211,13 @@
   <li>Focused write A/B, 3 rounds: same throughput, 1 MiB writes −12 % CPU. Found that idle queue threads count as iowait.</li>
   <li>Crash tests: 24 runs, 0 lost data. Committed zero copy on <code>main</code> (<code>c89ffb7</code>).</li>
   <li>Latency A/B (cold reads, FLUSH, queue depth 1) with three builds: no change from zero copy. The iowait fix is not clearly free, so it stays on its branch.</li>
+  <li>Merged the iowait fix on <code>main</code> (<code>38f770d</code>, docs in <code>29634e3</code>). Correction: the load average never changed; blocked tasks, I/O pressure and iowait did.</li>
   <li>Refactor on the branch <code>refactor</code>: rustfmt for the whole tree; <code>disk.rs</code> (900 lines), <code>local_data.rs</code> (800) and <code>chunk_cache.rs</code> (580) split by job into child modules; a CI workflow (format, strict Clippy, tests, lab script parse). The code does the same thing; codex found two small differences (an error text, a lint), both fixed.</li>
 </ol>
 
 <h2>Open</h2>
 <ol>
   <li>Merge the branch <code>refactor</code> (or not), after a look at the diff.</li>
-  <li>Decide on <code>no-iowait</code>: correct load average and I/O pressure, against a possible FLUSH tail cost.</li>
   <li>The rest of the to-do list for ublk: <code>UBLK_F_BATCH_IO</code>, more threads per queue, FUA writes into local chunks on the queue thread.</li>
 </ol>
 
@@ -226,9 +226,9 @@
 <tr><th>Branch</th><th>Commit</th><th>What</th></tr>
 <tr><td><code>main</code></td><td><code>aa97e7d</code></td><td>The zero-copy plan; the lab bucket prefix.</td></tr>
 <tr><td><code>main</code></td><td><code>c89ffb7</code></td><td>Zero copy: <code>src/ublk_queue.rs</code> (new), <code>src/queue_io.rs</code>, <code>src/ublk_device.rs</code>; lab tools <code>load.py</code>, <code>zerocopy.sh</code>, <code>datacheck.py</code>, <code>datacheck.sh</code>; docs.</td></tr>
-<tr><td><code>refactor</code></td><td>6 commits, <code>bb4e439</code>..<code>d4bac6c</code></td><td>rustfmt, three file splits, CI, review fixes. Lab check: data check pass; A/B against zero copy within noise (1 MiB reads 659 vs 688 µs CPU per read, 4 KiB reads 8.4 vs 8.6 µs); crash 8 runs (4 power cut, 4 daemon kill), 0 lost data. Not merged.</td></tr>
+<tr><td><code>refactor</code></td><td>6 commits, <code>0ace2be</code>..<code>f595b95</code></td><td>rustfmt, three file splits, CI, review fixes. Lab check: data check pass; A/B against zero copy within noise (1 MiB reads 659 vs 688 µs CPU per read, 4 KiB reads 8.4 vs 8.6 µs); crash 8 runs (4 power cut, 4 daemon kill), 0 lost data. Not merged.</td></tr>
 <tr><td><code>main</code></td><td><code>4fcf02d</code>, <code>1f6f976</code></td><td>Cold-read benchmark <code>lab/bench/coldread.sh</code>; the iowait finding in <code>todo.md</code>.</td></tr>
-<tr><td><code>no-iowait</code></td><td><code>38f770d</code></td><td>Idle queue threads do not count as iowait. Tested, not merged (see above).</td></tr>
+<tr><td><code>main</code></td><td><code>38f770d</code>, <code>29634e3</code></td><td>Idle queue threads do not count as iowait (see above); docs.</td></tr>
 </table></div>
 
 <p class="meta">Sources: <a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/ublk_cmd.h">ublk uapi header</a> · <a href="https://github.com/ublk-org/libublk-rs">libublk-rs</a> · <a href="https://lwn.net/Articles/1020732/">LWN: ublk auto buffer registration</a></p>
