@@ -226,9 +226,9 @@
 <tr><th>Branch</th><th>Commit</th><th>What</th></tr>
 <tr><td><code>main</code></td><td><code>aa97e7d</code></td><td>The zero-copy plan; the lab bucket prefix.</td></tr>
 <tr><td><code>main</code></td><td><code>c89ffb7</code></td><td>Zero copy: <code>src/ublk_queue.rs</code> (new), <code>src/queue_io.rs</code>, <code>src/ublk_device.rs</code>; lab tools <code>load.py</code>, <code>zerocopy.sh</code>, <code>datacheck.py</code>, <code>datacheck.sh</code>; docs.</td></tr>
-<tr><td><code>refactor</code></td><td>6 commits, <code>acf92b1</code>..<code>7fdd074</code></td><td>rustfmt, three file splits, CI, review fixes. Lab check: data check pass; A/B against zero copy within noise (1 MiB reads 659 vs 688 µs CPU per read, 4 KiB reads 8.4 vs 8.6 µs); crash 8 runs (4 power cut, 4 daemon kill), 0 lost data. Not merged.</td></tr>
-<tr><td><code>main</code></td><td><code>4fcf02d</code>, <code>3a552fc</code></td><td>Cold-read benchmark <code>lab/bench/coldread.sh</code>; the iowait finding in <code>todo.md</code>.</td></tr>
-<tr><td><code>no-iowait</code></td><td><code>6602a0c</code></td><td>Idle queue threads do not count as iowait. Tested, not merged (see above).</td></tr>
+<tr><td><code>refactor</code></td><td>6 commits, <code>bb4e439</code>..<code>d4bac6c</code></td><td>rustfmt, three file splits, CI, review fixes. Lab check: data check pass; A/B against zero copy within noise (1 MiB reads 659 vs 688 µs CPU per read, 4 KiB reads 8.4 vs 8.6 µs); crash 8 runs (4 power cut, 4 daemon kill), 0 lost data. Not merged.</td></tr>
+<tr><td><code>main</code></td><td><code>4fcf02d</code>, <code>1f6f976</code></td><td>Cold-read benchmark <code>lab/bench/coldread.sh</code>; the iowait finding in <code>todo.md</code>.</td></tr>
+<tr><td><code>no-iowait</code></td><td><code>38f770d</code></td><td>Idle queue threads do not count as iowait. Tested, not merged (see above).</td></tr>
 </table></div>
 
 <p class="meta">Sources: <a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/ublk_cmd.h">ublk uapi header</a> · <a href="https://github.com/ublk-org/libublk-rs">libublk-rs</a> · <a href="https://lwn.net/Articles/1020732/">LWN: ublk auto buffer registration</a></p>
