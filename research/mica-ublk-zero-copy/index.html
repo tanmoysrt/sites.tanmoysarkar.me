@@ -8,19 +8,19 @@
   :root {
     color-scheme: light;
     --bg: #fcfcfb; --text: #0b0b0b; --muted: #52514e; --line: #e4e3df; --code: #f1f0ec;
-    --old: #2a78d6; --new: #eb6834; --good: #0a6b4f; --warn: #9a5800; --status-bg: #f1f8f5; --tip: #ffffff;
+    --old: #2a78d6; --new: #eb6834; --third: #1baf7a; --good: #0a6b4f; --warn: #9a5800; --status-bg: #f1f8f5; --tip: #ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
       color-scheme: dark;
       --bg: #1a1a19; --text: #f0efec; --muted: #c3c2b7; --line: #383835; --code: #262624;
-      --old: #3987e5; --new: #d95926; --good: #5cc59a; --warn: #e3a64a; --status-bg: #1f2a25; --tip: #262624;
+      --old: #3987e5; --new: #d95926; --third: #199e70; --good: #5cc59a; --warn: #e3a64a; --status-bg: #1f2a25; --tip: #262624;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #1a1a19; --text: #f0efec; --muted: #c3c2b7; --line: #383835; --code: #262624;
-    --old: #3987e5; --new: #d95926; --good: #5cc59a; --warn: #e3a64a; --status-bg: #1f2a25; --tip: #262624;
+    --old: #3987e5; --new: #d95926; --third: #199e70; --good: #5cc59a; --warn: #e3a64a; --status-bg: #1f2a25; --tip: #262624;
   }
   body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 820px; margin: 0 auto; padding: 40px 16px 80px; }
@@ -49,13 +49,13 @@
   figcaption span { display: block; font-weight: 400; color: var(--muted); font-size: .85rem; }
   .legend { display: flex; gap: 16px; font-size: .85rem; color: var(--muted); margin: 6px 0 2px; }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-  .chart { position: relative; overflow-x: auto; }
-  .chart svg { width: 100%; min-width: 540px; height: auto; display: block; overflow: visible; }
+  .chart { overflow-x: auto; overflow-y: hidden; }
+  .chart svg { width: 100%; min-width: 540px; height: auto; display: block; }
   .chart text { fill: var(--muted); font-size: 12px; font-family: inherit; }
   .chart text.value { fill: var(--text); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
   .chart .grid { stroke: var(--line); stroke-width: 1; }
   .chart .ref { stroke: var(--muted); stroke-width: 1; }
-  .tip { position: absolute; pointer-events: none; background: var(--tip); border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; font-size: .82rem; white-space: nowrap; opacity: 0; transition: opacity .1s; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .tip { position: fixed; z-index: 10; pointer-events: none; background: var(--tip); border: 1px solid var(--line); border-radius: 4px; padding: 6px 9px; font-size: .82rem; white-space: nowrap; opacity: 0; transition: opacity .1s; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
   ol.log li { margin-bottom: 6px; }
   details { margin: 6px 0; }
   summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
@@ -64,10 +64,10 @@
 <body>
 <main>
 <h1>mica: ublk zero copy</h1>
-<p class="meta">Progress report. Updated 2026-10-30 04:58 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
+<p class="meta">Progress report. Updated 2026-10-30 05:55 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
 
 <div class="status">
-<strong>Now:</strong> zero copy is done and committed on <code>main</code>: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU, no regression, 24 of 24 crash runs without data loss. A cleanup refactor on the branch <code>refactor</code> passed its lab check. Now: the FLUSH and cold-read A/B, and a test of a fix for the iowait finding.
+<strong>Done.</strong> Zero copy is committed on <code>main</code>: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU. Cold reads, FLUSH and queue-depth-1 latency did not change. 32 of 32 crash runs without data loss. A cleanup refactor is on the branch <code>refactor</code>, and an iowait fix on <code>no-iowait</code>; neither is merged.
 </div>
 
 <div class="kpis">
@@ -161,9 +161,28 @@
 </table></div>
 <p><span class="good">No write regression.</span> The SSD sets the write throughput, and both builds reach the same speed. A 1 MiB write costs 12 % less daemon CPU, because the copy into the daemon's buffer is gone. At 4 KiB the copy is small, so the cost is the same.</p>
 
+<h3>Latency: cold reads, FLUSH, single requests</h3>
+<p>These tests wait for S3, the SSD or one request at a time, so the copy is a small part of their time. The plan expected no change. A third build is in the test: zero copy plus the iowait fix described below. All builds ran in turns, and each run started on a quiet host.</p>
+<figure>
+  <figcaption>Cold sequential reads from S3, 20 ms round trip<span>MiB/s, 1 MiB reads at queue depth 1, 128 MiB. Mean of 12 samples (3 cycles × 4 rounds). Higher is better.</span></figcaption>
+  <div class="legend"><span><i style="background:var(--old)"></i>v0.2c (copy)</span><span><i style="background:var(--new)"></i>zero copy</span><span><i style="background:var(--third)"></i>zero copy, no iowait</span></div>
+  <div class="chart" id="cold"></div>
+</figure>
+<div class="scroll"><table>
+<tr><th>Test</th><th class="n">v0.2c</th><th class="n">zero copy</th><th class="n">no iowait</th></tr>
+<tr><td>Cold sequential, MiB/s (12 samples, mean ± sd)</td><td class="n">79.2 ± 5.1</td><td class="n">77.9 ± 3.0</td><td class="n">76.6 ± 5.6</td></tr>
+<tr><td>Cold random 1 MiB reads, median ms (12 samples)</td><td class="n">33</td><td class="n">34</td><td class="n">33.5</td></tr>
+<tr><td>Idle 4 KiB write + fdatasync, writes/s (5 runs)</td><td class="n">922</td><td class="n">1045</td><td class="n warn">833</td></tr>
+<tr><td>Idle 4 KiB write + fdatasync, p50</td><td class="n">720–746 µs</td><td class="n">721–748 µs</td><td class="n">718–724 µs</td></tr>
+<tr><td>Local 4 KiB random reads, queue depth 1 (round 2)</td><td class="n">89.8k/s, p99 18 µs</td><td class="n">91.7k/s, p99 16 µs</td><td class="n">93.9k/s, p99 18 µs</td></tr>
+<tr><td>Local 4 KiB random writes, queue depth 1, no sync (2 rounds)</td><td class="n">31.9k*, 41.3k/s</td><td class="n">41.4k, 37.2k/s</td><td class="n good">46.2k, 46.1k/s</td></tr>
+</table></div>
+<p class="meta">* Round 1 of v0.2c ran while a Clippy build used the CPU. The first round of cold reads (4 samples per build) showed zero copy about 9 % slower; 12 samples show no difference.</p>
+<p><span class="good">Zero copy: no change</span> in cold reads, FLUSH or single requests, as the plan expected. The FLUSH throughput moves with rare slow syncs of btrfs (p99 up to 9 ms, max up to 3 s), not with the build: the median is the same.</p>
+
 <h3 id="iowait">A lab finding: idle disks look like an I/O stall</h3>
 <p>The first try of the write test waited forever for a quiet host. With 8 disks attached and no load, <code>/proc/pressure/io</code> showed about 95 %, and <code>vmstat</code> showed 32 blocked tasks, but the SSD did almost no I/O. 32 is 8 disks × 4 queue threads. Each queue thread waits in <code>io_uring_enter</code> while requests are in flight (the ublk fetch commands), and the kernel counts that wait as iowait. Both builds do this. On a production host, each attached disk adds up to 4 to the load average, and I/O pressure looks high. io_uring has a flag to stop this (<code>IORING_ENTER_NO_IOWAIT</code>, Linux 6.15), but libublk makes the wait call, and the kernel uses iowait to raise the CPU clock for low-depth I/O. So this needs its own A/B.</p>
-<p><strong>Prototype</strong> (branch <code>no-iowait</code>): the queue thread runs libublk's event loop with its own wait, the same in every way but with <code>IORING_ENTER_NO_IOWAIT</code>. With 8 idle disks: <span class="good">0 blocked tasks and 0 % iowait</span> (before: 32 and about 95 %). The data check passes. The A/B of queue-depth-1 latency runs now: if the clock boost matters, single reads and writes get slower.</p>
+<p><strong>Prototype</strong> (branch <code>no-iowait</code>): the queue thread runs libublk's event loop with its own wait, the same in every way but with <code>IORING_ENTER_NO_IOWAIT</code>. With 8 idle disks: <span class="good">0 blocked tasks and 0 % iowait</span> (before: 32 and about 95 %). The data check passes. In the A/B above, single requests are the same or faster, and FLUSH p50 is the same. But the mean of idle write + fdatasync was lower in 5 of 5 runs (833/s against 922/s), from a heavier tail. The fix improves host metrics, not speed, and adds an <code>unsafe</code> wait loop, so it is not merged. It needs a decision, and a quiet-host test of the FLUSH tail first.</p>
 
 <details>
 <summary>All numbers, per round</summary>
@@ -191,12 +210,15 @@
   <li>Clean A/B, 2 rounds: memory −96 %, 1 MiB reads 2.3×. Writes need a focused test.</li>
   <li>Focused write A/B, 3 rounds: same throughput, 1 MiB writes −12 % CPU. Found that idle queue threads count as iowait.</li>
   <li>Crash tests: 24 runs, 0 lost data. Committed zero copy on <code>main</code> (<code>c89ffb7</code>).</li>
+  <li>Latency A/B (cold reads, FLUSH, queue depth 1) with three builds: no change from zero copy. The iowait fix is not clearly free, so it stays on its branch.</li>
   <li>Refactor on the branch <code>refactor</code>: rustfmt for the whole tree; <code>disk.rs</code> (900 lines), <code>local_data.rs</code> (800) and <code>chunk_cache.rs</code> (580) split by job into child modules; a CI workflow (format, strict Clippy, tests, lab script parse). The code does the same thing; codex found two small differences (an error text, a lint), both fixed.</li>
 </ol>
 
-<h2>Next</h2>
+<h2>Open</h2>
 <ol>
-  <li>FLUSH benchmark, cold reads at 20 ms round trip, and queue-depth-1 latency of local chunks: v0.2c, zero copy, and zero copy without iowait, 2 rounds each (running).</li>
+  <li>Merge the branch <code>refactor</code> (or not), after a look at the diff.</li>
+  <li>Decide on <code>no-iowait</code>: correct load average and I/O pressure, against a possible FLUSH tail cost.</li>
+  <li>The rest of the to-do list for ublk: <code>UBLK_F_BATCH_IO</code>, more threads per queue, FUA writes into local chunks on the queue thread.</li>
 </ol>
 
 <h2>Code changes</h2>
@@ -205,7 +227,8 @@
 <tr><td><code>main</code></td><td><code>aa97e7d</code></td><td>The zero-copy plan; the lab bucket prefix.</td></tr>
 <tr><td><code>main</code></td><td><code>c89ffb7</code></td><td>Zero copy: <code>src/ublk_queue.rs</code> (new), <code>src/queue_io.rs</code>, <code>src/ublk_device.rs</code>; lab tools <code>load.py</code>, <code>zerocopy.sh</code>, <code>datacheck.py</code>, <code>datacheck.sh</code>; docs.</td></tr>
 <tr><td><code>refactor</code></td><td>6 commits</td><td>rustfmt, three file splits, CI, review fixes. Lab check: data check pass; A/B against zero copy within noise (1 MiB reads 659 vs 688 µs CPU per read, 4 KiB reads 8.4 vs 8.6 µs); crash 8 runs (4 power cut, 4 daemon kill), 0 lost data. Not merged.</td></tr>
-<tr><td><code>no-iowait</code></td><td><code>dbfc0c2</code></td><td>Idle queue threads do not count as iowait. Under test. Not merged.</td></tr>
+<tr><td><code>main</code></td><td><code>4fcf02d</code>, <code>3a552fc</code></td><td>Cold-read benchmark <code>lab/bench/coldread.sh</code>; the iowait finding in <code>todo.md</code>.</td></tr>
+<tr><td><code>no-iowait</code></td><td><code>dbfc0c2</code></td><td>Idle queue threads do not count as iowait. Tested, not merged (see above).</td></tr>
 </table></div>
 
 <p class="meta">Sources: <a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/ublk_cmd.h">ublk uapi header</a> · <a href="https://github.com/ublk-org/libublk-rs">libublk-rs</a> · <a href="https://lwn.net/Articles/1020732/">LWN: ublk auto buffer registration</a></p>
@@ -215,7 +238,7 @@
 // Horizontal grouped bars. Each series is one color; values sit at the bar tip.
 function bars(id, { categories, series, unit, digits = 0, max, reference }) {
   const root = document.getElementById(id);
-  const label = 190, right = 64, band = series.length * 20 + 18, top = 6;
+  const label = 190, right = 96, band = series.length * 20 + 18, top = 6;
   const width = 720, height = top + categories.length * band + 22;
   const plot = width - label - right;
   // Round ticks: a step of 1, 2, 2.5 or 5 times a power of ten.
@@ -254,10 +277,9 @@ function bars(id, { categories, series, unit, digits = 0, max, reference }) {
       svg.append(el("text", { x: label + w + 6, y: y + 8, class: "value", "dominant-baseline": "middle" }, fmt(v)));
       const hit = el("rect", { x: label, y: y - 2, width: plot + right, height: 20, fill: "transparent" });
       hit.addEventListener("pointermove", e => {
-        const box = root.getBoundingClientRect();
         tip.innerHTML = `<b>${name}</b><br>${s.name}: ${fmt(v)}`;
-        tip.style.left = Math.min(e.clientX - box.left + 12, box.width - tip.offsetWidth) + "px";
-        tip.style.top = e.clientY - box.top + 12 + "px";
+        tip.style.left = Math.min(e.clientX + 12, window.innerWidth - tip.offsetWidth - 8) + "px";
+        tip.style.top = e.clientY + 12 + "px";
         tip.style.opacity = 1;
       });
       hit.addEventListener("pointerleave", () => (tip.style.opacity = 0));
@@ -265,7 +287,8 @@ function bars(id, { categories, series, unit, digits = 0, max, reference }) {
     });
   });
   svg.setAttribute("aria-label", categories.map((c, i) => `${c}: ` + series.map(s => `${s.name} ${fmt(s.values[i])}`).join(", ")).join("; "));
-  root.append(svg, tip);
+  root.append(svg);
+  document.body.append(tip);
 }
 
 const old = { name: "v0.2c (copy)", color: "--old" }, zc = { name: "zero copy", color: "--new" };
@@ -283,6 +306,11 @@ bars("cpu", {
   categories: ["Fill, 1 MiB, new chunks", "1 MiB reads, local", "4 KiB random reads", "1 MiB writes, local", "4 KiB random writes"],
   series: [{ name: "zero copy vs v0.2c", color: "--new", values: [112, 46, 99, 95, 101] }],
   unit: " %", max: 125, reference: 100,
+});
+bars("cold", {
+  categories: ["Sequential"],
+  series: [{ ...old, values: [79.2] }, { ...zc, values: [77.9] }, { name: "zero copy, no iowait", color: "--third", values: [76.6] }],
+  unit: " MiB/s", digits: 1,
 });
 bars("wcpu", {
   categories: ["1 MiB writes"],
