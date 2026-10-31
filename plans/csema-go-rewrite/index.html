@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSEMA Go Rewrite Plan</title>
+<meta name="description" content="Plan to rewrite the CSEMA platform from Django + Next.js to one Go binary (Echo, sqlc, MariaDB) with an embedded UI.">
+<style>
+  :root { --ink:#1b1d21; --muted:#5d6470; --line:#dfe2e7; --soft:#f5f6f8; --accent:#2457d6; --core:#1f7a4d; --park:#a2620b; --drop:#a33a3a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#fff; color:var(--ink); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:1000px; margin:0 auto; padding:40px 16px 96px; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 8px; }
+  h2 { font-size:1.35rem; margin:56px 0 12px; padding-top:16px; border-top:1px solid var(--line); }
+  h3 { font-size:1.05rem; margin:28px 0 8px; }
+  p, li { max-width:74ch; }
+  .lede { color:var(--muted); font-size:1.05rem; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.86em; background:var(--soft); padding:1px 4px; border-radius:3px; }
+  pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.84rem; background:var(--soft); padding:14px 16px; border-radius:6px; overflow-x:auto; line-height:1.5; }
+  .t { border-collapse:collapse; width:100%; margin:12px 0 20px; font-size:.9rem; }
+  .t th, .t td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+  .t th { background:var(--soft); font-weight:600; }
+  .t .n { text-align:right; font-variant-numeric:tabular-nums; }
+  .t.small { font-size:.82rem; }
+  .wrap { overflow-x:auto; }
+  .tag { display:inline-block; font-size:.75rem; font-weight:600; padding:1px 8px; border-radius:10px; border:1px solid currentColor; }
+  .tag.core { color:var(--core); } .tag.park { color:var(--park); } .tag.drop { color:var(--drop); }
+  .bad { color:var(--drop); font-weight:600; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin:20px 0; }
+  .stat { border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .stat b { display:block; font-size:1.5rem; line-height:1.2; }
+  .stat span { color:var(--muted); font-size:.85rem; }
+  figure { margin:20px 0 28px; }
+  figure svg { width:100%; height:auto; display:block; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  figcaption { color:var(--muted); font-size:.88rem; margin-top:6px; }
+  details { border:1px solid var(--line); border-radius:6px; margin:8px 0; padding:6px 12px; }
+  details summary { cursor:pointer; padding:4px 0; }
+  .note { border-left:3px solid var(--accent); background:var(--soft); padding:10px 14px; margin:16px 0; }
+  .note.warn { border-left-color:var(--park); }
+  .phase { border:1px solid var(--line); border-radius:8px; padding:6px 18px 12px; margin:16px 0; }
+  .phase h3 { margin-top:14px; }
+  .phase .meta { color:var(--muted); font-size:.88rem; margin-top:-4px; }
+  nav.toc { columns:2; font-size:.92rem; margin:20px 0; }
+  nav.toc a { color:var(--accent); text-decoration:none; }
+  nav.toc li { margin:2px 0; }
+  @media (max-width:640px) { nav.toc { columns:1; } h1 { font-size:1.6rem; } }
+</style>
+</head>
+<body>
+<main>
+<h1>CSEMA Go Rewrite Plan</h1>
+<p class="lede">The plan moves the CSEMA cybersecurity learning platform from Django + Next.js to one Go binary (Echo, sqlc, MariaDB) with the UI embedded in it. It starts with what the product actually uses today, maps that to APIs and tables, and then gives the build phases, the cutover and the checks.</p>
+<p class="lede">Status: <b>plan only. No rewrite work has started.</b> The work branch is <code>refactor/go-rewrite</code> (local, both repositories). Measured on 31 Oct 2026 against a local copy of the production database.</p>
+
+<nav class="toc"><ol>
+  <li><a href="#why">Why we rewrite</a></li>
+  <li><a href="#method">How we measured usage</a></li>
+  <li><a href="#today">The system today</a></li>
+  <li><a href="#features">Features in use</a></li>
+  <li><a href="#scope">Scope: keep, park, drop</a></li>
+  <li><a href="#parked">Notes on parked modules</a></li>
+  <li><a href="#target">Target architecture</a></li>
+  <li><a href="#layout">Repository layout</a></li>
+  <li><a href="#data">Data model (ERD)</a></li>
+  <li><a href="#api">API design</a></li>
+  <li><a href="#compat">Compatibility rules</a></li>
+  <li><a href="#ui">UI plan</a></li>
+  <li><a href="#deploy">Zero-downtime deploy and size budget</a></li>
+  <li><a href="#phases">Phases and steps</a></li>
+  <li><a href="#verify">How we check success</a></li>
+  <li><a href="#risks">Risks</a></li>
+  <li><a href="#questions">Open questions</a></li>
+  <li><a href="#appendix">Appendix: raw maps</a></li>
+</ol></nav>
+
+<h2 id="why">1. Why we rewrite</h2>
+<p>The platform grew one feature at a time. Each feature added a Django app, a set of routes and a set of pages. Many of those features are now hidden, empty or replaced, but their code, tables and background jobs still run.</p>
+<p>The result is hard to change and expensive to run. One production container runs nginx, uvicorn with 4 workers, 2 Celery workers, Celery beat and Redis. The frontend is a separate Next.js deployment with server routes. A small change often touches 3 or 4 of these parts.</p>
+<p>The goal is one small program that does the same job for the features people use:</p>
+<ul>
+  <li>One Go binary. It serves the API, the WebSockets, the background jobs and the UI.</li>
+  <li>MariaDB is the only stateful dependency. Redis, Celery and Channels go away.</li>
+  <li>Binary size is less than 50 MB, and a deploy causes no downtime.</li>
+  <li>A smaller, clearer UI that is built from the same component set on every page.</li>
+</ul>
+
+<h2 id="method">2. How we measured usage</h2>
+<p>We did not trust the code alone. Hidden pages and dead routes look the same as live ones in code. We used 5 sources and compared them.</p>
+<ol>
+  <li><b>Browser crawl.</b> We signed in with 2 local test accounts, a learner with the highest plan and a staff account. We opened 61 pages with Claude in Chrome. A marker request before each page let us read the backend request log and assign each API call to the page that made it.</li>
+  <li><b>Static scan of the frontend.</b> We extracted 388 API calls from the TypeScript source, with their HTTP methods. This also finds actions that a page load does not run, for example "submit flag".</li>
+  <li><b>Route table.</b> We dumped all Django URL patterns and matched each frontend call to a route.</li>
+  <li><b>Database.</b> For each of the 265 models we counted rows and found the newest write time.</li>
+  <li><b>Django admin log.</b> This shows which models staff change by hand.</li>
+</ol>
+<div class="note warn">Production has nginx and uvicorn access logs turned off. Because of this we have no real traffic counts per endpoint. Row counts and last-write dates are the best usage signal we have. Phase 0 turns on a sampled access log for 2 weeks to confirm the decisions below.</div>
+
+<h2 id="today">3. The system today</h2>
+<div class="stats">
+  <div class="stat"><b>45</b><span>Django apps</span></div>
+  <div class="stat"><b>172k</b><span>Python lines (no migrations or tests). About 55k of these are course content in seed scripts.</span></div>
+  <div class="stat"><b>265 / 308</b><span>models / database tables</span></div>
+  <div class="stat"><b>669</b><span>unique API routes. The frontend calls 306. The crawl hit 79.</span></div>
+  <div class="stat"><b>2,036 MB</b><span>database size. 1,943 MB is one marketing table with 7.2M rows.</span></div>
+  <div class="stat"><b>117 / 95k</b><span>Next.js pages / TypeScript lines, 74 runtime dependencies</span></div>
+  <div class="stat"><b>7 + 12</b><span>WebSocket endpoints + scheduled jobs</span></div>
+  <div class="stat"><b>425</b><span>Django migration files</span></div>
+</div>
+<figure>
+  <svg id="fig-now" viewBox="0 0 960 380" role="img" aria-label="Current architecture: browser to Next.js and a Django container with nginx, uvicorn, Celery, beat and Redis, then a remote Postgres; plus external services."></svg>
+  <figcaption>Figure 1. Today. Seven processes in two deployments, plus a separate events app that calls the same API.</figcaption>
+</figure>
+<p>Other facts that change the plan:</p>
+<ul>
+  <li>The real product data is small. Without the marketing decision table, the database is about 90 MB.</li>
+  <li>Large static files live in git: lesson presentations (323 MB), challenge artwork (51 MB), marketing images (47 MB), frontend images (94 MB). User uploads are 1.6 GB. None of these can go into a 50 MB binary.</li>
+  <li>The code uses no Postgres-only features (no <code>ArrayField</code>, no <code>django.contrib.postgres</code>, no <code>DISTINCT ON</code>). It has 76 <code>JSONField</code> columns and 18 files with raw SQL. MariaDB is a safe target.</li>
+  <li>A standalone events app (separate repository) signs users in with a short-lived SSO token and calls the <code>/api/events/</code> routes. Its API contract must stay stable, or we rewrite that app too.</li>
+  <li>The red-team orchestrator (separate repository) calls an internal API (<code>/internal/redteam/…</code>, 17 routes) with a service key. This contract must stay stable.</li>
+</ul>
+
+<h2 id="features">4. Features in use</h2>
+<p>The learner sidebar has 6 items: Home, Learn, Practice, Compete, Teams and Events. Events opens the separate events app. The account menu adds Profile, Achievements, Plans, Bills and Ambassador. Staff get an admin panel with 10 sections. These are the features a learner can reach today.</p>
+<div class="wrap"><table class="t">
+<thead><tr><th>Area</th><th>What the user does</th><th>Main APIs today</th><th>Main tables (rows, last write)</th></tr></thead>
+<tbody>
+<tr><td>Sign in</td><td>Email + password, OTP, Google and GitHub sign-in, email verification, password reset. One active session per user.</td><td><code>/api/accounts/…</code>, <code>/api/token/refresh/</code></td><td>users (6,996, today), email verification (1,754), login OTP (6,494)</td></tr>
+<tr><td>Onboarding</td><td>4-step survey, then a recommended path.</td><td><code>/api/onboarding/survey/*</code>, <code>/api/accounts/onboarding/*</code></td><td>onboarding responses (994, today), skill gap reports (2,926, today)</td></tr>
+<tr><td>Home</td><td>Next lesson, "today" cards, weekly goals, streak, recommendations.</td><td>About 15 calls, including 52 weeks of progress and the full challenge list</td><td>reads from most tables</td></tr>
+<tr><td>Learn</td><td>27 paths in 5 tabs. Slide lessons, quizzes, code exercises, shell tasks, certificates.</td><td><code>/api/learning-paths/</code>, <code>/api/quizzes/</code>, <code>/api/coding/</code>, <code>/api/shell-labs/</code></td><td>modules (752), quiz attempts (12,817), path progress (1,751), certificates (910), code submissions (today)</td></tr>
+<tr><td>Practice: challenges</td><td>207 CTF challenges. Hints, flag submit, writeups, badges.</td><td><code>/api/challenges/</code>, <code>…/submit_flag/</code></td><td>challenges (763), solves (4,714), badges (550)</td></tr>
+<tr><td>Practice: machines and red-team labs</td><td>Start a hosted VM lab, connect by VPN or browser, submit user and root flags. Credits and plans.</td><td><code>/api/redteam/*</code> (18 used), internal orchestrator API</td><td>lab sessions (218, today), credit entries (225, today), pool VMs (61), lab specs (133)</td></tr>
+<tr><td>Compete</td><td>Global leaderboard.</td><td><code>/api/accounts/api_leaderboard/</code></td><td>users.points</td></tr>
+<tr><td>Teams</td><td>Team leaderboard, create, invite, join requests, announcements.</td><td><code>/api/teams/</code>, <code>/api/team-invites/</code></td><td>teams (161), requests (211)</td></tr>
+<tr><td>Events</td><td>CTF events with teams, waves, hints, live scoreboard, certificates. Runs in the separate events app.</td><td><code>/api/events/*</code> (99 routes, 53 used by this frontend)</td><td>registrations (1,591), event solves (16,209), views (24,656). Last write Sep 2026.</td></tr>
+<tr><td>Billing</td><td>Plans page, Razorpay checkout, coupons, bills.</td><td><code>/api/accounts/api/pricing/</code>, <code>/api/payments/*</code>, <code>/api/offers/*</code></td><td>subscription plans (8), Razorpay subscriptions (8, today), verifications (120)</td></tr>
+<tr><td>Profile</td><td>Skill radar, activity heatmap, achievements, notifications.</td><td><code>/api/accounts/api_*</code></td><td>notifications (6,915), streaks (639)</td></tr>
+<tr><td>Small features</td><td>News (blog), ambassador sign-up, CJWAPT waitlist, contact form.</td><td><code>/api/blog-posts/</code>, <code>/api/ambassador/</code>, <code>/api/waitlist/</code></td><td>blog (1 post), ambassadors (23), waitlist (10, today)</td></tr>
+<tr><td>Admin panel</td><td>System health, moderation, contact messages, waitlist, live event ops, revenue, challenges, machine labs, tools.</td><td><code>/api/admin-panel/*</code>, <code>/api/challenges-admin/</code>, <code>/api/redteam/admin/*</code></td><td>—</td></tr>
+<tr><td>Django admin</td><td>Staff edit challenges (166 changes in 120 days), challenge files (70), subscription plans (34), events (22), learning paths (17), users (9).</td><td><code>/admin/</code></td><td>admin log (1,871)</td></tr>
+</tbody></table></div>
+<p>Hidden, broken or redirecting pages that still ship:</p>
+<ul>
+  <li>Hidden by a feature flag or not linked: Battleground (1v1 CTF), Exams, Interviews, Jobs, Series.</li>
+  <li>Redirect only: <code>/dashboard/machines</code>, <code>/dashboard/red-team-labs</code>, <code>/dashboard/soc</code>, <code>/dashboard/series</code>, <code>/dashboard/jobs</code>.</li>
+  <li>Broken: a path's "practical" page calls a route that does not exist (404). The tampered-evidence page gets a 404 for its session.</li>
+  <li>About 10 frontend calls point at backend routes that do not exist (for example a dream-job pathway, landing-page data, exam registration and AI interview answers). This is dead code.</li>
+</ul>
+
+<h2 id="scope">5. Scope: keep, park, drop</h2>
+<p>We sort each Django app into one of three groups:</p>
+<ul>
+  <li><span class="tag core">core</span> We rewrite it in Go as part of the single release.</li>
+  <li><span class="tag park">park</span> It does not fit the core product. We keep its data and code frozen, remove it from the core UI and API, and rebuild it later as a separate microservice. See <a href="#parked">section 6</a>.</li>
+  <li><span class="tag drop">drop</span> It has no data or no users. We archive its code in git history and do not migrate it.</li>
+</ul>
+<div class="wrap"><table class="t"><thead><tr><th>App</th><th>Decision</th><th>Target</th><th class="n">Routes</th><th class="n">Used by UI</th><th class="n">Seen in crawl</th><th class="n">Models</th><th class="n">With data</th><th class="n">Rows</th><th>Last write</th></tr></thead><tbody>
+<tr><td>admin_panel</td><td><span class="tag core">core</span></td><td>admin</td><td class="n">23</td><td class="n">15</td><td class="n">6</td><td class="n">1</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>behavior_tracking</td><td><span class="tag core">core</span></td><td>analytics</td><td class="n">3</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">5,724</td><td>2026-10-31</td></tr>
+<tr><td>offers</td><td><span class="tag core">core</span></td><td>billing</td><td class="n">7</td><td class="n">4</td><td class="n">2</td><td class="n">2</td><td class="n">1</td><td class="n">1</td><td>2026-01-07</td></tr>
+<tr><td>payments</td><td><span class="tag core">core</span></td><td>billing</td><td class="n">10</td><td class="n">0</td><td class="n">0</td><td class="n">1</td><td class="n">1</td><td class="n">8</td><td>2026-10-31</td></tr>
+<tr><td>ambassador</td><td><span class="tag core">core</span></td><td>community</td><td class="n">8</td><td class="n">5</td><td class="n">2</td><td class="n">2</td><td class="n">1</td><td class="n">23</td><td>—</td></tr>
+<tr><td>exam_waitlist</td><td><span class="tag core">core</span></td><td>community</td><td class="n">2</td><td class="n">2</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">10</td><td>2026-10-31</td></tr>
+<tr><td>teams</td><td><span class="tag core">core</span></td><td>compete</td><td class="n">30</td><td class="n">14</td><td class="n">2</td><td class="n">5</td><td class="n">5</td><td class="n">435</td><td>2026-09-08</td></tr>
+<tr><td>blog</td><td><span class="tag core">core</span></td><td>content</td><td class="n">4</td><td class="n">3</td><td class="n">3</td><td class="n">2</td><td class="n">2</td><td class="n">6</td><td>2026-05-11</td></tr>
+<tr><td>events</td><td><span class="tag core">core</span></td><td>events</td><td class="n">99</td><td class="n">53</td><td class="n">5</td><td class="n">27</td><td class="n">21</td><td class="n">45,950</td><td>2026-09-25</td></tr>
+<tr><td>allauth</td><td><span class="tag core">core</span></td><td>identity</td><td class="n">19</td><td class="n">1</td><td class="n">1</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>rest_framework_simplejwt</td><td><span class="tag core">core</span></td><td>identity</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>users</td><td><span class="tag core">core</span></td><td>identity</td><td class="n">70</td><td class="n">47</td><td class="n">11</td><td class="n">23</td><td class="n">16</td><td class="n">30,899</td><td>2026-10-31</td></tr>
+<tr><td>coding</td><td><span class="tag core">core</span></td><td>learning</td><td class="n">8</td><td class="n">1</td><td class="n">1</td><td class="n">5</td><td class="n">5</td><td class="n">846</td><td>2026-10-31</td></tr>
+<tr><td>learning</td><td><span class="tag core">core</span></td><td>learning</td><td class="n">52</td><td class="n">19</td><td class="n">5</td><td class="n">23</td><td class="n">16</td><td class="n">70,254</td><td>2026-10-28</td></tr>
+<tr><td>shell_labs</td><td><span class="tag core">core</span></td><td>learning</td><td class="n">4</td><td class="n">4</td><td class="n">0</td><td class="n">5</td><td class="n">5</td><td class="n">374</td><td>2026-10-31</td></tr>
+<tr><td>redteam_labs</td><td><span class="tag core">core</span></td><td>machines</td><td class="n">35</td><td class="n">18</td><td class="n">7</td><td class="n">16</td><td class="n">14</td><td class="n">848</td><td>2026-10-31</td></tr>
+<tr><td>onboarding</td><td><span class="tag core">core</span></td><td>onboarding</td><td class="n">9</td><td class="n">8</td><td class="n">3</td><td class="n">6</td><td class="n">4</td><td class="n">5,204</td><td>2026-10-31</td></tr>
+<tr><td>challenges</td><td><span class="tag core">core</span></td><td>practice</td><td class="n">38</td><td class="n">17</td><td class="n">5</td><td class="n">20</td><td class="n">19</td><td class="n">7,814</td><td>2026-10-31</td></tr>
+<tr><td>ai_simulation</td><td><span class="tag park">park</span></td><td>ai-sim</td><td class="n">6</td><td class="n">0</td><td class="n">0</td><td class="n">5</td><td class="n">3</td><td class="n">8</td><td>2026-10-30</td></tr>
+<tr><td>battleground</td><td><span class="tag park">park</span></td><td>battleground</td><td class="n">32</td><td class="n">31</td><td class="n">1</td><td class="n">14</td><td class="n">9</td><td class="n">5,677</td><td>2026-09-14</td></tr>
+<tr><td>exam</td><td><span class="tag park">park</span></td><td>exams</td><td class="n">25</td><td class="n">9</td><td class="n">4</td><td class="n">13</td><td class="n">10</td><td class="n">29,005</td><td>2026-09-01</td></tr>
+<tr><td>forensics_labs</td><td><span class="tag park">park</span></td><td>forensics</td><td class="n">3</td><td class="n">0</td><td class="n">0</td><td class="n">6</td><td class="n">5</td><td class="n">67</td><td>2026-09-16</td></tr>
+<tr><td>tampered_evidence</td><td><span class="tag park">park</span></td><td>forensics</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">4</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>ai_engine</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">1</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>automation</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">9</td><td class="n">0</td><td class="n">0</td><td class="n">2</td><td class="n">1</td><td class="n">11</td><td>2026-08-29</td></tr>
+<tr><td>campaigns</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">4</td><td class="n">0</td><td class="n">0</td><td class="n">4</td><td class="n">4</td><td class="n">32,684</td><td>2026-10-30</td></tr>
+<tr><td>conversions</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">1</td><td class="n">0</td><td class="n">0</td><td class="n">1</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>decision_engine</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">1</td><td class="n">1</td><td class="n">7,206,921</td><td>2026-10-31</td></tr>
+<tr><td>experiments</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">3</td><td class="n">0</td><td class="n">0</td><td class="n">2</td><td class="n">2</td><td class="n">15</td><td>2026-08-20</td></tr>
+<tr><td>products</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">2</td><td class="n">0</td><td class="n">0</td><td class="n">1</td><td class="n">1</td><td class="n">2</td><td>2026-08-16</td></tr>
+<tr><td>providers</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">3</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>scoring</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">2</td><td class="n">2</td><td class="n">2,525</td><td>2026-08-16</td></tr>
+<tr><td>sending_limits</td><td><span class="tag park">park</span></td><td>growth</td><td class="n">6</td><td class="n">0</td><td class="n">0</td><td class="n">2</td><td class="n">2</td><td class="n">15</td><td>2026-08-29</td></tr>
+<tr><td>ai_interactions</td><td><span class="tag park">park</span></td><td>interviews</td><td class="n">5</td><td class="n">0</td><td class="n">0</td><td class="n">1</td><td class="n">1</td><td class="n">218</td><td>2026-09-02</td></tr>
+<tr><td>interviews</td><td><span class="tag park">park</span></td><td>interviews</td><td class="n">14</td><td class="n">12</td><td class="n">4</td><td class="n">7</td><td class="n">5</td><td class="n">1,245</td><td>2026-05-07</td></tr>
+<tr><td>network_labs</td><td><span class="tag park">park</span></td><td>network-labs</td><td class="n">4</td><td class="n">0</td><td class="n">0</td><td class="n">2</td><td class="n">2</td><td class="n">118</td><td>2026-10-31</td></tr>
+<tr><td>soc_arena</td><td><span class="tag park">park</span></td><td>soc-arena</td><td class="n">40</td><td class="n">5</td><td class="n">1</td><td class="n">9</td><td class="n">6</td><td class="n">66</td><td>2026-10-24</td></tr>
+<tr><td>zero_hour</td><td><span class="tag park">park</span></td><td>zero-hour</td><td class="n">5</td><td class="n">4</td><td class="n">2</td><td class="n">2</td><td class="n">2</td><td class="n">95</td><td>—</td></tr>
+<tr><td>academic</td><td><span class="tag drop">drop</span></td><td>-</td><td class="n">15</td><td class="n">7</td><td class="n">1</td><td class="n">6</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>branding</td><td><span class="tag drop">drop</span></td><td>-</td><td class="n">2</td><td class="n">2</td><td class="n">1</td><td class="n">2</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>bug_bounty</td><td><span class="tag drop">drop</span></td><td>-</td><td class="n">18</td><td class="n">15</td><td class="n">8</td><td class="n">5</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>corporate</td><td><span class="tag drop">drop</span></td><td>-</td><td class="n">11</td><td class="n">7</td><td class="n">0</td><td class="n">3</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>merch</td><td><span class="tag drop">drop</span></td><td>-</td><td class="n">13</td><td class="n">0</td><td class="n">0</td><td class="n">6</td><td class="n">0</td><td class="n">0</td><td>—</td></tr>
+<tr><td>organizations</td><td><span class="tag drop">drop</span></td><td>-</td><td class="n">7</td><td class="n">0</td><td class="n">0</td><td class="n">3</td><td class="n">2</td><td class="n">2</td><td>2026-08-25</td></tr>
+</tbody></table></div>
+<p>"Used by UI" counts unique routes that the current frontend calls. "Seen in crawl" counts routes that a page load called. The admin and orchestrator APIs are not in the learner crawl.</p>
+<div class="note">Some decisions need your confirmation: bug bounty (UI exists, 0 rows), exams (unlinked, much history) and the events app contract. See <a href="#questions">open questions</a>.</div>
+
+<h2 id="parked">6. Notes on parked modules</h2>
+<p>These modules do not fit the core platform. Each one has its own runtime, its own UI style or its own data model. They leave the core UI and API now. Later, each one becomes a separate microservice that uses the core platform through a small, fixed interface.</p>
+<h3>Interface that every future microservice uses</h3>
+<ul>
+  <li><b>Identity.</b> The core issues JWTs. It publishes its public key at <code>/.well-known/jwks.json</code> (EdDSA). A microservice checks tokens itself and does not call the core on each request.</li>
+  <li><b>Entitlements.</b> <code>GET /internal/v1/users/{id}/entitlements</code> returns the plan tier and the active date window.</li>
+  <li><b>Progress and points.</b> <code>POST /internal/v1/achievements</code> records XP, a solve or a badge, and is idempotent by key. The core stays the only owner of points and leaderboards.</li>
+  <li><b>Hosted labs.</b> Microservices that need a VM use the core machines API (lab sessions on pool VMs), as SOC Arena and shell labs do today.</li>
+  <li><b>UI.</b> Each microservice serves its own UI under its own path or subdomain. The core UI only links to it.</li>
+</ul>
+<div class="wrap"><table class="t">
+<thead><tr><th>Module</th><th>What exists today</th><th>Data to keep</th><th>Notes for the rebuild</th></tr></thead>
+<tbody>
+<tr><td>Zero Hour (season campaign)</td><td><code>zero_hour</code> app, <code>zero_hour_pack</code> (412 files, 380 challenge assets), full-screen story UI, audio.</td><td>challenge links (24), progress (71 users)</td><td>A season engine that links existing challenges into chapters. It only needs the challenge catalog and the achievements API.</td></tr>
+<tr><td>SOC Arena</td><td><code>soc_arena</code> (40 routes, 5.6k lines), a SOC runtime service, its own run and results UI.</td><td>scenario (1), runs (6), entitlements (6)</td><td>It runs on hosted lab sessions. Rebuild it as a service with its own scenario engine.</td></tr>
+<tr><td>Network labs (GNS3)</td><td><code>network_labs</code>, <code>services/netsim</code>, Next.js GNS3 proxy route, a scheduled idle-suspend job.</td><td>labs (73), sessions (45)</td><td>Lesson modules link to these labs. Until the rebuild, a lesson shows "lab coming back soon". The netsim service moves to <code>labs/netsim</code>.</td></tr>
+<tr><td>AI simulation</td><td><code>ai_simulation</code>, <code>ai_simulation_frontend</code> (Vite), telemetry WebSocket.</td><td>sessions (4)</td><td>Nearly unused. Rebuild only if there is demand.</td></tr>
+<tr><td>Forensics labs + tampered evidence</td><td><code>forensics_labs</code>, <code>forensics_lab_frontend</code>, <code>tampered_evidence</code> (0 rows, page returns 404).</td><td>lab (1), sessions (4)</td><td>Join them into one "forensics simulations" service.</td></tr>
+<tr><td>Battleground</td><td>1v1 live CTF. 32 routes, WebSocket, hidden by a flag.</td><td>sessions (134), submissions (283). Last activity May 2026.</td><td>Export the data to an archive file. Rebuild only if the product wants it back.</td></tr>
+<tr><td>Interviews (AI)</td><td><code>interviews</code>, <code>ai_interactions</code>. Unlinked.</td><td>attempts (15), MCQs (222)</td><td>Low use. Archive.</td></tr>
+<tr><td>Exams</td><td><code>exam</code>: MCQ exams, external practical-exam integration, PocketBase client. Unlinked while content is rewritten.</td><td>registrations (3,911), results (149), MCQs (1,755)</td><td>Certification history is valuable. Keep the tables read-only in MariaDB and show the results in the profile. The new exam engine is a separate service.</td></tr>
+<tr><td>Growth / marketing engine</td><td>10 apps: decision engine, campaigns, experiments, products, sending limits, providers, automation, conversions, AI content, scoring. 5 scheduled jobs. No learner UI.</td><td>Email jobs (17,976) and interactions. The decision table (7.2M rows, 1.9 GB) is a log: archive it, do not migrate it.</td><td>Transactional mail (verify, reset, receipts) stays in the core. Old <code>/r/…</code> tracking links and <code>/unsubscribe/…</code> links in sent emails must keep working, so the core keeps 2 small handlers for them.</td></tr>
+</tbody></table></div>
+
+<h2 id="target">7. Target architecture</h2>
+<figure>
+  <svg id="fig-target" viewBox="0 0 960 430" role="img" aria-label="Target architecture: browser to one csema Go binary containing HTTP API, WebSocket hub, job runner, embedded UI and file server; MariaDB; external services."></svg>
+  <figcaption>Figure 2. Target. One process and one database. Large files stay on disk or in object storage, not in the binary.</figcaption>
+</figure>
+<p>The binary has these parts:</p>
+<ul>
+  <li><b>HTTP API.</b> Echo v4 routes under <code>/api/v1</code>. Handlers are thin. Each domain package has a service layer that calls sqlc queries.</li>
+  <li><b>Embedded UI.</b> The built SPA (single-page app) is embedded with <code>go:embed</code> and served with pre-compressed Brotli and gzip files. Unknown paths return <code>index.html</code>.</li>
+  <li><b>WebSocket hub.</b> One in-process hub with topics (<code>user:{id}</code>, <code>event:{id}</code>, <code>team:{id}</code>, <code>admin</code>). It replaces Channels and Redis. The database stays the source of truth, so a client resyncs over REST after it reconnects.</li>
+  <li><b>Job runner.</b> A <code>jobs</code> table with a lease column (<code>locked_until</code>). Workers claim jobs with <code>SELECT … FOR UPDATE SKIP LOCKED</code> (MariaDB 10.6+). A small cron loop adds the periodic jobs. It replaces Celery and beat.</li>
+  <li><b>Files.</b> A storage interface with two drivers: local disk (default) and S3-compatible. Uploads, lesson presentations and challenge files use it. The binary serves files with long cache headers and ETags.</li>
+  <li><b>Cache and rate limits.</b> In-process, with a size limit (for example <code>otter</code> or a small LRU). No Redis.</li>
+</ul>
+<p>External services stay outside the binary: the code runner (Python sandbox), the red-team orchestrator, SMTP, Razorpay, and, later, the parked microservices.</p>
+<p>Main libraries: Echo v4, sqlc (MySQL engine), <code>go-sql-driver/mysql</code>, goose (migrations), <code>golang-jwt/jwt/v5</code>, <code>coder/websocket</code>, <code>cloudflare/tableflip</code>, <code>log/slog</code>. We add a dependency only when the standard library cannot do the job.</p>
+
+<h2 id="layout">8. Repository layout</h2>
+<p>Content and lab runtimes currently live mixed with app code. Course content is Python seed scripts (about 55k lines in <code>learning/</code>), and lab packs sit at the top level. The new layout gives each kind of thing one home:</p>
+<pre>csema/
+├── cmd/csema/            main.go: serve, migrate, import-pg, content import, admin tools
+├── internal/
+│   ├── platform/         config, db, http server, auth middleware, ws hub, jobs, mail, storage, logging
+│   ├── identity/         users, auth, sessions, OAuth, OTP, notifications, profile
+│   ├── practice/         categories, challenges, files, hints, flags, solves, badges, series
+│   ├── machines/         lab accounts, credits, sessions, pool VMs, specs, orchestrator internal API
+│   ├── learning/         paths, modules, quizzes, progress, certificates, coding, shell practicals
+│   ├── compete/          leaderboards, teams
+│   ├── events/           events, registrations, event teams, scoreboard, certificates
+│   ├── billing/          plans, Razorpay, coupons, offers, invoices
+│   ├── onboarding/       survey, job roles, skill profile
+│   ├── community/        blog, ambassadors, waitlist, contact
+│   └── admin/            admin APIs and audit log
+├── db/
+│   ├── migrations/       goose SQL files
+│   ├── queries/          sqlc .sql files, one folder for each domain
+│   └── sqlc.yaml
+├── web/                  Vite + React SPA; dist/ is embedded
+├── content/              course + challenge content as data (YAML / Markdown / assets)
+│   ├── courses/          fnd, os, net, crypto, pysec ... (from learning/*_course, seed commands)
+│   └── challenges/       challenge packs, artwork, badges
+├── labs/                 lab runtimes and packs; each builds and deploys on its own
+│   ├── code-runner/      from services/code_runner
+│   ├── os-runtime/       from services/os_runtime
+│   ├── netsim/           from services/netsim (parked)
+│   ├── machine-labs-pack/
+│   └── zero-hour-pack/   (parked)
+├── legacy/django/        current backend, read-only until cutover, then deleted
+└── docs/</pre>
+<p>A <code>csema content import</code> command loads <code>content/</code> into the database. It upserts by a stable slug, so it is safe to run again. Course authors edit files and run the importer. They do not write Python seed code.</p>
+
+<h2 id="data">9. Data model (ERD)</h2>
+<p>The core keeps about <b>100 tables, down from 308</b>. We port most tables one-to-one, so that the data migration stays easy to verify. We merge tables only where the merge is clearly simpler and safe.</p>
+<figure>
+  <svg id="fig-erd" viewBox="0 0 960 560" role="img" aria-label="Core ERD by domain: users at the center; challenges shared by practice, machines, learning and events."></svg>
+  <figcaption>Figure 3. Core domains and their main links. <code>users</code> and <code>challenges</code> are the two hub tables.</figcaption>
+</figure>
+<div class="wrap"><table class="t small">
+<thead><tr><th>Domain</th><th>Target tables</th><th>Changes from today</th></tr></thead>
+<tbody>
+<tr><td>identity</td><td>users, auth_tokens, user_sessions, oauth_identities, notifications, activity_days, contact_messages</td><td><code>auth_tokens(kind)</code> merges email verification, login OTP and password reset. <code>notifications</code> merges 2 notification tables. <code>activity_days</code> replaces streak and session-stat tables. Unused columns leave <code>users</code> (for example attack-machine IP and port, an SCBTP purchase flag and the resume path). Marketing scores leave the user profile.</td></tr>
+<tr><td>practice</td><td>categories, tags, challenges, challenge_tags, challenge_files, hints, hint_unlocks, solves, flag_attempts, challenge_feedback, writeups, machine_flags, machine_flag_solves, badges_earned, series, series_challenges</td><td>Challenge reports join feedback as a <code>kind</code>. Tutorial points become a JSON column on the challenge. Event-only access codes move to events.</td></tr>
+<tr><td>machines</td><td>lab_accounts, lab_credit_entries, lab_plan_purchases, lab_subscriptions, pool_vms, tenant_slots, lab_sessions, lab_checkpoints, lab_specs, lab_snapshots, lab_states, flag_secrets, lab_contents, lab_certificates, exam_pool_reservations</td><td>A one-to-one port. The orchestrator contract depends on these tables.</td></tr>
+<tr><td>learning</td><td>learning_paths, phases, modules, module_objectives, module_resources, quizzes, quiz_questions, quiz_choices, quiz_attempts, quiz_answers, path_progress, module_completions, module_progress, certificates, study_materials, coding_exercises, coding_test_cases, code_submissions, coding_solves, shell_practicals, shell_tasks, shell_attempts, shell_task_passes, solution_reveals</td><td><code>solution_reveals(kind)</code> merges the coding and shell reveal tables. Unused topic, Q&amp;A, audio and path-access tables are dropped.</td></tr>
+<tr><td>compete</td><td>teams, team_members, team_invites, team_requests, team_announcements</td><td>Team chat (30 rows, last write 2025) is dropped. The leaderboard is a query on an indexed <code>users.points</code>, with a 30-second in-process cache.</td></tr>
+<tr><td>events</td><td>events, event_waves, event_allowed_emails, event_registrations, event_ticket_tiers, event_challenges, event_challenge_solves, event_challenge_views, event_hints, event_hint_unlocks, event_teams, event_team_members, event_team_requests, event_team_chat, event_announcements, event_warnings, event_support_messages, event_gallery, certificate_templates, user_prizes, event_reports, integrity_flags, event_access_codes, event_writeups</td><td>A one-to-one port, because the events app depends on the shape. Library purchases and sponsors (0 rows) are dropped.</td></tr>
+<tr><td>billing</td><td>subscription_plans, payments, coupons, offers</td><td><code>payments</code> merges Razorpay subscriptions and manual verifications. Each payment row records the plan, amount, provider IDs and status.</td></tr>
+<tr><td>onboarding</td><td>job_roles, onboarding_responses, skill_profiles, skill_gap_reports, user_journeys</td><td>A one-to-one port.</td></tr>
+<tr><td>community</td><td>blog_posts, blog_feedback, ambassadors, ambassador_referrals, waitlist_entries</td><td>—</td></tr>
+<tr><td>platform</td><td>jobs, email_templates, email_outbox, email_suppressions, audit_log, user_events, exam_history (read-only)</td><td><code>email_outbox</code> replaces Celery mail tasks. <code>audit_log</code> replaces the Django admin log.</td></tr>
+</tbody></table></div>
+<p>Schema rules for MariaDB 11.4 LTS:</p>
+<ul>
+  <li><code>utf8mb4</code> and <code>utf8mb4_unicode_520_ci</code> everywhere, InnoDB, strict SQL mode.</li>
+  <li>Keep the current integer primary keys, so that links, JWT <code>user_id</code> claims and orchestrator references stay valid.</li>
+  <li>All times are <code>DATETIME(6)</code> in UTC. Booleans are <code>TINYINT(1)</code>. JSON is <code>JSON</code> with a <code>CHECK (JSON_VALID(…))</code> constraint, mapped to <code>json.RawMessage</code> in sqlc.</li>
+  <li>Every foreign key has an index. Leaderboard and feed queries get covering indexes, checked with <code>EXPLAIN</code> in CI.</li>
+  <li>sqlc's MySQL engine does not parse <code>INSERT … RETURNING</code>. We use <code>LastInsertId</code>.</li>
+</ul>
+
+<h2 id="api">10. API design</h2>
+<p>We rewrite the UI in the same release, so we can redesign the learner API. We keep the old shape only where a client outside this repository depends on it (see <a href="#compat">section 11</a>).</p>
+<h3>Rules</h3>
+<ul>
+  <li>One prefix: <code>/api/v1</code>. Plural nouns, kebab-case, no <code>api_</code> prefixes and no <code>/api/…/api/…</code> nesting.</li>
+  <li>List endpoints use cursor pagination and a hard limit (default 50, maximum 200). Today some lists return every row, for example <code>/api/challenges/</code>.</li>
+  <li>One error shape: <code>{"error":{"code":"…","message":"…","fields":{…}}}</code>.</li>
+  <li>The API contract is an OpenAPI file in the repository. The TypeScript client is generated from it, so the frontend and backend cannot drift apart.</li>
+</ul>
+<h3>Fewer calls for each page</h3>
+<p>Every page load today makes 7 "shell" calls: branding, notifications, profile, tracking, current offer, event collaborations and ambassador status. Home adds about 15 more. The new API gives each screen one call:</p>
+<pre>GET /api/v1/me/bootstrap      user, plan, unread count, current offer, feature flags, nav badges
+GET /api/v1/home              next lesson, today cards, weekly goal, streak, 6 recommendations
+GET /api/v1/practice?tab=…    one tab, paged, with filters
+GET /api/v1/learn             paths grouped by track, with the user's progress</pre>
+<h3>Old to new (examples)</h3>
+<div class="wrap"><table class="t small">
+<thead><tr><th>Today</th><th>New</th></tr></thead>
+<tbody>
+<tr><td><code>GET /api/accounts/api_profile/</code></td><td><code>GET /api/v1/me</code></td></tr>
+<tr><td><code>GET /api/accounts/api_leaderboard/?limit=50</code></td><td><code>GET /api/v1/leaderboard?limit=50</code></td></tr>
+<tr><td><code>POST /api/challenges/{id}/submit_flag/</code></td><td><code>POST /api/v1/challenges/{id}/flags</code></td></tr>
+<tr><td><code>POST /api/challenges/{id}/submit_machine_flag/</code></td><td><code>POST /api/v1/machines/{id}/flags</code></td></tr>
+<tr><td><code>GET /api/redteam/session/</code> + <code>/credits/</code> + <code>/machines/{id}/</code></td><td><code>GET /api/v1/machines/{id}</code> (includes session and credits)</td></tr>
+<tr><td><code>GET /api/exam/api/my-history/</code></td><td><code>GET /api/v1/me/exam-results</code></td></tr>
+<tr><td><code>GET /api/accounts/api/pricing/</code></td><td><code>GET /api/v1/plans</code></td></tr>
+<tr><td><code>POST /api/quizzes/{id}/submit/</code></td><td><code>POST /api/v1/quizzes/{id}/attempts</code></td></tr>
+</tbody></table></div>
+<p>The full list of the 213 core routes that the current UI uses is in the <a href="#appendix">appendix</a>. Each route gets a row in a mapping file (<code>docs/api-map.csv</code>: old route, new route, status), and CI checks that every row has a handler or a "removed" reason.</p>
+
+<h2 id="compat">11. Compatibility rules</h2>
+<p>We rewrite everything in one release. To make that safe, the cutover must not log anyone out, break a link or change a stored secret.</p>
+<ul>
+  <li><b>Passwords.</b> Django stores <code>pbkdf2_sha256$&lt;iterations&gt;$&lt;salt&gt;$&lt;hash&gt;</code>. Go checks this format with <code>x/crypto/pbkdf2</code>. On the next successful login, it rehashes the password to argon2id.</li>
+  <li><b>Sessions.</b> Today's tokens are HS256 JWTs (60-minute access, 3-day refresh, <code>user_id</code> claim). For 3 days after cutover, Go also accepts these tokens and exchanges them for new ones. After that, it accepts only its own EdDSA tokens. The single-session rule keeps working through <code>user_sessions</code>.</li>
+  <li><b>Flags.</b> Stored flag hashes are HMAC-SHA256 with the old secret key as the pepper. Go uses the same pepper value as a separate config key (<code>FLAG_PEPPER</code>). It does not reuse it as a signing key.</li>
+  <li><b>Frozen contracts.</b> These keep their exact paths and payloads: the orchestrator internal API (17 routes), the events app API (until we decide on that app), Razorpay and email-provider webhooks, OAuth callback URLs, <code>/unsubscribe/…</code> and <code>/r/…</code> links in sent emails, <code>/media/…</code> URLs and the events SSO handoff.</li>
+  <li><b>IDs.</b> All primary keys stay the same.</li>
+</ul>
+
+<h2 id="ui">12. UI plan</h2>
+<p>The current UI has a good base: a dark theme, a clear 6-item sidebar and dense, readable cards. Its problems are structure and weight, not style.</p>
+<h3>Problems we found</h3>
+<ul>
+  <li>Too many requests for each page, as section 10 describes.</li>
+  <li>Dead, hidden and redirect-only pages still ship, and a duplicate route folder exists (<code>exams/%5Bid%5D/take</code> next to <code>exams/[id]/take</code>).</li>
+  <li>The admin "Tools" page is a mix of 9 unrelated tabs: jobs, study materials, blogs, interviews, battleground, exam upload, learning upload, student skills and mailing.</li>
+  <li>The API layer is split into <code>client.ts</code>, <code>client-part2.ts</code>, <code>client-part3.ts</code> and <code>client-part4.ts</code> plus 30 domain files, with hand-written types.</li>
+  <li>Next.js server routes act as proxies (AI simulation, forensics, GNS3, web proxy, file proxy). They cannot exist in a static embedded UI.</li>
+  <li>Heavy or duplicate libraries: 2 chart libraries (ApexCharts and Recharts), jQuery, 2 globe libraries, Genkit (AI SDK in the browser bundle), a page-flip library and html2canvas.</li>
+  <li>The notifications WebSocket reconnects in a loop when the channel layer times out.</li>
+</ul>
+<h3>New UI</h3>
+<ul>
+  <li><b>Stack.</b> Vite + React 19 + TanStack Router (typed routes) + TanStack Query. We keep Tailwind and the Radix/shadcn components we already use, and move them into one <code>web/src/ui</code> folder with design tokens.</li>
+  <li><b>Public pages.</b> Landing, pricing, news and legal pages are pre-rendered to static HTML at build time for SEO. They are part of the same embedded build.</li>
+  <li><b>Information architecture.</b> Home · Learn · Practice (Challenges, Machines) · Compete (Leaderboard, Teams) · Profile. Events stays an external link. Teams moves under Compete. Seasons and SOC leave the Practice tabs until their services return.</li>
+  <li><b>Admin.</b> Admin gets its own area with clear sections: Users, Content (paths, modules, challenges, files), Machines, Events, Billing (plans, payments, coupons), Moderation, System. These sections replace the Django admin for the 8 models staff edit, and the "Tools" tab mix.</li>
+  <li><b>One page pattern.</b> Each page has a header (title, one primary action), a filter bar, the content, and empty, loading and error states. A review checklist enforces the pattern.</li>
+  <li><b>Budget.</b> Initial JavaScript is less than 200 KB gzip. Each route is a separate chunk. Lesson presentations load from file storage in an iframe, not from the bundle.</li>
+</ul>
+
+<h2 id="deploy">13. Zero-downtime deploy and size budget</h2>
+<figure>
+  <svg id="fig-deploy" viewBox="0 0 960 300" role="img" aria-label="Zero-downtime handover: old process passes the listening socket to the new process, new process migrates and signals ready, old process drains and exits."></svg>
+  <figcaption>Figure 4. In-place upgrade with a shared listening socket. Neither process closes the socket, so no connection gets refused.</figcaption>
+</figure>
+<ol>
+  <li>The deploy copies the new binary and sends <code>SIGHUP</code> (<code>systemctl reload csema</code>).</li>
+  <li>The running process starts the new binary and passes it the listening socket (<code>tableflip</code>).</li>
+  <li>The new process runs pending migrations, then opens the database pool, warms caches and reports "ready".</li>
+  <li>The old process stops accepting connections and lets in-flight HTTP requests finish (30-second limit). It closes WebSockets with code 1012 ("service restart"). Clients reconnect to the new process and resync.</li>
+  <li>If the new process fails its health check, it exits. The old process keeps serving.</li>
+</ol>
+<p><b>Migrations</b> use the expand/contract rule. A release only adds columns, tables and indexes. The release after that removes old ones. So the old binary always works with the new schema during the handover. Jobs use database leases, so two processes can overlap safely.</p>
+<h3>Size and memory budget</h3>
+<div class="wrap"><table class="t">
+<thead><tr><th>Item</th><th>Budget</th><th>How we keep it</th></tr></thead>
+<tbody>
+<tr><td>Binary on disk</td><td>&lt; 50 MB (target 30 MB)</td><td><code>CGO_ENABLED=0</code>, <code>-trimpath -ldflags "-s -w"</code>. The SPA is about 3–6 MB compressed. CI fails when the binary is larger than the budget.</td></tr>
+<tr><td>Memory (RSS)</td><td>&lt; 50 MB at idle (target 30 MB)</td><td><code>GOMEMLIMIT=48MiB</code>, a bounded DB pool (10 connections), caches with a size limit, streaming for large responses.</td></tr>
+<tr><td>Not in the binary</td><td>—</td><td>Lesson presentations (323 MB), uploads (1.6 GB), large images. They are served from <code>/var/lib/csema/files</code> or S3.</td></tr>
+<tr><td>Startup</td><td>&lt; 1 s to ready</td><td>No migrations at boot when none are pending, and lazy loading of caches.</td></tr>
+</tbody></table></div>
+<p>The binary runs under systemd on the host. A container is optional. MariaDB runs as its own service (managed or on the same host). One instance is enough for the current load. Section 9's design (DB leases, no in-memory source of truth) leaves room for 2 instances later.</p>
+
+<h2 id="phases">14. Phases and steps</h2>
+<p>We do the rewrite as one project with one cutover. The phases set the build order. Phase 4 (UI) starts when Phase 1 has the API contract, and then runs in parallel with Phases 2 and 3.</p>
+<figure>
+  <svg id="fig-phases" viewBox="0 0 960 250" role="img" aria-label="Phase timeline: P0 prep, P1 foundation, P2 core learner domains, P3 rest of core, P4 UI in parallel from P1, P5 migration rehearsal and parity, P6 cutover, P7 parked services later."></svg>
+  <figcaption>Figure 5. Build order. The UI track starts after the foundation and joins at the rehearsal.</figcaption>
+</figure>
+
+<div class="phase"><h3>Phase 0. Prepare</h3>
+<p class="meta">Depends on: nothing · Exit: the new layout is in place, the baseline is recorded, and the scope is approved</p>
+<ol>
+  <li>Approve the keep, park and drop list (section 5) and answer the open questions (section 17).</li>
+  <li>Turn on a sampled access log in production for 2 weeks. Confirm that the parked and dropped routes get no traffic.</li>
+  <li>Restructure the repository on <code>refactor/go-rewrite</code>. Move Django to <code>legacy/django/</code>, lab runtimes and packs to <code>labs/</code>, and course content and artwork to <code>content/</code>. Django must still start from the new path.</li>
+  <li>Record golden fixtures. A script calls each of the 213 used core routes against the local copy and saves the JSON responses. These are the reference for parity checks.</li>
+  <li>Write <code>docs/api-map.csv</code> with all 213 routes and the new route for each one.</li>
+  <li>Archive the parked and dropped data. Export each table to compressed CSV with a checksum file.</li>
+</ol></div>
+
+<div class="phase"><h3>Phase 1. Foundation</h3>
+<p class="meta">Depends on: Phase 0 · Exit: a user can log in to the Go binary with an old password and an old token</p>
+<ol>
+  <li>Go module skeleton, config (env + file), structured logging, health and readiness endpoints, graceful shutdown with <code>tableflip</code>.</li>
+  <li>MariaDB 11.4 in Docker for local development. goose migrations and sqlc config. A CI job runs <code>sqlc vet</code>, the migrations and the tests.</li>
+  <li>Identity domain: login (PBKDF2 check and argon2id rehash), JWT (EdDSA plus the HS256 bridge), refresh, OTP, email verification, password reset, Google and GitHub OAuth, single session, the SSO handoff for the events app.</li>
+  <li>Platform parts: job runner, email outbox (SMTP), file storage interface, WebSocket hub, rate limiter, audit log.</li>
+  <li>The <code>csema import-pg</code> tool for identity tables, with row-count and checksum checks.</li>
+  <li>The OpenAPI file for <code>/api/v1</code>, with the TypeScript client generated from it.</li>
+  <li>A size and memory check in CI.</li>
+</ol></div>
+
+<div class="phase"><h3>Phase 2. Core learner domains</h3>
+<p class="meta">Depends on: Phase 1 · Exit: the parity harness passes for practice, machines, learning and compete</p>
+<ol>
+  <li>Practice: catalog, filters, hints, flag submit (HMAC pepper), solves, badges, writeups, feedback.</li>
+  <li>Machines: credits, plans, sessions, start, stop and heartbeat, machine flags, certificates, and the orchestrator internal API (frozen contract).</li>
+  <li>Learning: paths, modules, quizzes, progress, certificates. Coding exercises call the code runner over HTTP. Shell practicals use lab sessions.</li>
+  <li>The <code>content import</code> command. Convert the Python seed courses into <code>content/courses/*</code>. The check: importing into an empty database gives the same rows as today.</li>
+  <li>Compete: the leaderboard and teams (invites, requests, announcements).</li>
+  <li>Notifications over REST and WebSocket.</li>
+  <li>Extend <code>import-pg</code> to these domains.</li>
+</ol></div>
+
+<div class="phase"><h3>Phase 3. Rest of the core</h3>
+<p class="meta">Depends on: Phase 1 (it can overlap with Phase 2) · Exit: every row in api-map.csv has a handler or a "removed" reason</p>
+<ol>
+  <li>Billing: plans, Razorpay orders and subscriptions, webhook signature checks, coupons, offers, bills. Use Razorpay test mode only, never the live keys.</li>
+  <li>Events: a one-to-one port of the routes that the events app uses, plus the event, spectator, team-chat and admin-ops WebSockets, and the wave-unlock job.</li>
+  <li>Onboarding survey, blog, ambassador, waitlist, contact.</li>
+  <li>Admin APIs for the admin sections in section 12. These replace the Django admin.</li>
+  <li>Scheduled jobs: wave unlocks, lifecycle emails, idle-connection cleanup (no longer needed) and practical-exam result sync (if exams stay).</li>
+  <li>The <code>/unsubscribe/…</code> and <code>/r/…</code> handlers for old emails.</li>
+</ol></div>
+
+<div class="phase"><h3>Phase 4. New UI (in parallel from Phase 1)</h3>
+<p class="meta">Depends on: the Phase 1 OpenAPI contract · Exit: all learner and admin flows pass end-to-end tests against the Go binary</p>
+<ol>
+  <li>Set up Vite, React, TanStack Router and Query, and Tailwind tokens. Move the shared components into <code>web/src/ui</code>.</li>
+  <li>Build the app shell and <code>/me/bootstrap</code>. Then, in order: Home, Learn (path, lesson player, quiz, code, shell), Practice (catalog, challenge, machine), Compete, Profile, Billing.</li>
+  <li>Build the admin area (section 12).</li>
+  <li>Pre-render the public pages (landing, pricing, news, legal).</li>
+  <li>Remove the dead pages, redirects and libraries listed in section 12.</li>
+  <li>Embed <code>web/dist</code> in the binary with pre-compressed files.</li>
+</ol></div>
+
+<div class="phase"><h3>Phase 5. Migration rehearsal and parity</h3>
+<p class="meta">Depends on: Phases 2, 3 and 4 · Exit: 3 clean rehearsals in a row and an approved parity report</p>
+<ol>
+  <li>Take a fresh production snapshot. Run <code>import-pg</code> into an empty MariaDB and record the time (target: under 10 minutes).</li>
+  <li>Check the row count and a column checksum for each table, plus spot checks on users, points, solves and payments.</li>
+  <li>Parity harness: replay the golden fixtures and recorded flows against Django and Go on the same snapshot, then compare the normalized responses.</li>
+  <li>Run end-to-end tests (Playwright) on the main flows: sign up, onboard, lesson, quiz, flag, start machine, team, checkout (test mode), admin edit.</li>
+  <li>Load test with the existing <code>loadtest/</code> scenarios. Compare p95 latency and memory with today.</li>
+</ol></div>
+
+<div class="phase"><h3>Phase 6. Cutover</h3>
+<p class="meta">Depends on: Phase 5 · Exit: Go serves all traffic for 7 days without a rollback</p>
+<ol>
+  <li>Announce a short read-only window (target: under 15 minutes). The window is necessary because the data moves between database engines.</li>
+  <li>Put Django in read-only mode. Take the final snapshot, run <code>import-pg</code>, and run the checks.</li>
+  <li>Point DNS or the proxy at the Go binary. Watch errors, logins and payments.</li>
+  <li>Rollback plan: keep Django and Postgres untouched for 7 days. A rollback switches the proxy back. Writes made in Go after cutover are replayed with a small export tool.</li>
+  <li>After 7 days, delete <code>legacy/django/</code> and turn off the old container, Redis and Celery.</li>
+</ol></div>
+
+<div class="phase"><h3>Phase 7. Parked services (later)</h3>
+<p class="meta">Depends on: Phase 6 · Exit: each service is live behind the interface in section 6</p>
+<p>The order is up to the product. A suggested order: Zero Hour (it needs only the catalog and achievements), then SOC Arena, Network labs, Forensics, and the Growth engine.</p></div>
+
+<h2 id="verify">15. How we check success</h2>
+<div class="wrap"><table class="t">
+<thead><tr><th>Check</th><th>Pass condition</th></tr></thead>
+<tbody>
+<tr><td>Data migration</td><td>Row counts and checksums match for every migrated table. 0 orphan foreign keys.</td></tr>
+<tr><td>Login continuity</td><td>A sample of old password hashes and live tokens works after cutover. Logout rate does not spike.</td></tr>
+<tr><td>Flag continuity</td><td>Every stored flag hash in a sample verifies with the known flag.</td></tr>
+<tr><td>API parity</td><td>The golden fixtures and recorded flows match after normalization (ordering, timestamps, renamed fields).</td></tr>
+<tr><td>Frozen contracts</td><td>The orchestrator, the events app and the webhooks pass their contract tests unchanged.</td></tr>
+<tr><td>Performance</td><td>p95 latency is the same or better than today for the 20 busiest routes. Idle RSS is less than 50 MB.</td></tr>
+<tr><td>Size</td><td>The binary is less than 50 MB in CI.</td></tr>
+<tr><td>Zero downtime</td><td>A deploy during a load test gives 0 failed HTTP requests, and all WebSockets reconnect within 5 seconds.</td></tr>
+<tr><td>Code size</td><td>The Go core is under 40k lines (excluding generated code), against 172k lines of Python today.</td></tr>
+</tbody></table></div>
+
+<h2 id="risks">16. Risks</h2>
+<div class="wrap"><table class="t">
+<thead><tr><th>Risk</th><th>Effect</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>A hidden dependency on a parked module</td><td>A core page breaks</td><td>The 2-week access log in Phase 0, plus the parity harness.</td></tr>
+<tr><td>The events app breaks</td><td>Live events fail</td><td>Frozen contract and contract tests. Do not cut over during an event.</td></tr>
+<tr><td>Data differences between the engines (time zones, JSON, collation)</td><td>Wrong data</td><td>Store UTC only, validate JSON, choose the collation on purpose, and run 3 rehearsals.</td></tr>
+<tr><td>One big release is late</td><td>Two systems run for longer</td><td>Freeze new features in Django during the rewrite. Phase 0 limits the scope with data, and Phase 4 runs in parallel.</td></tr>
+<tr><td>The Django admin is gone</td><td>Staff cannot edit content</td><td>Admin sections cover the 8 models in the admin log, and the content importer covers bulk edits.</td></tr>
+<tr><td>Single instance</td><td>A host failure stops the service</td><td>The same risk exists today. Backups and a restore runbook. DB leases allow a second instance later.</td></tr>
+</tbody></table></div>
+
+<h2 id="questions">17. Open questions</h2>
+<ol>
+  <li><b>Events app.</b> Do we keep its API contract and leave the app as it is, or do we rebuild events inside the new UI (and later retire that app)?</li>
+  <li><b>Exams.</b> Do we keep the results read-only in the profile, as proposed, or do we also need registration and the practical-exam integration at cutover?</li>
+  <li><b>Bug bounty, academic, corporate.</b> They have UI but 0 rows. Is it correct to drop them?</li>
+  <li><b>Growth engine.</b> Can it stop at cutover? Or must the Python version keep running against a copy of the data until it is rebuilt?</li>
+  <li><b>"&lt; 50 MB".</b> Is this the binary size, the memory, or both? The plan targets both.</li>
+  <li><b>Files.</b> Local disk or object storage for uploads and lesson presentations?</li>
+  <li><b>MariaDB hosting.</b> Managed or self-hosted, and in which region relative to the app host?</li>
+</ol>
+
+<h2 id="appendix">18. Appendix: raw maps</h2>
+<h3>Page to API (crawl, 61 pages)</h3>
+<p>The 7 shell calls on every page are <code>/api/branding/</code>, <code>/api/accounts/notifications/</code>, <code>/api/accounts/api_profile/</code>, <code>/api/track/</code>, <code>/api/offers/current/</code>, <code>/api/events/my-collaborations/</code> and <code>/api/ambassador/me/</code>. Red codes are errors.</p>
+<details><summary>Show the page map</summary><div class="wrap"><table class="t small"><thead><tr><th>Page</th><th>API calls on load (beyond the 7 shell calls)</th></tr></thead><tbody>
+<tr><td><code>/dashboard/challenges/1133</code></td><td><code>GET /api/coding/exercises/</code><br><code>GET /api/challenges/{id}/</code><br><code>GET /api/redteam/session/</code><br><code>GET /api/redteam/credits/</code><br><code>GET /api/redteam/machines/{id}/</code><br><code>GET /api/redteam/machines/</code></td></tr>
+<tr><td><code>/dashboard/learning/57</code></td><td><code>GET /api/accounts/onboarding/status/</code><br><code>GET /api/learning-paths/{id}/</code></td></tr>
+<tr><td><code>/dashboard/learning/57/practical</code></td><td><code>GET /learning/api/learning/paths/{id}/practical/</code> <span class="bad">404</span></td></tr>
+<tr><td><code>/dashboard/study-materials</code></td><td><code>GET /api/learning-paths/</code></td></tr>
+<tr><td><code>/dashboard/study-materials/2</code></td><td><code>GET /api/learning-paths/</code></td></tr>
+<tr><td><code>/dashboard/exams</code></td><td><code>GET /api/exam/api/exams/</code><br><code>GET /api/exam/api/my-history/</code></td></tr>
+<tr><td><code>/dashboard/exams/history</code></td><td><code>GET /api/exam/api/my-history/</code></td></tr>
+<tr><td><code>/dashboard/exams/:id</code></td><td><code>GET /api/exam/api/exams/{id}/</code><br><code>GET /api/exam/api/check-access/</code></td></tr>
+<tr><td><code>/dashboard/interviews</code></td><td><code>GET /api/interview-credits/</code><br><code>GET /api/interviews/</code></td></tr>
+<tr><td><code>/dashboard/interviews/history</code></td><td><code>GET /api/interview-attempts/</code></td></tr>
+<tr><td><code>/dashboard/interviews/:id</code></td><td><code>GET /api/interview-credits/</code><br><code>GET /api/interviews/{id}/</code></td></tr>
+<tr><td><code>/dashboard/jobs</code></td><td><code>GET /api/accounts/api_weekly_progress/</code><br><code>GET /api/accounts/onboarding/status/</code><br><code>GET /api/onboarding/survey/journey/</code><br><code>GET /api/zero-hour/progress/</code><br><code>GET /api/zero-hour/campaign/</code><br><code>GET /api/learning-paths/</code><br><code>GET /api/challenges/</code><br><code>GET /api/events/</code></td></tr>
+<tr><td><code>/dashboard/leaderboard</code></td><td><code>GET /api/accounts/api_leaderboard/</code></td></tr>
+<tr><td><code>/dashboard/news</code></td><td><code>GET /api/blog-posts/</code></td></tr>
+<tr><td><code>/dashboard/series</code></td><td><code>GET /api/zero-hour/progress/</code><br><code>GET /api/redteam/credits/</code><br><code>GET /api/zero-hour/campaign/</code><br><code>GET /api/soc/</code><br><code>GET /api/redteam/machines/</code><br><code>GET /api/challenges/</code></td></tr>
+<tr><td><code>/dashboard/teams/:id</code></td><td><code>GET /api/teams/{id}/</code><br><code>GET /api/teams/</code></td></tr>
+<tr><td><code>/dashboard/profile</code></td><td><code>GET /api/accounts/api_skill_radar/</code><br><code>GET /api/accounts/api_daily_activity/</code></td></tr>
+<tr><td><code>/dashboard/achievements</code></td><td><code>GET /api/accounts/available-challenge-badges/</code></td></tr>
+<tr><td><code>/dashboard/pricing</code></td><td><code>GET /api/accounts/api/pricing/</code></td></tr>
+<tr><td><code>/dashboard/bills</code></td><td><code>GET /api/payments/history/</code></td></tr>
+<tr><td><code>/dashboard/ambassador</code></td><td><i>none</i></td></tr>
+<tr><td><code>/dashboard/cjwapt</code></td><td><code>GET /api/waitlist/CJWAPT/</code></td></tr>
+<tr><td><code>/dashboard/bug-bounty</code></td><td><code>GET /api/bug-bounty/programs/</code><br><code>GET /api/bug-bounty/my-stats/</code></td></tr>
+<tr><td><code>/dashboard/bug-bounty/timeline</code></td><td><code>GET /api/bug-bounty/timeline/</code></td></tr>
+<tr><td><code>/dashboard/bug-bounty/submissions</code></td><td><code>GET /api/bug-bounty/submissions/</code></td></tr>
+<tr><td><code>/dashboard/bug-bounty/leaderboard</code></td><td><code>GET /api/bug-bounty/leaderboard/</code></td></tr>
+<tr><td><code>/dashboard/bug-bounty/prizes</code></td><td><code>GET /api/bug-bounty/vulnerability-badges/</code><br><code>GET /api/bug-bounty/vulnerability-badges/sqli/image/</code><br><code>GET /api/bug-bounty/vulnerability-badges/idor/image/</code><br><code>GET /api/bug-bounty/vulnerability-badges/rce/image/</code><br><code>GET /api/bug-bounty/vulnerability-badges/xss/image/</code><br><code>GET /api/bug-bounty/vulnerability-badges/auth_bypass/image/</code><br><code>GET /api/bug-bounty/vulnerability-badges/ssrf/image/</code><br><code>GET /api/bug-bounty/vulnerability-badges/info_disclosure/image/</code><br><code>GET /api/bug-bounty/vulnerability-badges/csrf/image/</code></td></tr>
+<tr><td><code>/dashboard/battleground</code></td><td><code>GET /api/accounts/api_leaderboard/</code></td></tr>
+<tr><td><code>/dashboard/practice/new</code></td><td><code>GET /api/challenges/</code></td></tr>
+<tr><td><code>/dashboard/machines/plans</code></td><td><code>GET /api/accounts/api/pricing/</code></td></tr>
+<tr><td><code>/dashboard/learning/challenges/tampered-evidence</code></td><td><code>GET /api/tampered-evidence/DF101-CTF-TAMPERED-EVIDENCE/session/</code> <span class="bad">404</span><br><code>POST /api/tampered-evidence/DF101-CTF-TAMPERED-EVIDENCE/session/</code> <span class="bad">404</span></td></tr>
+<tr><td><code>/dashboard/profile/achievements</code></td><td><code>GET /api/accounts/available-challenge-badges/</code></td></tr>
+<tr><td><code>/dashboard/academic</code></td><td><code>GET /api/academic/assignments/</code></td></tr>
+<tr><td><code>/dashboard/corporate</code></td><td><i>none</i></td></tr>
+<tr><td><code>/dashboard/challenges/create</code></td><td><code>GET /api/categories/</code><br><code>GET /api/redteam/credits/</code><br><code>GET /api/challenges/</code><br><code>GET /api/redteam/machines/</code></td></tr>
+<tr><td><code>/</code></td><td><code>GET /api/stats/</code><br><code>GET /api/accounts/api_weekly_progress/</code><br><code>GET /api/accounts/onboarding/status/</code><br><code>GET /api/onboarding/survey/journey/</code><br><code>GET /api/learning-paths/</code><br><code>GET /api/zero-hour/progress/</code><br><code>GET /api/zero-hour/campaign/</code><br><code>GET /api/challenges/</code><br><code>GET /api/events/</code></td></tr>
+<tr><td><code>/pricing</code></td><td><code>GET /api/stats/</code><br><code>GET /api/accounts/api/pricing/</code></td></tr>
+<tr><td><code>/leaderboard</code></td><td><code>GET /api/accounts/api_leaderboard/</code></td></tr>
+<tr><td><code>/learning</code></td><td><code>GET /api/learning-paths/</code></td></tr>
+<tr><td><code>/challenges</code></td><td><code>GET /api/zero-hour/campaign/</code><br><code>GET /api/challenges/</code></td></tr>
+<tr><td><code>/teams</code></td><td><code>GET /api/teams/</code></td></tr>
+<tr><td><code>/news</code></td><td><code>GET /api/blog-posts/</code></td></tr>
+<tr><td><code>/news/:slug</code></td><td><code>GET /api/blog-posts/{slug}/</code><br><code>GET /api/blog-feedbacks/</code></td></tr>
+<tr><td><code>/csema-labs</code></td><td><i>none</i></td></tr>
+<tr><td><code>/contact</code></td><td><i>none</i></td></tr>
+<tr><td><code>/seasons</code></td><td><code>GET /api/zero-hour/campaign/</code></td></tr>
+<tr><td><code>/welcome</code></td><td><code>GET /api/events/live-online/</code><br><code>GET /api/events/my-live-registration/</code><br><code>GET /api/accounts/onboarding/status/</code><br><code>GET /api/accounts/api_weekly_progress/</code><br><code>GET /api/onboarding/survey/journey/</code><br><code>GET /api/zero-hour/campaign/</code><br><code>GET /api/zero-hour/progress/</code><br><code>GET /api/learning-paths/</code><br><code>GET /api/challenges/</code><br><code>GET /api/events/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/system-health</code></td><td><code>GET /api/admin-panel/system-health/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/moderation</code></td><td><code>GET /api/admin-panel/integrity-flags/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/contact-messages</code></td><td><code>GET /api/admin-panel/contact-messages/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/waitlist</code></td><td><code>GET /api/admin-panel/exam-waitlist/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/live-ops</code></td><td><code>GET /api/admin-panel/live-events/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/revenue</code></td><td><code>GET /api/admin-panel/revenue-summary/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/challenges</code></td><td><code>GET /api/categories/</code><br><code>GET /api/challenges-admin/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/machine-labs</code></td><td><code>GET /api/redteam/admin/labs/meta/</code><br><code>GET /api/redteam/admin/labs/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/bug-bounty</code></td><td><code>GET /api/bug-bounty/admin/submissions/</code></td></tr>
+<tr><td><code>/dashboard/admin-panel/tools</code></td><td><code>GET /api/jobs/</code><br><code>GET /api/study-materials/</code><br><code>GET /api/blog-posts/</code><br><code>GET /api/interviews/</code><br><code>GET /api/battleground/sessions/</code><br><code>GET /api/challenges/</code></td></tr>
+<tr><td><code>/dashboard/learning/create</code></td><td><code>GET /api/onboarding/survey/job_roles/</code><br><code>GET /api/exam/api/exams/</code><br><code>GET /api/categories/</code><br><code>GET /api/challenges/</code><br><code>GET /api/learning-paths/</code></td></tr>
+</tbody></table></div></details>
+<h3>Core routes in use (213)</h3>
+<p>These are routes in core apps that the current frontend calls. A ✓ means that a page load in the crawl called the route.</p>
+<div class="wrap"><details><summary><b>admin</b> · admin_panel · 15 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/admin-panel/contact-messages/</code></td><td>✓</td></tr>
+<tr><td>DELETE</td><td><code>/api/admin-panel/contact-messages/{contact_id}/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/admin-panel/exam-waitlist/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/admin-panel/integrity-flags/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/admin-panel/integrity-flags/{flag_id}/resolve/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/admin-panel/live-events/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/admin-panel/redteam/subscriptions/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/admin-panel/redteam/subscriptions/{subscription_id}/force-expire/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/admin-panel/redteam/subscriptions/{subscription_id}/suspend/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/admin-panel/redteam/subscriptions/{subscription_id}/unsuspend/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/admin-panel/revenue-summary/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/admin-panel/support-messages/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/admin-panel/system-health/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/admin-panel/users/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/admin-panel/users/{user_id}/moderation/</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><b>analytics</b> · behavior_tracking · 1 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/track/</code></td><td>✓</td></tr>
+</tbody></table></details>
+<details><summary><b>billing</b> · offers · 3 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/offers/current/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/offers/validate-coupon/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/offers/{pk}/</code></td><td>✓</td></tr>
+</tbody></table></details>
+<details><summary><b>community</b> · ambassador · 5 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/ambassador/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/ambassador/claim_referral/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/ambassador/me/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/ambassador/referrals/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/ambassador/{id}/</code></td><td>✓</td></tr>
+</tbody></table></details>
+<details><summary><b>community</b> · exam_waitlist · 2 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>DELETE POST</td><td><code>/api/waitlist/{code}/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/waitlist/{code}/public/</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><b>compete</b> · teams · 14 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/team-invites/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/team-invites/{pk}/accept/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/team-invites/{pk}/reject/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/teams/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/teams/{pk}/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/teams/{pk}/announcement/create/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/teams/{pk}/invite/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/teams/{pk}/join/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/teams/{pk}/leave/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/teams/{pk}/manage/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/teams/{pk}/members/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/teams/{pk}/regenerate-invite-code/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/teams/{pk}/request/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/teams/{pk}/requests/</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><b>content</b> · blog · 3 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET POST</td><td><code>/api/blog-feedbacks/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/blog-posts/</code></td><td>✓</td></tr>
+<tr><td>DELETE GET</td><td><code>/api/blog-posts/{slug}/</code></td><td>✓</td></tr>
+</tbody></table></details>
+<details><summary><b>events</b> · events · 53 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET POST</td><td><code>/api/events/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/events/capacity-options/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/library-challenges/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/live-online/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/events/my-collaborations/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/events/my-live-registration/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/events/request-event-credit/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/events/{pk}/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/admin/challenges/{challenge_id}/force-unlock/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/all-teams/</code></td><td></td></tr>
+<tr><td>DELETE</td><td><code>/api/events/{pk}/all-teams/{team_id}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/allowed-emails/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/events/{pk}/announcements/</code></td><td></td></tr>
+<tr><td>DELETE PATCH</td><td><code>/api/events/{pk}/announcements/{announcement_id}/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/events/{pk}/certificate-template/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/challenge-analysis/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/challenges/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/challenges/{challenge_id}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/challenges/{challenge_id}/hints/{hint_id}/unlock/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/challenges/{challenge_id}/submit_flag/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/create_category/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/events/{pk}/event-teams/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/event-teams/{team_id}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/event-teams/{team_id}/join/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/events/{pk}/event-teams/{team_id}/requests/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/flag-submission-stats/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/gallery/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/hints/create/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/leaderboard/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/my-certificate/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/my-stats/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/my-team/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/events/{pk}/my-team/chat/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/my-team/kick/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/my-team/leave/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/my-team/settings/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/my-team/transfer-captain/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/purchase-challenges/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/register/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/registrations/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/send_reminder_emails/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/solves/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/support_messages/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/support_messages/{message_id}/resolve/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/events/{pk}/unlocked-hints/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/upload-certificate-image/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/verify-challenges-purchase/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/events/{pk}/verify-payment/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/events/{pk}/warnings/</code></td><td></td></tr>
+<tr><td>DELETE PATCH</td><td><code>/api/events/{pk}/warnings/{warning_id}/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/events/{pk}/waves/</code></td><td></td></tr>
+<tr><td>DELETE PATCH</td><td><code>/api/events/{pk}/waves/{wave_id}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/events/{event_id}/unregister/</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><b>identity</b> · allauth · 1 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/accounts/login/</code></td><td>✓</td></tr>
+</tbody></table></details>
+<details><summary><b>identity</b> · rest_framework_simplejwt · 1 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>POST</td><td><code>/api/token/refresh/</code></td><td>✓</td></tr>
+</tbody></table></details>
+<details><summary><b>identity</b> · users · 47 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>POST</td><td><code>/api/accounts/api/contact/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/api/pricing/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/accounts/api_category_progress/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/api_daily_activity/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/accounts/api_delete_account/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/api_github_auth/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/api_google_auth/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/api_leaderboard/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/accounts/api_logout/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/api_partner_students/</code></td><td></td></tr>
+<tr><td>GET PUT</td><td><code>/api/accounts/api_profile/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/accounts/api_skill_radar/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/accounts/api_solved_by_category/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/api_sso_exchange/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/api_sso_token/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/api_weekly_progress/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/accounts/auth/login/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/accounts/auth/password-reset/confirm/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/auth/password-reset/request/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/auth/password/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/auth/register/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/auth/resend-verification/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/auth/verify-email/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/available-challenge-badges/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/accounts/dream_job_pathway/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/initiate_subscription_payment/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/mailing/available_users/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/mailing/groups/</code></td><td></td></tr>
+<tr><td>DELETE POST PUT</td><td><code>/api/accounts/mailing/groups/{pk}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/mailing/groups/{pk}/add_users/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/mailing/groups/{pk}/remove_users/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/mailing/send_group/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/mailing/send_manual/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/mailing/templates/</code></td><td></td></tr>
+<tr><td>DELETE POST PUT</td><td><code>/api/accounts/mailing/templates/{pk}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/notifications/</code></td><td>✓</td></tr>
+<tr><td>DELETE</td><td><code>/api/accounts/notifications/delete-all/</code></td><td></td></tr>
+<tr><td>DELETE</td><td><code>/api/accounts/notifications/delete/{notification_id}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/notifications/mark-all-read/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/notifications/mark-read/{notification_id}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/onboarding/complete/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/onboarding/path/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/accounts/onboarding/status/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/accounts/player_detailed_stats/{user_id}/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/public_profile/{user_id}/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/accounts/session-info/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/accounts/verify_subscription_payment/</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><b>learning</b> · coding · 1 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/coding/exercises/</code></td><td>✓</td></tr>
+</tbody></table></details>
+<details><summary><b>learning</b> · learning · 19 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/jobs/</code></td><td>✓</td></tr>
+<tr><td>DELETE GET</td><td><code>/api/jobs/{pk}/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/learning-paths/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/learning-paths/next_drop/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/learning-paths/scbtp-pathway/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/learning-paths/{pk}/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/quizzes/{pk}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/quizzes/{pk}/check_mcq/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/quizzes/{pk}/check_saq/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/quizzes/{pk}/submit/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/study-materials/</code></td><td>✓</td></tr>
+<tr><td>DELETE GET</td><td><code>/api/study-materials/{pk}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/learning/api/learning/gns3/session/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/learning/api/learning/modules/{module_id}/complete_progress/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/learning/api/learning/modules/{module_id}/gns3-flag/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/learning/api/learning/paths/{path_id}/practical/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/learning/api/learning/paths/{path_id}/practical/{challenge_id}/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/learning/api/learning/paths/{path_id}/practical/{challenge_id}/submit/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/learning/modules/{module_id}/verify-lab-completion/</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><b>learning</b> · shell_labs · 4 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET POST</td><td><code>/api/shell-labs/modules/{module_id}/</code></td><td></td></tr>
+<tr><td>PUT</td><td><code>/api/shell-labs/modules/{module_id}/file/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/shell-labs/tasks/{task_id}/check/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/shell-labs/tasks/{task_id}/solution/</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><b>machines</b> · redteam_labs · 18 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/redteam/admin/labs/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/redteam/admin/labs/meta/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/redteam/admin/labs/preview/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/redteam/admin/labs/snapshot/rebuild/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/redteam/admin/labs/{challenge_id}/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/redteam/admin/labs/{challenge_id}/test-launch/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/redteam/certificate/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/redteam/credits/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/redteam/labs/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/redteam/labs/{challenge_id}/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/redteam/labs/{challenge_id}/certificate/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/redteam/labs/{challenge_id}/start/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/redteam/labs/{challenge_id}/stop/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/redteam/machines/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/redteam/machines/{challenge_id}/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/redteam/session/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/redteam/session/heartbeat/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/redteam/subscription/status/</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><b>onboarding</b> · onboarding · 8 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/onboarding/survey/admin_skill_analytics/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/onboarding/survey/job_roles/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/onboarding/survey/journey/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/onboarding/survey/pathway/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/onboarding/survey/report/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/onboarding/survey/skip/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/onboarding/survey/submit/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/onboarding/survey/{pk}/</code></td><td>✓</td></tr>
+</tbody></table></details>
+<details><summary><b>practice</b> · challenges · 17 routes</summary><table class="t small"><thead><tr><th>Method</th><th>Current route</th><th>Seen</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/api/categories/</code></td><td>✓</td></tr>
+<tr><td>GET POST</td><td><code>/api/challenges-admin/</code></td><td>✓</td></tr>
+<tr><td>DELETE PATCH</td><td><code>/api/challenges-admin/{pk}/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/challenges/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/challenges/next_drop/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/challenges/trivarna/</code></td><td></td></tr>
+<tr><td>POST</td><td><code>/api/challenges/trivarna/redeem/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/challenges/trivarna/writeup/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/challenges/{pk}/</code></td><td>✓</td></tr>
+<tr><td>POST</td><td><code>/api/challenges/{pk}/hints/{hint_id}/unlock/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/challenges/{pk}/rewards/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/challenges/{pk}/submit_flag/</code></td><td></td></tr>
+<tr><td>GET POST</td><td><code>/api/challenges/{pk}/submit_machine_flag/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/series/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/series/{pk}/</code></td><td></td></tr>
+<tr><td>GET</td><td><code>/api/stats/</code></td><td>✓</td></tr>
+<tr><td>GET</td><td><code>/api/tags/</code></td><td></td></tr>
+</tbody></table></details></div>
+<h3>Method</h3>
+<p>Local copy of the production database (Postgres 18), Django on port 8001, Next.js production build. Two local test accounts were created for the crawl. Tools: Claude in Chrome, the Django URL resolver, a TypeScript call extractor and SQL row counts.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  if (!window.rough) return;
+  var NS = "http://www.w3.org/2000/svg";
+  var C = { ink: "#1b1d21", muted: "#5d6470", accent: "#2457d6", core: "#1f7a4d", park: "#a2620b", soft: "#eef2fb" };
+  function setup(id) { var s = document.getElementById(id); return { svg: s, rc: rough.svg(s) }; }
+  function text(svg, x, y, str, o) {
+    o = o || {};
+    var lines = String(str).split("\n");
+    lines.forEach(function (ln, i) {
+      var t = document.createElementNS(NS, "text");
+      t.setAttribute("x", x); t.setAttribute("y", y + i * (o.lh || 16));
+      t.setAttribute("text-anchor", o.anchor || "middle");
+      t.setAttribute("font-family", "system-ui,-apple-system,Segoe UI,Roboto,sans-serif");
+      t.setAttribute("font-size", o.size || 13);
+      t.setAttribute("font-weight", o.bold ? 600 : 400);
+      t.setAttribute("fill", o.color || C.ink);
+      t.textContent = ln; svg.appendChild(t);
+    });
+  }
+  function box(g, x, y, w, h, label, o) {
+    o = o || {};
+    g.svg.appendChild(g.rc.rectangle(x, y, w, h, { roughness: 1.1, stroke: o.stroke || C.ink, strokeWidth: o.sw || 1.2, fill: o.fill, fillStyle: "solid", strokeLineDash: o.dash }));
+    var n = String(label).split("\n").length;
+    text(g.svg, x + w / 2, y + h / 2 - (n - 1) * 8 + 4, label, { bold: o.bold, size: o.size, color: o.color });
+  }
+  function arrow(g, x1, y1, x2, y2, label, o) {
+    o = o || {};
+    var col = o.color || C.muted;
+    g.svg.appendChild(g.rc.line(x1, y1, x2, y2, { roughness: 0.9, stroke: col, strokeWidth: 1.2, strokeLineDash: o.dash }));
+    if (!o.noHead) {
+      var a = Math.atan2(y2 - y1, x2 - x1), L = 9;
+      [0.45, -0.45].forEach(function (d) {
+        g.svg.appendChild(g.rc.line(x2, y2, x2 - L * Math.cos(a + d), y2 - L * Math.sin(a + d), { roughness: 0.5, stroke: col, strokeWidth: 1.2 }));
+      });
+    }
+    if (label) text(g.svg, (x1 + x2) / 2 + (o.dx || 0), (y1 + y2) / 2 + (o.dy || -6), label, { size: 11, color: C.muted });
+  }
+  function region(g, x, y, w, h, label) {
+    g.svg.appendChild(g.rc.rectangle(x, y, w, h, { roughness: 0.6, stroke: C.muted, strokeWidth: 0.8, strokeLineDash: [6, 5] }));
+    text(g.svg, x + 10, y + 18, label, { anchor: "start", size: 12, color: C.muted });
+  }
+
+  // Figure 1: today
+  var g = setup("fig-now");
+  box(g, 20, 160, 110, 50, "Browser", { bold: true });
+  region(g, 170, 20, 200, 120, "Frontend deployment");
+  box(g, 190, 50, 160, 70, "Next.js\npages + server\nproxy routes");
+  region(g, 410, 20, 330, 340, "Backend container (supervisord)");
+  box(g, 430, 50, 120, 40, "nginx");
+  box(g, 430, 110, 120, 50, "uvicorn x4\nDjango + Channels");
+  box(g, 600, 110, 120, 50, "Celery worker");
+  box(g, 600, 180, 120, 50, "Celery\ncode_runner queue");
+  box(g, 600, 250, 120, 40, "Celery beat");
+  box(g, 430, 200, 120, 50, "Redis\ncache + channels");
+  box(g, 430, 290, 120, 50, "static + media\n(local disk)");
+  box(g, 790, 150, 150, 60, "Postgres\n(remote, 2 GB)", { bold: true });
+  box(g, 190, 260, 160, 50, "Events app\n(separate repo)", { dash: [5, 4] });
+  box(g, 790, 40, 150, 50, "Orchestrator,\ncode runner, SMTP", { dash: [5, 4] });
+  box(g, 790, 270, 150, 50, "Razorpay, AI APIs,\nSentry", { dash: [5, 4] });
+  arrow(g, 130, 175, 190, 95, "pages");
+  arrow(g, 130, 190, 430, 75, "API + WS", { dx: 40, dy: 30 });
+  arrow(g, 350, 85, 430, 125, "");
+  arrow(g, 350, 285, 430, 140, "API", { dy: 4 });
+  arrow(g, 550, 135, 790, 175, "SQL", { dx: 150, dy: 30 });
+  arrow(g, 490, 160, 490, 200, "");
+  arrow(g, 660, 160, 660, 180, "", { noHead: true });
+  arrow(g, 720, 135, 790, 165, "");
+  arrow(g, 720, 70, 790, 65, "", { dash: [4, 4] });
+
+  // Figure 2: target
+  g = setup("fig-target");
+  box(g, 20, 180, 110, 50, "Browser", { bold: true });
+  region(g, 180, 30, 430, 370, "csema (one Go binary, systemd)");
+  box(g, 200, 70, 180, 50, "Echo HTTP API\n/api/v1", { fill: C.soft });
+  box(g, 410, 70, 180, 50, "Embedded SPA\n(go:embed, br/gz)", { fill: C.soft });
+  box(g, 200, 150, 180, 50, "WebSocket hub\n(in-process topics)", { fill: C.soft });
+  box(g, 410, 150, 180, 50, "Job runner\n(jobs table + leases)", { fill: C.soft });
+  box(g, 200, 230, 390, 70, "Domain services\nidentity · practice · machines · learning · compete\nevents · billing · onboarding · community · admin", { fill: "#fff" });
+  box(g, 410, 320, 180, 50, "sqlc queries");
+  box(g, 200, 320, 180, 50, "File storage\n(disk or S3)");
+  box(g, 680, 250, 160, 60, "MariaDB 11.4", { bold: true });
+  box(g, 680, 360, 160, 40, "/var/lib/csema/files", { size: 12 });
+  box(g, 680, 20, 250, 70, "External: orchestrator,\ncode runner, SMTP, Razorpay,\nevents app", { dash: [5, 4] });
+  box(g, 680, 120, 250, 90, "Parked microservices (later)\nZero Hour · SOC Arena · Network labs\nForensics · Growth engine\nuse JWKS + internal API", { dash: [5, 4], color: C.park, stroke: C.park });
+  arrow(g, 130, 200, 200, 95, "HTTPS", { dy: -4 });
+  arrow(g, 130, 210, 200, 175, "WSS", { dy: 14 });
+  arrow(g, 590, 345, 680, 285, "SQL", { dx: 4, dy: 16 });
+  arrow(g, 290, 370, 290, 390, "", { noHead: true });
+  arrow(g, 290, 390, 680, 385, "files", { dx: 150, dy: -6 });
+  arrow(g, 590, 85, 680, 60, "HTTP", { dx: 0, dy: -6 });
+  arrow(g, 680, 190, 590, 245, "JWT + internal API", { dx: 30, dy: 22, color: C.park });
+
+  // Figure 3: ERD
+  g = setup("fig-erd");
+  function dom(x, y, w, h, title, body, col) {
+    g.svg.appendChild(g.rc.rectangle(x, y, w, h, { roughness: 1, stroke: col || C.ink, strokeWidth: 1.2 }));
+    text(g.svg, x + 10, y + 20, title, { anchor: "start", bold: true, color: col || C.ink });
+    text(g.svg, x + 10, y + 40, body, { anchor: "start", size: 11.5, color: C.muted, lh: 15 });
+  }
+  dom(370, 220, 220, 110, "users (hub)", "users · auth_tokens · user_sessions\noauth_identities · notifications\nactivity_days", C.accent);
+  dom(370, 20, 220, 120, "practice", "challenges (hub) · categories · tags\nchallenge_files · hints · solves\nflag_attempts · badges_earned\nmachine_flags · series");
+  dom(30, 20, 250, 125, "machines", "lab_accounts · lab_credit_entries\nlab_sessions · pool_vms · tenant_slots\nlab_specs · lab_states · flag_secrets\nlab_subscriptions · lab_certificates");
+  dom(680, 20, 250, 125, "learning", "learning_paths · phases · modules\nquizzes · quiz_attempts · path_progress\nmodule_completions · certificates\ncoding_* · shell_* · solution_reveals");
+  dom(30, 400, 250, 120, "events", "events · event_registrations\nevent_challenges · event_solves\nevent_teams · event_team_members\nevent_waves · announcements · prizes");
+  dom(370, 420, 220, 100, "compete", "teams · team_members\nteam_invites · team_requests\nleaderboard = users.points");
+  dom(680, 400, 250, 120, "billing + onboarding + community", "subscription_plans · payments\ncoupons · offers · job_roles\nonboarding_responses · skill_profiles\nblog_posts · ambassadors · waitlist");
+  dom(20, 230, 230, 80, "platform", "jobs · email_outbox · audit_log\nemail_suppressions · user_events", C.muted);
+  arrow(g, 480, 140, 480, 220, "solves.user_id", { dx: 48, dy: 4 });
+  arrow(g, 280, 110, 370, 110, "challenge_id", { dy: -6 });
+  arrow(g, 680, 110, 590, 110, "challenge_id", { dy: -6 });
+  arrow(g, 200, 145, 400, 220, "lab_accounts.user_id", { dx: -10, dy: 6 });
+  arrow(g, 760, 145, 560, 220, "path_progress.user_id", { dx: 20, dy: 6 });
+  arrow(g, 200, 400, 400, 330, "registrations.user_id", { dx: -20, dy: 0 });
+  arrow(g, 260, 400, 395, 140, "challenge_id", { dx: -40, dy: 40 });
+  arrow(g, 480, 420, 480, 330, "team_members.user_id", { dx: 60, dy: 4 });
+  arrow(g, 760, 400, 560, 330, "payments.user_id", { dx: 30, dy: 0 });
+
+  // Figure 4: deploy handover
+  g = setup("fig-deploy");
+  box(g, 20, 120, 120, 60, "listening\nsocket :443", { bold: true });
+  box(g, 220, 40, 180, 60, "old process\n(serving)");
+  box(g, 220, 200, 180, 60, "new process\n(starting)", { fill: C.soft });
+  arrow(g, 140, 140, 220, 75, "inherited fd", { dy: -4 });
+  arrow(g, 140, 160, 220, 225, "passed fd", { dy: 18 });
+  box(g, 480, 200, 200, 60, "1. migrate (expand only)\n2. warm caches\n3. ready", { size: 12 });
+  arrow(g, 400, 230, 480, 230, "");
+  box(g, 480, 40, 200, 60, "stop accept · drain 30 s\nclose WS (1012)", { size: 12 });
+  arrow(g, 400, 70, 480, 70, "");
+  arrow(g, 580, 200, 580, 100, "ready signal", { dx: 44, dy: 4, color: C.accent });
+  box(g, 760, 40, 170, 60, "exit");
+  arrow(g, 680, 70, 760, 70, "");
+  box(g, 760, 200, 170, 60, "serving all traffic", { bold: true, stroke: C.core, color: C.core });
+  arrow(g, 680, 230, 760, 230, "");
+
+  // Figure 5: phases
+  g = setup("fig-phases");
+  var P = [["P0\nPrepare", 20], ["P1\nFoundation", 150], ["P2\nCore learner", 290], ["P3\nRest of core", 290], ["P5\nRehearse +\nparity", 590], ["P6\nCutover", 720], ["P7\nParked services", 840]];
+  box(g, 20, 40, 110, 60, P[0][0]);
+  box(g, 150, 40, 120, 60, P[1][0], { fill: C.soft });
+  box(g, 300, 10, 140, 55, P[2][0]);
+  box(g, 300, 80, 140, 55, P[3][0]);
+  box(g, 300, 170, 260, 55, "P4  New UI (parallel from P1)", { stroke: C.accent, color: C.accent });
+  box(g, 590, 40, 110, 70, P[4][0]);
+  box(g, 720, 40, 100, 60, P[5][0], { bold: true, stroke: C.core, color: C.core });
+  box(g, 840, 40, 105, 60, "P7\nParked\n(later)", { dash: [5, 4], color: C.park, stroke: C.park });
+  arrow(g, 130, 70, 150, 70, "");
+  arrow(g, 270, 60, 300, 40, "");
+  arrow(g, 270, 80, 300, 105, "");
+  arrow(g, 210, 100, 300, 195, "OpenAPI", { dx: -20, dy: 14 });
+  arrow(g, 440, 40, 590, 60, "");
+  arrow(g, 440, 105, 590, 80, "");
+  arrow(g, 560, 195, 600, 110, "");
+  arrow(g, 700, 70, 720, 70, "");
+  arrow(g, 820, 70, 840, 70, "");
+})();
+</script>
+</body>
+</html>
