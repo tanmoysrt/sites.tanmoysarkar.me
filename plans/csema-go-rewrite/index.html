@@ -96,6 +96,7 @@
 <div class="note warn"><b>Strict rule: no automated tests.</b> We write no unit, integration or end-to-end tests until you approve the whole system. Until then, we check each phase by hand with the checklists in section 18.</div>
 <div class="note"><b>Conway's law.</b> The structure follows the team. Today one engineer maintains 4 repositories and 7+ processes. The new system is one repository and one core binary. Its modules follow the roles that ask for changes (section 10).</div>
 <div class="note"><b>Only what is needed.</b> Every table, route and screen in this plan has a current use in the data. Nothing is kept "for later". <b>No hard-coded values:</b> infrastructure values come from one env config, business values (prices, lab hours, ranks, onboarding roles, limits) live in the database and are edited in admin, and the UI gets everything from the API.</div>
+<div class="note"><b>Repository rules</b> live in <code>CLAUDE.md</code> at the root: module shape, Go and GORM rules, API and UI conventions, no tests, no backward-compatibility code, no hard-coded values, max 500 lines per Go file, a <code>README.md</code> in every package (plus <code>docs/</code> only when needed), and the handover checklist.</div>
 <div class="note">Logging everyone out at cutover is accepted. Users log in again once. Passwords keep working.</div>
 
 <h2 id="method">2. How we measured usage</h2>
@@ -324,6 +325,8 @@
 </figure>
 <h3>One package, one shape</h3>
 <pre>internal/practice/
+├── README.md      what it does, tables it owns, routes, main flows (short)
+├── docs/          only when one README page is not enough
 ├── model.go       GORM structs for this package's tables (columns only)
 ├── practice.go    type Service struct{ db *gorm.DB } and the rules (plain methods)
 ├── http.go        Routes(g *echo.Group) and handlers: read input → call Service → write JSON
@@ -337,6 +340,8 @@
   <li><b>GORM, plainly.</b> Models have columns only, with no relation fields, so GORM never saves related rows by surprise. Joins are written where they are needed. No hooks.</li>
   <li><b>Admin endpoints live in the owner package</b> (<code>admin.go</code>), so the rules for a table stay in one place.</li>
   <li><b>One error type:</b> <code>server.Err(status, code, message)</code>. Clients get <code>{"error":{"code","message","fields"}}</code>.</li>
+  <li><b>Max 500 lines per Go file.</b> Split by meaning, not by size alone.</li>
+  <li><b>No backward-compatibility code.</b> The UI and API ship in one binary, and the agent ships with the core. A change updates every caller at once: no old routes, aliases, deprecated fields, fallbacks or API versions.</li>
   <li><b>No hard-coded values.</b> Infrastructure (domains, keys, SMTP, paths) comes from one <code>Config</code> struct, loaded from env and checked at start. Business values (lab hours per tier, ranks, onboarding roles, rate limits, feature switches) come from the <code>settings</code> table through <code>server.Setting(key)</code>, cached and edited in admin. Content (paths, challenges, plans, coupons) is data. The UI has no URLs, prices, lists or constants: it reads them from the API.</li>
 </ol>
 <h3>Database connection</h3>
@@ -547,7 +552,7 @@ DELETE /api/admin/{resource}/{id}       delete</pre>
   <li><b>Google and GitHub.</b> A user is matched by verified email, as today. No extra table.</li>
   <li><b>Flags.</b> Stored hashes are HMAC-SHA256 with the old secret key as pepper. The same value becomes the <code>FLAG_PEPPER</code> setting.</li>
   <li><b>At cutover</b> everyone logs in once more. Passwords keep working. We do not bridge the old JWTs.</li>
-  <li><b>Kept as is:</b> only the Razorpay webhook and the OAuth callback URLs. Old email links and <code>/media/…</code> URLs are not kept. Files are served at <code>/files/…</code>.</li>
+  <li><b>No compatibility layer.</b> Old routes, links and file URLs are not kept. External settings (Razorpay webhook, OAuth callbacks) are updated in their consoles at cutover.</li>
 </ul>
 
 <h2 id="ui">14. UI plan</h2>
@@ -660,7 +665,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 <p class="meta">Exit: the new layout builds and CI is green</p>
 <ol>
   <li>Move all current code to <code>legacy/</code>: <code>backend</code> (csemv2), <code>frontend</code> (csem_front), <code>events-frontend</code> and <code>orchestrator</code>. The 4 repositories become 1.</li>
-  <li>Create the Go module, <code>compose.yaml</code> (MariaDB 11.8, Mailpit), the Makefile and CI (vet, build, size check). No test jobs (strict rule).</li>
+  <li>Write <code>CLAUDE.md</code> (done, on the branch). Create the Go module, <code>compose.yaml</code> (MariaDB 11.8, Mailpit), the Makefile and CI (vet, build, size check). No test jobs (strict rule).</li>
   <li>Create the Nuxt app in <code>web/</code> with the theme override.</li>
 </ol></div>
 <div class="phase"><h3>P1. Skeleton, auth, progress</h3>
