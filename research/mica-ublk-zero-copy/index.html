@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mica ublk zero copy</title>
+<title>mica final performance</title>
 <style>
   :root {
     color-scheme: light;
@@ -63,9 +63,99 @@
 </head>
 <body>
 <main>
-<h1>mica: ublk zero copy</h1>
-<p class="meta">Progress report. Updated 2026-10-30 12:51 IST. Local lab only: one laptop (16 CPUs, NVMe, btrfs), RustFS in Docker.</p>
+<h1>mica: ublk zero copy and final performance</h1>
+<p class="meta">Progress report. Updated 2026-10-31. Final tests: a cloud VM (2 vCPUs, 8 GiB, ext4, Linux 7.0). Zero-copy A/B: one laptop (16 CPUs, NVMe, btrfs). The commits are on <code>main</code>.</p>
 
+<h2>Final performance</h2>
+<div class="status">
+<strong>All tests on the server passed.</strong> 36 crash runs and two 16-disk soak tests found 0 bad blocks. These tests found and fixed two launch blockers: S3 overload with many disks, and a page that a GC could delete before a power cut.
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="label">Rewrite inside the cache budget, 4 KiB, no sync</div><div class="value">21.4k writes/s</div><div class="delta">p50 40 µs</div></div>
+  <div class="kpi"><div class="label">Same, with <code>fdatasync</code></div><div class="value">2.1k writes/s</div><div class="delta">p50 450 µs</div></div>
+  <div class="kpi"><div class="label">Sync latency, 16 busy disks</div><div class="value">p50 1.7–4.3 ms</div><div class="delta">p99 11–86 ms</div></div>
+  <div class="kpi"><div class="label">Daemon memory, 16 busy disks</div><div class="value">40–72 MiB</div><div class="delta">under 1 MiB per idle disk</div></div>
+</div>
+
+<h3>Test setup</h3>
+<p>The server is one VM in a Hetzner location. There are two S3 stores: RustFS in Docker on the same VM, and Hetzner Object Storage in the same location. A round trip to Hetzner Object Storage is 0.7 ms. The final binary ran the last 12 crash runs. The 24 crash runs and the soak tests before them used a build that differs only in its restart takeover, and that takeover went back to the code the earlier crash tests covered.</p>
+
+<h3>Writes to saved chunks</h3>
+<p>A saved chunk is a chunk that S3 has. Each saved chunk used to leave the local data files after each checkpoint, so its next write had to copy it back or download it. Now saved chunks stay local up to the disk's cache budget. The rewrite rows are 4 KiB random writes for 15 s, or 4 s for the rows inside the budget, with RustFS on the VM.</p>
+<div class="scroll"><table>
+<tr><th>Test</th><th class="n">Before</th><th class="n">After</th></tr>
+<tr><td>Rewrite 2 GiB, budget 1 GiB, no sync</td><td class="n">160–260 writes/s, p50 2.5–3.5 ms</td><td class="n">286–362 writes/s, p50 55–61 µs</td></tr>
+<tr><td>Rewrite 2 GiB, budget 1 GiB, <code>fdatasync</code></td><td class="n">138–149 writes/s, p50 4.8 ms</td><td class="n">290–361 writes/s, p50 1.1–1.6 ms</td></tr>
+<tr><td>Rewrite inside the budget, no sync</td><td class="n">not measured</td><td class="n"><span class="good">21,441 writes/s, p50 40 µs</span></td></tr>
+<tr><td>Rewrite inside the budget, <code>fdatasync</code></td><td class="n">not measured</td><td class="n"><span class="good">2,091 writes/s, p50 450 µs</span></td></tr>
+<tr><td>Checkpoint of 2 GiB</td><td class="n">109–113 MiB/s</td><td class="n">132–143 MiB/s</td></tr>
+<tr><td>Detach on ext4, 2 GiB written</td><td class="n">2–25 s</td><td class="n">1.0 s</td></tr>
+</table></div>
+<p class="meta">Cost: a disk can keep its cache budget twice, in the data files and in the cache. The "before" detach times include builds between the two fixes.</p>
+
+<h3>S3 stores</h3>
+<div class="scroll"><table>
+<tr><th>Request</th><th class="n">Hetzner, same location</th><th class="n">RustFS on the VM</th></tr>
+<tr><td>GET 4 KiB, one at a time, p50</td><td class="n">127 ms</td><td class="n">1.5 ms</td></tr>
+<tr><td>GET 256 KiB, one at a time, p50</td><td class="n">103 ms</td><td class="n">1.9 ms</td></tr>
+<tr><td>PUT 1 MiB, 16 at a time</td><td class="n">44 MiB/s</td><td class="n">149 MiB/s</td></tr>
+<tr><td>GET 1 MiB, 16 at a time</td><td class="n">54 MiB/s</td><td class="n">468 MiB/s</td></tr>
+<tr><td>Slowest GET in the test</td><td class="n"><span class="warn">150 s</span></td><td class="n">under 1 s</td></tr>
+</table></div>
+<p>Local reads and writes do not wait for S3. A cold read does: about 100 ms or more for each miss on Hetzner.</p>
+<figure>
+  <figcaption>First checkpoint of 512 MiB<span>Upload rate by the number of uploads at a time. More is better. Hetzner is slower at 8 and 16, so the limit stays 64.</span></figcaption>
+  <div class="legend"><span><i style="background:var(--old)"></i>Hetzner</span><span><i style="background:var(--new)"></i>RustFS on the VM</span></div>
+  <div class="chart" id="uploads"></div>
+</figure>
+
+<h3>Many disks</h3>
+<p>Each disk could upload 64 chunks at a time, with no limit for the node. With 32 busy disks, about 2000 PUTs overloaded RustFS on the laptop. Now the node has at most 64 chunk uploads and 128 chunk downloads, of which 32 for read-ahead and the fill.</p>
+<div class="scroll"><table>
+<tr><th>32 busy disks on the laptop</th><th class="n">No node limit</th><th class="n">Node limit</th></tr>
+<tr><td>Small S3 requests</td><td class="n"><span class="warn">over 20 s, failing</span></td><td class="n">no failures in 6 rounds</td></tr>
+<tr><td>GC</td><td class="n"><span class="warn">failed</span></td><td class="n">passed</td></tr>
+<tr><td>Detach</td><td class="n"><span class="warn">not finished after minutes</span></td><td class="n">33 disks in 26 s</td></tr>
+<tr><td>Daemon memory while writing</td><td class="n">558 MiB</td><td class="n">94–122 MiB</td></tr>
+</table></div>
+<p>Sync latency in that laptop test was high (p99 about 2–4 s). Plain files on the same btrfs show the same under 32 sync writers, without mica: p99 2.2 s. So the filesystem causes it, not mica. The server does not show it.</p>
+
+<h3>Soak tests on the server</h3>
+<p>16 disks with a writer on each, 4 rounds of 90 s. Each round runs a GC during the writes, detaches and attaches half the disks, and checks every block. One round restarts the daemon during the writes.</p>
+<div class="scroll"><table>
+<tr><th>Result</th><th class="n">RustFS on the VM</th><th class="n">Hetzner</th></tr>
+<tr><td>Disks with 0 bad blocks, each round</td><td class="n"><span class="good">16 of 16</span></td><td class="n"><span class="good">16 of 16</span></td></tr>
+<tr><td>Errors in the daemon log</td><td class="n">0</td><td class="n">0</td></tr>
+<tr><td>Probe, 4 KiB write + <code>fdatasync</code>, p50</td><td class="n">1.7–4.3 ms</td><td class="n">1.8–4.0 ms</td></tr>
+<tr><td>Same, p99</td><td class="n">13–86 ms</td><td class="n">11–19 ms</td></tr>
+<tr><td>GC</td><td class="n">48–80 s</td><td class="n">31–44 s</td></tr>
+<tr><td>Daemon restart command during writes</td><td class="n">30 s</td><td class="n">22 s</td></tr>
+</table></div>
+<p>With writers at full speed on 16 disks, a separate test measured the longest wait of each write in a restart: at most 3.7 s. The restart command took 60 s there: the last checkpoints are slow and reach their limit. Guests go on during that time, and data not yet uploaded stays on the SSD.</p>
+
+<h3>Crash safety on the server</h3>
+<div class="scroll"><table>
+<tr><th>Test</th><th class="n">Runs</th><th class="n">Lost data</th></tr>
+<tr><td>Power cut: ext4, XFS, btrfs</td><td class="n">18</td><td class="n"><span class="good">0</span></td></tr>
+<tr><td>Daemon kill during writes, ext4</td><td class="n">6</td><td class="n"><span class="good">0</span></td></tr>
+<tr><td>Final binary: power cut, ext4</td><td class="n">6</td><td class="n"><span class="good">0</span></td></tr>
+<tr><td>Final binary: daemon kill, ext4</td><td class="n">6</td><td class="n"><span class="good">0</span></td></tr>
+</table></div>
+<p>A checkpoint now repairs objects that a GC deleted before it writes the head. Before, a power cut between the head and the repair could leave a head that named a deleted page. A unit test covers this order. No crash run forced this exact timing.</p>
+
+<h3>Tried and removed</h3>
+<p>Parallel takeover of devices at restart showed no gain: serial takeover also takes under 1 s for 16 disks. It went back to the simpler code.</p>
+
+<h3>Not tested yet</h3>
+<ul>
+  <li>Firecracker guests on the server.</li>
+  <li>More than 16 disks on the server.</li>
+  <li>A soak longer than about 20 minutes.</li>
+  <li>Real power loss on a physical machine. The power-cut tests drop all writes at the device.</li>
+</ul>
+
+<h2>Zero copy summary</h2>
 <div class="status">
 <strong>Done.</strong> Zero copy is committed on <code>main</code>: memory −96 %, 1 MiB reads 2.3×, 1 MiB writes −12 % CPU. Cold reads, FLUSH and queue-depth-1 latency did not change. 32 of 32 crash runs without data loss. The iowait fix is merged on <code>main</code> too. A cleanup refactor is on the branch <code>refactor</code>, not merged.
 </div>
@@ -218,7 +308,8 @@
 <h2>Open</h2>
 <ol>
   <li>Merge the branch <code>refactor</code> (or not), after a look at the diff.</li>
-  <li>The rest of the to-do list for ublk: <code>UBLK_F_BATCH_IO</code>, more threads per queue, FUA writes into local chunks on the queue thread.</li>
+  <li>The rest of the to-do list for ublk: more threads per queue, FUA writes into local chunks on the queue thread. <code>UBLK_F_BATCH_IO</code> is out: libublk rejects it with zero copy.</li>
+  <li>A Firecracker guest soak on the server.</li>
 </ol>
 
 <h2>Code changes</h2>
@@ -229,6 +320,10 @@
 <tr><td><code>refactor</code></td><td>6 commits, <code>0ace2be</code>..<code>f595b95</code></td><td>rustfmt, three file splits, CI, review fixes. Lab check: data check pass; A/B against zero copy within noise (1 MiB reads 659 vs 688 µs CPU per read, 4 KiB reads 8.4 vs 8.6 µs); crash 8 runs (4 power cut, 4 daemon kill), 0 lost data. Not merged.</td></tr>
 <tr><td><code>main</code></td><td><code>4fcf02d</code>, <code>1f6f976</code></td><td>Cold-read benchmark <code>lab/bench/coldread.sh</code>; the iowait finding in <code>todo.md</code>.</td></tr>
 <tr><td><code>main</code></td><td><code>38f770d</code>, <code>29634e3</code></td><td>Idle queue threads do not count as iowait (see above); docs.</td></tr>
+<tr><td><code>main</code></td><td><code>338ae20</code></td><td>Removes compatibility with older builds and data.</td></tr>
+<tr><td><code>main</code></td><td><code>0eac372</code>, <code>d629b84</code></td><td>Saved chunks stay local up to the cache budget; a detach copies only what fits; the fill starts again on a new budget.</td></tr>
+<tr><td><code>main</code></td><td><code>9ee5f0a</code></td><td>Repairs objects that a GC deleted before the head names them.</td></tr>
+<tr><td><code>main</code></td><td><code>a60dc6b</code>, <code>4e9d945</code></td><td>Chunk transfer limits for the whole node; the soak test.</td></tr>
 </table></div>
 
 <p class="meta">Sources: <a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/ublk_cmd.h">ublk uapi header</a> · <a href="https://github.com/ublk-org/libublk-rs">libublk-rs</a> · <a href="https://lwn.net/Articles/1020732/">LWN: ublk auto buffer registration</a></p>
@@ -311,6 +406,11 @@ bars("cold", {
   categories: ["Sequential"],
   series: [{ ...old, values: [79.2] }, { ...zc, values: [77.9] }, { name: "zero copy, no iowait", color: "--third", values: [76.6] }],
   unit: " MiB/s", digits: 1,
+});
+bars("uploads", {
+  categories: ["64 at a time", "16 at a time", "8 at a time"],
+  series: [{ name: "Hetzner", color: "--old", values: [46, 18, 6] }, { name: "RustFS on the VM", color: "--new", values: [75, 57, 65] }],
+  unit: " MiB/s",
 });
 bars("wcpu", {
   categories: ["1 MiB writes"],
