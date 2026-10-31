@@ -497,13 +497,51 @@ POST   /api/checkout                    plan or pack + coupon → Razorpay order
 POST   /api/checkout/verify             Razorpay signature → payment done
 POST   /api/webhooks/razorpay
 GET    /api/payments                    my bills
-
-<b>admin</b> (staff only, each in its owner package; list / create / get / update / delete)
-/api/admin/users  /paths  /modules  /activities  /challenges  /plans  /coupons
-/api/admin/events (+ /{id}/challenges, /{id}/entries (CSV allow-list), /{id}/teams, POST /{id}/announce)
-/api/admin/payments  /forms  /lab-hosts (+ POST /{id}/setup)  /lab-sessions  /system
-/api/admin/subscribers  /newsletters (+ POST /{id}/test, POST /{id}/send)</pre>
-<p>That is about 80 routes against 669 today. The appendix lists the 208 core routes that the current UI calls, grouped by new package. Every feature in them maps to a route above or is in the drop list.</p>
+</pre>
+<h3>Admin API</h3>
+<p>Every admin resource has the same 5 routes. Only staff can call them. Each resource lives in the package that owns its table (<code>admin.go</code>).</p>
+<pre>GET    /api/admin/{resource}            list   ?q= &amp; filters &amp; cursor
+POST   /api/admin/{resource}            create
+GET    /api/admin/{resource}/{id}       read
+PATCH  /api/admin/{resource}/{id}       update (only the fields sent)
+DELETE /api/admin/{resource}/{id}       delete</pre>
+<div class="wrap"><table class="t small">
+<thead><tr><th>Resource</th><th>Package</th><th>Filters</th><th>Extra actions (only these)</th></tr></thead>
+<tbody>
+<tr><td><code>users</code></td><td>auth</td><td><code>q</code>, <code>role</code>, <code>tier</code></td><td>No create. <code>PATCH</code> sets role, tier, tier_until, disabled. <code>DELETE</code> anonymizes.</td></tr>
+<tr><td><code>paths</code>, <code>modules</code>, <code>activities</code></td><td>learn</td><td><code>path</code>, <code>module</code>, <code>published</code></td><td>—</td></tr>
+<tr><td><code>challenges</code></td><td>practice</td><td><code>q</code>, <code>category</code>, <code>kind</code>, <code>published</code></td><td><code>POST /challenges/{id}/files</code> upload a file</td></tr>
+<tr><td><code>feedback</code></td><td>practice</td><td><code>kind</code>, <code>challenge</code></td><td>—</td></tr>
+<tr><td><code>events</code></td><td>events</td><td><code>status</code> (upcoming, live, past)</td><td><code>PUT /events/{id}/challenges</code> the full list with xp and release_at<br><code>GET|PATCH /events/{id}/entries</code>, <code>POST /events/{id}/entries/import</code> (CSV allow-list)<br><code>POST /events/{id}/announcements</code> notify all entrants</td></tr>
+<tr><td><code>teams</code></td><td>teams</td><td><code>event</code>, <code>q</code></td><td>—</td></tr>
+<tr><td><code>plans</code>, <code>coupons</code></td><td>billing</td><td><code>active</code></td><td>—</td></tr>
+<tr><td><code>payments</code></td><td>billing</td><td><code>from</code>, <code>to</code>, <code>status</code>, <code>kind</code></td><td>The list also returns totals for the range. <code>POST</code> records a manual grant.</td></tr>
+<tr><td><code>lab-hosts</code></td><td>labs</td><td><code>status</code></td><td><code>POST /lab-hosts/{id}/setup</code> install over SSH. <code>PATCH status=draining</code> stops new sessions.</td></tr>
+<tr><td><code>lab-sessions</code></td><td>labs</td><td><code>status</code>, <code>host</code>, <code>user</code></td><td>No create. <code>DELETE</code> stops a session.</td></tr>
+<tr><td><code>forms</code></td><td>community</td><td><code>form</code> (contact, ambassador, waitlist, event-support), <code>status</code> (new, done)</td><td>—</td></tr>
+<tr><td><code>subscribers</code></td><td>community</td><td><code>status</code>, <code>q</code></td><td>—</td></tr>
+<tr><td><code>newsletters</code></td><td>community</td><td><code>status</code></td><td><code>POST /newsletters/{id}/test</code> send to me<br><code>POST /newsletters/{id}/send</code> send to all subscribers</td></tr>
+<tr><td><code>system</code></td><td>server</td><td>—</td><td>Read only: <code>GET /api/admin/system</code> gives version, uptime, database, mail queue and lab hosts.</td></tr>
+</tbody></table></div>
+<h3>Today's admin routes, and where they go</h3>
+<div class="wrap"><table class="t small">
+<thead><tr><th>Today</th><th>New</th></tr></thead>
+<tbody>
+<tr><td><code>/api/admin-panel/contact-messages/</code></td><td><code>/api/admin/forms?form=contact</code></td></tr>
+<tr><td><code>/api/admin-panel/exam-waitlist/</code></td><td><code>/api/admin/forms?form=waitlist</code></td></tr>
+<tr><td><code>/api/admin-panel/system-health/</code></td><td><code>/api/admin/system</code></td></tr>
+<tr><td><code>/api/admin-panel/revenue-summary/</code></td><td><code>/api/admin/payments?from=&amp;to=</code> (totals in the response)</td></tr>
+<tr><td><code>/api/admin-panel/live-events/</code></td><td><code>/api/admin/events?status=live</code></td></tr>
+<tr><td><code>/api/admin-panel/integrity-flags/</code></td><td>Dropped (0 rows)</td></tr>
+<tr><td><code>/api/challenges-admin/</code></td><td><code>/api/admin/challenges</code></td></tr>
+<tr><td><code>/api/redteam/admin/labs/</code>, <code>…/labs/meta/</code>, <code>…/labs/{id}/test-launch/</code></td><td><code>/api/admin/challenges</code> (the lab spec is a field of the challenge). Test launch is a normal lab start by a staff user.</td></tr>
+<tr><td><code>/api/redteam/admin/labs/snapshot/rebuild/</code></td><td>Dropped (no snapshots)</td></tr>
+<tr><td><code>/api/learning-admin/</code>, <code>/api/learning-paths/bulk-upload/</code></td><td><code>/api/admin/paths</code>, <code>/modules</code>, <code>/activities</code></td></tr>
+<tr><td><code>/api/accounts/admin/lifecycle-emails/</code>, <code>/api/accounts/mailing/…</code></td><td><code>/api/admin/newsletters</code></td></tr>
+<tr><td><code>/api/bug-bounty/admin/…</code>, <code>/api/battleground/sessions/</code>, <code>/api/jobs/</code>, <code>/api/study-materials/</code></td><td>Dropped or parked</td></tr>
+<tr><td>Django admin (<code>/admin/</code>, 1,285 routes)</td><td>The resources above</td></tr>
+</tbody></table></div>
+<p>That is about 80 learner routes plus 14 admin resources, against 669 routes today. The appendix lists the 208 core routes that the current UI calls, grouped by new package. Every feature in them maps to a route above or is in the drop list.</p>
 
 <h2 id="auth">13. Sessions and compatibility</h2>
 <ul>
