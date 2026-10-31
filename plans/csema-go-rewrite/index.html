@@ -334,7 +334,7 @@
 <h3>Rules</h3>
 <ol>
   <li><b>Each table has one owner package.</b> Only the owner writes to it. Any package can read with SQL joins.</li>
-  <li><b>XP has one write path:</b> <code>progress.Record(tx, …)</code>. It adds the <code>progress</code> row and updates <code>users.xp</code> in the same transaction. <code>users.xp</code> is the one column that a non-owner writes.</li>
+  <li><b>XP has one write path:</b> <code>progress.Record(tx, …)</code>. It adds the <code>progress</code> row and updates <code>users.xp</code> in the same transaction. <code>users.xp</code> is the one column that a non-owner writes. Event solves never change it.</li>
   <li><b>Handlers are thin.</b> No SQL and no rules in a handler.</li>
   <li><b>No interfaces</b> unless there are 2 real implementations. No repository layer: the Service uses GORM directly.</li>
   <li><b>GORM, plainly.</b> Models have columns only, with no relation fields, so GORM never saves related rows by surprise. Joins are written where they are needed. No hooks.</li>
@@ -387,13 +387,42 @@ challenges
 
 activities                                one interactive part of a module
   id, module_id → modules.id, position, kind ENUM(quiz, code, shell, challenge), title, xp
+  challenge_id         → challenges.id, only when kind = challenge (a real foreign key)
   content JSON         quiz: {questions:[{text, choices:[…], answer}]}
                        code: {starter, tests:[…]}   shell: {setup, checks:[…]}
-                       challenge: {challenge_id}
 
-team_members
-  team_id → teams.id, user_id → users.id, status ENUM(member, invited, requested),
-  role ENUM(owner, member), created_at        PRIMARY KEY (team_id, user_id)</pre>
+lab_sessions
+  status ENUM(starting, running, ended, failed), error TEXT
+  active_user_id       generated: user_id while starting or running, else NULL
+  UNIQUE (active_user_id)                    one active lab per user, race-free
+
+teams / team_members
+  teams.owner_id       the one owner; a transfer is one update
+  team_members         PRIMARY KEY (team_id, user_id), status ENUM(member, invited, requested)
+
+event_entries
+  UNIQUE (event_id, user_id)                 no double registration, one team per event
+  UNIQUE (event_id, email)                   one allow-list row per email
+
+payments
+  amount_paise INT, UNIQUE (provider_order_id), UNIQUE (provider_payment_id)</pre>
+<h3>XP rules</h3>
+<div class="wrap"><table class="t small">
+<thead><tr><th>Column</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>challenges.xp</code>, <code>activities.xp</code></td><td>Default reward for a solve or a finished activity.</td></tr>
+<tr><td><code>modules.xp</code></td><td>One-time bonus when the module is complete. Finishing a path gives a certificate, not XP.</td></tr>
+<tr><td><code>event_challenges.xp</code></td><td>The reward inside that event. It replaces <code>challenges.xp</code> there.</td></tr>
+<tr><td><code>progress.xp</code></td><td>The XP actually given. The primary key makes a second award impossible.</td></tr>
+<tr><td><code>users.xp</code></td><td>Lifetime XP. A cache of <code>progress.xp</code> where <code>event_id = 0</code>, updated in the same transaction by <code>progress.Record</code>.</td></tr>
+</tbody></table></div>
+<p><b>Event XP and lifetime XP are separate.</b> An event solve (<code>event_id ≠ 0</code>) counts only on that event's scoreboard and never changes <code>users.xp</code>. A user can solve the same challenge once in Practice and once in each event.</p>
+<h3>Flags</h3>
+<ul>
+  <li><b>Static flags:</b> HMAC-SHA256 hashes in <code>challenges.flags</code>.</li>
+  <li><b>Per-player flags</b> (machine labs): generated when a session starts and stored as hashes in <code>lab_sessions.flags</code>.</li>
+  <li>The HMAC key (<code>FLAG_PEPPER</code>) lives in env config, never in the database. A database dump alone cannot be used to guess flags offline.</li>
+</ul>
 <h3>Old tables to new tables</h3>
 <div class="wrap"><table class="t small">
 <thead><tr><th>New</th><th>Replaces (today)</th></tr></thead>
@@ -413,7 +442,7 @@ team_members
 <tr><td><code>subscribers</code>, <code>newsletters</code></td><td>Marketing consent, MailingGroup, campaigns (new, simple version)</td></tr>
 <tr><td><code>mail_outbox</code></td><td>Celery mail tasks, EmailLog</td></tr>
 </tbody></table></div>
-<p>Schema rules: MariaDB 11.8 LTS, InnoDB, <code>utf8mb4_uca1400_ai_ci</code>, strict mode. <code>DATETIME(6)</code> in UTC. <code>JSON</code> columns with <code>JSON_VALID</code> checks. An index on every foreign key. Integer ids stay the same as today where a table maps one-to-one.</p>
+<p>Schema rules: MariaDB 11.8 LTS, InnoDB, <code>utf8mb4_uca1400_ai_ci</code>, strict mode. <code>DATETIME(6)</code> in UTC. <code>JSON</code> columns with <code>JSON_VALID</code> checks. An index on every foreign key. Integer ids stay the same as today where a table maps one-to-one. Money is integer paise. Emails are stored lowercase. Every <code>*_id</code> column has an index. Foreign key constraints come with the migration tooling, because GORM creates them only from relation fields and our models have none.</p>
 
 <h2 id="api">12. API</h2>
 <h3>Conventions</h3>
@@ -611,7 +640,7 @@ export default defineAppConfig({ ui: { colors: { primary: 'blue', neutral: 'neut
   <li><b>Add a host by hand.</b> You create a Debian 12 machine and add the core's SSH key. In admin you click <i>Add host</i>. The core connects once as root, installs Docker and nftables, creates a restricted user (socket forwarding only), uploads the agent and starts it with systemd.</li>
   <li><b>Control link.</b> The agent serves HTTP only on a Unix socket. The core reaches the socket through one SSH connection for each host. There is no public control port and no API key.</li>
   <li><b>Desired state.</b> The core sends the full list of sessions for the host. The agent compares it with the running containers, fixes any difference and reports back. The agent also stops sessions at their deadline by itself.</li>
-  <li><b>Placement.</b> The host with the most free memory. Labs share hosts.</li>
+  <li><b>Placement.</b> The host with the most free memory, checked under <code>SELECT … FOR UPDATE</code> on the <code>lab_hosts</code> row. A unique generated column allows one active session per user. Labs share hosts.</li>
   <li><b>Lab hours.</b> Each tier's monthly allowance is a setting. Hours left = allowance minus this month's <code>seconds_used</code>. No credit table.</li>
   <li><b>Isolation now.</b> Standard containers with memory, CPU and PID limits. nftables rules stop labs from reaching the internet, the host or other sessions.</li>
   <li><b>One release.</b> Core and agent have one version. A core upgrade pushes the agent to every host.</li>
@@ -1179,34 +1208,34 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
     arrow(g, p[0], p[1], q[0], q[1], (o && o.label) || "", { color: (o && o.color) || "#8a929c", dash: o && o.dash, dx: o && o.dx, dy: o && o.dy });
   }
   var W = 270;
-  table(20, 20, W, "users", ["id PK", "email UQ · username UQ", "password_hash", "name · avatar · country · bio", "role  (user|staff|admin)", "tier · tier_until", "xp", "onboarding JSON", "email_verified_at", "created_at · last_seen_at"], "auth");
+  table(20, 20, W, "users", ["id PK", "email UQ (lowercase) · username UQ", "password_hash", "name · avatar · country · bio", "role  (user|staff|admin)", "tier · tier_until", "xp", "onboarding JSON", "email_verified_at", "created_at · last_seen_at"], "auth");
   table(20, 210, W, "sessions", ["token_hash PK", "user_id FK", "ip · user_agent", "expires_at · created_at"], "auth");
   table(20, 310, W, "tokens", ["token_hash PK", "user_id FK", "purpose (verify|reset|sso)", "expires_at"], "auth");
 
   table(320, 20, W, "paths", ["id PK", "slug UQ · title", "track · level", "summary · badge_url", "position · published"], "learn");
   table(320, 140, W, "modules", ["id PK", "path_id FK", "section · position", "slug · title · xp", "slides_url · body JSON"], "learn");
-  table(320, 260, W, "activities", ["id PK", "module_id FK", "kind (quiz|code|shell|challenge)", "position · title · xp", "content JSON"], "learn");
+  table(320, 260, W, "activities", ["id PK", "module_id FK", "kind (quiz|code|shell|challenge)", "challenge_id FK (challenge only)", "position · title · xp · content JSON"], "learn");
 
   table(620, 20, W, "challenges", ["id PK", "slug UQ · title", "category · difficulty", "kind (flag|machine) · tier", "xp · published", "body JSON  (hints, files, writeup)", "flags JSON (hashed)", "lab JSON (machine spec)"], "practice");
 
   table(320, 395, W, "progress", ["PK (user_id, event_id,", "    kind, ref_id, part)", "kind (challenge|flag|hint|", "      activity|module|path)", "xp · score · data JSON", "created_at"], "progress");
 
   table(920, 20, 260, "lab_hosts", ["id PK", "name · address · ssh_port", "memory_mb · status", "created_at"], "labs");
-  table(920, 120, 260, "lab_sessions", ["id PK", "user_id FK · challenge_id FK", "host_id FK", "status · token · ip", "flags JSON (per player)", "started_at · ends_at · ended_at", "end_reason · seconds_used"], "labs");
+  table(920, 120, 260, "lab_sessions", ["id PK", "user_id FK · challenge_id FK", "host_id FK · token · ip", "status (starting|running|", "        ended|failed) · error", "active_user_id UQ (generated)", "flags JSON (per player, hashed)", "started_at · ends_at · ended_at", "end_reason · seconds_used"], "labs");
 
-  table(20, 535, W, "teams", ["id PK", "slug UQ · name · join_code", "owner_id FK", "event_id FK (null = global)", "open · created_at"], "teams");
-  table(20, 665, W, "team_members", ["PK (team_id, user_id)", "status (member|invited|", "        requested)", "role (owner|member)", "created_at"], "teams");
+  table(20, 535, W, "teams", ["id PK", "slug UQ · name · join_code", "owner_id FK (the one owner)", "event_id FK (null = global)", "open · created_at"], "teams");
+  table(20, 665, W, "team_members", ["PK (team_id, user_id)", "status (member|invited|", "        requested)", "created_at"], "teams");
 
   table(320, 535, W, "events", ["id PK", "slug UQ · title · body", "mode (solo|team) · max_team", "starts_at · ends_at", "access (open|allow_list)", "settings JSON (prizes, gallery,", "  certificate, announcements)"], "events");
   table(320, 695, W, "event_challenges", ["PK (event_id, challenge_id)", "xp · release_at"], "events");
-  table(320, 770, W, "event_entries", ["id PK", "event_id FK · email", "user_id FK · team_id FK", "status (allowed|registered)", "data JSON (writeup, rank)", "created_at"], "events");
+  table(320, 770, W, "event_entries", ["id PK", "event_id FK · email", "user_id FK · team_id FK", "status (allowed|registered)", "data JSON (writeup, rank)", "UQ (event_id, user_id)", "UQ (event_id, email)"], "events");
 
-  table(620, 535, W, "plans", ["id PK", "code UQ · name", "tier · months", "price_inr · price_usd · active"], "billing");
-  table(620, 650, W, "payments", ["id PK", "user_id FK · plan_id FK", "amount · currency", "coupon_code FK", "provider_order_id", "provider_payment_id", "status · created_at"], "billing");
+  table(620, 535, W, "plans", ["id PK", "code UQ · name", "tier · months", "price_paise · active"], "billing");
+  table(620, 650, W, "payments", ["id PK", "user_id FK · plan_id FK", "amount_paise", "coupon_code FK", "provider_order_id UQ", "provider_payment_id UQ", "status · created_at"], "billing");
   table(620, 815, W, "coupons", ["code PK", "percent_off · max_uses · used", "starts_at · ends_at", "banner"], "billing");
 
-  table(920, 270, 260, "subscribers", ["email PK", "user_id FK (null for guests)", "status (subscribed|unsubscribed)", "token UQ · created_at"], "community");
-  table(920, 380, 260, "newsletters", ["id PK", "subject · body_md", "status (draft|sending|sent)", "sent_count · sent_at", "created_at"], "community");
+  table(920, 300, 260, "subscribers", ["email PK", "user_id FK (null for guests)", "status (subscribed|unsubscribed)", "token UQ · created_at"], "community");
+  table(920, 405, 260, "newsletters", ["id PK", "subject · body_md", "status (draft|sending|sent)", "sent_count · sent_at", "created_at"], "community");
   table(920, 535, 260, "form_entries", ["id PK", "form (contact|ambassador|", "      waitlist)", "user_id FK · email", "data JSON · status", "created_at"], "community");
   table(920, 680, 260, "settings", ["key PK", "value JSON", "updated_at", "(lab hours per tier, ranks,", " roles, limits, switches)"], "server");
   table(920, 810, 260, "mail_outbox", ["id PK", "to_email · subject", "html · text", "status · attempts", "send_after · sent_at"], "mail");
@@ -1214,7 +1243,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
   link("sessions", "users", "t", "b", {});
   link("modules", "paths", "t", "b", {});
   link("activities", "modules", "t", "b", {});
-  link("activities", "challenges", "r", "l", { dash: [5, 4], label: "kind=challenge", dy: 30, dx: -30 });
+  link("activities", "challenges", "r", "l", { label: "challenge_id", dy: 30, dx: -30 });
   link("progress", "activities", "t", "b", { dash: [5, 4], label: "kind + ref_id", dx: 50 });
   link("progress", "challenges", "r", "l", { dash: [5, 4] });
   link("lab_sessions", "lab_hosts", "t", "b", {});
