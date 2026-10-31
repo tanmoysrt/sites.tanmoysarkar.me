@@ -298,7 +298,8 @@
 │   └── agent/             agent code: reconcile, Docker, nftables, SSH gateway, HTTPS proxy, exec
 ├── web/                   Nuxt app
 ├── docs/
-├── CLAUDE.md  go.mod  Makefile  compose.yaml (MariaDB 11.8 + Mailpit for dev)</pre>
+├── CLAUDE.md  go.mod  Makefile</pre>
+<p>Development uses the machine's own MariaDB 11.8 (database <code>csema</code>) and the existing Mailpit container. No extra database is started.</p>
 <p>Lab sources and runtime images (<code>machine-labs-pack</code>, the code runner, the shell-lab image) stay in <code>legacy/backend</code>. They move out only when we need to change them.</p>
 
 <h2 id="modules">10. Module design</h2>
@@ -696,7 +697,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 <p class="meta">Exit: the new layout builds and CI is green</p>
 <ol>
   <li><b>Done:</b> move all current code to <code>legacy/</code> (gitignored): <code>backend</code> (csemv2), <code>frontend</code> (csem_front), <code>events-frontend</code> and <code>orchestrator</code>. The 4 repositories become 1.</li>
-  <li>Write <code>CLAUDE.md</code> (done, on the branch). Create the Go module, <code>compose.yaml</code> (MariaDB 11.8, Mailpit), the Makefile and CI (vet, build, size check). No test jobs (strict rule).</li>
+  <li>Write <code>CLAUDE.md</code> (done, on the branch). Create the Go module, the <code>csema</code> database on the local MariaDB 11.8, the Makefile and CI (vet, build, size check). No test jobs (strict rule).</li>
   <li>Create the Nuxt app in <code>web/</code> with the theme override.</li>
 </ol></div>
 <div class="phase"><h3>P1. Skeleton, auth, progress</h3>
