@@ -66,6 +66,7 @@
   <li><a href="#compat">Compatibility rules</a></li>
   <li><a href="#ui">UI plan</a></li>
   <li><a href="#deploy">Zero-downtime deploy and size budget</a></li>
+  <li><a href="#labs">Machine lab hosting</a></li>
   <li><a href="#phases">Phases and steps</a></li>
   <li><a href="#verify">How we check success</a></li>
   <li><a href="#risks">Risks</a></li>
@@ -116,7 +117,7 @@
   <li>Large static files live in git: lesson presentations (323 MB), challenge artwork (51 MB), marketing images (47 MB), frontend images (94 MB). User uploads are 1.6 GB. None of these can go into a 50 MB binary.</li>
   <li>The code uses no Postgres-only features (no <code>ArrayField</code>, no <code>django.contrib.postgres</code>, no <code>DISTINCT ON</code>). It has 76 <code>JSONField</code> columns and 18 files with raw SQL. MariaDB is a safe target.</li>
   <li>A standalone events app (separate repository) signs users in with a short-lived SSO token and calls the <code>/api/events/</code> routes. Its API contract must stay stable, or we rewrite that app too.</li>
-  <li>The red-team orchestrator (separate repository) calls an internal API (<code>/internal/redteam/…</code>, 17 routes) with a service key. This contract must stay stable.</li>
+  <li>The red-team orchestrator (separate repository) calls an internal API (<code>/internal/redteam/…</code>, 17 routes) with a service key. The new lab design in <a href="#labs">section 14</a> replaces the orchestrator for labs.</li>
 </ul>
 
 <h2 id="features">4. Features in use</h2>
@@ -223,7 +224,7 @@
 <tr><td>Forensics labs + tampered evidence</td><td><code>forensics_labs</code>, <code>forensics_lab_frontend</code>, <code>tampered_evidence</code> (0 rows, page returns 404).</td><td>lab (1), sessions (4)</td><td>Join them into one "forensics simulations" service.</td></tr>
 <tr><td>Battleground</td><td>1v1 live CTF. 32 routes, WebSocket, hidden by a flag.</td><td>sessions (134), submissions (283). Last activity May 2026.</td><td>Export the data to an archive file. Rebuild only if the product wants it back.</td></tr>
 <tr><td>Interviews (AI)</td><td><code>interviews</code>, <code>ai_interactions</code>. Unlinked.</td><td>attempts (15), MCQs (222)</td><td>Low use. Archive.</td></tr>
-<tr><td>Exams</td><td><code>exam</code>: MCQ exams, external practical-exam integration, PocketBase client. Unlinked while content is rewritten.</td><td>registrations (3,911), results (149), MCQs (1,755)</td><td>Certification history is valuable. Keep the tables read-only in MariaDB and show the results in the profile. The new exam engine is a separate service.</td></tr>
+<tr><td>Exams</td><td><code>exam</code>: MCQ exams, external practical-exam integration, PocketBase client. Unlinked while content is rewritten.</td><td>registrations (3,911), results (149), MCQs (1,755)</td><td>Certification history is valuable. Keep the tables read-only in MariaDB and show the results in the profile. The new exam engine is a separate service. It reserves slots and starts exam labs through the core <code>machines</code> API on the same shared lab hosts (<a href="#labs">section 14</a>).</td></tr>
 <tr><td>Growth / marketing engine</td><td>10 apps: decision engine, campaigns, experiments, products, sending limits, providers, automation, conversions, AI content, scoring. 5 scheduled jobs. No learner UI.</td><td>Email jobs (17,976) and interactions. The decision table (7.2M rows, 1.9 GB) is a log: archive it, do not migrate it.</td><td>Transactional mail (verify, reset, receipts) stays in the core. Old <code>/r/…</code> tracking links and <code>/unsubscribe/…</code> links in sent emails must keep working, so the core keeps 2 small handlers for them.</td></tr>
 </tbody></table></div>
 
@@ -241,18 +242,21 @@
   <li><b>Files.</b> A storage interface with two drivers: local disk (default) and S3-compatible. Uploads, lesson presentations and challenge files use it. The binary serves files with long cache headers and ETags.</li>
   <li><b>Cache and rate limits.</b> In-process, with a size limit (for example <code>otter</code> or a small LRU). No Redis.</li>
 </ul>
-<p>External services stay outside the binary: the code runner (Python sandbox), the red-team orchestrator, SMTP, Razorpay, and, later, the parked microservices.</p>
+<p>Other parts stay outside the binary: the lab hosts, each with a small <code>csema-lab-agent</code> (<a href="#labs">section 14</a>), the code runner (Python sandbox), SMTP, Razorpay, and, later, the parked microservices.</p>
 <p>Main libraries: Echo v4, sqlc (MySQL engine), <code>go-sql-driver/mysql</code>, goose (migrations), <code>golang-jwt/jwt/v5</code>, <code>coder/websocket</code>, <code>cloudflare/tableflip</code>, <code>log/slog</code>. We add a dependency only when the standard library cannot do the job.</p>
 
 <h2 id="layout">8. Repository layout</h2>
 <p>Content and lab runtimes currently live mixed with app code. Course content is Python seed scripts (about 55k lines in <code>learning/</code>), and lab packs sit at the top level. The new layout gives each kind of thing one home:</p>
 <pre>csema/
-├── cmd/csema/            main.go: serve, migrate, import-pg, content import, admin tools
+├── cmd/
+│   ├── csema/            core: serve, migrate, import-pg, content import, admin tools
+│   └── csema-lab-agent/  small agent that runs on each lab host
 ├── internal/
 │   ├── platform/         config, db, http server, auth middleware, ws hub, jobs, mail, storage, logging
 │   ├── identity/         users, auth, sessions, OAuth, OTP, notifications, profile
 │   ├── practice/         categories, challenges, files, hints, flags, solves, badges, series
-│   ├── machines/         lab accounts, credits, sessions, pool VMs, specs, orchestrator internal API
+│   ├── machines/         lab accounts, credits, sessions, specs, host registry, placement, agent client
+│   ├── labagent/         agent internals: reconcile, docker, wireguard, nftables, https proxy, exec
 │   ├── learning/         paths, modules, quizzes, progress, certificates, coding, shell practicals
 │   ├── compete/          leaderboards, teams
 │   ├── events/           events, registrations, event teams, scoreboard, certificates
@@ -264,7 +268,7 @@
 │   ├── migrations/       goose SQL files
 │   ├── queries/          sqlc .sql files, one folder for each domain
 │   └── sqlc.yaml
-├── web/                  Vite + React SPA; dist/ is embedded
+├── web/                  Nuxt 4 + Nuxt UI app; nuxi generate output is embedded
 ├── content/              course + challenge content as data (YAML / Markdown / assets)
 │   ├── courses/          fnd, os, net, crypto, pysec ... (from learning/*_course, seed commands)
 │   └── challenges/       challenge packs, artwork, badges
@@ -289,7 +293,7 @@
 <tbody>
 <tr><td>identity</td><td>users, auth_tokens, user_sessions, oauth_identities, notifications, activity_days, contact_messages</td><td><code>auth_tokens(kind)</code> merges email verification, login OTP and password reset. <code>notifications</code> merges 2 notification tables. <code>activity_days</code> replaces streak and session-stat tables. Unused columns leave <code>users</code> (for example attack-machine IP and port, an SCBTP purchase flag and the resume path). Marketing scores leave the user profile.</td></tr>
 <tr><td>practice</td><td>categories, tags, challenges, challenge_tags, challenge_files, hints, hint_unlocks, solves, flag_attempts, challenge_feedback, writeups, machine_flags, machine_flag_solves, badges_earned, series, series_challenges</td><td>Challenge reports join feedback as a <code>kind</code>. Tutorial points become a JSON column on the challenge. Event-only access codes move to events.</td></tr>
-<tr><td>machines</td><td>lab_accounts, lab_credit_entries, lab_plan_purchases, lab_subscriptions, pool_vms, tenant_slots, lab_sessions, lab_checkpoints, lab_specs, lab_snapshots, lab_states, flag_secrets, lab_contents, lab_certificates, exam_pool_reservations</td><td>A one-to-one port. The orchestrator contract depends on these tables.</td></tr>
+<tr><td>machines</td><td>lab_hosts, wg_peers, lab_accounts, lab_credit_entries, lab_plan_purchases, lab_subscriptions, lab_sessions, lab_checkpoints, lab_specs, lab_states, flag_secrets, lab_contents, lab_certificates</td><td>Add <code>lab_hosts</code> (address, SSH port, capacity, status) and <code>wg_peers</code> (one peer for each user). <code>pool_vms</code> and <code>tenant_slots</code> become placements on <code>lab_hosts</code>. Snapshot tables and cloud-provider columns are dropped.</td></tr>
 <tr><td>learning</td><td>learning_paths, phases, modules, module_objectives, module_resources, quizzes, quiz_questions, quiz_choices, quiz_attempts, quiz_answers, path_progress, module_completions, module_progress, certificates, study_materials, coding_exercises, coding_test_cases, code_submissions, coding_solves, shell_practicals, shell_tasks, shell_attempts, shell_task_passes, solution_reveals</td><td><code>solution_reveals(kind)</code> merges the coding and shell reveal tables. Unused topic, Q&amp;A, audio and path-access tables are dropped.</td></tr>
 <tr><td>compete</td><td>teams, team_members, team_invites, team_requests, team_announcements</td><td>Team chat (30 rows, last write 2025) is dropped. The leaderboard is a query on an indexed <code>users.points</code>, with a 30-second in-process cache.</td></tr>
 <tr><td>events</td><td>events, event_waves, event_allowed_emails, event_registrations, event_ticket_tiers, event_challenges, event_challenge_solves, event_challenge_views, event_hints, event_hint_unlocks, event_teams, event_team_members, event_team_requests, event_team_chat, event_announcements, event_warnings, event_support_messages, event_gallery, certificate_templates, user_prizes, event_reports, integrity_flags, event_access_codes, event_writeups</td><td>A one-to-one port, because the events app depends on the shape. Library purchases and sponsors (0 rows) are dropped.</td></tr>
@@ -343,7 +347,7 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
   <li><b>Passwords.</b> Django stores <code>pbkdf2_sha256$&lt;iterations&gt;$&lt;salt&gt;$&lt;hash&gt;</code>. Go checks this format with <code>x/crypto/pbkdf2</code>. On the next successful login, it rehashes the password to argon2id.</li>
   <li><b>Sessions.</b> Today's tokens are HS256 JWTs (60-minute access, 3-day refresh, <code>user_id</code> claim). For 3 days after cutover, Go also accepts these tokens and exchanges them for new ones. After that, it accepts only its own EdDSA tokens. The single-session rule keeps working through <code>user_sessions</code>.</li>
   <li><b>Flags.</b> Stored flag hashes are HMAC-SHA256 with the old secret key as the pepper. Go uses the same pepper value as a separate config key (<code>FLAG_PEPPER</code>). It does not reuse it as a signing key.</li>
-  <li><b>Frozen contracts.</b> These keep their exact paths and payloads: the orchestrator internal API (17 routes), the events app API (until we decide on that app), Razorpay and email-provider webhooks, OAuth callback URLs, <code>/unsubscribe/…</code> and <code>/r/…</code> links in sent emails, <code>/media/…</code> URLs and the events SSO handoff.</li>
+  <li><b>Frozen contracts.</b> These keep their exact paths and payloads: the events app API (until we decide on that app), Razorpay and email-provider webhooks, OAuth callback URLs, <code>/unsubscribe/…</code> and <code>/r/…</code> links in sent emails, <code>/media/…</code> URLs and the events SSO handoff.</li>
   <li><b>IDs.</b> All primary keys stay the same.</li>
 </ul>
 
@@ -361,13 +365,30 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
 </ul>
 <h3>New UI</h3>
 <ul>
-  <li><b>Stack.</b> Vite + React 19 + TanStack Router (typed routes) + TanStack Query. We keep Tailwind and the Radix/shadcn components we already use, and move them into one <code>web/src/ui</code> folder with design tokens.</li>
-  <li><b>Public pages.</b> Landing, pricing, news and legal pages are pre-rendered to static HTML at build time for SEO. They are part of the same embedded build.</li>
-  <li><b>Information architecture.</b> Home · Learn · Practice (Challenges, Machines) · Compete (Leaderboard, Teams) · Profile. Events stays an external link. Teams moves under Compete. Seasons and SOC leave the Practice tabs until their services return.</li>
-  <li><b>Admin.</b> Admin gets its own area with clear sections: Users, Content (paths, modules, challenges, files), Machines, Events, Billing (plans, payments, coupons), Moderation, System. These sections replace the Django admin for the 8 models staff edit, and the "Tools" tab mix.</li>
-  <li><b>One page pattern.</b> Each page has a header (title, one primary action), a filter bar, the content, and empty, loading and error states. A review checklist enforces the pattern.</li>
-  <li><b>Budget.</b> Initial JavaScript is less than 200 KB gzip. Each route is a separate chunk. Lesson presentations load from file storage in an iframe, not from the bundle.</li>
+  <li><b>Stack.</b> Nuxt 4 + Nuxt UI 4 + TypeScript. The app runs in the browser (<code>ssr: false</code>). <code>nuxi generate</code> writes static files, and the Go binary embeds them. No Node server runs in production.</li>
+  <li><b>Public pages.</b> Landing, pricing and legal pages are pre-rendered at build time for SEO. News articles render in the browser.</li>
+  <li><b>Use components as they are.</b> We do not restyle Nuxt UI component by component. We change the theme only with one global override, so that the shades stay the same as today (table below).</li>
+  <li><b>Everything is a component.</b> A page only composes components. Pages have no page-level CSS. Shared parts live in <code>components/app/</code>, and each domain has its own folder, for example <code>components/practice/ChallengeCard.vue</code>.</li>
+  <li><b>API client.</b> Generated from the OpenAPI file (<code>openapi-typescript</code> + <code>openapi-fetch</code>).</li>
+  <li><b>Icons.</b> Bundled locally from Iconify collections. The app never fetches icons at runtime.</li>
+  <li><b>Information architecture.</b> Home · Learn · Practice (Challenges, Machines) · Compete (Leaderboard, Teams) · Profile. Events stays an external link. Seasons and SOC leave the Practice tabs until their services return.</li>
+  <li><b>Admin.</b> Built from Nuxt UI dashboard components (sidebar, table, form). Sections: Users, Content (paths, modules, challenges, files), Machines (specs, hosts, sessions), Events, Billing (plans, payments, coupons), Moderation, System. These replace the Django admin for the 8 models staff edit, and the "Tools" tab mix.</li>
+  <li><b>One page pattern.</b> Each page has a header (title, one primary action), a filter bar, the content, and empty, loading and error states.</li>
+  <li><b>Budget.</b> Initial JavaScript is less than 250 KB gzip. Each route is a separate chunk. Lesson presentations load from file storage in an iframe.</li>
 </ul>
+<p>Note: no code from the current React UI carries over. The UI is rebuilt on Nuxt UI, page by page.</p>
+<h3>Theme override</h3>
+<p>The current UI uses Tailwind blue as the brand color, near-black neutrals in dark mode, white in light mode, and the Inter font. The override maps these to Nuxt UI:</p>
+<pre>// app.config.ts
+export default defineAppConfig({ ui: { colors: { primary: 'blue', neutral: 'neutral' } } })
+
+/* assets/css/main.css */
+@import "tailwindcss";
+@import "@nuxt/ui";
+@theme { --font-sans: 'Inter', system-ui, sans-serif; }
+:root { --ui-bg: #ffffff; --ui-bg-muted: #fbfcfd; --ui-primary: var(--color-blue-600); }
+.dark { --ui-bg: #0f0f0f; --ui-bg-elevated: #161616; --ui-bg-muted: #0b0b0b;
+        --ui-border: #262626; --ui-primary: var(--color-blue-500); }</pre>
 
 <h2 id="deploy">13. Zero-downtime deploy and size budget</h2>
 <figure>
@@ -393,17 +414,108 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
 </tbody></table></div>
 <p>The binary runs under systemd on the host. A container is optional. MariaDB runs as its own service (managed or on the same host). One instance is enough for the current load. Section 9's design (DB leases, no in-memory source of truth) leaves room for 2 instances later.</p>
 
-<h2 id="phases">14. Phases and steps</h2>
+<h2 id="labs">14. Machine lab hosting</h2>
+<p>Machine labs, red-team labs, shell labs, SOC sessions and exam practicals all run as containers on <b>shared lab hosts</b>. Today, a separate orchestrator (about 8.1k lines of Python) and a Python lab agent (about 2.4k lines) manage a pool of cloud VMs. The new design replaces both with logic in the core and a small Go agent, <code>csema-lab-agent</code>, on each host.</p>
+
+<h3>How it works today</h3>
+<ol>
+  <li>The player clicks Start. csemv2 creates a lab session and takes the time from the player's credits.</li>
+  <li>csemv2 calls the orchestrator over HTTPS with a service key.</li>
+  <li>The orchestrator keeps a pool of cloud VMs (4 GB, 2 vCPU). It boots them from a golden snapshot with cloud-init, keeps one warm, and deletes empty ones.</li>
+  <li>A Python agent on each VM pulls the lab image and runs one container (or compose stack) for each player, plus a 128 MB browser-terminal container (ttyd). The agent has a public HTTPS API with a key.</li>
+  <li>The player connects with WireGuard (one peer for each session on each VM) or with the browser terminal.</li>
+</ol>
+<div class="wrap"><table class="t">
+<thead><tr><th>Measured (Sep to Oct 2026)</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Lab sessions</td><td class="n">218 sessions, 21 accounts</td></tr>
+<tr><td>Peak concurrent sessions</td><td class="n">2</td></tr>
+<tr><td>Real play time</td><td class="n">about 17 h (25 h billed)</td></tr>
+<tr><td>VMs created since 3 Aug</td><td class="n">61, about 2,263 VM-hours</td></tr>
+<tr><td>Failed starts</td><td class="n">15% (32 of 218)</td></tr>
+<tr><td>Typical lab memory</td><td class="n">128–256 MB (maximum 768 MB)</td></tr>
+</tbody></table></div>
+<p>The VM-hours are about 100 times the real play time. Cost comes from warm and short-lived VMs, not from players. All 32 failed starts came from the extra network hops: orchestrator 404 (11), agent not reachable (11), TLS failure to the orchestrator (6) and agent key mismatch (2).</p>
+
+<h3>New design</h3>
+<figure>
+  <svg id="fig-labs" viewBox="0 0 960 400" role="img" aria-label="Lab hosting: the core controls csema-lab-agent on each lab host through an SSH tunnel; players reach labs by HTTPS wildcard, WireGuard and the embedded terminal."></svg>
+  <figcaption>Figure 6. One core, shared lab hosts. The control link is an SSH tunnel. Players use 3 paths.</figcaption>
+</figure>
+<ul>
+  <li><b>Hosts are created by hand.</b> We do not automate VM creation. You create a machine (Debian 12) and add the core's SSH public key. In the admin area you click "Add host".</li>
+  <li><b>Bootstrap over SSH.</b> The core connects as root once. It installs Docker and nftables, sets kernel settings, makes a restricted <code>csema-ctl</code> user (socket forwarding only, no shell, no TTY), uploads <code>csema-lab-agent</code>, installs a systemd unit and pre-pulls the lab images. The host then shows as <i>ready</i>. Admin also has <i>drain</i> and <i>remove</i>.</li>
+  <li><b>One release for both binaries.</b> <code>csema</code> and <code>csema-lab-agent</code> build from one repository with one version. When the core is upgraded, it pushes the matching agent to every host.</li>
+  <li><b>Control link.</b> The agent serves HTTP only on a Unix socket (<code>/run/csema-lab-agent.sock</code>). The core keeps one SSH connection for each host and sends requests through it. The agent has no public control port, no API key and no TLS of its own.</li>
+  <li><b>Desired state.</b> The core sends each host the full list of sessions (spec, deadline, network) and WireGuard peers. The agent compares this list with what runs (Docker labels and the WireGuard device), fixes any difference and reports the result. A lost call, an agent restart or a core restart is repaired on the next pass. The agent also stops sessions at their deadline by itself.</li>
+  <li><b>Shared hosts.</b> The core places each session on the host with the best fit by reserved memory. Labs, shell labs, SOC sessions and exam practicals share the same hosts.</li>
+  <li><b>Isolation now.</b> Standard containers (<code>runc</code>) with memory, CPU and PID limits, plus nftables rules. A stronger runtime (gVisor or Firecracker) is a later option and is not in scope now.</li>
+</ul>
+
+<h3>Network addresses (all inside 198.18.0.0/16)</h3>
+<div class="wrap"><table class="t">
+<thead><tr><th>Use</th><th>Range</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Lab networks</td><td><code>198.18.0.0/17</code></td><td>A <code>/27</code> for each lab network by default (1,024 networks). With more hosts, each host gets its own block.</td></tr>
+<tr><td>WireGuard tunnel IPs</td><td><code>198.18.192.0/18</code></td><td>One peer for each user (16k addresses). A user downloads the config once. A peer is released after 30 days without use.</td></tr>
+</tbody></table></div>
+<p>nftables rules let a user's tunnel IP reach only the networks of that user's running sessions. Labs cannot reach the internet, the host or other labs. One host is also the one WireGuard gateway (no HA for now). A second host later needs only a site-to-site tunnel and a route. Users see no change.</p>
+
+<h3>How a player reaches a lab</h3>
+<ol>
+  <li><b>Web challenges by HTTPS.</b> <code>https://&lt;session-token&gt;.lab.&lt;base&gt;</code> goes to the session's web port. Wildcard DNS <code>*.lab.&lt;base&gt;</code> points at the host. The core gets the wildcard certificate (DNS-01) and pushes it to the agent. No VPN is needed.</li>
+  <li><b>SSH over WireGuard.</b> The player connects the VPN, then runs <code>ssh</code> to the attack box or lab IP that the UI shows, with a password for that session.</li>
+  <li><b>Terminal in the UI.</b> The Machine page has a terminal. The browser opens a WebSocket to the core, which checks the user. The core then goes through the SSH tunnel to the agent, and the agent runs <code>docker exec</code> with a PTY in the session's attack box. No ttyd container is needed, which saves 128 MB for each session.</li>
+</ol>
+
+<h3>Agent API (on the Unix socket)</h3>
+<pre>GET  /v1/health                     version, uptime, Docker and WireGuard status
+PUT  /v1/state                      desired sessions + peers (full list, idempotent)
+GET  /v1/state                      actual sessions, IPs, ports, errors
+GET  /v1/stats                      memory, CPU, network I/O for each session (idle detection)
+POST /v1/images/pull                pre-pull or refresh images
+PUT  /v1/tls                        wildcard certificate for *.lab.&lt;base&gt;
+GET  /v1/exec/{session}/{service}   WebSocket upgrade: interactive PTY (terminal)</pre>
+
+<h3>What goes away</h3>
+<ul>
+  <li>VM creation through cloud APIs, golden snapshots, cloud-init and autoscaling.</li>
+  <li>The Python lab agent, its public HTTPS port and its API keys.</li>
+  <li>The ttyd container for each session.</li>
+  <li>A new WireGuard config for each session or VM.</li>
+</ul>
+
+<h3>Good to have, out of scope for now</h3>
+<ul>
+  <li>An SSH proxy in the agent: <code>ssh &lt;session-token&gt;@ssh.lab.&lt;base&gt;</code> goes straight into the attack box, with no VPN.</li>
+  <li>A stronger isolation runtime (gVisor, or Firecracker microVMs on bare metal) for labs that need their own kernel.</li>
+  <li>A second lab host and a separate WireGuard gateway box.</li>
+  <li>Automatic VM creation when all hosts are full.</li>
+</ul>
+
+<h3>Lab track (starts after Phase 1)</h3>
+<div class="phase">
+<ol>
+  <li><b>L1. Agent skeleton.</b> <code>csema-lab-agent</code> with the socket API, Docker client, labels and the reconcile loop for single-container labs. Check: start and stop 20 sessions on a local VM.</li>
+  <li><b>L2. Host registry and bootstrap.</b> <code>lab_hosts</code>, "Add host" over SSH, the restricted user, agent upload and the systemd unit. Check: a new Debian 12 VM goes from empty to <i>ready</i> with one click.</li>
+  <li><b>L3. Networks and WireGuard.</b> <code>/27</code> networks, compose labs with several services, a peer for each user, nftables isolation. Check: user A cannot reach user B's lab. Labs cannot reach the internet.</li>
+  <li><b>L4. Access paths.</b> The wildcard HTTPS proxy and the embedded terminal (exec over WebSocket). Check: a web lab opens with no VPN, and the terminal works in the UI.</li>
+  <li><b>L5. Placement and lifecycle.</b> Best-fit placement, credits, idle and deadline stops, drain. SOC, shell-lab and exam sessions use the same path. Check: the full current lab catalog starts on the new host.</li>
+  <li><b>L6. Soak test.</b> 40 sessions on one 16 GB host for 24 hours, with an agent restart and a core deploy during the test. Check: no lost sessions and no leftover containers.</li>
+</ol>
+</div>
+
+<h2 id="phases">15. Phases and steps</h2>
 <p>We do the rewrite as one project with one cutover. The phases set the build order. Phase 4 (UI) starts when Phase 1 has the API contract, and then runs in parallel with Phases 2 and 3.</p>
 <figure>
-  <svg id="fig-phases" viewBox="0 0 960 250" role="img" aria-label="Phase timeline: P0 prep, P1 foundation, P2 core learner domains, P3 rest of core, P4 UI in parallel from P1, P5 migration rehearsal and parity, P6 cutover, P7 parked services later."></svg>
-  <figcaption>Figure 5. Build order. The UI track starts after the foundation and joins at the rehearsal.</figcaption>
+  <svg id="fig-phases" viewBox="0 0 960 310" role="img" aria-label="Phase timeline: P0 prep, P1 foundation, P2 core learner domains, P3 rest of core, P4 UI in parallel from P1, P5 migration rehearsal and parity, P6 cutover, P7 parked services later."></svg>
+  <figcaption>Figure 5. Build order. The UI track and the lab track start after the foundation and join at testing.</figcaption>
 </figure>
 
 <div class="phase"><h3>Phase 0. Prepare</h3>
 <p class="meta">Depends on: nothing · Exit: the new layout is in place, the baseline is recorded, and the scope is approved</p>
 <ol>
-  <li>Approve the keep, park and drop list (section 5) and answer the open questions (section 17).</li>
+  <li>Approve the keep, park and drop list (section 5) and answer the open questions (section 18).</li>
   <li>Turn on a sampled access log in production for 2 weeks. Confirm that the parked and dropped routes get no traffic.</li>
   <li>Restructure the repository on <code>refactor/go-rewrite</code>. Move Django to <code>legacy/django/</code>, lab runtimes and packs to <code>labs/</code>, and course content and artwork to <code>content/</code>. Django must still start from the new path.</li>
   <li>Record golden fixtures. A script calls each of the 213 used core routes against the local copy and saves the JSON responses. These are the reference for parity checks.</li>
@@ -418,7 +530,7 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
   <li>MariaDB 11.4 in Docker for local development. goose migrations and sqlc config. A CI job runs <code>sqlc vet</code>, the migrations and the tests.</li>
   <li>Identity domain: login (PBKDF2 check and argon2id rehash), JWT (EdDSA plus the HS256 bridge), refresh, OTP, email verification, password reset, Google and GitHub OAuth, single session, the SSO handoff for the events app.</li>
   <li>Platform parts: job runner, email outbox (SMTP), file storage interface, WebSocket hub, rate limiter, audit log.</li>
-  <li>The <code>csema import-pg</code> tool for identity tables, with row-count and checksum checks.</li>
+  <li>A first <code>csema import-pg</code> tool, so that development and tests run on a real copy of the data. The full migration plan comes later (Phase 6).</li>
   <li>The OpenAPI file for <code>/api/v1</code>, with the TypeScript client generated from it.</li>
   <li>A size and memory check in CI.</li>
 </ol></div>
@@ -427,7 +539,7 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
 <p class="meta">Depends on: Phase 1 · Exit: the parity harness passes for practice, machines, learning and compete</p>
 <ol>
   <li>Practice: catalog, filters, hints, flag submit (HMAC pepper), solves, badges, writeups, feedback.</li>
-  <li>Machines: credits, plans, sessions, start, stop and heartbeat, machine flags, certificates, and the orchestrator internal API (frozen contract).</li>
+  <li>Machines: credits, plans, sessions, start, stop and heartbeat, machine flags, certificates. Lab hosting itself is the lab track (section 14).</li>
   <li>Learning: paths, modules, quizzes, progress, certificates. Coding exercises call the code runner over HTTP. Shell practicals use lab sessions.</li>
   <li>The <code>content import</code> command. Convert the Python seed courses into <code>content/courses/*</code>. The check: importing into an empty database gives the same rows as today.</li>
   <li>Compete: the leaderboard and teams (invites, requests, announcements).</li>
@@ -449,39 +561,32 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
 <div class="phase"><h3>Phase 4. New UI (in parallel from Phase 1)</h3>
 <p class="meta">Depends on: the Phase 1 OpenAPI contract · Exit: all learner and admin flows pass end-to-end tests against the Go binary</p>
 <ol>
-  <li>Set up Vite, React, TanStack Router and Query, and Tailwind tokens. Move the shared components into <code>web/src/ui</code>.</li>
-  <li>Build the app shell and <code>/me/bootstrap</code>. Then, in order: Home, Learn (path, lesson player, quiz, code, shell), Practice (catalog, challenge, machine), Compete, Profile, Billing.</li>
-  <li>Build the admin area (section 12).</li>
-  <li>Pre-render the public pages (landing, pricing, news, legal).</li>
-  <li>Remove the dead pages, redirects and libraries listed in section 12.</li>
-  <li>Embed <code>web/dist</code> in the binary with pre-compressed files.</li>
+  <li>Create the Nuxt 4 app in <code>web/</code> with Nuxt UI 4. Add the theme override (section 12), Inter, local icons, <code>ssr: false</code> and <code>nuxi generate</code>.</li>
+  <li>Generate the API client from the OpenAPI file.</li>
+  <li>Build the app shell (dashboard sidebar) and <code>/me/bootstrap</code>. Then, in order: Home, Learn (path, lesson player, quiz, code, shell), Practice (catalog, challenge, machine with the embedded terminal), Compete, Profile, Billing.</li>
+  <li>Build the admin area (section 12), including lab hosts and live sessions.</li>
+  <li>Pre-render the public pages (landing, pricing, legal).</li>
+  <li>Embed the <code>nuxi generate</code> output in the binary, with pre-compressed files and a <code>200.html</code> fallback.</li>
 </ol></div>
 
-<div class="phase"><h3>Phase 5. Migration rehearsal and parity</h3>
-<p class="meta">Depends on: Phases 2, 3 and 4 · Exit: 3 clean rehearsals in a row and an approved parity report</p>
+<div class="phase"><h3>Phase 5. Test and harden</h3>
+<p class="meta">Depends on: Phases 2, 3, 4 and the lab track · Exit: the checks in section 16 pass on a full copy of the data</p>
 <ol>
-  <li>Take a fresh production snapshot. Run <code>import-pg</code> into an empty MariaDB and record the time (target: under 10 minutes).</li>
-  <li>Check the row count and a column checksum for each table, plus spot checks on users, points, solves and payments.</li>
-  <li>Parity harness: replay the golden fixtures and recorded flows against Django and Go on the same snapshot, then compare the normalized responses.</li>
-  <li>Run end-to-end tests (Playwright) on the main flows: sign up, onboard, lesson, quiz, flag, start machine, team, checkout (test mode), admin edit.</li>
-  <li>Load test with the existing <code>loadtest/</code> scenarios. Compare p95 latency and memory with today.</li>
+  <li>Run end-to-end tests (Playwright) on the main flows: sign up, onboard, lesson, quiz, flag, start a machine, terminal, WireGuard, team, checkout (Razorpay test mode), admin edit.</li>
+  <li>Parity harness: replay the golden fixtures against Django and Go on the same data, then compare the normalized responses.</li>
+  <li>Load test with the existing <code>loadtest/</code> scenarios, plus a lab soak test (40 sessions on one host for 24 hours).</li>
+  <li>Deploy during a load test to prove the zero-downtime handover.</li>
 </ol></div>
 
-<div class="phase"><h3>Phase 6. Cutover</h3>
-<p class="meta">Depends on: Phase 5 · Exit: Go serves all traffic for 7 days without a rollback</p>
-<ol>
-  <li>Announce a short read-only window (target: under 15 minutes). The window is necessary because the data moves between database engines.</li>
-  <li>Put Django in read-only mode. Take the final snapshot, run <code>import-pg</code>, and run the checks.</li>
-  <li>Point DNS or the proxy at the Go binary. Watch errors, logins and payments.</li>
-  <li>Rollback plan: keep Django and Postgres untouched for 7 days. A rollback switches the proxy back. Writes made in Go after cutover are replayed with a small export tool.</li>
-  <li>After 7 days, delete <code>legacy/django/</code> and turn off the old container, Redis and Celery.</li>
-</ol></div>
+<div class="phase"><h3>Phase 6. Data migration and cutover (planned later)</h3>
+<p class="meta">Depends on: Phase 5 · We write the detailed plan after testing</p>
+<p>Outline only: the <code>import-pg</code> tool copies the data into MariaDB and checks counts and checksums. We rehearse it, then switch traffic in a short read-only window. Django and Postgres stay untouched for a rollback period, and then <code>legacy/django/</code> is deleted.</p></div>
 
 <div class="phase"><h3>Phase 7. Parked services (later)</h3>
 <p class="meta">Depends on: Phase 6 · Exit: each service is live behind the interface in section 6</p>
 <p>The order is up to the product. A suggested order: Zero Hour (it needs only the catalog and achievements), then SOC Arena, Network labs, Forensics, and the Growth engine.</p></div>
 
-<h2 id="verify">15. How we check success</h2>
+<h2 id="verify">16. How we check success</h2>
 <div class="wrap"><table class="t">
 <thead><tr><th>Check</th><th>Pass condition</th></tr></thead>
 <tbody>
@@ -489,14 +594,15 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
 <tr><td>Login continuity</td><td>A sample of old password hashes and live tokens works after cutover. Logout rate does not spike.</td></tr>
 <tr><td>Flag continuity</td><td>Every stored flag hash in a sample verifies with the known flag.</td></tr>
 <tr><td>API parity</td><td>The golden fixtures and recorded flows match after normalization (ordering, timestamps, renamed fields).</td></tr>
-<tr><td>Frozen contracts</td><td>The orchestrator, the events app and the webhooks pass their contract tests unchanged.</td></tr>
+<tr><td>Frozen contracts</td><td>The events app and the webhooks pass their contract tests unchanged.</td></tr>
+<tr><td>Lab starts</td><td>p95 time to "running" is under 5 s with cached images. Fewer than 1% of starts fail (today: 15%).</td></tr>
 <tr><td>Performance</td><td>p95 latency is the same or better than today for the 20 busiest routes. Idle RSS is less than 50 MB.</td></tr>
 <tr><td>Size</td><td>The binary is less than 50 MB in CI.</td></tr>
 <tr><td>Zero downtime</td><td>A deploy during a load test gives 0 failed HTTP requests, and all WebSockets reconnect within 5 seconds.</td></tr>
 <tr><td>Code size</td><td>The Go core is under 40k lines (excluding generated code), against 172k lines of Python today.</td></tr>
 </tbody></table></div>
 
-<h2 id="risks">16. Risks</h2>
+<h2 id="risks">17. Risks</h2>
 <div class="wrap"><table class="t">
 <thead><tr><th>Risk</th><th>Effect</th><th>Mitigation</th></tr></thead>
 <tbody>
@@ -505,21 +611,23 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
 <tr><td>Data differences between the engines (time zones, JSON, collation)</td><td>Wrong data</td><td>Store UTC only, validate JSON, choose the collation on purpose, and run 3 rehearsals.</td></tr>
 <tr><td>One big release is late</td><td>Two systems run for longer</td><td>Freeze new features in Django during the rewrite. Phase 0 limits the scope with data, and Phase 4 runs in parallel.</td></tr>
 <tr><td>The Django admin is gone</td><td>Staff cannot edit content</td><td>Admin sections cover the 8 models in the admin log, and the content importer covers bulk edits.</td></tr>
+<tr><td>One lab host, one WireGuard gateway (no HA)</td><td>A host failure stops all labs</td><td>Accepted for now. Sessions are short and restart cleanly. A second host only needs a site-to-site tunnel and a route.</td></tr>
 <tr><td>Single instance</td><td>A host failure stops the service</td><td>The same risk exists today. Backups and a restore runbook. DB leases allow a second instance later.</td></tr>
 </tbody></table></div>
 
-<h2 id="questions">17. Open questions</h2>
+<h2 id="questions">18. Open questions</h2>
 <ol>
   <li><b>Events app.</b> Do we keep its API contract and leave the app as it is, or do we rebuild events inside the new UI (and later retire that app)?</li>
-  <li><b>Exams.</b> Do we keep the results read-only in the profile, as proposed, or do we also need registration and the practical-exam integration at cutover?</li>
+  <li><b>Exams.</b> Until the exams service is rebuilt, do practical exams pause, or does the old orchestrator keep its own VMs for exams only? The plan shows results read-only in the profile.</li>
   <li><b>Bug bounty, academic, corporate.</b> They have UI but 0 rows. Is it correct to drop them?</li>
-  <li><b>Growth engine.</b> Can it stop at cutover? Or must the Python version keep running against a copy of the data until it is rebuilt?</li>
+  <li><b>Growth engine.</b> Can it stop at cutover, or must the Python version keep running until it is rebuilt?</li>
   <li><b>"&lt; 50 MB".</b> Is this the binary size, the memory, or both? The plan targets both.</li>
   <li><b>Files.</b> Local disk or object storage for uploads and lesson presentations?</li>
-  <li><b>MariaDB hosting.</b> Managed or self-hosted, and in which region relative to the app host?</li>
+  <li><b>Hosting.</b> Where do MariaDB and the first lab host run, and what size is the lab host? The plan assumes 16 GB.</li>
+  <li><b>CLAUDE.md addressing.</b> The new tunnel range is <code>198.18.192.0/18</code> (inside the required <code>198.18.0.0/16</code>). We must update the pinned values in CLAUDE.md.</li>
 </ol>
 
-<h2 id="appendix">18. Appendix: raw maps</h2>
+<h2 id="appendix">19. Appendix: raw maps</h2>
 <h3>Page to API (crawl, 61 pages)</h3>
 <p>The 7 shell calls on every page are <code>/api/branding/</code>, <code>/api/accounts/notifications/</code>, <code>/api/accounts/api_profile/</code>, <code>/api/track/</code>, <code>/api/offers/current/</code>, <code>/api/events/my-collaborations/</code> and <code>/api/ambassador/me/</code>. Red codes are errors.</p>
 <details><summary>Show the page map</summary><div class="wrap"><table class="t small"><thead><tr><th>Page</th><th>API calls on load (beyond the 7 shell calls)</th></tr></thead><tbody>
@@ -918,7 +1026,7 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
   box(g, 200, 320, 180, 50, "File storage\n(disk or S3)");
   box(g, 680, 250, 160, 60, "MariaDB 11.4", { bold: true });
   box(g, 680, 360, 160, 40, "/var/lib/csema/files", { size: 12 });
-  box(g, 680, 20, 250, 70, "External: orchestrator,\ncode runner, SMTP, Razorpay,\nevents app", { dash: [5, 4] });
+  box(g, 680, 20, 250, 70, "Lab hosts (csema-lab-agent),\ncode runner, SMTP, Razorpay,\nevents app", { dash: [5, 4] });
   box(g, 680, 120, 250, 90, "Parked microservices (later)\nZero Hour · SOC Arena · Network labs\nForensics · Growth engine\nuse JWKS + internal API", { dash: [5, 4], color: C.park, stroke: C.park });
   arrow(g, 130, 200, 200, 95, "HTTPS", { dy: -4 });
   arrow(g, 130, 210, 200, 175, "WSS", { dy: 14 });
@@ -972,14 +1080,17 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
 
   // Figure 5: phases
   g = setup("fig-phases");
-  var P = [["P0\nPrepare", 20], ["P1\nFoundation", 150], ["P2\nCore learner", 290], ["P3\nRest of core", 290], ["P5\nRehearse +\nparity", 590], ["P6\nCutover", 720], ["P7\nParked services", 840]];
+  var P = [["P0\nPrepare", 20], ["P1\nFoundation", 150], ["P2\nCore learner", 290], ["P3\nRest of core", 290], ["P5\nTest +\nharden", 590], ["P6\nCutover", 720], ["P7\nParked services", 840]];
   box(g, 20, 40, 110, 60, P[0][0]);
   box(g, 150, 40, 120, 60, P[1][0], { fill: C.soft });
   box(g, 300, 10, 140, 55, P[2][0]);
   box(g, 300, 80, 140, 55, P[3][0]);
   box(g, 300, 170, 260, 55, "P4  New UI (parallel from P1)", { stroke: C.accent, color: C.accent });
   box(g, 590, 40, 110, 70, P[4][0]);
-  box(g, 720, 40, 100, 60, P[5][0], { bold: true, stroke: C.core, color: C.core });
+  box(g, 720, 40, 100, 60, "P6\nMigrate +\ncutover", { bold: true, stroke: C.core, color: C.core });
+  box(g, 300, 245, 260, 55, "Lab track L1–L6 (from P1)", { stroke: C.core, color: C.core });
+  arrow(g, 230, 100, 300, 270, "", {});
+  arrow(g, 560, 270, 620, 110, "");
   box(g, 840, 40, 105, 60, "P7\nParked\n(later)", { dash: [5, 4], color: C.park, stroke: C.park });
   arrow(g, 130, 70, 150, 70, "");
   arrow(g, 270, 60, 300, 40, "");
@@ -990,6 +1101,25 @@ GET /api/v1/learn             paths grouped by track, with the user's progress</
   arrow(g, 560, 195, 600, 110, "");
   arrow(g, 700, 70, 720, 70, "");
   arrow(g, 820, 70, 840, 70, "");
+  // Figure 6: lab hosting
+  g = setup("fig-labs");
+  box(g, 20, 40, 120, 50, "Player\n(web UI,\nterminal)", { bold: true });
+  box(g, 20, 300, 120, 55, "Player\n(VPN, ssh,\nweb challenge)", { bold: true });
+  box(g, 220, 30, 220, 110, "csema (core)\nsessions · credits · placement\nhost registry · certificates\nterminal bridge", { fill: C.soft });
+  box(g, 220, 170, 220, 45, "MariaDB", { bold: true });
+  region(g, 520, 20, 420, 360, "Lab host (created by hand, shared)");
+  box(g, 540, 50, 380, 110, "csema-lab-agent (Unix socket only)\nreconcile · Docker · WireGuard · nftables\nHTTPS proxy *.lab.<base> · exec PTY · reaper", { fill: C.soft });
+  box(g, 540, 205, 180, 55, "WireGuard gw\nUDP 51820");
+  box(g, 740, 205, 180, 55, "HTTPS :443\n*.lab.<base>");
+  box(g, 540, 300, 380, 65, "Lab containers (one network per session)\n198.18.0.0/17 · attack box · services", { stroke: C.core });
+  arrow(g, 140, 65, 220, 75, "");
+  arrow(g, 330, 140, 330, 170, "");
+  arrow(g, 440, 85, 540, 100, "SSH tunnel", { dy: -8, color: C.accent });
+  arrow(g, 140, 315, 540, 240, "WireGuard → ssh", { dx: -40, dy: -10 });
+  arrow(g, 140, 340, 750, 262, "https://<token>.lab.<base>", { dx: 40, dy: 22 });
+  arrow(g, 630, 260, 630, 300, "");
+  arrow(g, 830, 260, 830, 300, "");
+  arrow(g, 730, 160, 730, 300, "manage", { dx: 0, dy: -48 });
 })();
 </script>
 </body>
