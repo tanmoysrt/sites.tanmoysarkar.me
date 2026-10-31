@@ -229,7 +229,7 @@
 <tr><td>Battleground</td><td>1v1 live CTF, hidden by a flag</td><td>sessions (134). Last activity May 2026.</td><td>Archive. Rebuild only if wanted.</td></tr>
 <tr><td>AI interviews</td><td><code>interviews</code>, <code>ai_interactions</code>, unlinked</td><td>attempts (15)</td><td>Archive.</td></tr>
 <tr><td>Exams</td><td>MCQ exams, practical exams through the orchestrator</td><td>Archive (registrations, results, MCQs)</td><td>Rebuild later on the shared lab hosts.</td></tr>
-<tr><td>Growth engine</td><td>10 apps (decisions, campaigns, experiments …), no learner UI</td><td>Archive. The 1.9 GB decision log is not migrated.</td><td>Transactional mail and a simple newsletter are in the core (section 11). Old tracking and unsubscribe links are not kept.</td></tr>
+<tr><td>Growth engine (removed)</td><td>10 apps (decisions, campaigns, experiments …), no learner UI</td><td>Not migrated. It is removed, not rebuilt.</td><td>Transactional mail and a simple newsletter are in the core (section 11). Old tracking and unsubscribe links are not kept.</td></tr>
 </tbody></table></div>
 
 <h2 id="yagni">7. What we do not build</h2>
@@ -250,7 +250,7 @@
 <tr><td>S3 or object storage</td><td>Files on the local disk (<code>/var/lib/csema/files</code>), served with cache headers.</td></tr>
 <tr><td>Separate tables for quizzes, questions, choices, tests, hints, files</td><td>JSON columns on the parent row (section 11 explains the rule).</td></tr>
 <tr><td>A table for each kind of "done" (solves, completions, attempts, badges, certificates)</td><td>One <code>progress</code> table.</td></tr>
-<tr><td>Content-as-code (55k lines of seed scripts)</td><td>Content lives in the database. Staff edit it in the admin area. A one-time import copies today's content.</td></tr>
+<tr><td>Content-as-code (55k lines of seed scripts), content files in git</td><td>Content lives in the database. Content files (lesson presentations, challenge files, images) are imported into the files directory, never committed. Staff edit both in the admin area. S3 support comes later.</td></tr>
 <tr><td>Automated tests (for now)</td><td>Manual checklists until you approve the system (strict rule).</td></tr>
 <tr><td>An admin audit log, analytics tables</td><td>Structured logs.</td></tr>
 <tr><td>Cloud VM automation, autoscaling, HA</td><td>Lab hosts that you add by hand.</td></tr>
@@ -581,7 +581,7 @@ DELETE /api/admin/{resource}/{id}       delete</pre>
   <li><b>Google and GitHub.</b> A user is matched by verified email, as today. No extra table.</li>
   <li><b>Flags.</b> Stored hashes are HMAC-SHA256 with the old secret key as pepper. The same value becomes the <code>FLAG_PEPPER</code> setting.</li>
   <li><b>At cutover</b> everyone logs in once more. Passwords keep working. We do not bridge the old JWTs.</li>
-  <li><b>No compatibility layer.</b> Old routes, links and file URLs are not kept. External settings (Razorpay webhook, OAuth callbacks) are updated in their consoles at cutover.</li>
+  <li><b>No compatibility layer.</b> Old routes, links and file URLs are not kept. Files are served at <code>/files/…</code>.</li>
 </ul>
 
 <h2 id="ui">14. UI plan</h2>
@@ -637,7 +637,9 @@ export default defineAppConfig({ ui: { colors: { primary: 'blue', neutral: 'neut
   <figcaption>Figure 5. The control link is an SSH tunnel. Players use 3 paths.</figcaption>
 </figure>
 <ul>
-  <li><b>Add a host by hand.</b> You create a Debian 12 machine and add the core's SSH key. In admin you click <i>Add host</i>. The core connects once as root, installs Docker and nftables, creates a restricted user (socket forwarding only), uploads the agent and starts it with systemd.</li>
+  <li><b>Hosts.</b> In development the lab host is the same machine as the core. In production we connect any machine by its IP address: the same machine or another one.</li>
+  <li><b>Code runner.</b> The agent runs the code runner (Python sandbox for code activities) as a container on the lab host. Learner code never runs next to the core.</li>
+  <li><b>Add a host by hand.</b> You create a Debian 12 machine and add the core's SSH key. In admin you click <i>Add host</i>. The core connects once as root (the host's SSH server and port stay as they are), installs Docker and nftables, creates a restricted user (socket forwarding only), uploads the agent and starts it with systemd.</li>
   <li><b>Control link.</b> The agent serves HTTP only on a Unix socket. The core reaches the socket through one SSH connection for each host. There is no public control port and no API key.</li>
   <li><b>Desired state.</b> The core sends the full list of sessions for the host. The agent compares it with the running containers, fixes any difference and reports back. The agent also stops sessions at their deadline by itself.</li>
   <li><b>Placement.</b> The host with the most free memory, checked under <code>SELECT … FOR UPDATE</code> on the <code>lab_hosts</code> row. A unique generated column allows one active session per user. Labs share hosts.</li>
@@ -649,14 +651,14 @@ export default defineAppConfig({ ui: { colors: { primary: 'blue', neutral: 'neut
 <p>Each session gets its own Docker network, a <code>/27</code> from <code>198.18.0.0/17</code>, which is the pool that CLAUDE.md already pins. There is no VPN.</p>
 <h3>How a player reaches a lab</h3>
 <ol>
-  <li><b>SSH gateway (main path).</b> The agent has a built-in SSH server on port 22. The host's own admin SSH moves to port 2222. The UI shows one command and a password for each session:
-    <pre>ssh s-1234@ssh.lab.&lt;base&gt;                       shell in the attack box
-ssh -L 8080:198.18.3.5:80 s-1234@ssh.lab.&lt;base&gt;   reach a target port from your laptop
-ssh -D 1080 s-1234@ssh.lab.&lt;base&gt;                SOCKS proxy for a browser or proxychains
-ssh -R 4444:localhost:4444 s-1234@ssh.lab.&lt;base&gt; catch a reverse shell on your laptop
-ssh -J s-1234@ssh.lab.&lt;base&gt; root@198.18.3.5      jump to a target's own SSH</pre>
+  <li><b>SSH gateway (main path).</b> The agent has a built-in SSH server on port 2222. The host's own SSH server is never changed. The UI shows one command and a password for each session:
+    <pre>ssh -p 2222 s-1234@ssh.lab.csema.tanmoysrt.xyz                       shell in the attack box
+ssh -p 2222 -L 8080:198.18.3.5:80 s-1234@ssh.lab.csema.tanmoysrt.xyz   reach a target port from your laptop
+ssh -p 2222 -D 1080 s-1234@ssh.lab.csema.tanmoysrt.xyz                SOCKS proxy for a browser or proxychains
+ssh -p 2222 -R 4444:localhost:4444 s-1234@ssh.lab.csema.tanmoysrt.xyz catch a reverse shell on your laptop
+ssh -J s-1234@ssh.lab.csema.tanmoysrt.xyz:2222 root@198.18.3.5        jump to a target's own SSH</pre>
     The gateway allows forwards only into the user's own session network. A reverse forward (<code>-R</code>) listens on the session network's gateway address, so a target can connect back. Players need nothing but <code>ssh</code>, and it works where UDP is blocked. The limit: no raw UDP or ICMP from the player's own machine. Those tools run in the attack box.</li>
-  <li><b>Web challenges:</b> <code>https://&lt;token&gt;.lab.&lt;base&gt;</code>. Wildcard DNS points at the host. The agent gets the wildcard certificate (ACME DNS-01) itself.</li>
+  <li><b>Web challenges:</b> <code>https://&lt;token&gt;.lab.csema.tanmoysrt.xyz</code>. Wildcard DNS points at the host. The agent gets the wildcard certificate (ACME DNS-01) itself.</li>
   <li><b>Terminal in the UI:</b> browser → core (checks the user) → SSH tunnel → agent → <code>docker exec</code> with a PTY in the attack box. No ttyd container.</li>
 </ol>
 <h3>Agent API (Unix socket)</h3>
@@ -693,7 +695,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 <div class="phase"><h3>P0. Set up</h3>
 <p class="meta">Exit: the new layout builds and CI is green</p>
 <ol>
-  <li>Move all current code to <code>legacy/</code>: <code>backend</code> (csemv2), <code>frontend</code> (csem_front), <code>events-frontend</code> and <code>orchestrator</code>. The 4 repositories become 1.</li>
+  <li><b>Done:</b> move all current code to <code>legacy/</code> (gitignored): <code>backend</code> (csemv2), <code>frontend</code> (csem_front), <code>events-frontend</code> and <code>orchestrator</code>. The 4 repositories become 1.</li>
   <li>Write <code>CLAUDE.md</code> (done, on the branch). Create the Go module, <code>compose.yaml</code> (MariaDB 11.8, Mailpit), the Makefile and CI (vet, build, size check). No test jobs (strict rule).</li>
   <li>Create the Nuxt app in <code>web/</code> with the theme override.</li>
 </ol></div>
@@ -773,15 +775,20 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 <tr><td>One big release is late.</td><td>Freeze new features in Django. Labs and UI run in parallel.</td></tr>
 </tbody></table></div>
 
-<h2 id="questions">20. Open questions</h2>
-<ol>
-  <li><b>Drop list.</b> Is section 5 correct, in particular blog, series, study materials, OTP login, bug bounty, the faculty and corporate dashboards, and the unused event extras (organizations, paid events, challenge library, event team chat)?</li>
-  <li><b>Exams.</b> Do practical exams pause until the exam service exists?</li>
-  <li><b>Growth engine.</b> Can it stop at cutover?</li>
-  <li><b>Hosting.</b> Where do the core, MariaDB and the first lab host run? The plan assumes a 16 GB lab host.</li>
-  <li><b>SSH port.</b> Is it OK that the lab gateway takes port 22 on lab hosts and admin SSH moves to 2222?</li>
-  <li><b>CLAUDE.md.</b> Lab networks stay in the pinned <code>198.18.0.0/17</code>. The WireGuard part of CLAUDE.md becomes obsolete and needs an update when the lab work starts.</li>
-</ol>
+<h2 id="questions">20. Decisions</h2>
+<div class="wrap"><table class="t">
+<thead><tr><th>Question</th><th>Decision</th></tr></thead>
+<tbody>
+<tr><td>Drop list (section 5)</td><td>Accepted.</td></tr>
+<tr><td>Exams</td><td>Set aside for now. Data is archived.</td></tr>
+<tr><td>Growth engine</td><td>Removed.</td></tr>
+<tr><td>Hosting</td><td>Development: core, MariaDB and lab host on one machine. Production: we connect a lab host by IP, the same machine or another one.</td></tr>
+<tr><td>Lab host SSH</td><td>The host's SSH server and port are never changed. The player gateway uses port 2222.</td></tr>
+<tr><td>Base domain</td><td><code>csema.tanmoysrt.xyz</code>. Labs at <code>*.lab.csema.tanmoysrt.xyz</code>.</td></tr>
+<tr><td>Code runner</td><td>A container on the lab host, run by the agent.</td></tr>
+<tr><td>Content files</td><td>Out of the repository. Imported into the files directory. S3 later.</td></tr>
+<tr><td>Legacy code</td><td>All 4 repositories moved to <code>legacy/</code> (gitignored, read-only reference). Done.</td></tr>
+</tbody></table></div>
 
 <h2 id="appendix">21. Appendix: raw maps</h2>
 <h3>Page to API (crawl, 61 pages)</h3>
@@ -1269,7 +1276,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
   box(g, 220, 170, 220, 45, "MariaDB", { bold: true });
   region(g, 520, 20, 420, 360, "Lab host (added by hand, shared)");
   box(g, 540, 50, 380, 110, "csema-lab-agent (control on Unix socket)\nreconcile · Docker · nftables\nSSH gateway · HTTPS *.lab.<base> · exec PTY", { fill: C.soft });
-  box(g, 540, 205, 180, 55, "SSH gateway :22\nshell · -L · -D · -R · -J");
+  box(g, 540, 205, 180, 55, "SSH gateway :2222\nshell · -L · -D · -R · -J");
   box(g, 740, 205, 180, 55, "HTTPS :443\n*.lab.<base>");
   box(g, 540, 300, 380, 65, "Lab containers (one network per session)\n198.18.0.0/17 · attack box · services", { stroke: C.core });
   arrow(g, 140, 65, 220, 75, "");
