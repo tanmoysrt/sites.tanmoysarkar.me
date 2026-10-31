@@ -20,7 +20,7 @@
 </head>
 <body>
 <h1>CSEMA Go Rewrite: Progress</h1>
-<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">1 Nov 2026, 02:00 IST</span>.</p>
+<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">1 Nov 2026, 02:30 IST</span>.</p>
 
 <h2>Live demo</h2>
 <p>The demo runs on the development machine through a Cloudflare quick tunnel. The address changes when the tunnel restarts. Mail goes to a local Mailpit, so sign up and use the account without the verify link.</p>
@@ -30,8 +30,8 @@
 <table>
   <tr><th>Phase</th><th>State</th><th>Notes</th></tr>
   <tr><td>P0 Set up</td><td class="done">Done</td><td>Go module, <code>csema</code> database, Makefile, CI (gofmt, vet, build, 500-line and size checks), Nuxt app with the theme override.</td></tr>
-  <tr><td>P1 Skeleton, auth, progress</td><td class="doing">Most done</td><td>Server, db, mail, auth, progress and all 23 tables work. Open: onboarding, avatar upload, Google and GitHub keys.</td></tr>
-  <tr><td>P2 Learner features</td><td class="todo">Next</td><td>Content import from Postgres, then learn, practice, teams, billing, community.</td></tr>
+  <tr><td>P1 Skeleton, auth, progress</td><td class="done">Done</td><td>Server, db, mail, auth, onboarding, progress and all 23 tables work. Open: avatar upload, Google and GitHub keys (the code is ready, the keys are not set).</td></tr>
+  <tr><td>P2 Learner features</td><td class="doing">In progress</td><td>Done: content import, learn, practice, teams. Next: billing, community, admin routes. Code and shell checks wait for the code runner (P3).</td></tr>
   <tr><td>P3 Labs</td><td class="todo">Not started</td><td></td></tr>
   <tr><td>P4 UI</td><td class="todo">Started</td><td>Sign in, sign up, reset, verify, leaderboard, profile.</td></tr>
   <tr><td>P5 Events</td><td class="todo">Not started</td><td></td></tr>
@@ -45,6 +45,11 @@
   <li>A real Django <code>pbkdf2_sha256</code> hash logs in and is replaced with argon2id.</li>
   <li>A cookie request that changes data from another origin (for example a lab site) gets 403.</li>
   <li><code>progress.Record</code> is the one writer of <code>users.xp</code>. Event rows never change it.</li>
+  <li>Content import from the Postgres copy: 43 paths (27 published), 752 modules, 434 activities, 763 challenges (367 published), 4 plans, the 30 ranks and the onboarding survey. 2,832 content files copied.</li>
+  <li>The old flag hashes work: 30 flags found in the old lab sources match their stored HMAC hashes with the copied pepper.</li>
+  <li>Practice: challenge list with filters, detail, flag submit (machines with several flags), hints in order with XP cost.</li>
+  <li>Learn: paths, lessons, quiz grading, module completion with XP, path certificates with a public check.</li>
+  <li>Teams: create, invite, join request, join code, accept, remove, owner transfer, member limit.</li>
   <li>Settings table with typed values, defaults in code, admin list and PATCH.</li>
   <li>Zero-downtime upgrade with <code>tableflip</code> on SIGHUP (not yet tested under load).</li>
   <li>The browser makes no request to a third-party host. Inter and Lucide icons are bundled.</li>
@@ -58,10 +63,19 @@
   <li><b>OAuth without a library.</b> The Google and GitHub code flow uses the standard library only. The provider URLs are in code, because the providers fix them.</li>
   <li><b>User tiers</b> are <code>free</code>, <code>prime</code>, <code>elite</code>. The old <code>basic</code> becomes <code>free</code> at migration.</li>
   <li><b>Challenge difficulty</b> keeps the old 4 values: easy, medium, hard, expert.</li>
-  <li><b>Extra columns</b> not in the ERD: <code>plans.features</code> and <code>plans.position</code> (the pricing page reads them), <code>lab_sessions.password</code> (SSH gateway), <code>subscribers.status = pending</code> (double opt-in), <code>mail_outbox.headers</code> (one-click unsubscribe), <code>users.disabled</code>.</li>
+  <li><b>Extra columns</b> not in the ERD: <code>paths.tier</code> (prime and elite paths), <code>plans.features</code> and <code>plans.position</code> (the pricing page reads them), <code>lab_sessions.password</code> (SSH gateway), <code>subscribers.status = pending</code> (double opt-in), <code>mail_outbox.headers</code> (one-click unsubscribe), <code>users.disabled</code>.</li>
   <li><b>Technical constants stay in code</b>: drain timeout (30 s), mail retry (5 attempts), argon2id cost, DB pool size. Business values are in settings: session days, token lifetimes, minimum password length, auth rate limit, body limit, ranks.</li>
   <li><b>Ranks default</b> to one rank in code. The content import will store the 30 current ranks in the settings table.</li>
+  <li><b>Machine flags</b> keep the old questions: one flag part for each question, each with its own XP. The last part marks the machine solved with 0 XP, so XP is not counted twice.</li>
+  <li><b>Activity XP is 0.</b> As before, only module completion gives XP. A quiz keeps its score.</li>
+  <li><b>Global teams:</b> a user can be in more than one team (as before). Team XP is the sum of the members' XP.</li>
   <li><b>tygo</b> is pinned as a Go tool (<code>go tool tygo generate</code>).</li>
+</ul>
+
+<h2>Open questions</h2>
+<ul>
+  <li><b>Uploaded files.</b> 408 challenge files and 31 badges and videos exist only in the production media backup. I did not touch the backup. Can I extract only <code>challenge_files/</code> and <code>learning/</code> from <code>media.tar</code> into the local files folder?</li>
+  <li><b>Importer dependency.</b> <code>cmd/csema-import</code> uses <code>pgx</code> to read Postgres. It is a separate one-time binary, so the core binary does not include it. It goes away after cutover.</li>
 </ul>
 
 <h2>Found in the data</h2>
