@@ -302,9 +302,9 @@
 <tr><td>community</td><td>blog_posts, blog_feedback, ambassadors, ambassador_referrals, waitlist_entries</td><td>—</td></tr>
 <tr><td>platform</td><td>jobs, email_templates, email_outbox, email_suppressions, audit_log, user_events, exam_history (read-only)</td><td><code>email_outbox</code> replaces Celery mail tasks. <code>audit_log</code> replaces the Django admin log.</td></tr>
 </tbody></table></div>
-<p>Schema rules for MariaDB 11.4 LTS:</p>
+<p>Schema rules for MariaDB 11.8 LTS:</p>
 <ul>
-  <li><code>utf8mb4</code> and <code>utf8mb4_unicode_520_ci</code> everywhere, InnoDB, strict SQL mode.</li>
+  <li><code>utf8mb4</code> with the 11.8 default collation <code>utf8mb4_uca1400_ai_ci</code> everywhere, InnoDB, strict SQL mode.</li>
   <li>Keep the current integer primary keys, so that links, JWT <code>user_id</code> claims and orchestrator references stay valid.</li>
   <li>All times are <code>DATETIME(6)</code> in UTC. Booleans are <code>TINYINT(1)</code>. JSON is <code>JSON</code> with a <code>CHECK (JSON_VALID(…))</code> constraint, mapped to <code>json.RawMessage</code> in sqlc.</li>
   <li>Every foreign key has an index. Leaderboard and feed queries get covering indexes, checked with <code>EXPLAIN</code> in CI.</li>
@@ -527,7 +527,7 @@ GET  /v1/exec/{session}/{service}   WebSocket upgrade: interactive PTY (terminal
 <p class="meta">Depends on: Phase 0 · Exit: a user can log in to the Go binary with an old password and an old token</p>
 <ol>
   <li>Go module skeleton, config (env + file), structured logging, health and readiness endpoints, graceful shutdown with <code>tableflip</code>.</li>
-  <li>MariaDB 11.4 in Docker for local development. goose migrations and sqlc config. A CI job runs <code>sqlc vet</code>, the migrations and the tests.</li>
+  <li>MariaDB 11.8 in Docker for local development. goose migrations and sqlc config. A CI job runs <code>sqlc vet</code>, the migrations and the tests.</li>
   <li>Identity domain: login (PBKDF2 check and argon2id rehash), JWT (EdDSA plus the HS256 bridge), refresh, OTP, email verification, password reset, Google and GitHub OAuth, single session, the SSO handoff for the events app.</li>
   <li>Platform parts: job runner, email outbox (SMTP), file storage interface, WebSocket hub, rate limiter, audit log.</li>
   <li>A first <code>csema import-pg</code> tool, so that development and tests run on a real copy of the data. The full migration plan comes later (Phase 6).</li>
@@ -1024,7 +1024,7 @@ GET  /v1/exec/{session}/{service}   WebSocket upgrade: interactive PTY (terminal
   box(g, 200, 230, 390, 70, "Domain services\nidentity · practice · machines · learning · compete\nevents · billing · onboarding · community · admin", { fill: "#fff" });
   box(g, 410, 320, 180, 50, "sqlc queries");
   box(g, 200, 320, 180, 50, "File storage\n(disk or S3)");
-  box(g, 680, 250, 160, 60, "MariaDB 11.4", { bold: true });
+  box(g, 680, 250, 160, 60, "MariaDB 11.8", { bold: true });
   box(g, 680, 360, 160, 40, "/var/lib/csema/files", { size: 12 });
   box(g, 680, 20, 250, 70, "Lab hosts (csema-lab-agent),\ncode runner, SMTP, Razorpay,\nevents app", { dash: [5, 4] });
   box(g, 680, 120, 250, 90, "Parked microservices (later)\nZero Hour · SOC Arena · Network labs\nForensics · Growth engine\nuse JWKS + internal API", { dash: [5, 4], color: C.park, stroke: C.park });
