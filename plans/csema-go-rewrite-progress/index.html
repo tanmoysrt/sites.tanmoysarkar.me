@@ -20,7 +20,7 @@
 </head>
 <body>
 <h1>CSEMA Go Rewrite: Progress</h1>
-<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">1 Nov 2026, 02:30 IST</span>.</p>
+<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">01 Nov 2026, 02:33 IST</span>.</p>
 
 <h2>Live demo</h2>
 <p>The demo runs on the development machine through a Cloudflare quick tunnel. The address changes when the tunnel restarts. Mail goes to a local Mailpit, so sign up and use the account without the verify link.</p>
@@ -31,11 +31,14 @@
   <tr><th>Phase</th><th>State</th><th>Notes</th></tr>
   <tr><td>P0 Set up</td><td class="done">Done</td><td>Go module, <code>csema</code> database, Makefile, CI (gofmt, vet, build, 500-line and size checks), Nuxt app with the theme override.</td></tr>
   <tr><td>P1 Skeleton, auth, progress</td><td class="done">Done</td><td>Server, db, mail, auth, onboarding, progress and all 23 tables work. Open: avatar upload, Google and GitHub keys (the code is ready, the keys are not set).</td></tr>
-  <tr><td>P2 Learner features</td><td class="doing">In progress</td><td>Done: content import, learn, practice, teams. Next: billing, community, admin routes. Code and shell checks wait for the code runner (P3).</td></tr>
-  <tr><td>P3 Labs</td><td class="todo">Not started</td><td></td></tr>
-  <tr><td>P4 UI</td><td class="todo">Started</td><td>Sign in, sign up, reset, verify, leaderboard, profile.</td></tr>
+  <tr><td>P2 Learner features</td><td class="doing">In progress</td><td>Content import, learn, practice, teams, billing and community services exist. Admin routes and the code runner remain open. Razorpay still needs a real test-mode checkout.</td></tr>
+  <tr><td>P3 Labs</td><td class="doing">In progress</td><td>Core placement, host setup, desired-state sync, Docker isolation, SSH gateway and the browser terminal work on the test host. Wildcard HTTPS, the code runner and the larger manual checks remain open.</td></tr>
+  <tr><td>P4 UI</td><td class="todo">Deferred</td><td>The basic learner screens and lab controls support backend checks. Finish the backend first. Then build the UI from the approved plan, with the legacy design as the visual baseline.</td></tr>
   <tr><td>P5 Events</td><td class="todo">Not started</td><td></td></tr>
 </table>
+
+<h2>Current work order</h2>
+<p>Keep the basic UI during backend work. Complete the backend steps in the approved plan before visual work. No new design direction.</p>
 
 <h2>What works now</h2>
 <ul>
@@ -51,6 +54,8 @@
   <li>Learn: paths, lessons, quiz grading, module completion with XP, path certificates with a public check.</li>
   <li>Teams: create, invite, join request, join code, accept, remove, owner transfer, member limit.</li>
   <li>Settings table with typed values, defaults in code, admin list and PATCH.</li>
+  <li>Labs: a host becomes ready through the admin API. A real imported private image runs with an attack box. The browser terminal executes commands through the core and agent.</li>
+  <li>A second session cannot reach the first session, host SSH or the internet. Stop removes the session containers. An agent restart keeps the existing lab containers.</li>
   <li>Zero-downtime upgrade with <code>tableflip</code> on SIGHUP (not yet tested under load).</li>
   <li>The browser makes no request to a third-party host. Inter and Lucide icons are bundled.</li>
 </ul>
