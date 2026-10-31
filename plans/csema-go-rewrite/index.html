@@ -83,8 +83,8 @@
 <thead><tr><th>Topic</th><th>Today</th><th>New</th></tr></thead>
 <tbody>
 <tr><td>Programs</td><td>nginx, uvicorn ×4, 2 Celery workers, beat, Redis, Next.js server</td><td><code>csema</code> (one Go binary) + <code>csema-lab-agent</code> on each lab host</td></tr>
-<tr><td>Database</td><td>Postgres, 308 tables, 2,036 MB</td><td>MariaDB 11.8 with GORM, <b>27 tables</b></td></tr>
-<tr><td>API</td><td>669 routes</td><td>About 80 routes, one style</td></tr>
+<tr><td>Database</td><td>Postgres, 308 tables, 2,036 MB</td><td>MariaDB 11.8 with GORM, <b>23 tables</b></td></tr>
+<tr><td>API</td><td>669 routes</td><td>About 70 routes, one style</td></tr>
 <tr><td>Backend code</td><td>172k lines of Python</td><td>As little as possible. Target under 20k lines of Go.</td></tr>
 <tr><td>UI</td><td>Next.js, 117 pages, 74 dependencies</td><td>Nuxt 4 + Nuxt UI 4, static, embedded in the binary</td></tr>
 <tr><td>Events</td><td>A separate Next.js app (a fork of the main UI: 31 pages, 26k lines) with its own login hand-off</td><td>Part of the one app and the one binary. 3 tables.</td></tr>
@@ -95,6 +95,7 @@
 </tbody></table></div>
 <div class="note warn"><b>Strict rule: no automated tests.</b> We write no unit, integration or end-to-end tests until you approve the whole system. Until then, we check each phase by hand with the checklists in section 18.</div>
 <div class="note"><b>Conway's law.</b> The structure follows the team. Today one engineer maintains 4 repositories and 7+ processes. The new system is one repository and one core binary. Its modules follow the roles that ask for changes (section 10).</div>
+<div class="note"><b>Only what is needed.</b> Every table, route and screen in this plan has a current use in the data. Nothing is kept "for later". <b>No hard-coded values:</b> infrastructure values come from one env config, business values (prices, lab hours, ranks, onboarding roles, limits) live in the database and are edited in admin, and the UI gets everything from the API.</div>
 <div class="note">Logging everyone out at cutover is accepted. Users log in again once. Passwords keep working.</div>
 
 <h2 id="method">2. How we measured usage</h2>
@@ -207,18 +208,15 @@
   <li><b>Team announcements and team chat</b> (2 and 30 rows, last chat in 2025).</li>
   <li><b>Ambassador hub and referrals</b> (0 referrals). The application form stays.</li>
   <li><b>All analytics and tracking:</b> the tracking SDK (<code>/api/track/</code>, called on every page), PostHog, Sentry, and email open and click tracking.</li>
-  <li><b>Lab pause and resume, lab certificates</b> (0 and 1 rows).</li>
+  <li><b>Lab pause and resume, lab certificates</b> (0 and 1 rows), <b>lab hour packs</b> (never bought) and the lab credit ledger.</li>
+  <li><b>In-app notifications and the bell.</b> 90-day volume is mostly automatic noise ("challenge unlocked": 1,507, "you solved": 771). Results show where they happen instead: a toast, the team page, the event page.</li>
+  <li><b>Answer and attempt history</b> (every quiz answer, code submission and wrong flag). Only the result is kept, in <code>progress</code>.</li>
+  <li><b>Exam results in the core.</b> The 149 results go to the archive with the rest of the exam data.</li>
   <li><b>Event extras that were never or almost never used:</b> organizations (1 row, never used for an event), paid events and ticket tiers (0 sold), the paid challenge library (0 purchases), co-organizers, student event credits, white-label settings, event moderation, event bug bounty, warnings (0), integrity flags (0), challenge view tracking. Event team chat (273 messages in 1 event) is dropped too: teams use their own chat apps. Support messages become a contact form entry.</li>
 </ul>
 
 <h2 id="parked">6. Notes on parked modules</h2>
 <p>These modules each have their own runtime, UI or data model. They leave the core now and come back later. By Conway's law, a module comes back as a <b>new package in the same repository and binary</b>, unless a separate team owns it or its runtime must be isolated. Only then is it a separate service. SOC and network labs, for example, need their own runtime images on the lab hosts, but their APIs and UI still fit in the core.</p>
-<p>If a module does become a separate service, we design its interface to the core then, not now. The likely shape:</p>
-<ul>
-  <li>The service checks a user's session with one internal call to the core.</li>
-  <li>It gives XP through one internal call to the core.</li>
-  <li>It starts lab sessions through the core labs API.</li>
-</ul>
 <div class="wrap"><table class="t">
 <thead><tr><th>Module</th><th>What exists today</th><th>Data to keep</th><th>Notes for the rebuild</th></tr></thead>
 <tbody>
@@ -229,7 +227,7 @@
 <tr><td>Forensics labs</td><td><code>forensics_labs</code>, <code>tampered_evidence</code>, own Vite UI</td><td>sessions (4)</td><td>One "forensics simulations" service.</td></tr>
 <tr><td>Battleground</td><td>1v1 live CTF, hidden by a flag</td><td>sessions (134). Last activity May 2026.</td><td>Archive. Rebuild only if wanted.</td></tr>
 <tr><td>AI interviews</td><td><code>interviews</code>, <code>ai_interactions</code>, unlinked</td><td>attempts (15)</td><td>Archive.</td></tr>
-<tr><td>Exams</td><td>MCQ exams, practical exams through the orchestrator</td><td>results (149) → core table <code>exam_results</code></td><td>The new exam service uses the core labs API on the shared hosts.</td></tr>
+<tr><td>Exams</td><td>MCQ exams, practical exams through the orchestrator</td><td>Archive (registrations, results, MCQs)</td><td>Rebuild later on the shared lab hosts.</td></tr>
 <tr><td>Growth engine</td><td>10 apps (decisions, campaigns, experiments …), no learner UI</td><td>Archive. The 1.9 GB decision log is not migrated.</td><td>Transactional mail and a simple newsletter are in the core (section 11). Old tracking and unsubscribe links are not kept.</td></tr>
 </tbody></table></div>
 
@@ -240,7 +238,9 @@
 <tbody>
 <tr><td>JWT access and refresh tokens, JWKS</td><td>One opaque session token in a cookie (same origin). The same token works as a Bearer header for other clients.</td></tr>
 <tr><td>Redis, Celery, a job queue</td><td>Goroutine tickers for periodic work. One <code>mail_outbox</code> table for mail.</td></tr>
-<tr><td>A WebSocket hub</td><td>Polling for notifications (unread count comes with <code>/api/me</code>). Server-sent events for a live scoreboard. WebSocket only for the lab terminal.</td></tr>
+<tr><td>A WebSocket hub, notifications</td><td>Server-sent events only for the live event scoreboard. WebSocket only for the lab terminal. No notifications.</td></tr>
+<tr><td>A lab credit ledger and hour packs</td><td>Hours left = the monthly allowance for the user's tier (a setting) minus this month's <code>lab_sessions.seconds_used</code>.</td></tr>
+<tr><td>Constants in code</td><td>A <code>settings</code> table, edited in admin. Infrastructure values in env config.</td></tr>
 <tr><td>A WireGuard VPN gateway</td><td>An SSH gateway in the agent (section 15). Players need only <code>ssh</code>.</td></tr>
 <tr><td>sqlc, SQL files and generated code</td><td>GORM models. Raw SQL only for a few heavy reads (leaderboard, stats).</td></tr>
 <tr><td>Analytics, tracking, Sentry</td><td>Nothing. Server logs only.</td></tr>
@@ -282,16 +282,16 @@
 │   ├── csema/             main.go of the core
 │   └── csema-lab-agent/   main.go of the agent
 ├── internal/
-│   ├── auth/              users, sessions, tokens, notifications, onboarding
+│   ├── auth/              users, sessions, tokens, onboarding
 │   ├── learn/             paths, modules, activities
-│   ├── practice/          challenges, feedback
-│   ├── progress/          progress, submissions, exam results, XP, leaderboard, stats, home
+│   ├── practice/          challenges
+│   ├── progress/          progress, XP, leaderboard, stats, home
 │   ├── teams/             teams, team_members
 │   ├── events/            events, event_challenges, event_entries
-│   ├── labs/              lab_hosts, lab_sessions, credit_entries
+│   ├── labs/              lab_hosts, lab_sessions
 │   ├── billing/           plans, payments, coupons
 │   ├── community/         forms, subscribers, newsletters
-│   ├── server/            Echo setup, middleware, errors, UI embed, graceful restart
+│   ├── server/            Echo setup, config, settings, middleware, errors, UI embed, graceful restart
 │   ├── db/                GORM setup, pool, transaction helper
 │   ├── mail/              outbox and SMTP
 │   └── agent/             agent code: reconcile, Docker, nftables, SSH gateway, HTTPS proxy, exec
@@ -337,6 +337,7 @@
   <li><b>GORM, plainly.</b> Models have columns only, with no relation fields, so GORM never saves related rows by surprise. Joins are written where they are needed. No hooks.</li>
   <li><b>Admin endpoints live in the owner package</b> (<code>admin.go</code>), so the rules for a table stay in one place.</li>
   <li><b>One error type:</b> <code>server.Err(status, code, message)</code>. Clients get <code>{"error":{"code","message","fields"}}</code>.</li>
+  <li><b>No hard-coded values.</b> Infrastructure (domains, keys, SMTP, paths) comes from one <code>Config</code> struct, loaded from env and checked at start. Business values (lab hours per tier, ranks, onboarding roles, rate limits, feature switches) come from the <code>settings</code> table through <code>server.Setting(key)</code>, cached and edited in admin. Content (paths, challenges, plans, coupons) is data. The UI has no URLs, prices, lists or constants: it reads them from the API.</li>
 </ol>
 <h3>Database connection</h3>
 <ul>
@@ -347,16 +348,16 @@
 </ul>
 
 <h2 id="data">11. Data model and ERD</h2>
-<p>The model has <b>27 tables</b>. Four ideas make it small:</p>
+<p>The model has <b>23 tables</b>. Four ideas make it small:</p>
 <ol>
   <li><b>One table for "done".</b> <code>progress</code> stores every completion: a solved challenge, a machine flag, an unlocked hint, a finished activity, module or path, and an event solve. XP, leaderboards, streaks, the activity heatmap, badges and certificates all come from this one table.</li>
   <li><b>JSON for parts that belong to a parent.</b> A quiz's questions, a code exercise's tests, a challenge's hints, files and lab spec are always read and saved together with their parent and are never queried on their own. The rule: <i>if we never query it alone, it is a JSON column</i>. The API never sends answers, flag hashes or tests to the browser.</li>
-  <li><b>Status columns, not more tables.</b> Team invites and join requests are rows in <code>team_members</code> with <code>status</code> = <code>invited</code> or <code>requested</code>. Event allow-lists are rows in <code>event_entries</code> with <code>status</code> = <code>allowed</code>. Contact, ambassador and waitlist forms are rows in <code>form_entries</code>. Newsletter opt-in is one row in <code>subscribers</code> for each email.</li>
+  <li><b>Status columns, not more tables.</b> Team invites and join requests are rows in <code>team_members</code> with <code>status</code> = <code>invited</code> or <code>requested</code>. Event allow-lists are rows in <code>event_entries</code> with <code>status</code> = <code>allowed</code>. Contact, ambassador, waitlist, event-support and challenge-report forms are rows in <code>form_entries</code>. Newsletter opt-in is one row in <code>subscribers</code> for each email.</li>
   <li><b>Reuse.</b> Event challenges are normal challenges linked to an event. They stay unpublished in Practice until staff publish them after the event. Event teams are normal teams with <code>event_id</code> set and a join code. Event solves and hints are <code>progress</code> rows with <code>event_id</code> set.</li>
 </ol>
 <figure>
-  <svg id="fig-erd" viewBox="0 0 1200 1070" role="img" aria-label="Full ERD of 27 tables grouped by owner package."></svg>
-  <figcaption>Figure 4. All 27 tables, coloured by owner package. Every <code>user_id</code> column points to <code>users.id</code> (lines to <code>users</code> are left out for clarity). Dashed lines are references by <code>kind</code> + <code>ref_id</code>.</figcaption>
+  <svg id="fig-erd" viewBox="0 0 1200 980" role="img" aria-label="Full ERD of 23 tables grouped by owner package."></svg>
+  <figcaption>Figure 4. All 23 tables, coloured by owner package. Every <code>user_id</code> column points to <code>users.id</code> (lines to <code>users</code> are left out for clarity). Dashed lines are references by <code>kind</code> + <code>ref_id</code>.</figcaption>
 </figure>
 <h3>Key tables in detail</h3>
 <pre>progress                                  one row = one thing a user finished
@@ -393,17 +394,17 @@ team_members
 <thead><tr><th>New</th><th>Replaces (today)</th></tr></thead>
 <tbody>
 <tr><td><code>progress</code></td><td>ChallengeSolve, MachineFlagSolve, UnlockedHint, ModuleCompletion, ModuleProgress, PathProgress, QuizAttempt, CodingExerciseSolve, ShellTaskPass, EarnedBadge, Certificate, EventChallengeSolve, UnlockedEventChallengeHint, UserStreak, UserScoreHistory</td></tr>
-<tr><td><code>submissions</code></td><td>QuizAnswer, CodeSubmission, ChallengeAttempt, ShellAttempt (append-only log, can be pruned)</td></tr>
 <tr><td><code>activities</code></td><td>Quiz, QuizQuestion, QuizChoice, CodingExercise, CodingTestCase, ShellPractical, ShellTask, ChallengePlacement</td></tr>
 <tr><td><code>modules</code>, <code>paths</code></td><td>Module, Phase (→ <code>section</code> text), Objective, Resource, LearningPath, Topic</td></tr>
 <tr><td><code>challenges</code></td><td>Challenge, Category, Tag, Hint, ChallengeFile, OfficialWriteup, TutorialPoint, MachineFlag, RedTeamLabSpec, RedTeamLabContent, RedTeamFlagSecret</td></tr>
 <tr><td><code>teams</code>, <code>team_members</code></td><td>Team, TeamInvite, TeamRequest, TeamAnnouncement, TeamChat, EventTeam, EventTeamMember, EventTeamRequest</td></tr>
-<tr><td><code>events</code>, <code>event_challenges</code>, <code>event_entries</code></td><td>Event, EventWave (→ <code>release_at</code>), EventChallenge, EventChallengeHint, EventRegistration, EventAllowedEmail, CertificateTemplate, UserPrize, EventGallery, EventAnnouncement (→ notifications), EventReport and TrivarnaWriteup (→ <code>data</code>), EventSupportMessage (→ <code>form_entries</code>)</td></tr>
-<tr><td><code>lab_hosts</code>, <code>lab_sessions</code>, <code>credit_entries</code></td><td>RedTeamPoolVM, RedTeamTenantSlot, LabSession, RedTeamLabState, LabAccount, LabCreditEntry, LabPlanPurchase</td></tr>
+<tr><td><code>events</code>, <code>event_challenges</code>, <code>event_entries</code></td><td>Event, EventWave (→ <code>release_at</code>), EventChallenge, EventChallengeHint, EventRegistration, EventAllowedEmail, CertificateTemplate, UserPrize, EventGallery, EventAnnouncement (→ <code>settings</code> JSON, shown on the event page), EventReport and TrivarnaWriteup (→ <code>data</code>), EventSupportMessage (→ <code>form_entries</code>)</td></tr>
+<tr><td><code>lab_hosts</code>, <code>lab_sessions</code></td><td>RedTeamPoolVM, RedTeamTenantSlot, LabSession, RedTeamLabState</td></tr>
 <tr><td><code>plans</code>, <code>payments</code>, <code>coupons</code></td><td>SubscriptionPlan, RazorpaySubscription, UserSubscriptionVerification, RedTeamSubscription, Offer, CouponCode</td></tr>
-<tr><td><code>users</code>, <code>sessions</code>, <code>tokens</code>, <code>notifications</code></td><td>User, UserProfile (core fields), EmailVerification, PasswordReset, Notification, UserNotification, OnboardingResponse + JobRole (→ <code>users.onboarding</code> JSON)</td></tr>
-<tr><td><code>form_entries</code></td><td>Contact, Ambassador, ExamWaitlistEntry</td></tr>
-<tr><td><code>exam_results</code></td><td>ExamResult (read-only archive)</td></tr>
+<tr><td><code>users</code>, <code>sessions</code>, <code>tokens</code></td><td>User, UserProfile (core fields), EmailVerification, PasswordReset, OnboardingResponse (→ <code>users.onboarding</code> JSON)</td></tr>
+<tr><td><code>form_entries</code></td><td>Contact, Ambassador, ExamWaitlistEntry, EventSupportMessage, Feedback and ChallengeReport</td></tr>
+<tr><td><code>settings</code></td><td>JobRole, ranks, tier lab hours and other values that are hard-coded today</td></tr>
+<tr><td>Not kept (archived)</td><td>QuizAnswer, CodeSubmission, ChallengeAttempt, ShellAttempt, Notification, UserNotification, LabAccount, LabCreditEntry, LabPlanPurchase, all exam tables</td></tr>
 <tr><td><code>subscribers</code>, <code>newsletters</code></td><td>Marketing consent, MailingGroup, campaigns (new, simple version)</td></tr>
 <tr><td><code>mail_outbox</code></td><td>Celery mail tasks, EmailLog</td></tr>
 </tbody></table></div>
@@ -416,7 +417,7 @@ team_members
   <li>Auth: the <code>csema_session</code> cookie (HttpOnly, Secure, SameSite=Lax), or <code>Authorization: Bearer &lt;token&gt;</code>.</li>
   <li>Lists: <code>?cursor=&amp;limit=</code> (default 50, maximum 200). The response is <code>{"items":[…],"next":"…"}</code>.</li>
   <li>Writes return the changed object. Errors use the one error shape.</li>
-  <li>One call for each screen. <code>GET /api/me</code> gives the user, plan, unread count, offer banner and feature flags. <code>GET /api/home</code> gives the whole Home page.</li>
+  <li>One call for each screen. <code>GET /api/me</code> gives the user, plan, offer banner and the settings the UI needs. <code>GET /api/home</code> gives the whole Home page.</li>
 </ul>
 <h3>Endpoints</h3>
 <pre><b>auth</b>
@@ -428,15 +429,13 @@ GET    /api/auth/google/callback  /api/auth/github/callback
 POST   /api/auth/verify-email           token
 POST   /api/auth/forgot-password        email
 POST   /api/auth/reset-password         token, password
-GET    /api/me                          user, plan, unread count, banner, flags
+GET    /api/me                          user, plan, banner, UI settings
 PATCH  /api/me                          name, bio, country, avatar, newsletter on/off
 PUT    /api/me/password
 PUT    /api/me/onboarding               survey answers → recommended path
-GET    /api/notifications               ?cursor
-POST   /api/notifications/read          ids or "all"
 
 <b>community</b>
-POST   /api/forms/{contact|ambassador|waitlist|event-support}
+POST   /api/forms/{contact|ambassador|waitlist|event-support|challenge-report}
 POST   /api/newsletter                  subscribe an email (double opt-in mail)
 POST   /api/newsletter/unsubscribe      token from the mail link (one click, no login)
 
@@ -453,12 +452,10 @@ GET    /api/challenges                  ?category&amp;difficulty&amp;kind&amp;q&
 GET    /api/challenges/{slug}           details, hints (locked/unlocked), files, my flags
 POST   /api/challenges/{slug}/flag      flag, part → correct?, xp
 POST   /api/challenges/{slug}/hints/{n} unlock a hint (costs xp)
-POST   /api/challenges/{slug}/feedback  rating, text, kind
 
 <b>progress</b>
 GET    /api/home                        next lesson, today, weekly goal, streak, picks
-GET    /api/exam-results                my archived exam results
-GET    /api/leaderboard                 ?period=all|week&amp;limit
+GET    /api/leaderboard                 ?limit
 GET    /api/users/{username}            public profile: xp, rank, badges, heatmap, radar
 
 <b>teams</b>
@@ -472,7 +469,7 @@ PATCH  /api/teams/{slug}/members/{uid}  accept a request (owner)
 DELETE /api/teams/{slug}/members/{uid}  leave, kick, decline
 
 <b>labs</b>
-GET    /api/labs                        my credits, my running session, its SSH command and password
+GET    /api/labs                        hours left this month, my running session, its SSH command and password
 POST   /api/challenges/{slug}/lab       start a lab session
 DELETE /api/labs/sessions/{id}          stop it
 GET    /api/labs/sessions/{id}/terminal WebSocket: terminal in the attack box
@@ -491,9 +488,9 @@ POST   /api/events/{slug}/writeup       upload a writeup file after the event
         (event teams use /api/teams with "event": slug, and join with the team's join code)
 
 <b>billing</b>
-GET    /api/plans                       plans + lab hour packs
+GET    /api/plans                       active plans
 GET    /api/coupons/{code}              check a coupon
-POST   /api/checkout                    plan or pack + coupon → Razorpay order
+POST   /api/checkout                    plan + coupon → Razorpay order
 POST   /api/checkout/verify             Razorpay signature → payment done
 POST   /api/webhooks/razorpay
 GET    /api/payments                    my bills
@@ -511,16 +508,16 @@ DELETE /api/admin/{resource}/{id}       delete</pre>
 <tr><td><code>users</code></td><td>auth</td><td><code>q</code>, <code>role</code>, <code>tier</code></td><td>No create. <code>PATCH</code> sets role, tier, tier_until, disabled. <code>DELETE</code> anonymizes.</td></tr>
 <tr><td><code>paths</code>, <code>modules</code>, <code>activities</code></td><td>learn</td><td><code>path</code>, <code>module</code>, <code>published</code></td><td>—</td></tr>
 <tr><td><code>challenges</code></td><td>practice</td><td><code>q</code>, <code>category</code>, <code>kind</code>, <code>published</code></td><td><code>POST /challenges/{id}/files</code> upload a file</td></tr>
-<tr><td><code>feedback</code></td><td>practice</td><td><code>kind</code>, <code>challenge</code></td><td>—</td></tr>
-<tr><td><code>events</code></td><td>events</td><td><code>status</code> (upcoming, live, past)</td><td><code>PUT /events/{id}/challenges</code> the full list with xp and release_at<br><code>GET|PATCH /events/{id}/entries</code>, <code>POST /events/{id}/entries/import</code> (CSV allow-list)<br><code>POST /events/{id}/announcements</code> notify all entrants</td></tr>
+<tr><td><code>events</code></td><td>events</td><td><code>status</code> (upcoming, live, past)</td><td><code>PUT /events/{id}/challenges</code> the full list with xp and release_at<br><code>GET|PATCH /events/{id}/entries</code>, <code>POST /events/{id}/entries/import</code> (CSV allow-list)<br><code>POST /events/{id}/announcements</code> post on the event page (live through the stream)</td></tr>
 <tr><td><code>teams</code></td><td>teams</td><td><code>event</code>, <code>q</code></td><td>—</td></tr>
 <tr><td><code>plans</code>, <code>coupons</code></td><td>billing</td><td><code>active</code></td><td>—</td></tr>
-<tr><td><code>payments</code></td><td>billing</td><td><code>from</code>, <code>to</code>, <code>status</code>, <code>kind</code></td><td>The list also returns totals for the range. <code>POST</code> records a manual grant.</td></tr>
-<tr><td><code>lab-hosts</code></td><td>labs</td><td><code>status</code></td><td><code>POST /lab-hosts/{id}/setup</code> install over SSH. <code>PATCH status=draining</code> stops new sessions.</td></tr>
+<tr><td><code>payments</code></td><td>billing</td><td><code>from</code>, <code>to</code>, <code>status</code>, <code>kind</code></td><td>Read only. The list also returns totals for the range. Manual upgrades are a <code>PATCH</code> on the user's tier.</td></tr>
+<tr><td><code>lab-hosts</code></td><td>labs</td><td><code>status</code></td><td><code>POST /lab-hosts/{id}/setup</code> install over SSH.</td></tr>
 <tr><td><code>lab-sessions</code></td><td>labs</td><td><code>status</code>, <code>host</code>, <code>user</code></td><td>No create. <code>DELETE</code> stops a session.</td></tr>
-<tr><td><code>forms</code></td><td>community</td><td><code>form</code> (contact, ambassador, waitlist, event-support), <code>status</code> (new, done)</td><td>—</td></tr>
+<tr><td><code>forms</code></td><td>community</td><td><code>form</code> (contact, ambassador, waitlist, event-support, challenge-report), <code>status</code> (new, done)</td><td>—</td></tr>
 <tr><td><code>subscribers</code></td><td>community</td><td><code>status</code>, <code>q</code></td><td>—</td></tr>
 <tr><td><code>newsletters</code></td><td>community</td><td><code>status</code></td><td><code>POST /newsletters/{id}/test</code> send to me<br><code>POST /newsletters/{id}/send</code> send to all subscribers</td></tr>
+<tr><td><code>settings</code></td><td>server</td><td>—</td><td>List and <code>PATCH /settings/{key}</code>. No create or delete: keys are defined in code with defaults.</td></tr>
 <tr><td><code>system</code></td><td>server</td><td>—</td><td>Read only: <code>GET /api/admin/system</code> gives version, uptime, database, mail queue and lab hosts.</td></tr>
 </tbody></table></div>
 <h3>Today's admin routes, and where they go</h3>
@@ -541,7 +538,7 @@ DELETE /api/admin/{resource}/{id}       delete</pre>
 <tr><td><code>/api/bug-bounty/admin/…</code>, <code>/api/battleground/sessions/</code>, <code>/api/jobs/</code>, <code>/api/study-materials/</code></td><td>Dropped or parked</td></tr>
 <tr><td>Django admin (<code>/admin/</code>, 1,285 routes)</td><td>The resources above</td></tr>
 </tbody></table></div>
-<p>That is about 80 learner routes plus 14 admin resources, against 669 routes today. The appendix lists the 208 core routes that the current UI calls, grouped by new package. Every feature in them maps to a route above or is in the drop list.</p>
+<p>That is about 70 routes plus the admin resources, against 669 routes today. The appendix lists the 208 core routes that the current UI calls, grouped by new package. Every feature in them maps to a route above or is in the drop list.</p>
 
 <h2 id="auth">13. Sessions and compatibility</h2>
 <ul>
@@ -567,9 +564,10 @@ DELETE /api/admin/{resource}/{id}       delete</pre>
   <li><b>Stack.</b> Nuxt 4 + Nuxt UI 4 + TypeScript, <code>ssr: false</code>, built with <code>nuxi generate</code> and embedded in the binary. No Node server in production. Landing, pricing and legal pages are pre-rendered for SEO.</li>
   <li><b>Few overrides.</b> We use Nuxt UI components as they are. The theme changes only through one global override, so that the shades stay the same as today.</li>
   <li><b>Everything is a component.</b> A page only composes components and has no CSS of its own. Shared parts live in <code>components/app/</code>. Each feature has a folder that matches its Go package, for example <code>components/practice/ChallengeCard.vue</code>.</li>
-  <li><b>Data.</b> One <code>api.ts</code> fetch wrapper. Types come from Go with <code>tygo</code>.</li>
+  <li><b>Data.</b> One <code>api.ts</code> fetch wrapper with relative URLs. Types come from Go with <code>tygo</code>.</li>
+  <li><b>No hard-coded content.</b> No lists of paths, plans, ranks, roles or prices in the UI code. Today's UI has many (curriculum, plan highlights, ranks, lab templates, scenario JSON). The new UI reads all of them from the API.</li>
   <li><b>No tracking.</b> No analytics, no third-party scripts. Inter and the icons are bundled locally.</li>
-  <li><b>Navigation.</b> Home · Learn · Practice · Compete (leaderboard, teams) · Events · Profile. Events screens: list, event page (register, team), play (challenges, team, scoreboard), live scoreboard for spectators, results and certificate. Admin has its own sidebar: Users, Content, Challenges, Events, Billing, Labs, Forms, Newsletter, System.</li>
+  <li><b>Navigation.</b> Home · Learn · Practice · Compete (leaderboard, teams) · Events · Profile. Events screens: list, event page (register, team), play (challenges, team, scoreboard), live scoreboard for spectators, results and certificate. Admin has its own sidebar: Users, Content, Challenges, Events, Billing, Labs, Forms, Newsletter, Settings, System.</li>
   <li><b>One page pattern.</b> A header (title and one main action), a filter bar, the content, and empty, loading and error states.</li>
   <li><b>Certificates</b> (paths and events) are HTML pages built from a template image and the user's name, printed to PDF by the browser. No PDF code on the server.</li>
   <li><b>Budget.</b> Initial JavaScript under 250 KB gzip, one chunk for each route.</li>
@@ -609,6 +607,7 @@ export default defineAppConfig({ ui: { colors: { primary: 'blue', neutral: 'neut
   <li><b>Control link.</b> The agent serves HTTP only on a Unix socket. The core reaches the socket through one SSH connection for each host. There is no public control port and no API key.</li>
   <li><b>Desired state.</b> The core sends the full list of sessions for the host. The agent compares it with the running containers, fixes any difference and reports back. The agent also stops sessions at their deadline by itself.</li>
   <li><b>Placement.</b> The host with the most free memory. Labs share hosts.</li>
+  <li><b>Lab hours.</b> Each tier's monthly allowance is a setting. Hours left = allowance minus this month's <code>seconds_used</code>. No credit table.</li>
   <li><b>Isolation now.</b> Standard containers with memory, CPU and PID limits. nftables rules stop labs from reaching the internet, the host or other sessions.</li>
   <li><b>One release.</b> Core and agent have one version. A core upgrade pushes the agent to every host.</li>
 </ul>
@@ -628,16 +627,9 @@ ssh -J s-1234@ssh.lab.&lt;base&gt; root@198.18.3.5      jump to a target's own S
 </ol>
 <h3>Agent API (Unix socket)</h3>
 <pre>GET  /health                  version, Docker status
-PUT  /state                   desired sessions (full list, with SSH passwords)
+PUT  /state                   desired sessions and images (full list, with SSH passwords)
 GET  /state                   actual sessions, IPs, ports, errors, memory and network use
-POST /images/pull             pre-pull images
 GET  /exec/{session}          WebSocket: interactive PTY</pre>
-<h3>Good to have, out of scope for now</h3>
-<ul>
-  <li>A WireGuard VPN, only if players need raw UDP or ICMP from their own machine.</li>
-  <li>A stronger runtime (gVisor, or Firecracker on bare metal).</li>
-  <li>More hosts, a separate gateway, automatic VM creation.</li>
-</ul>
 
 <h2 id="deploy">16. Deploy and size budget</h2>
 <figure>
@@ -661,7 +653,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 
 <h2 id="phases">17. Phases and steps</h2>
 <figure>
-  <svg id="fig-phases" viewBox="0 0 960 260" role="img" aria-label="Phases: P0 setup, P1 skeleton and auth, P2 learner features, P3 labs and P4 UI in parallel, P5 events, P6 verify, P7 migration later, P8 parked later."></svg>
+  <svg id="fig-phases" viewBox="0 0 960 260" role="img" aria-label="Phases: P0 setup, P1 skeleton and auth, P2 learner features, P3 labs and P4 UI in parallel, P5 events, P6 verify, P7 migration later."></svg>
   <figcaption>Figure 7. Build order. Labs and UI run in parallel after the skeleton.</figcaption>
 </figure>
 <div class="phase"><h3>P0. Set up</h3>
@@ -675,7 +667,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 <p class="meta">Exit: sign up, log in (password, Google, GitHub), reset password and <code>/api/me</code> work end to end in the new UI</p>
 <ol>
   <li><code>server</code>, <code>db</code>, <code>mail</code>: Echo, errors, cookie sessions, rate limits, the GORM setup, the outbox, the UI embed, graceful restart.</li>
-  <li>GORM models for all 27 tables.</li>
+  <li>GORM models for all 23 tables.</li>
   <li><code>auth</code> and <code>progress</code> (Record, leaderboard, stats).</li>
 </ol></div>
 <div class="phase"><h3>P2. Learner features</h3>
@@ -717,9 +709,8 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 </ol></div>
 <div class="phase"><h3>P7. Data migration and cutover (planned later)</h3>
 <p class="meta">We write this plan after testing</p>
-<p>Outline: an import tool transforms the Postgres data into the 27 tables and checks the counts. We rehearse it, then switch traffic in a short read-only window. Django stays available for a rollback period, and then <code>legacy/</code> is deleted.</p></div>
-<div class="phase"><h3>P8. Parked services (later)</h3>
-<p>Suggested order: Zero Hour, SOC Arena, network labs, forensics, exams, growth.</p></div>
+<p>Outline: an import tool transforms the Postgres data into the 23 tables and checks the counts. We rehearse it, then switch traffic in a short read-only window. Django stays available for a rollback period, and then <code>legacy/</code> is deleted.</p></div>
+
 
 <h2 id="verify">18. How we check success</h2>
 <p>All checks are manual until you approve the system (strict rule: no automated tests).</p>
@@ -733,7 +724,8 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 <tr><td>Speed</td><td>p95 under 50 ms for the 20 busiest routes on the real data.</td></tr>
 <tr><td>Size</td><td>Binary under 50 MB. Idle memory under 50 MB.</td></tr>
 <tr><td>Privacy</td><td>The browser makes no request to any third-party host.</td></tr>
-<tr><td>Simplicity</td><td>27 tables, about 80 routes, under 20k lines of Go.</td></tr>
+<tr><td>Simplicity</td><td>23 tables, about 70 routes, under 20k lines of Go.</td></tr>
+<tr><td>No hard-coded values</td><td>A search of the Go and Vue code finds no URLs, prices, limits, lists or copy text outside config, settings and UI labels.</td></tr>
 </tbody></table></div>
 
 <h2 id="risks">19. Risks</h2>
@@ -1163,7 +1155,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
 
   // Figure 4: ERD
   g = setup("fig-erd");
-  var PK = { auth: "#2457d6", learn: "#1f7a4d", practice: "#7a3fb0", progress: "#b4321e", teams: "#0b7285", events: "#a2620b", labs: "#2b8a3e", billing: "#5c5f66", community: "#8a5a00", mail: "#5c5f66" };
+  var PK = { auth: "#2457d6", learn: "#1f7a4d", practice: "#7a3fb0", progress: "#b4321e", teams: "#0b7285", events: "#a2620b", labs: "#2b8a3e", billing: "#5c5f66", community: "#8a5a00", mail: "#5c5f66", server: "#5c5f66" };
   var T = {};
   function table(x, y, w, name, cols, pkg) {
     var h = 26 + cols.length * 15;
@@ -1185,49 +1177,43 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
   table(20, 20, W, "users", ["id PK", "email UQ · username UQ", "password_hash", "name · avatar · country · bio", "role  (user|staff|admin)", "tier · tier_until", "xp", "onboarding JSON", "email_verified_at", "created_at · last_seen_at"], "auth");
   table(20, 210, W, "sessions", ["token_hash PK", "user_id FK", "ip · user_agent", "expires_at · created_at"], "auth");
   table(20, 310, W, "tokens", ["token_hash PK", "user_id FK", "purpose (verify|reset|sso)", "expires_at"], "auth");
-  table(20, 410, W, "notifications", ["id PK", "user_id FK", "title · body · link", "read_at · created_at"], "auth");
 
   table(320, 20, W, "paths", ["id PK", "slug UQ · title", "track · level", "summary · badge_url", "position · published"], "learn");
   table(320, 140, W, "modules", ["id PK", "path_id FK", "section · position", "slug · title · xp", "slides_url · body JSON"], "learn");
   table(320, 260, W, "activities", ["id PK", "module_id FK", "kind (quiz|code|shell|challenge)", "position · title · xp", "content JSON"], "learn");
 
   table(620, 20, W, "challenges", ["id PK", "slug UQ · title", "category · difficulty", "kind (flag|machine) · tier", "xp · published", "body JSON  (hints, files, writeup)", "flags JSON (hashed)", "lab JSON (machine spec)"], "practice");
-  table(620, 185, W, "feedback", ["id PK", "user_id FK · challenge_id FK", "kind (rating|report)", "rating · text · created_at"], "practice");
 
   table(320, 395, W, "progress", ["PK (user_id, event_id,", "    kind, ref_id, part)", "kind (challenge|flag|hint|", "      activity|module|path)", "xp · score · data JSON", "created_at"], "progress");
-  table(620, 300, W, "submissions", ["id PK", "user_id FK", "kind · ref_id", "body JSON · ok", "created_at"], "progress");
 
   table(920, 20, 260, "lab_hosts", ["id PK", "name · address · ssh_port", "memory_mb · status", "created_at"], "labs");
   table(920, 120, 260, "lab_sessions", ["id PK", "user_id FK · challenge_id FK", "host_id FK", "status · token · ip", "flags JSON (per player)", "started_at · ends_at · ended_at", "end_reason · seconds_used"], "labs");
-  table(920, 270, 260, "credit_entries", ["id PK", "user_id FK", "seconds (+/-) · reason", "payment_id · created_at"], "labs");
 
-  table(20, 620, W, "teams", ["id PK", "slug UQ · name · join_code", "owner_id FK", "event_id FK (null = global)", "open · created_at"], "teams");
-  table(20, 750, W, "team_members", ["PK (team_id, user_id)", "status (member|invited|", "        requested)", "role (owner|member)", "created_at"], "teams");
+  table(20, 535, W, "teams", ["id PK", "slug UQ · name · join_code", "owner_id FK", "event_id FK (null = global)", "open · created_at"], "teams");
+  table(20, 665, W, "team_members", ["PK (team_id, user_id)", "status (member|invited|", "        requested)", "role (owner|member)", "created_at"], "teams");
 
-  table(320, 620, W, "events", ["id PK", "slug UQ · title · body", "mode (solo|team) · max_team", "starts_at · ends_at", "access (open|allow_list)", "settings JSON (prizes, gallery,", "  certificate, writeups)"], "events");
-  table(320, 780, W, "event_challenges", ["PK (event_id, challenge_id)", "xp · release_at"], "events");
-  table(320, 855, W, "event_entries", ["id PK", "event_id FK · email", "user_id FK · team_id FK", "status (allowed|registered)", "data JSON (writeup, rank)", "created_at"], "events");
+  table(320, 535, W, "events", ["id PK", "slug UQ · title · body", "mode (solo|team) · max_team", "starts_at · ends_at", "access (open|allow_list)", "settings JSON (prizes, gallery,", "  certificate, announcements)"], "events");
+  table(320, 695, W, "event_challenges", ["PK (event_id, challenge_id)", "xp · release_at"], "events");
+  table(320, 770, W, "event_entries", ["id PK", "event_id FK · email", "user_id FK · team_id FK", "status (allowed|registered)", "data JSON (writeup, rank)", "created_at"], "events");
 
-  table(620, 620, W, "plans", ["id PK", "code UQ · name", "kind (membership|lab_pack)", "tier · months · lab_hours", "price_inr · price_usd · active"], "billing");
-  table(620, 750, W, "payments", ["id PK", "user_id FK · plan_id FK", "event_id FK", "amount · currency", "coupon_code FK", "provider_order_id", "provider_payment_id", "status · created_at"], "billing");
-  table(620, 925, W, "coupons", ["code PK", "percent_off · max_uses · used", "starts_at · ends_at", "banner"], "billing");
+  table(620, 535, W, "plans", ["id PK", "code UQ · name", "tier · months", "price_inr · price_usd · active"], "billing");
+  table(620, 650, W, "payments", ["id PK", "user_id FK · plan_id FK", "amount · currency", "coupon_code FK", "provider_order_id", "provider_payment_id", "status · created_at"], "billing");
+  table(620, 815, W, "coupons", ["code PK", "percent_off · max_uses · used", "starts_at · ends_at", "banner"], "billing");
 
-  table(920, 385, 260, "subscribers", ["email PK", "user_id FK (null for guests)", "status (subscribed|unsubscribed)", "token UQ · created_at"], "community");
-  table(920, 495, 260, "newsletters", ["id PK", "subject · body_md", "status (draft|sending|sent)", "sent_count · sent_at", "created_at"], "community");
-  table(920, 620, 260, "form_entries", ["id PK", "form (contact|ambassador|", "      waitlist)", "user_id FK · email", "data JSON · status", "created_at"], "community");
-  table(920, 765, 260, "exam_results", ["id PK", "user_id FK · exam", "score · passed", "certificate_code", "taken_at   (archive)"], "progress");
-  table(920, 895, 260, "mail_outbox", ["id PK", "to_email · subject", "html · text", "status · attempts", "send_after · sent_at"], "mail");
+  table(920, 270, 260, "subscribers", ["email PK", "user_id FK (null for guests)", "status (subscribed|unsubscribed)", "token UQ · created_at"], "community");
+  table(920, 380, 260, "newsletters", ["id PK", "subject · body_md", "status (draft|sending|sent)", "sent_count · sent_at", "created_at"], "community");
+  table(920, 535, 260, "form_entries", ["id PK", "form (contact|ambassador|", "      waitlist)", "user_id FK · email", "data JSON · status", "created_at"], "community");
+  table(920, 680, 260, "settings", ["key PK", "value JSON", "updated_at", "(lab hours per tier, ranks,", " roles, limits, switches)"], "server");
+  table(920, 810, 260, "mail_outbox", ["id PK", "to_email · subject", "html · text", "status · attempts", "send_after · sent_at"], "mail");
 
   link("sessions", "users", "t", "b", {});
   link("modules", "paths", "t", "b", {});
   link("activities", "modules", "t", "b", {});
   link("activities", "challenges", "r", "l", { dash: [5, 4], label: "kind=challenge", dy: 30, dx: -30 });
-  link("feedback", "challenges", "t", "b", {});
   link("progress", "activities", "t", "b", { dash: [5, 4], label: "kind + ref_id", dx: 50 });
   link("progress", "challenges", "r", "l", { dash: [5, 4] });
   link("lab_sessions", "lab_hosts", "t", "b", {});
   link("lab_sessions", "challenges", "l", "r", {});
-  link("credit_entries", "payments", "l", "r", { dash: [5, 4] });
   link("team_members", "teams", "t", "b", {});
   link("teams", "events", "r", "l", {});
   link("event_challenges", "events", "t", "b", {});
@@ -1237,9 +1223,9 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
   link("payments", "plans", "t", "b", {});
   link("coupons", "payments", "t", "b", {});
   link("tokens", "users", "r", "r", {});
-  text(g.svg, 20, 1010, "Every user_id → users.id (not drawn).", { anchor: "start", size: 12, color: C.muted });
-  text(g.svg, 20, 1028, "progress.event_id = 0 outside events; else → events.id.", { anchor: "start", size: 12, color: C.muted });
-  text(g.svg, 20, 1046, "27 tables, owner package shown at the top right of each table.", { anchor: "start", size: 12, color: C.muted });
+  text(g.svg, 20, 925, "Every user_id → users.id (not drawn).", { anchor: "start", size: 12, color: C.muted });
+  text(g.svg, 20, 943, "progress.event_id = 0 outside events; else → events.id.", { anchor: "start", size: 12, color: C.muted });
+  text(g.svg, 20, 961, "23 tables, owner package shown at the top right of each table.", { anchor: "start", size: 12, color: C.muted });
 
   // Figure 5: labs
   g = setup("fig-labs");
@@ -1288,7 +1274,6 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
   box(g, 450, 40, 100, 60, "P5\nEvents");
   box(g, 580, 40, 110, 60, "P6\nVerify +\nharden");
   box(g, 720, 40, 110, 60, "P7\nMigrate +\ncutover", { dash: [5, 4] });
-  box(g, 850, 40, 95, 60, "P8\nParked", { dash: [5, 4], color: C.park, stroke: C.park });
   arrow(g, 120, 70, 140, 70, "");
   arrow(g, 260, 70, 290, 70, "");
   arrow(g, 260, 85, 290, 145, "");
@@ -1298,8 +1283,7 @@ GET  /exec/{session}          WebSocket: interactive PTY</pre>
   arrow(g, 420, 145, 600, 100, "");
   arrow(g, 420, 215, 620, 100, "");
   arrow(g, 690, 70, 720, 70, "");
-  arrow(g, 830, 70, 850, 70, "");
-  text(g.svg, 720, 130, "P7 and P8 are planned later.", { anchor: "start", size: 12, color: C.muted });
+  text(g.svg, 720, 130, "P7 is planned later.", { anchor: "start", size: 12, color: C.muted });
 })();
 </script>
 </body>
