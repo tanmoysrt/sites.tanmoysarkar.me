@@ -20,7 +20,7 @@
 </head>
 <body>
 <h1>CSEMA Go Rewrite: Progress</h1>
-<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">01 Nov 2026, 02:33 IST</span>.</p>
+<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">01 Nov 2026, 12:59 IST</span>.</p>
 
 <h2>Live demo</h2>
 <p>The demo runs on the development machine through a Cloudflare quick tunnel. The address changes when the tunnel restarts. Mail goes to a local Mailpit, so sign up and use the account without the verify link.</p>
@@ -29,22 +29,37 @@
 <h2>Phases</h2>
 <table>
   <tr><th>Phase</th><th>State</th><th>Notes</th></tr>
-  <tr><td>P0 Set up</td><td class="done">Done</td><td>Go module, <code>csema</code> database, Makefile, CI (gofmt, vet, build, 500-line and size checks), Nuxt app with the theme override.</td></tr>
-  <tr><td>P1 Skeleton, auth, progress</td><td class="done">Done</td><td>Server, db, mail, auth, onboarding, progress and all 23 tables work. Open: avatar upload, Google and GitHub keys (the code is ready, the keys are not set).</td></tr>
-  <tr><td>P2 Learner features</td><td class="doing">In progress</td><td>Content import, learn, practice, teams, billing and community services exist. Admin routes and the code runner remain open. Razorpay still needs a real test-mode checkout.</td></tr>
-  <tr><td>P3 Labs</td><td class="doing">In progress</td><td>Core placement, host setup, desired-state sync, Docker isolation, SSH gateway and the browser terminal work on the test host. Wildcard HTTPS, the code runner and the larger manual checks remain open.</td></tr>
-  <tr><td>P4 UI</td><td class="todo">Deferred</td><td>The basic learner screens and lab controls support backend checks. Finish the backend first. Then build the UI from the approved plan, with the legacy design as the visual baseline.</td></tr>
-  <tr><td>P5 Events</td><td class="todo">Not started</td><td></td></tr>
+  <tr><td>P0 Set up</td><td class="done">Done</td><td>Go module, <code>csema</code> database, Makefile, CI checks, Nuxt app with the theme override.</td></tr>
+  <tr><td>P1 Skeleton, auth, progress</td><td class="doing">Implemented, checks open</td><td>Server, db, mail, auth, onboarding, progress and all 23 tables work. Google and GitHub sign-in still need configured keys.</td></tr>
+  <tr><td>P2 Learner backend</td><td class="doing">Implemented, few checks open</td><td>Learner routes, import, staff CRUD and uploads exist. A real Razorpay checkout remains open.</td></tr>
+  <tr><td>P3 Labs</td><td class="doing">Implemented, few checks open</td><td>Host setup, Docker isolation, SSH gateway, browser terminal, code runner and wildcard HTTPS work. See the <a href="../csema-go-rewrite/#implementation-progress">plan table</a> for the open checks.</td></tr>
+  <tr><td>P4 UI</td><td class="doing">In progress</td><td>Learner and staff screens exist. The polish segment below is complete.</td></tr>
+  <tr><td>P5 Events</td><td class="doing">Implemented, UI checks open</td><td>Backend and screens exist. The browser dry run and load check remain open.</td></tr>
+  <tr><td>P6 Verify and harden</td><td class="todo">Pending</td><td>Needs load checks, upgrade checks and owner approval.</td></tr>
+  <tr><td>P7 Migration and cutover</td><td class="todo">Plan later</td><td></td></tr>
 </table>
 
 <h2>Current work order</h2>
-<p>Keep the basic UI during backend work. Complete the backend steps in the approved plan before visual work. No new design direction.</p>
+<p>The UI polish segment is complete. Next are the open checks in the <a href="../csema-go-rewrite/#implementation-progress">plan table</a>.</p>
+
+<h2>UI polish segment (01 Nov 2026)</h2>
+<ul>
+  <li>The landing page is at <code>/</code>. The signed-in home is at <code>/dashboard</code>.</li>
+  <li>Auth screens, Ctrl+K search, buttons, cards and focus states use one calm theme with soft neutral surfaces.</li>
+  <li>A flag capture or a finished lesson shows a short celebration.</li>
+  <li>Learn, Practice, leaderboard, teams, events, profile, account, billing and admin lists are restyled.</li>
+  <li>The sidebar has its own surface and a raised active row. Its collapse button is at the bottom.</li>
+  <li>All 765 challenge titles, categories and stories are rewritten. Categories drop from 38 to 15.</li>
+  <li>A machine flag can be per-player: the lab gets the user ID and writes a flag from it and a secret. 25 labs use this.</li>
+  <li>A user can have many sessions. A session lasts 7 days by default.</li>
+  <li>Browser check: admin, auth and sidebar in light, dark, collapsed and narrow states.</li>
+</ul>
 
 <h2>What works now</h2>
 <ul>
-  <li>One binary (13 MB with the UI) serves <code>/api</code>, <code>/files</code> and the embedded Nuxt app. Unknown paths get <code>200.html</code>.</li>
+  <li>One binary (16 MB with the UI) serves <code>/api</code>, <code>/files</code> and the embedded Nuxt app. Unknown paths get <code>200.html</code>.</li>
   <li>AutoMigrate creates all 23 tables on the local MariaDB 11.8. A second start changes nothing.</li>
-  <li>Sign up, verify mail (through the outbox to Mailpit), log in by email or username, one session per user, forgot and reset password, change password, log out.</li>
+  <li>Sign up, verify mail (through the outbox to Mailpit), log in by email or username, many sessions per user, forgot and reset password, change password, log out.</li>
   <li>A real Django <code>pbkdf2_sha256</code> hash logs in and is replaced with argon2id.</li>
   <li>A cookie request that changes data from another origin (for example a lab site) gets 403.</li>
   <li><code>progress.Record</code> is the one writer of <code>users.xp</code>. Event rows never change it.</li>
