@@ -20,7 +20,7 @@
 </head>
 <body>
 <h1>CSEMA Go Rewrite: Progress</h1>
-<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">01 Nov 2026, 19:54 IST</span>.</p>
+<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">01 Nov 2026, 20:01 IST</span>.</p>
 
 <h2>Live demo</h2>
 <p>The demo runs on the development machine through a Cloudflare quick tunnel. The address changes when the tunnel restarts. Mail goes to a local Mailpit, so sign up and use the account without the verify link.</p>
@@ -40,7 +40,7 @@
 </table>
 
 <h2>Current work order</h2>
-<p>The UI polish segment and the content and lab cleanup are complete. Next: the challenge page redesign (teardown and mockup done, in review), then the open checks in the <a href="../csema-go-rewrite/#implementation-progress">plan table</a>.</p>
+<p>The UI polish segment and the content and lab cleanup are complete. Next: the open checks in the <a href="../csema-go-rewrite/#implementation-progress">plan table</a>.</p>
 
 <h2>UI polish segment (01 Nov 2026)</h2>
 <ul>
@@ -69,6 +69,7 @@
   <li>Private registry logins are a setting (<code>lab_registries</code>). Each sync sends them to the agents, and the agent uses only these logins to pull images.</li>
   <li>The lab panel is simpler: one start button, one short starting message. Opening a machine page now starts its lab when the player has time left and no other lab runs.</li>
   <li>The challenge file viewer shows "Open target" next to "Download" in its header.</li>
+  <li>Challenge page redesign: the lab toolbar holds "Open web target", the time left and Stop. The Access tab became Connect, with each value in its own field and copy button. The flag panel puts the question and its XP on one line. On a phone the page fits the screen: Brief, Lab, Flags and Hints are tabs, and a floating Flag button opens a sheet. Long text has a 24 px line height.</li>
 </ul>
 
 <h2>Lab resources</h2>
