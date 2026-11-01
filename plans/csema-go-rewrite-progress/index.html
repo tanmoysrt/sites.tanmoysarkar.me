@@ -20,7 +20,7 @@
 </head>
 <body>
 <h1>CSEMA Go Rewrite: Progress</h1>
-<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">01 Nov 2026, 19:30 IST</span>.</p>
+<p class="muted">Work log for the <a href="../csema-go-rewrite/">rewrite plan</a>. Updated: <span id="updated">01 Nov 2026, 19:54 IST</span>.</p>
 
 <h2>Live demo</h2>
 <p>The demo runs on the development machine through a Cloudflare quick tunnel. The address changes when the tunnel restarts. Mail goes to a local Mailpit, so sign up and use the account without the verify link.</p>
@@ -40,7 +40,7 @@
 </table>
 
 <h2>Current work order</h2>
-<p>The UI polish segment and the content and lab cleanup are complete. Next: apply the suggested lab memory limits after a check under real use, then the open checks in the <a href="../csema-go-rewrite/#implementation-progress">plan table</a>.</p>
+<p>The UI polish segment and the content and lab cleanup are complete. Next: the challenge page redesign (teardown and mockup done, in review), then the open checks in the <a href="../csema-go-rewrite/#implementation-progress">plan table</a>.</p>
 
 <h2>UI polish segment (01 Nov 2026)</h2>
 <ul>
@@ -56,7 +56,7 @@
 </ul>
 
 <h2>Content and lab cleanup (01 Nov 2026)</h2>
-<p>Every challenge was checked, fixed or unpublished, and every machine lab was started on a real lab host. Now <b>384 of 632</b> challenges and <b>72 of 152</b> machine labs are published.</p>
+<p>Every challenge was checked, fixed or unpublished, and every machine lab was started on a real lab host. Now <b>384 of 632</b> challenges and <b>63 of 152</b> machine labs are published.</p>
 <ul>
   <li>Codex (gpt-6-luna, high effort) rewrote all 784 challenges and machines: title, story, hook, objective, known facts, questions, hints, category and tags from a fixed list. A script checked each result: challenge data, file names and links stay the same, flag parts and XP do not change, and no flag is in the text. All titles are unique.</li>
   <li>8 challenges with very long flags got short flags taken from the evidence. Each one passed a blind solve.</li>
@@ -72,7 +72,8 @@
 </ul>
 
 <h2>Lab resources</h2>
-<p>Measured on a 2 CPU, 8 GB lab host, about 20 seconds after start, with no player activity. The suggested limit is the measured peak times 1.5 (at least peak plus 64 MB), rounded up to 64 MB, with a minimum of 128 MB. No limit is changed yet.</p>
+<p>Measured on a 2 CPU, 8 GB lab host, about 20 seconds after start, with no player activity. The suggested limit is the measured peak times 1.5 (at least peak plus 64 MB), rounded up to 64 MB, with a minimum of 128 MB.</p>
+<p><b>Applied.</b> 58 containers now use the suggested limit. A retest of all 72 labs with the new limits had no out-of-memory stop. The 9 labs that need more than 100 MB in total are unpublished for now, so the table below is for reference.</p>
 <table>
   <tr><th>Measure</th><th>Value</th></tr>
   <tr><td>Published labs measured</td><td>72 labs, 80 containers</td></tr>
