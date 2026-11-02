@@ -40,7 +40,8 @@
 <div class="box">
 <p><strong>Result.</strong> Docker Hub images boot on Firecracker with no Docker and no container runtime in the guest. We unpack the image into an ext4 disk, add one small init program, and boot it with the Ubuntu kernel that Atlas already uses.</p>
 <p><strong>Recommendation.</strong> Follow the Fly.io model for the guest. Keep the Atlas storage path: an image becomes a normal <code>Virtual Machine Image</code> with an ext4 root file system. Then ZFS clones, object storage, and host caching work with no first-phase change to the Metal API.</p>
-<p><strong>Limit.</strong> The test used local storage. Guest networking is not proven yet. It did not run on an Atlas host or through <code>metald</code>.</p>
+<p><strong>Evidence.</strong> nginx from Docker Hub answered HTTP 200 over a TAP device about 840 ms after Firecracker started. A graceful stop, disk growth, and a restart with data also worked.</p>
+<p><strong>Limit.</strong> All tests ran on a laptop. Nothing ran on an Atlas host or through <code>metald</code> yet.</p>
 </div>
 
 <h2>Why this needs more than an unpacked image</h2>
@@ -77,13 +78,26 @@
 <p class="meta">* Time from init start until a TCP connection to the port inside the guest succeeded. This is over loopback, not over the network. The nginx range comes from three boots.</p>
 <p>The kernel reached init in about 0.86 s on every boot. This includes slow serial console output. The entrypoint started 6 to 16 ms after init. Flatten plus mkfs took less than 4 s for each image.</p>
 
+<h3>Second round: boot, network, stop, and restart</h3>
+<p class="meta">Same laptop and shape. These runs used the Metal default kernel arguments, init at <code>/sbin/init</code>, and a disk file made 1 GiB larger than its file system. The HTTP test ran in a private network namespace with a TAP device, because the test had no root access.</p>
+<div class="scroll"><table>
+<tr><th>Test</th><th>Result</th><th>State</th></tr>
+<tr><td>HTTP from outside the guest to nginx</td><td>HTTP 200. First answer at 831, 837, and 843 ms from Firecracker start with <code>quiet loglevel=0</code>. 1059 ms in one run with full console output.</td><td><span class="tag tested">tested</span></td></tr>
+<tr><td>Init at <code>/sbin/init</code>, no <code>init=</code></td><td>Booted on Alpine (<code>nginx</code>, the path was a symlink) and on Debian (<code>postgres</code>, <code>/sbin</code> links to <code>usr/sbin</code>).</td><td><span class="tag tested">tested</span></td></tr>
+<tr><td>Grow ext4 online with an ioctl</td><td>nginx: 311 to 1270 MiB in 24 ms. postgres: 791 to 1799 MiB in 8 ms. No <code>resize2fs</code> in the guest.</td><td><span class="tag tested">tested</span></td></tr>
+<tr><td>Ctrl+Alt+Del to the image stop signal</td><td>nginx got <code>SIGQUIT</code> and exited in 31 ms. postgres got <code>SIGINT</code>, logged a clean shutdown, and exited in 19 ms. Firecracker exited with 0. <code>e2fsck</code> found the disks clean.</td><td><span class="tag tested">tested</span></td></tr>
+<tr><td>Restart with the same disk</td><td>postgres logged "Skipping initialization" on the second boot. Port open 143 ms after init.</td><td><span class="tag tested">tested</span></td></tr>
+<tr><td>Guest memory in use, 1 s after port open</td><td>MemTotal minus MemAvailable: nginx 114 MiB, postgres 172 MiB on first boot and 136 MiB on second. A 1024 MiB VM reports 956 MiB total.</td><td><span class="tag tested">tested</span></td></tr>
+</table></div>
+
 <h3>Findings that change the design</h3>
 <ol>
 <li><strong>Do not mount over image directories.</strong> Our first init mounted a tmpfs on <code>/run</code>. This hid the <code>/run/mysqld</code> directory that the MariaDB image ships, and the entrypoint failed. We removed the mount and set <code>MARIADB_ROOT_PASSWORD</code>, and the server started. Init must match Docker here, even though Fly mounts <code>/run</code>.</li>
-<li><strong>An exit is a normal event.</strong> <code>ubuntu</code>, <code>python</code>, and <code>node</code> exit at once with code 0, because they expect a terminal. If Metal restarts the guest after each exit, this becomes a boot loop. Atlas needs a clear rule. See decision 2.</li>
+<li><strong>The Ubuntu kernel ignores <code>ip=</code>.</strong> The boot log says <code>Unknown kernel command line parameters "ip=..."</code>. So <code>eth0</code> stayed down and our first network test got no answer. Today, Ubuntu guests get their address from a systemd-networkd file in the image. Init must set the address itself. It can read the <code>ip=</code> value that Metal already sends from <code>/proc/cmdline</code>. The comment on <code>bootArguments</code> in Metal does not match this kernel.</li>
+<li><strong>An exit is a normal event.</strong> <code>ubuntu</code>, <code>python</code>, and <code>node</code> exit at once with code 0, because they expect a terminal. Metal starts a stopped guest when its desired state is running, and a successful start gets no backoff. We read this in the code and did not run it on a host. So an exit that powers off the guest would become a boot loop. See decision 2.</li>
 <li><strong>Images are small, so disks can be small.</strong> Our test disks were 276 to 819 MiB. The Ubuntu base is a fixed 4 GiB. The VM disk grows from the image size, so init must grow the file system itself. Ubuntu does this with cloud-init today.</li>
 <li><strong>Whiteouts are real.</strong> <code>postgres</code> and <code>mariadb</code> each had 2. A plain tar extraction would keep files that the image deleted. The converter must handle whiteouts, and opaque whiteouts too, though none appeared in this set.</li>
-<li><strong>Each entrypoint expects a different stop signal.</strong> nginx declares <code>SIGQUIT</code> and postgres declares <code>SIGINT</code>. Metal stops a guest with Ctrl+Alt+Del. By default the Linux kernel reboots at once on this event. Init must turn this off with <code>LINUX_REBOOT_CMD_CAD_OFF</code>, receive <code>SIGINT</code>, and send the image stop signal. We have not tested this yet.</li>
+<li><strong>Each entrypoint expects a different stop signal.</strong> nginx declares <code>SIGQUIT</code> and postgres declares <code>SIGINT</code>. Metal stops a guest with Ctrl+Alt+Del. By default the Linux kernel reboots at once on this event. Init turns this off with <code>LINUX_REBOOT_CMD_CAD_OFF</code>, receives <code>SIGINT</code>, and sends the image stop signal. This worked in the second round.</li>
 <li><strong>Kernel modules are large.</strong> The Ubuntu modules package is 166 MiB compressed. Ubuntu images install it so that Docker and BPF work in the guest. Start without it. An image that needs <code>modprobe</code> will not get that module.</li>
 <li><strong>Docker Hub limits are low for a fleet.</strong> The docs give 100 pulls per 6 hours per IP for anonymous use, and 200 per 6 hours for a free account. The response headers we saw said <code>100;w=3600</code>, so the docs and the headers differ. Docker also warns about abuse limits for platforms that pull for many users from one address. Pull each digest once. Do not pull once per host.</li>
 </ol>
@@ -107,7 +121,7 @@
 <h3>How does init get into the guest?</h3>
 <div class="scroll"><table>
 <tr><th>Option</th><th>Effect</th><th>View</th></tr>
-<tr><td><strong>Write init to <code>/sbin/init</code> in the disk</strong></td><td>The kernel starts it by default, so Metal needs no boot change. One disk and one digest. A new init needs a new image build, as <code>apply-metadata</code> does today. If the image has its own <code>/sbin/init</code>, the builder moves it. On Alpine this path is a symlink to BusyBox, so replace the link and do not write through it. Not tested yet: the test used <code>init=</code>.</td><td class="rec">Recommended.</td></tr>
+<tr><td><strong>Write init to <code>/sbin/init</code> in the disk</strong></td><td>The kernel starts it by default, so Metal needs no boot change. One disk and one digest. A new init needs a new image build, as <code>apply-metadata</code> does today. If the image has its own <code>/sbin/init</code>, the builder moves it. On Alpine this path is a symlink to BusyBox, so replace the link and do not write through it. An absolute symlink in an image must not lead the converter out of its directory. Tested on Alpine and Debian images.</td><td class="rec">Recommended.</td></tr>
 <tr><td>Add boot arguments to the Metal image request</td><td>Explicit. Needs a Metal API field and host upgrades. Metal reads a <code>boot-args</code> file today, but in the repository only the development script writes it.</td><td>Use only if the first option fails.</td></tr>
 <tr><td>Separate small init drive (Fly's public init)</td><td>Init can change with no rebuild. Metal must add a second drive to boot, rescue, and migration. Device names change.</td><td>Reject for now.</td></tr>
 </table></div>
@@ -132,12 +146,13 @@
 <tr><td>Mount <code>/proc</code>, <code>/sys</code>, <code>/dev</code>, cgroup2</td><td>systemd</td><td>Mount only these. Do not mount over image directories.</td><td><span class="tag tested">tested</span></td></tr>
 <tr><td>Start entrypoint with env, user, directory</td><td>n/a</td><td>From <code>image.json</code>, plus overrides from <code>attributes</code> in the metadata service (MMDS).</td><td><span class="tag tested">tested</span> without overrides</td></tr>
 <tr><td>Reap child processes as PID 1</td><td>systemd</td><td>Wait for all children.</td><td><span class="tag tested">tested</span></td></tr>
-<tr><td>IPv4 address</td><td>Kernel <code>ip=</code> argument</td><td>No change.</td><td><span class="tag unknown">test incomplete</span></td></tr>
+<tr><td>IPv4 address</td><td>systemd-networkd file in the image</td><td>Read <code>ip=</code> from <code>/proc/cmdline</code> and set the address by netlink or ioctl. The kernel passes unknown arguments to init, so do not pass them to the entrypoint.</td><td><span class="tag tested">tested</span> with a fixed address</td></tr>
 <tr><td>MTU 1380, IPv4 and metadata routes, DNS, <code>/etc/hosts</code></td><td>systemd-networkd</td><td>Set by netlink. Write the DNS and hosts files.</td><td><span class="tag proposed">proposed</span></td></tr>
 <tr><td>Mesh IPv6 address and host routes</td><td><code>apply-metadata</code> (Python)</td><td>Poll MMDS every 250 ms and apply by netlink. Images may have no Python or <code>ip</code>.</td><td><span class="tag proposed">proposed</span></td></tr>
 <tr><td>Clock step after memory restore</td><td><code>apply-metadata</code></td><td>Same rule: forward only, gap above 2 s.</td><td><span class="tag proposed">proposed</span></td></tr>
-<tr><td>Grow file system</td><td>cloud-init</td><td>Online ext4 resize ioctl at boot and after a disk resize. Images may have no <code>resize2fs</code>.</td><td><span class="tag proposed">proposed</span></td></tr>
-<tr><td>Graceful stop</td><td>systemd</td><td>Disable Ctrl+Alt+Del reboot. Send the image stop signal, wait, sync, and power off.</td><td><span class="tag proposed">proposed</span></td></tr>
+<tr><td>Grow file system</td><td>cloud-init</td><td>Online ext4 resize ioctl at boot and after a disk resize. Images may have no <code>resize2fs</code>.</td><td><span class="tag tested">tested</span> at boot</td></tr>
+<tr><td>Graceful stop</td><td>systemd</td><td>Disable Ctrl+Alt+Del reboot. Send the image stop signal, wait, sync, and power off.</td><td><span class="tag tested">tested</span></td></tr>
+<tr><td>Entrypoint exit</td><td>n/a</td><td>Keep the guest running. Restart the entrypoint with a growing delay. Write the exit code to the console.</td><td><span class="tag proposed">proposed</span></td></tr>
 <tr><td>SSH keys and <code>user_data</code></td><td>sshd, cloud-init</td><td>Not available. See decisions 4 and 5.</td><td><span class="tag unknown">open</span></td></tr>
 </table></div>
 <p>The metadata logic would then exist in Python and in Go. Later, Ubuntu images can use the Go program too, so one implementation remains. Do this as a separate change, because it touches all current images.</p>
@@ -148,14 +163,14 @@
 <tr><td>Guest init (new Go binary)</td><td>Jobs above. Static build. Lives in the Metal Go module. Exact path is for review.</td><td>New images only.</td></tr>
 <tr><td>Converter (new)</td><td>Pull, flatten, make ext4. Enforce limits on size and file count. Reject unsafe paths. Consider <code>go-containerregistry</code> for pull and flatten, and <code>mke2fs -d</code> with a tar input to avoid root. mke2fs 1.47 documents this when built with libarchive. Not tested.</td><td>New.</td></tr>
 <tr><td>Atlas app</td><td>A build command in <code>image_builder.py</code> style. Optional source reference and digest on the image. Later, a tenant import route.</td><td>Optional fields and a Frappe patch. DocType layout needs a mockup and approval first.</td></tr>
-<tr><td>Metal</td><td>None in the first phase. Check the guest exit behavior.</td><td>No API or record change expected.</td></tr>
+<tr><td>Metal</td><td>None in the first phase. Init owns the restart of the entrypoint, so the guest does not power off when its program exits.</td><td>No API or record change expected.</td></tr>
 <tr><td>Migration, sleep, warm, rescue</td><td>No planned code change. The VM is still Firecracker on a ZFS disk. Each needs a test, and init must keep MMDS polling so that a restored guest gets its address.</td><td>Must be proven by test.</td></tr>
 </table></div>
 
 <h2>Plan</h2>
 <div class="scroll"><table>
 <tr><th>Phase</th><th>Work</th><th>Depends on</th><th>Done when</th></tr>
-<tr><td><strong>0</strong></td><td>Local boot test. <span class="tag tested">done</span>, except guest networking.</td><td></td><td>Results above.</td></tr>
+<tr><td><strong>0</strong></td><td>Local boot, network, stop, growth, and restart tests. <span class="tag tested">done</span></td><td></td><td>Results above.</td></tr>
 <tr><td><strong>1</strong></td><td>Guest init with network, MMDS, growth, and stop. Boot on a development host from a hand-built disk.</td><td>Decisions 2 and 3</td><td>nginx answers over mesh IPv6 and the public path. Stop uses the image signal. Disk resize grows the file system.</td></tr>
 <tr><td><strong>2</strong></td><td>Converter and operator command (option A). Public Docker Hub images. Docs.</td><td>1</td><td>The nine images above publish as Available images and boot through the normal VM create flow on a development host.</td></tr>
 <tr><td><strong>3</strong></td><td>Test each Atlas feature. Add command and environment overrides. Add exit handling and console access.</td><td>2, decisions 2 and 5</td><td>Restart, migration, sleep and wake, warm start, snapshot, and rescue pass on nginx and postgres. A failed entrypoint is visible to the operator.</td></tr>
@@ -166,10 +181,10 @@
 <h2>Decisions for discussion</h2>
 <ol>
 <li><strong>Who uses this first?</strong> Operator-selected images, or tenants? <span class="rec">Recommendation: operators first.</span> Tenant import brings the untrusted archive problem, registry credentials, and quotas.</li>
-<li><strong>What happens when the entrypoint exits?</strong> Options: stop the VM, restart it, or keep the guest alive. <span class="rec">Recommendation: init powers off and reports the exit code. Metal does not restart it in a loop.</span> We must first read how Metal treats a guest-initiated shutdown, and record the exit code in a place Atlas can read.</li>
+<li><strong>What happens when the entrypoint exits?</strong> Options: power off, or keep the guest up and restart the program. A power off needs a Metal change, because Metal starts the guest again while the desired state is running. <span class="rec">Recommendation: init restarts the entrypoint with a delay that grows to 60 s, and writes the exit code to the console.</span> The VM stays Running in Atlas, so a failing program does not show in the VM state. Exit codes in the API can come later.</li>
 <li><strong>Does the root disk survive a restart?</strong> Fly resets by default. Atlas VMs keep their disk. <span class="rec">Recommendation: keep the disk.</span> This is the current Atlas contract, and migration, snapshots, and databases depend on it. A reset mode can come later.</li>
 <li><strong>What does <code>user_data</code> do on an OCI image?</strong> It has no cloud-init. <span class="rec">Recommendation: reject the request with a clear error</span>, and do not ignore it silently. This is a new image kind, so no existing client breaks.</li>
-<li><strong>How does a person get a shell?</strong> Fly has SSH and an API built into init. DigitalOcean has an exec API. Many images have no shell. <span class="rec">Recommendation: first phase shows output on the TTY console only.</span> Then add exec through init over vsock or the serial console. Check the SSH console mode, which may need sshd in the guest.</li>
+<li><strong>How does a person get a shell?</strong> Fly has SSH and an API built into init. DigitalOcean has an exec API. Many images have no shell. <span class="rec">Recommendation: first phase shows output on the TTY console only.</span> Then add exec through init over vsock or the serial console. The Atlas SSH console needs an SSH service and the key lookup in the guest, so it does not work on these images. The TTY console collects output while the VM runs.</li>
 <li><strong>How does an image update work?</strong> The disk holds both the image files and the data, so a new image cannot replace the old one in place. <span class="rec">Recommendation: a new image means a new VM until network volumes exist.</span> Fly can replace it because its volumes are separate. This is the largest product difference from Fly.</li>
 </ol>
 
@@ -185,9 +200,10 @@
 
 <h3>Not tested yet</h3>
 <ul>
-<li><strong>Guest networking.</strong> One test in a private network namespace with a TAP device got no HTTP answer. The cause is not known. The test timed out, and may be at fault. Port results above use loopback only.</li>
-<li>Anything on an Atlas host: <code>metald</code>, jailer, ZFS, cgroup limits, mesh, migration, sleep, warm start, and rescue.</li>
-<li>Boot with <code>/sbin/init</code>, quiet boot time, memory use, restart with the same disk, stop signals, and ext4 growth.</li>
+<li>Anything on an Atlas host: <code>metald</code>, jailer, ZFS, cgroup limits, mesh IPv6, public access, migration, sleep, warm start, and rescue.</li>
+<li>The Metal reaction to a guest exit. We read the code only.</li>
+<li>Applying metadata from MMDS: mesh address, host routes, hostname, and clock step. The test address was fixed. Ubuntu memory use, for comparison.</li>
+<li>A disk resize while the guest runs. The growth test ran at boot.</li>
 <li>The reasons that Traefik did not open port 8080. It likely needs configuration, which we did not give it.</li>
 </ul>
 
@@ -244,7 +260,7 @@ W.arrow(215, 55, 298, 55, "one pull"); W.arrow(470, 55, 558, 55, "one disk");
 W.box(95, 130, 120, 50, ["Docker Hub"]); W.box(300, 130, 170, 50, ["Builder VM", "(converter, in a guest)"], "#1f6f54"); W.box(560, 130, 130, 50, ["Object storage"]);
 W.arrow(215, 155, 298, 155, "one pull"); W.arrow(470, 155, 558, 155, "one disk");
 W.box(95, 230, 120, 50, ["Docker Hub"]); W.box(300, 215, 170, 34, ["Host 1: metald converts"], "#a33a2a"); W.box(300, 258, 170, 34, ["Host N: metald converts"], "#a33a2a");
-W.arrow(215, 248, 298, 232, "one pull each", "#a33a2a"); W.arrow(215, 262, 298, 275, "", "#a33a2a");
+W.arrow(215, 248, 298, 232, "", "#a33a2a"); W.arrow(215, 262, 298, 275, "", "#a33a2a"); W.text(256, 298, "one pull each", "#a33a2a", 11.5);
 W.text(620, 258, "No shared copy", "#a33a2a", 13); W.text(620, 276, "Digest can differ", "#a33a2a", 13);
 
 const F = sketch("flow");
