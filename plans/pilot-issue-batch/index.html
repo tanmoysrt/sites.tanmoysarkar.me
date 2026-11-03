@@ -31,58 +31,58 @@ code { font-size:.85em; overflow-wrap:anywhere; }
 
 <section class="card">
   <header><span class="step">1</span><h2><a href="https://github.com/frappe/pilot/issues/676">#676</a> 2FA QR code does not scan in dark mode</h2>
-  <span class="badge done">Done, awaiting approval</span></header>
+  <span class="badge approved">Approved, PR open</span></header>
   <p class="meta">Size S</p>
   <dl><dt>Root cause</dt><dd>The QR SVG has no quiet zone (qrcode.vue default margin is 0). The white frame comes from the container class bg-surface-white, and that theme token turns dark in dark mode. Scanners need a light border around the code.</dd>
   <dt>Proposal</dt><dd>Give the QR code its own 4-module white quiet zone with fixed white and black colors, so the theme cannot change it.</dd>
-  <dt>How it is checked</dt><dd>Build the dashboard and open the 2FA dialog in dark mode. The code shows a white border.</dd><dt>Branch</dt><dd><code>fix/2fa-qr-dark-mode</code> at <code>0e5a99cd</code></dd><dt>Result</dt><dd>Rendered the component: the SVG viewBox grows from 29 to 37 modules and the code starts at (4,4) on a white rect, so the quiet zone no longer depends on the theme.</dd></dl>
+  <dt>How it is checked</dt><dd>Build the dashboard and open the 2FA dialog in dark mode. The code shows a white border.</dd><dt>Branch</dt><dd><code>fix/2fa-qr-dark-mode, PR frappe/pilot#759</code> at <code>0e5a99cd</code></dd><dt>Result</dt><dd>Rendered the component: the SVG viewBox grows from 29 to 37 modules and the code starts at (4,4) on a white rect, so the quiet zone no longer depends on the theme.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">2</span><h2><a href="https://github.com/frappe/pilot/issues/742">#742</a> setup production --tls fails when another certbot runs</h2>
-  <span class="badge done">Done, awaiting approval</span></header>
+  <span class="badge approved">Approved, PR open</span></header>
   <p class="meta">Size S</p>
   <dl><dt>Root cause</dt><dd>certbot takes a global lock. When the renewal timer or another run holds it, certbot exits at once with &#x27;Another instance of Certbot is already running&#x27;. Pilot runs certbot once and does not wait.</dd>
   <dt>Proposal</dt><dd>Run every certbot certonly call through one method on LetsEncryptManager. On that exact message only, wait 10 seconds and try again, up to 6 times. After the last try, fail with a clear message: another certbot run is in progress, try again in a minute. certbot refuses before it does any work, so the retry is safe.</dd>
-  <dt>How it is checked</dt><dd>Unit tests: lock message retries then succeeds; other errors do not retry; the final error has the clear message.</dd><dt>Branch</dt><dd><code>fix/certbot-lock-retry</code> at <code>efa4f5e2</code></dd><dt>Result</dt><dd>3 new unit tests pass, plus 88 existing certbot tests. A fake certbot that prints the lock message twice succeeds on the third run through the real run_command path.</dd></dl>
+  <dt>How it is checked</dt><dd>Unit tests: lock message retries then succeeds; other errors do not retry; the final error has the clear message.</dd><dt>Branch</dt><dd><code>fix/certbot-lock-retry, PR frappe/pilot#760</code> at <code>efa4f5e2</code></dd><dt>Result</dt><dd>3 new unit tests pass, plus 88 existing certbot tests. A fake certbot that prints the lock message twice succeeds on the third run through the real run_command path.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">3</span><h2><a href="https://github.com/frappe/pilot/issues/736">#736</a> Admin domain gets indexed by search engines</h2>
-  <span class="badge done">Done, awaiting approval</span></header>
+  <span class="badge approved">Approved, PR open</span></header>
   <p class="meta">Size S</p>
   <dl><dt>Root cause</dt><dd>The admin vhost proxies every path to the admin SPA, so /robots.txt returns index.html. The template has no noindex header.</dd>
   <dt>Proposal</dt><dd>Always add X-Robots-Tag &quot;noindex, nofollow&quot; to the admin vhost and serve a fixed /robots.txt that disallows everything. No config switch: an admin login page must never be indexed. A general custom-include hook is left out; it adds a root-parsed, bench-writable config surface.</dd>
-  <dt>How it is checked</dt><dd>Unit test on rendered nginx config: admin server block has the header and robots location; site blocks do not. Run nginx -t on the rendered file when nginx is present.</dd><dt>Branch</dt><dd><code>fix/admin-noindex</code> at <code>17c26680</code></dd><dt>Result</dt><dd>Rendered config passes nginx -t on nginx 1.30. Live curl: admin /robots.txt returns the disallow text; admin / returns X-Robots-Tag: noindex, nofollow; the site vhost has no header.</dd></dl>
+  <dt>How it is checked</dt><dd>Unit test on rendered nginx config: admin server block has the header and robots location; site blocks do not. Run nginx -t on the rendered file when nginx is present.</dd><dt>Branch</dt><dd><code>fix/admin-noindex, PR frappe/pilot#761</code> at <code>17c26680</code></dd><dt>Result</dt><dd>Rendered config passes nginx -t on nginx 1.30. Live curl: admin /robots.txt returns the disallow text; admin / returns X-Robots-Tag: noindex, nofollow; the site vhost has no header.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">4</span><h2><a href="https://github.com/frappe/pilot/issues/741">#741</a> Supported way to run git with the bench&#x27;s stored credential</h2>
-  <span class="badge done">Done, awaiting approval</span></header>
+  <span class="badge approved">Approved, PR open</span></header>
   <p class="meta">Size S</p>
   <dl><dt>Root cause</dt><dd>Only internal helpers (auth_config_for, git_env) attach the stored token to git. Outside scripts import them and break when they change.</dd>
   <dt>Proposal</dt><dd>Add a public App.run_git(*args) that runs git in the app folder with the stored credential in the environment (never in argv or .git/config). Add a thin CLI: pilot -b &lt;bench&gt; git &lt;app&gt; &lt;git args...&gt;, which streams output and returns git&#x27;s exit code.</dd>
-  <dt>How it is checked</dt><dd>Unit tests: env carries GIT_CONFIG_* auth and argv has no token; CLI passes args through and returns the exit code. Run pilot git &lt;app&gt; status on a local bench.</dd><dt>Branch</dt><dd><code>feat/app-run-git</code> at <code>4b7ed532</code></dd><dt>Result</dt><dd>3 unit tests: the token reaches git through GIT_CONFIG_* (git config --get reads it) and is absent from argv and .git/config; exit codes pass through. Live on a local bench: pilot -b bench1 git frappe log --oneline -1 and ls-remote work, a bad ref exits 128, a missing app exits 1.</dd></dl>
+  <dt>How it is checked</dt><dd>Unit tests: env carries GIT_CONFIG_* auth and argv has no token; CLI passes args through and returns the exit code. Run pilot git &lt;app&gt; status on a local bench.</dd><dt>Branch</dt><dd><code>feat/app-run-git, PR frappe/pilot#762</code> at <code>4b7ed532</code></dd><dt>Result</dt><dd>3 unit tests: the token reaches git through GIT_CONFIG_* (git config --get reads it) and is absent from argv and .git/config; exit codes pass through. Live on a local bench: pilot -b bench1 git frappe log --oneline -1 and ls-remote work, a bad ref exits 128, a missing app exits 1.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">5</span><h2><a href="https://github.com/frappe/pilot/issues/752">#752</a> Reject a backup if the disk has no space</h2>
-  <span class="badge done">Done, awaiting approval</span></header>
+  <span class="badge approved">Approved, PR open</span></header>
   <p class="meta">Size M</p>
   <dl><dt>Root cause</dt><dd>SiteBackups.take writes to the site&#x27;s backups folder with no space check. A full disk can also stop the database.</dd>
   <dt>Proposal</dt><dd>SiteBackups.take checks free space before Frappe runs and raises InsufficientDiskSpaceError. The estimate is the newest local database dump plus 20%; with no local dump, the database size on disk (an upper bound). With files, add the size of public/files and private/files. 500 MB always stays free for the system. Backups that stream to S3 skip the check. The API was left thin: the task fails at once with the message, and the failure counts toward the backup-failing alert.</dd>
-  <dt>How it is checked</dt><dd>Unit tests for the estimate and the rejection. API test for the early 4xx error.</dd><dt>Branch</dt><dd><code>feat/backup-disk-space</code> at <code>e843afa0</code></dd><dt>Result</dt><dd>New tests for the estimate, the refusal, the 500 MB reserve edge and the message. Local site drift.localhost: last real run was 142 MB, estimate 170 MB. With free space forced to 600 MB, the backup is refused before Frappe runs: &#x27;needs about 170 MB, plus 500 MB kept free for the system, and 600 MB is free&#x27;.</dd></dl>
+  <dt>How it is checked</dt><dd>Unit tests for the estimate and the rejection. API test for the early 4xx error.</dd><dt>Branch</dt><dd><code>feat/backup-disk-space, PR frappe/pilot#763</code> at <code>e843afa0</code></dd><dt>Result</dt><dd>New tests for the estimate, the refusal, the 500 MB reserve edge and the message. Local site drift.localhost: last real run was 142 MB, estimate 170 MB. With free space forced to 600 MB, the backup is refused before Frappe runs: &#x27;needs about 170 MB, plus 500 MB kept free for the system, and 600 MB is free&#x27;.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">6</span><h2><a href="https://github.com/frappe/pilot/issues/751">#751</a> Reject a migration if the disk has no space for its backup</h2>
-  <span class="badge done">Done, awaiting approval</span></header>
+  <span class="badge approved">Approved, PR open</span></header>
   <p class="meta">Size S</p><p class='meta'>Needs #752 first.</p>
   <dl><dt>Root cause</dt><dd>MigrationOperation.begin starts the backup phase without a space check, so a migration can fail half way, with sites in maintenance.</dd>
   <dt>Proposal</dt><dd>MigrationOperation.begin sums each site&#x27;s predicted database backup size (from #752) and calls the same ensure_free_space helper, so the 500 MB reserve applies here too. It raises before any site enters maintenance. Safeguards off means no backup, so no check. The Admin API maps the error to 507 insufficient_disk_space with the message, and deletes the unstarted record.</dd>
-  <dt>How it is checked</dt><dd>Unit tests in test_migration_operation: begin raises and no site enters maintenance; safeguards off skips the check.</dd><dt>Branch</dt><dd><code>feat/migration-disk-space (stacked on #752)</code> at <code>07111007</code></dd><dt>Result</dt><dd>New unit tests (refuse, allow, safeguards off, no maintenance on refusal) and an API test for the 507. Local bench drift: a real migration record passes on the real disk and is refused with free space forced low; the record was deleted afterwards.</dd></dl>
+  <dt>How it is checked</dt><dd>Unit tests in test_migration_operation: begin raises and no site enters maintenance; safeguards off skips the check.</dd><dt>Branch</dt><dd><code>feat/migration-disk-space (stacked on #752), PR frappe/pilot#764</code> at <code>07111007</code></dd><dt>Result</dt><dd>New unit tests (refuse, allow, safeguards off, no maintenance on refusal) and an API test for the 507. Local bench drift: a real migration record passes on the real disk and is refused with free space forced low; the record was deleted afterwards.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">7</span><h2><a href="https://github.com/frappe/pilot/issues/756">#756</a> Opt-in auto Pilot update</h2>
-  <span class="badge done">Done, awaiting approval</span></header>
+  <span class="badge approved">Approved, PR open</span></header>
   <p class="meta">Size M</p>
   <dl><dt>Root cause</dt><dd>Pilot updates only when a person runs pilot admin upgrade or clicks update in the Admin.</dd>
   <dt>Proposal</dt><dd>[updates] auto = false in common_config.toml (host-wide). pilot admin auto-update on|off|status saves it and adds or removes a daily cron entry (03:37). When a newer release exists, the entry queues one update-cli task on the first bench by name, with an idempotency key per release. Dev checkouts are skipped. Extra change: the update-cli task now restarts the admin of every bench, not only the bench that ran it. Before, other admins kept old modules over the new code.</dd>
-  <dt>How it is checked</dt><dd>Unit tests for config parsing, cron install and remove, and the check that queues one update only when a newer release exists.</dd><dt>Branch</dt><dd><code>feat/auto-update</code> at <code>a986ab5c</code></dd><dt>Result</dt><dd>Tests for config round trip, cron on/off, queue only on a release build with a newer release, and restart of every admin even when one fails. Real check with a temporary benches folder: on writes [updates] auto = true and a &#x27;37 3 * * *&#x27; crontab line; that line ran by hand exits 0; off removes it, and the crontab matches its backup.</dd></dl>
+  <dt>How it is checked</dt><dd>Unit tests for config parsing, cron install and remove, and the check that queues one update only when a newer release exists.</dd><dt>Branch</dt><dd><code>feat/auto-update, PR frappe/pilot#765</code> at <code>a986ab5c</code></dd><dt>Result</dt><dd>Tests for config round trip, cron on/off, queue only on a release build with a newer release, and restart of every admin even when one fails. Real check with a temporary benches folder: on writes [updates] auto = true and a &#x27;37 3 * * *&#x27; crontab line; that line ran by hand exits 0; off removes it, and the crontab matches its backup.</dd></dl>
 </section>
 </main></body></html>
