@@ -10,7 +10,7 @@ main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
 h1 { font-size:1.6rem; margin:0 0 4px; } h3 { font-size:1rem; margin:28px 0 8px; }
 .lead { color:var(--muted); margin:0 0 8px; }
 .bar { height:6px; background:var(--line); border-radius:3px; margin:16px 0 28px; overflow:hidden; }
-.bar span { display:block; height:100%; background:var(--ok); width:0%; }
+.bar span { display:block; height:100%; background:var(--ok); width:12%; }
 .card { border:1px solid var(--line); border-radius:8px; padding:14px 18px; margin:0 0 14px; }
 .card header { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
 .card h2 { font-size:1.02rem; margin:0; flex:1 1 300px; }
@@ -25,13 +25,13 @@ ul.log { padding-left:18px; color:var(--muted); font-size:.9rem; } ul.log b { co
 </style></head><body><main>
 <h1>Pilot overnight stack</h1>
 <p class="lead">Eight Pilot changes, built as one local branch stack on develop. Nothing is pushed to GitHub. Each item gets a root cause, a change, tests, and a check on the test server. The migration work (S3 upload of migration backups, interruption and force stop) is part of #670 and #600.</p>
-<p class="lead">Progress: 0 of 8 done. Updated 2026-11-04.</p>
-<div class="bar" role="img" aria-label="0 of 8 done"><span></span></div>
+<p class="lead">Progress: 1 of 8 done. Updated 2026-11-04.</p>
+<div class="bar" role="img" aria-label="1 of 8 done"><span></span></div>
 <section class="card"><header><span class="step">1</span><h2><a href="https://github.com/frappe/pilot/issues/584">#584</a> Common site config editor</h2>
-<span class="badge queued">Queued</span></header>
-<dl></dl></section><section class="card"><header><span class="step">2</span><h2><a href="https://github.com/frappe/pilot/issues/591">#591</a> Configurable Nginx ports</h2>
-<span class="badge queued">Queued</span></header>
-<dl></dl></section><section class="card"><header><span class="step">3</span><h2><a href="https://github.com/frappe/pilot/issues/386">#386</a> Custom domain and TLS monitoring</h2>
+<span class="badge working">Working</span></header>
+<dl><dt>Root cause</dt><dd>Pilot has an editor for site_config.json, but no editor for sites/common_site_config.json. A bench-wide setting needed SSH.</dd><dt>Change</dt><dd>Bench.public_common_site_config and Bench.update_public_common_site_config(patch) use the same secret filter as the site editor. They also refuse the keys Pilot writes itself: Redis, ports, workers, maintenance_mode, mail, S3, default_site and dns_multitenant. API: GET and PATCH /api/v1/settings/common-site-config (bench session only). UI: the site Config tab and a new &#x27;Common site config&#x27; section in Settings &gt; Bench use one shared ConfigEditor component, so both look the same.</dd><dt>Tests</dt><dd>API tests: read hides managed and secret keys, patch sets and removes keys, managed and secret keys are refused, a damaged file is not rewritten. A guard test checks that every key Pilot writes is in the managed list.</dd></dl></section><section class="card"><header><span class="step">2</span><h2><a href="https://github.com/frappe/pilot/issues/591">#591</a> Configurable Nginx ports</h2>
+<span class="badge done">Done, committed</span></header>
+<dl><dt>Root cause</dt><dd>NginxConfig had http_port and https_port, but no config file fed them. A [nginx] table in bench.toml was ignored without a warning, so nginx always listened on 80 and 443.</dd><dt>Change</dt><dd>One nginx serves every bench on a host, so the ports are a host setting: [nginx] http_port and https_port in common_config.toml (defaults 80 and 443). Pilot checks the values and stops with a clear error when a value is bad. A [nginx] table in bench.toml is now an error that names common_config.toml. The admin readiness check reads the port from the same file. Two copies of the port-suffix code now use one helper, login.origin().</dd><dt>Tests</dt><dd>New tests: ports round trip, defaults are not written, bad ports fail, [nginx] in bench.toml fails. The admin readiness tests now set the port in common_config.toml. Full suite: 4059 passed.</dd><dt>Branch</dt><dd>feat/nginx-ports (local only)</dd></dl></section><section class="card"><header><span class="step">3</span><h2><a href="https://github.com/frappe/pilot/issues/386">#386</a> Custom domain and TLS monitoring</h2>
 <span class="badge queued">Queued</span></header>
 <dl></dl></section><section class="card"><header><span class="step">4</span><h2><a href="https://github.com/frappe/pilot/issues/726">#726</a> Send all notifications to webhooks, with an event filter per endpoint</h2>
 <span class="badge queued">Queued</span></header>
@@ -44,5 +44,5 @@ ul.log { padding-left:18px; color:var(--muted); font-size:.9rem; } ul.log b { co
 <dl></dl></section><section class="card"><header><span class="step">8</span><h2>Replace the fluent-bit setup with Vector</h2>
 <span class="badge queued">Queued</span></header>
 <dl></dl></section>
-<h3>Log</h3><ul class="log"><li><b>Scope</b> The first brief line is part of #670 and #600. It is not a separate item.</li><li><b>Start</b> Page created. Reading issues and code.</li></ul>
+<h3>Log</h3><ul class="log"><li><b>UI</b> Each changed screen gets a screenshot from the test server on this page.</li><li><b>#584</b> Core, API and UI written. Tests pass. Screenshots come after the test server deploy.</li><li><b>#591</b> Committed on feat/nginx-ports.</li><li><b>Scope</b> The first brief line is part of #670 and #600. It is not a separate item.</li><li><b>Start</b> Page created. Reading issues and code.</li></ul>
 </main></body></html>
