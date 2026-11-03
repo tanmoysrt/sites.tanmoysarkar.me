@@ -10,7 +10,7 @@ main { max-width:820px; margin:0 auto; padding:32px 16px 64px; }
 h1 { font-size:1.6rem; margin:0 0 4px; }
 .lead { color:var(--muted); margin:0 0 8px; }
 .progress { height:6px; background:var(--line); border-radius:3px; margin:16px 0 28px; overflow:hidden; }
-.progress span { display:block; height:100%; background:var(--ok); width:42%; }
+.progress span { display:block; height:100%; background:var(--ok); width:85%; }
 .card { border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin:0 0 16px; background:var(--card); }
 .card header { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
 .card h2 { font-size:1.05rem; margin:0; flex:1 1 300px; }
@@ -26,8 +26,8 @@ code { font-size:.85em; overflow-wrap:anywhere; }
 <body><main>
 <h1>Pilot issue batch</h1>
 <p class="lead">Seven open issues in frappe/pilot, fixed one at a time. The order puts small, independent fixes first. #751 comes after #752, because it reuses the backup size estimate. #756 comes last, because it adds a new host-wide setting.</p>
-<p class="lead">Each fix goes on its own branch from develop with tests. Progress: 3 of 7 done. Updated 2026-11-03.</p>
-<div class="progress" role="img" aria-label="3 of 7 done"><span></span></div>
+<p class="lead">Each fix goes on its own branch from develop with tests. Progress: 6 of 7 done. Updated 2026-11-03.</p>
+<div class="progress" role="img" aria-label="6 of 7 done"><span></span></div>
 
 <section class="card">
   <header><span class="step">1</span><h2><a href="https://github.com/frappe/pilot/issues/676">#676</a> 2FA QR code does not scan in dark mode</h2>
@@ -55,31 +55,31 @@ code { font-size:.85em; overflow-wrap:anywhere; }
 </section>
 <section class="card">
   <header><span class="step">4</span><h2><a href="https://github.com/frappe/pilot/issues/741">#741</a> Supported way to run git with the bench&#x27;s stored credential</h2>
-  <span class="badge working">In progress</span></header>
+  <span class="badge done">Done, awaiting approval</span></header>
   <p class="meta">Size S</p>
   <dl><dt>Root cause</dt><dd>Only internal helpers (auth_config_for, git_env) attach the stored token to git. Outside scripts import them and break when they change.</dd>
   <dt>Proposal</dt><dd>Add a public App.run_git(*args) that runs git in the app folder with the stored credential in the environment (never in argv or .git/config). Add a thin CLI: pilot -b &lt;bench&gt; git &lt;app&gt; &lt;git args...&gt;, which streams output and returns git&#x27;s exit code.</dd>
-  <dt>How it is checked</dt><dd>Unit tests: env carries GIT_CONFIG_* auth and argv has no token; CLI passes args through and returns the exit code. Run pilot git &lt;app&gt; status on a local bench.</dd></dl>
+  <dt>How it is checked</dt><dd>Unit tests: env carries GIT_CONFIG_* auth and argv has no token; CLI passes args through and returns the exit code. Run pilot git &lt;app&gt; status on a local bench.</dd><dt>Branch</dt><dd><code>feat/app-run-git</code> at <code>4b7ed532</code></dd><dt>Result</dt><dd>3 unit tests: the token reaches git through GIT_CONFIG_* (git config --get reads it) and is absent from argv and .git/config; exit codes pass through. Live on a local bench: pilot -b bench1 git frappe log --oneline -1 and ls-remote work, a bad ref exits 128, a missing app exits 1.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">5</span><h2><a href="https://github.com/frappe/pilot/issues/752">#752</a> Reject a backup if the disk has no space</h2>
-  <span class="badge planned">Planned</span></header>
+  <span class="badge done">Done, awaiting approval</span></header>
   <p class="meta">Size M</p>
   <dl><dt>Root cause</dt><dd>SiteBackups.take writes to the site&#x27;s backups folder with no space check. A full disk can also stop the database.</dd>
-  <dt>Proposal</dt><dd>Add SiteBackups.get_estimated_size(with_files). It uses the size of the newest local backup of the same kind when one exists, plus 20% headroom. Otherwise it uses the database data size plus the public and private files size (an upper bound). take() raises a clear error when the free space on the backups disk is smaller. The Admin API runs the same check before it queues the task, so the user sees the error at once. Backups streamed to S3 skip the check, because they do not write to local disk.</dd>
-  <dt>How it is checked</dt><dd>Unit tests for the estimate and the rejection. API test for the early 4xx error.</dd></dl>
+  <dt>Proposal</dt><dd>SiteBackups.take checks free space before Frappe runs and raises InsufficientDiskSpaceError. The estimate is the newest local database dump plus 20%; with no local dump, the database size on disk (an upper bound). With files, add the size of public/files and private/files. 500 MB always stays free for the system. Backups that stream to S3 skip the check. The API was left thin: the task fails at once with the message, and the failure counts toward the backup-failing alert.</dd>
+  <dt>How it is checked</dt><dd>Unit tests for the estimate and the rejection. API test for the early 4xx error.</dd><dt>Branch</dt><dd><code>feat/backup-disk-space</code> at <code>e843afa0</code></dd><dt>Result</dt><dd>New tests for the estimate, the refusal, the 500 MB reserve edge and the message. Local site drift.localhost: last real run was 142 MB, estimate 170 MB. With free space forced to 600 MB, the backup is refused before Frappe runs: &#x27;needs about 170 MB, plus 500 MB kept free for the system, and 600 MB is free&#x27;.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">6</span><h2><a href="https://github.com/frappe/pilot/issues/751">#751</a> Reject a migration if the disk has no space for its backup</h2>
-  <span class="badge planned">Planned</span></header>
+  <span class="badge done">Done, awaiting approval</span></header>
   <p class="meta">Size S</p><p class='meta'>Needs #752 first.</p>
   <dl><dt>Root cause</dt><dd>MigrationOperation.begin starts the backup phase without a space check, so a migration can fail half way, with sites in maintenance.</dd>
-  <dt>Proposal</dt><dd>In MigrationOperation.begin, before sites go into maintenance, add up the database backup estimate of every site (from #752). Reject the migration with a clear error if the bench disk has less free space. Skip the check when safeguards are off, because then no backup is taken.</dd>
-  <dt>How it is checked</dt><dd>Unit tests in test_migration_operation: begin raises and no site enters maintenance; safeguards off skips the check.</dd></dl>
+  <dt>Proposal</dt><dd>MigrationOperation.begin sums each site&#x27;s predicted database backup size (from #752) and calls the same ensure_free_space helper, so the 500 MB reserve applies here too. It raises before any site enters maintenance. Safeguards off means no backup, so no check. The Admin API maps the error to 507 insufficient_disk_space with the message, and deletes the unstarted record.</dd>
+  <dt>How it is checked</dt><dd>Unit tests in test_migration_operation: begin raises and no site enters maintenance; safeguards off skips the check.</dd><dt>Branch</dt><dd><code>feat/migration-disk-space (stacked on #752)</code> at <code>07111007</code></dd><dt>Result</dt><dd>New unit tests (refuse, allow, safeguards off, no maintenance on refusal) and an API test for the 507. Local bench drift: a real migration record passes on the real disk and is refused with free space forced low; the record was deleted afterwards.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">7</span><h2><a href="https://github.com/frappe/pilot/issues/756">#756</a> Opt-in auto Pilot update</h2>
-  <span class="badge planned">Planned</span></header>
+  <span class="badge working">In progress</span></header>
   <p class="meta">Size M</p>
   <dl><dt>Root cause</dt><dd>Pilot updates only when a person runs pilot admin upgrade or clicks update in the Admin.</dd>
   <dt>Proposal</dt><dd>Add [updates] auto = false to common_config.toml (host-wide, because one Pilot install serves every bench). When on, a daily cron entry in the CLI root runs a check. If a newer release exists, it queues the existing UpdateCliTask on each bench that has a managed admin, one time, so the update shows in the task log. Off by default. A pilot command toggles it and adds or removes the cron entry.</dd>
