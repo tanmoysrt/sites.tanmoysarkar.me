@@ -35,7 +35,7 @@ code { font-size:.85em; overflow-wrap:anywhere; }
   <p class="meta">Size S</p>
   <dl><dt>Root cause</dt><dd>The QR SVG has no quiet zone (qrcode.vue default margin is 0). The white frame comes from the container class bg-surface-white, and that theme token turns dark in dark mode. Scanners need a light border around the code.</dd>
   <dt>Proposal</dt><dd>Give the QR code its own 4-module white quiet zone with fixed white and black colors, so the theme cannot change it.</dd>
-  <dt>How it is checked</dt><dd>Build the dashboard and open the 2FA dialog in dark mode. The code shows a white border.</dd><dt>Branch</dt><dd><code>fix/2fa-qr-dark-mode</code> at <code>5651e84a</code></dd><dt>Result</dt><dd>Rendered the component: the SVG viewBox grows from 29 to 37 modules and the code starts at (4,4) on a white rect, so the quiet zone no longer depends on the theme.</dd></dl>
+  <dt>How it is checked</dt><dd>Build the dashboard and open the 2FA dialog in dark mode. The code shows a white border.</dd><dt>Branch</dt><dd><code>fix/2fa-qr-dark-mode</code> at <code>0e5a99cd</code></dd><dt>Result</dt><dd>Rendered the component: the SVG viewBox grows from 29 to 37 modules and the code starts at (4,4) on a white rect, so the quiet zone no longer depends on the theme.</dd></dl>
 </section>
 <section class="card">
   <header><span class="step">2</span><h2><a href="https://github.com/frappe/pilot/issues/742">#742</a> setup production --tls fails when another certbot runs</h2>
