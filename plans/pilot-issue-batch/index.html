@@ -10,7 +10,7 @@ main { max-width:820px; margin:0 auto; padding:32px 16px 64px; }
 h1 { font-size:1.6rem; margin:0 0 4px; }
 .lead { color:var(--muted); margin:0 0 8px; }
 .progress { height:6px; background:var(--line); border-radius:3px; margin:16px 0 28px; overflow:hidden; }
-.progress span { display:block; height:100%; background:var(--ok); width:85%; }
+.progress span { display:block; height:100%; background:var(--ok); width:100%; }
 .card { border:1px solid var(--line); border-radius:8px; padding:16px 18px; margin:0 0 16px; background:var(--card); }
 .card header { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
 .card h2 { font-size:1.05rem; margin:0; flex:1 1 300px; }
@@ -26,8 +26,8 @@ code { font-size:.85em; overflow-wrap:anywhere; }
 <body><main>
 <h1>Pilot issue batch</h1>
 <p class="lead">Seven open issues in frappe/pilot, fixed one at a time. The order puts small, independent fixes first. #751 comes after #752, because it reuses the backup size estimate. #756 comes last, because it adds a new host-wide setting.</p>
-<p class="lead">Each fix goes on its own branch from develop with tests. Progress: 6 of 7 done. Updated 2026-11-03.</p>
-<div class="progress" role="img" aria-label="6 of 7 done"><span></span></div>
+<p class="lead">Each fix goes on its own branch from develop with tests. Progress: 7 of 7 done. Updated 2026-11-03.</p>
+<div class="progress" role="img" aria-label="7 of 7 done"><span></span></div>
 
 <section class="card">
   <header><span class="step">1</span><h2><a href="https://github.com/frappe/pilot/issues/676">#676</a> 2FA QR code does not scan in dark mode</h2>
@@ -79,10 +79,10 @@ code { font-size:.85em; overflow-wrap:anywhere; }
 </section>
 <section class="card">
   <header><span class="step">7</span><h2><a href="https://github.com/frappe/pilot/issues/756">#756</a> Opt-in auto Pilot update</h2>
-  <span class="badge working">In progress</span></header>
+  <span class="badge done">Done, awaiting approval</span></header>
   <p class="meta">Size M</p>
   <dl><dt>Root cause</dt><dd>Pilot updates only when a person runs pilot admin upgrade or clicks update in the Admin.</dd>
-  <dt>Proposal</dt><dd>Add [updates] auto = false to common_config.toml (host-wide, because one Pilot install serves every bench). When on, a daily cron entry in the CLI root runs a check. If a newer release exists, it queues the existing UpdateCliTask on each bench that has a managed admin, one time, so the update shows in the task log. Off by default. A pilot command toggles it and adds or removes the cron entry.</dd>
-  <dt>How it is checked</dt><dd>Unit tests for config parsing, cron install and remove, and the check that queues one update only when a newer release exists.</dd></dl>
+  <dt>Proposal</dt><dd>[updates] auto = false in common_config.toml (host-wide). pilot admin auto-update on|off|status saves it and adds or removes a daily cron entry (03:37). When a newer release exists, the entry queues one update-cli task on the first bench by name, with an idempotency key per release. Dev checkouts are skipped. Extra change: the update-cli task now restarts the admin of every bench, not only the bench that ran it. Before, other admins kept old modules over the new code.</dd>
+  <dt>How it is checked</dt><dd>Unit tests for config parsing, cron install and remove, and the check that queues one update only when a newer release exists.</dd><dt>Branch</dt><dd><code>feat/auto-update</code> at <code>a986ab5c</code></dd><dt>Result</dt><dd>Tests for config round trip, cron on/off, queue only on a release build with a newer release, and restart of every admin even when one fails. Real check with a temporary benches folder: on writes [updates] auto = true and a &#x27;37 3 * * *&#x27; crontab line; that line ran by hand exits 0; off removes it, and the crontab matches its backup.</dd></dl>
 </section>
 </main></body></html>
