@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pilot overnight stack</title>
+<style>
+:root { --bg:#fff; --fg:#1f2328; --muted:#656d76; --line:#d8dee4; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --bad:#cf222e; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8d96a0; --line:#30363d; --accent:#4493f8; --ok:#3fb950; --warn:#d29922; --bad:#f85149; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:1.6rem; margin:0 0 4px; } h3 { font-size:1rem; margin:28px 0 8px; }
+.lead { color:var(--muted); margin:0 0 8px; }
+.bar { height:6px; background:var(--line); border-radius:3px; margin:16px 0 28px; overflow:hidden; }
+.bar span { display:block; height:100%; background:var(--ok); width:0%; }
+.card { border:1px solid var(--line); border-radius:8px; padding:14px 18px; margin:0 0 14px; }
+.card header { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+.card h2 { font-size:1.02rem; margin:0; flex:1 1 300px; }
+.step { color:var(--muted); font-variant-numeric:tabular-nums; }
+a { color:var(--accent); }
+dl { margin:8px 0 0; } dt { font-weight:600; font-size:.82rem; margin-top:8px; color:var(--muted); } dd { margin:2px 0 0; white-space:pre-line; }
+.badge { font-size:.75rem; border:1px solid var(--line); border-radius:999px; padding:1px 8px; color:var(--muted); white-space:nowrap; }
+.badge.working { color:var(--warn); border-color:var(--warn); }
+.badge.done { color:var(--ok); border-color:var(--ok); }
+.badge.blocked { color:var(--bad); border-color:var(--bad); }
+ul.log { padding-left:18px; color:var(--muted); font-size:.9rem; } ul.log b { color:var(--fg); font-weight:600; }
+</style></head><body><main>
+<h1>Pilot overnight stack</h1>
+<p class="lead">Nine Pilot changes, built as one local branch stack on develop. Nothing is pushed to GitHub. Each item gets a root cause, a change, tests, and a check on the test server.</p>
+<p class="lead">Progress: 0 of 9 done. Updated 2026-11-04.</p>
+<div class="bar" role="img" aria-label="0 of 9 done"><span></span></div>
+<section class="card"><header><span class="step">1</span><h2>Upload migration backups to S3, and one more pass on migration interruption and force stop</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section><section class="card"><header><span class="step">2</span><h2><a href="https://github.com/frappe/pilot/issues/584">#584</a> Common site config editor</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section><section class="card"><header><span class="step">3</span><h2><a href="https://github.com/frappe/pilot/issues/591">#591</a> Configurable Nginx ports</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section><section class="card"><header><span class="step">4</span><h2><a href="https://github.com/frappe/pilot/issues/386">#386</a> Custom domain and TLS monitoring</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section><section class="card"><header><span class="step">5</span><h2><a href="https://github.com/frappe/pilot/issues/726">#726</a> Send all notifications to webhooks, with an event filter per endpoint</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section><section class="card"><header><span class="step">6</span><h2><a href="https://github.com/frappe/pilot/issues/670">#670</a> Update failed button blocks access to updates</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section><section class="card"><header><span class="step">7</span><h2><a href="https://github.com/frappe/pilot/issues/600">#600</a> Recover a failed migration with corrected code</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section><section class="card"><header><span class="step">8</span><h2><a href="https://github.com/frappe/pilot/issues/748">#748</a> Validate alerting</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section><section class="card"><header><span class="step">9</span><h2>Replace the fluent-bit setup with Vector</h2>
+<span class="badge queued">Queued</span></header>
+<dl></dl></section>
+<h3>Log</h3><ul class="log"><li><b>Start</b> Page created. Reading issues and code.</li></ul>
+</main></body></html>
