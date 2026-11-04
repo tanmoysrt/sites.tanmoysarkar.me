@@ -1,6 +1,6 @@
 {
-  "intro": "The first eight reviewed Pilot changes are merged into develop. A follow-up adds a minimal automatic-update switch in Settings > About. It is built and tested locally on feat/auto-update-ui.",
-  "updated": "2026-11-04 18:21 IST",
+  "intro": "The first eight reviewed Pilot changes are merged into develop. The follow-up automatic-update switch is published in PR #784.",
+  "updated": "2026-11-04 18:30 IST",
   "items": [
     {
       "issue": 591,
@@ -186,26 +186,25 @@
     {
       "title": "Automatic Pilot updates in Settings > About",
       "status": "done",
-      "label": "Built locally",
+      "label": "PR open",
       "details": {
-        "UI": "One default Frappe UI switch below the Pilot version. It saves immediately. Checks run daily at 12:00 AM UTC for all benches. There is no time picker.",
-        "Source installs": "The switch is disabled and says Unavailable for source installs. The API also rejects changes on a source install.",
+        "UI": "One default Frappe UI switch below the Pilot version. It saves immediately. The helper says: Checks daily at 12:00 AM UTC. There is no time picker.",
+        "Source installs": "Development installs show the switch disabled and do not run automatic updates.",
         "Save errors": "The switch keeps its previous value and shows the error. A failed cron change keeps the stored setting. Concurrent changes use the common config lock.",
-        "Checks": "41 focused backend and cron tests pass. Three browser tests, type checking and the dashboard build pass. The UTC guard is checked at midnight and at other times, with a non-UTC server timezone. Upgrade tests cover disabled hosts, repeated runs and a failed cron change.",
-        "Branch": "feat/auto-update-ui. Built locally; no Pilot commit or pull request yet.",
-        "Screens": "The real dashboard uses simulated release and source-install responses here. These previews do not change the host cron job.",
-        "Schedule": "A short cron command checks the UTC clock each minute. It starts Pilot only at midnight UTC. The server timezone does not change this time. An upgrade patch replaces the old schedule only on hosts where automatic updates are already on."
+        "Checks": "71 focused backend and cron tests, three browser tests, lint, type checking and the production dashboard build pass. The browser checks the shortened platform line, saved state after reload, save failures and development installs. The installer passes bash syntax validation.",
+        "Branch": "feat/auto-update-ui, commit 972f50b5. Published as PR #784 against develop.",
+        "Screens": "The real dashboard uses a simulated release response. This preview does not change the host cron job.",
+        "Schedule": "A short cron command checks the UTC clock each minute. It starts Pilot only at midnight UTC. The server timezone does not change this time. An upgrade patch replaces the old schedule only on hosts where automatic updates are already on.",
+        "Configuration": "Release installs have automatic Pilot updates on by default. Set auto_pilot_update = false under [updates] to turn them off. The config has no old auto alias.",
+        "Platform": "The existing Running on prefix stays. OS and kernel details are shorter, for example: Running on Fedora Linux 44 \u00b7 kernel 7.0.12-201."
       },
       "images": [
         {
           "src": "auto-update-enabled.png",
           "caption": "Release install: the switch is on. The version and OS are sample values."
-        },
-        {
-          "src": "auto-update-source.png",
-          "caption": "Source install: the switch is disabled with a short explanation."
         }
-      ]
+      ],
+      "pr": "https://github.com/frappe/pilot/pull/784"
     }
   ],
   "log": [
@@ -240,6 +239,10 @@
     [
       "Schedule",
       "The automatic-update check now runs daily at 12:00 AM UTC. The UI keeps one switch and no time picker."
+    ],
+    [
+      "PR #784",
+      "Published the automatic-update switch, enabled by default for release installs, with a fixed midnight UTC check and the auto_pilot_update config key."
     ]
   ],
   "checks": [
