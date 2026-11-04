@@ -1,12 +1,12 @@
 {
-  "intro": "Eight reviewed Pilot changes are published as a branch stack on develop. Each pull request uses the previous branch as its base. Vector is out of scope. The separate Update code & retry action was removed after review.",
-  "updated": "2026-11-04 17:52 IST",
+  "intro": "All eight reviewed Pilot changes are merged into develop. The pull request links and review evidence are below. Vector is out of scope. The separate Update code & retry action was removed after review.",
+  "updated": "2026-11-04 17:55 IST",
   "items": [
     {
       "issue": 591,
       "title": "Configurable Nginx ports",
       "status": "done",
-      "label": "PR open",
+      "label": "Merged",
       "details": {
         "Root cause": "NginxConfig had http_port and https_port, but no config file fed them. A [nginx] table in bench.toml was ignored without a warning, so nginx always listened on 80 and 443.",
         "Change": "One nginx serves every bench on a host, so the ports are a host setting: [nginx] http_port and https_port in common_config.toml (defaults 80 and 443). Pilot checks the values and stops with a clear error when a value is bad. A [nginx] table in bench.toml is now an error that names common_config.toml. The admin readiness check reads the port from the same file. Two copies of the port-suffix code now use one helper, login.origin().",
@@ -19,7 +19,7 @@
       "issue": 584,
       "title": "Common site config editor",
       "status": "done",
-      "label": "PR open",
+      "label": "Merged",
       "details": {
         "Change": "Settings > Bench has a common site config editor. The site editor uses the same component. Pick a known key or add a custom key with a type. The dialog uses 60% of the row for the key and 40% for the value. Long values are cut with an ellipsis.",
         "Secrets": "Password fields are write-only. The API returns a mask, never the stored value. Users can set or remove encryption_key. Only keys that Pilot writes are blocked.",
@@ -41,7 +41,7 @@
     {
       "title": "Settings > Database fixes found during the check",
       "status": "done",
-      "label": "PR open",
+      "label": "Merged",
       "details": {
         "Why": "The Settings > Database review found three display problems. The data and actions were correct.",
         "Change": "1. The Buffer pool inline editor put 'of 2128 MB' inside the narrow input, so a typed 1800 showed as '300'. The input now shows only the unit. 2. In edit mode the card header cut '50 advised' to '50 adv\u2026'. The note now leaves out the label (the icon stays): '1535 advised \u00b7 up to 2128', or 'Use 10 to 87' in red for a bad value. 3. MariaDB shows 'no limit' as 2^64-1 bytes, and the list showed tmp_disk_table_size as '16777216 TB'. It now shows 'No limit'.",
@@ -79,7 +79,7 @@
       "issue": 670,
       "title": "Update failed button blocks access to updates",
       "status": "done",
-      "label": "PR open",
+      "label": "Merged",
       "details": {
         "Change": "Dismiss closes a failed update, restarts services on the current code, restores the saved maintenance and scheduler settings, and deletes its backup. The Closed tab keeps the record. Restore skips apps and sites that were removed after the failure.",
         "UI": "The attention card has Retry, Skip patch, Restore backup and Dismiss. Each action has a short confirmation. Successful actions refresh the state.",
@@ -99,7 +99,7 @@
       "issue": 753,
       "title": "Keep the pre-update backup in the S3 bucket",
       "status": "done",
-      "label": "PR open",
+      "label": "Merged",
       "details": {
         "Change": "With a bench bucket and [s3] upload_migration_backups enabled, each MariaDB table dump streams through gzip into S3. Restore streams each object through gunzip into MariaDB. No database dump is written to local disk. The table list, config copy and S3 location stay local.",
         "Settings": "The switch is in Settings > Bench. It is on by default and ignored without a bucket. SQLite and PostgreSQL backups stay local. The disk check counts only sites that back up locally.",
@@ -115,7 +115,7 @@
       "issue": 726,
       "title": "Send all notifications to webhooks, with an event filter per endpoint",
       "status": "done",
-      "label": "PR open",
+      "label": "Merged",
       "details": {
         "Configuration": "Endpoints use the top-level [[webhook_endpoints]] array in common_config.toml. Each has a URL, an optional token and events. An empty event list receives every event. Old entries under resource_limits still load and move on the next save.",
         "Delivery": "Each endpoint receives a fixed JSON body. A token adds Bearer authorization and an HMAC-SHA256 signature in X-Pilot-Signature-256. Safe task context is included. Passwords, tokens and repository URLs are excluded.",
@@ -140,7 +140,7 @@
       "issue": 748,
       "title": "Validate alerting: alerts on by default, and each alert checked end to end",
       "status": "done",
-      "label": "PR open",
+      "label": "Merged",
       "details": {
         "Default alerts": "CPU, memory and disk alerts were off on every host. They now start at 90%, and site uptime stays on. The enable_default_alerts patch turns them on once on an older host that had all three off. On the test server the patch changed 0/0/0 to 90/90/90. A host that set any limit keeps its values.",
         "Central bug": "Central's report_pilot_event refuses an event type that is not one of its Server types. Pilot sent site_down, but Central calls it site_unavailable, so a managed host's team never got site-down alerts. Pilot now sends Central's names: site_down \u2192 site_unavailable, backups_failing \u2192 backup_failure, a failed update \u2192 migration_failure, and resource_limit_breached as it is. Central has no certificate type, so certificate_expiry goes to mail and webhooks only. Checked against Central's develop fixtures; not sent to a real Central.",
@@ -163,7 +163,7 @@
       "issue": 386,
       "title": "Custom domain and TLS status from the certificate on disk",
       "status": "done",
-      "label": "PR open",
+      "label": "Merged",
       "details": {
         "Scope": "On your note, there are no WHOIS, RDAP, DNS or HTTP checks. Pilot never connects to a domain, so a Sleepy VM stays asleep. All state comes from the certificate files and certbot's results.",
         "Root cause": "A failed issue or renewal was only printed in the task log. The domain list showed a plain lock, so a broken domain looked the same as one waiting for a certificate.",
@@ -204,6 +204,10 @@
     [
       "Validation",
       "The final Python run had 4169 passed, one skipped and one process-matcher failure caused by an unrelated agent shell. All 12 command-runner tests then passed in an isolated process namespace. Lint, type checking, all 91 frontend tests and the secret scan passed."
+    ],
+    [
+      "Merged",
+      "All eight pull requests, #775 through #782, merged into develop. The last merge completed at 12:25 UTC on 4 November."
     ]
   ],
   "checks": [
@@ -234,7 +238,7 @@
         [
           "GitHub CI",
           "note",
-          "Checks were queued when the stack was published. These are separate from the local results."
+          "Checks were queued when the branches were published. All eight pull requests have since merged. Local test results are recorded above."
         ]
       ]
     },
