@@ -1,6 +1,6 @@
 {
-  "intro": "All eight reviewed Pilot changes are merged into develop. The pull request links and review evidence are below. Vector is out of scope. The separate Update code & retry action was removed after review.",
-  "updated": "2026-11-04 17:55 IST",
+  "intro": "The first eight reviewed Pilot changes are merged into develop. A follow-up adds a minimal automatic-update switch in Settings > About. It is built and tested locally on feat/auto-update-ui.",
+  "updated": "2026-11-04 18:10 IST",
   "items": [
     {
       "issue": 591,
@@ -182,6 +182,29 @@
         }
       ],
       "pr": "https://github.com/frappe/pilot/pull/782"
+    },
+    {
+      "title": "Automatic Pilot updates in Settings > About",
+      "status": "done",
+      "label": "Built locally",
+      "details": {
+        "UI": "One default Frappe UI switch below the Pilot version. It saves immediately. The note gives the daily 03:37 schedule in server time and says that the setting applies to all benches.",
+        "Source installs": "The switch is disabled and says Unavailable for source installs. The API also rejects changes on a source install.",
+        "Save errors": "The switch keeps its previous value and shows the error. A failed cron change keeps the stored setting. Concurrent changes use the common config lock.",
+        "Checks": "22 focused backend tests, three browser tests and all 91 frontend unit tests pass. Lint, type checking and the production dashboard build pass. Browser tests cover reload, failed saves and source installs.",
+        "Branch": "feat/auto-update-ui. Built locally; no Pilot commit or pull request yet.",
+        "Screens": "The real dashboard uses simulated release and source-install responses here. These previews do not change the host cron job."
+      },
+      "images": [
+        {
+          "src": "auto-update-enabled.png",
+          "caption": "Release install: the switch is on. The version and OS are sample values."
+        },
+        {
+          "src": "auto-update-source.png",
+          "caption": "Source install: the switch is disabled with a short explanation."
+        }
+      ]
     }
   ],
   "log": [
@@ -208,6 +231,10 @@
     [
       "Merged",
       "All eight pull requests, #775 through #782, merged into develop. The last merge completed at 12:25 UTC on 4 November."
+    ],
+    [
+      "Follow-up",
+      "Built and tested the automatic-update switch locally. The original eight changes remain merged."
     ]
   ],
   "checks": [
