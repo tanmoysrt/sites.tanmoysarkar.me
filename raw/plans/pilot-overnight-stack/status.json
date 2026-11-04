@@ -1,6 +1,6 @@
 {
   "intro": "The first eight reviewed Pilot changes are merged into develop. A follow-up adds a minimal automatic-update switch in Settings > About. It is built and tested locally on feat/auto-update-ui.",
-  "updated": "2026-11-04 18:10 IST",
+  "updated": "2026-11-04 18:21 IST",
   "items": [
     {
       "issue": 591,
@@ -188,12 +188,13 @@
       "status": "done",
       "label": "Built locally",
       "details": {
-        "UI": "One default Frappe UI switch below the Pilot version. It saves immediately. The note gives the daily 03:37 schedule in server time and says that the setting applies to all benches.",
+        "UI": "One default Frappe UI switch below the Pilot version. It saves immediately. Checks run daily at 12:00 AM UTC for all benches. There is no time picker.",
         "Source installs": "The switch is disabled and says Unavailable for source installs. The API also rejects changes on a source install.",
         "Save errors": "The switch keeps its previous value and shows the error. A failed cron change keeps the stored setting. Concurrent changes use the common config lock.",
-        "Checks": "22 focused backend tests, three browser tests and all 91 frontend unit tests pass. Lint, type checking and the production dashboard build pass. Browser tests cover reload, failed saves and source installs.",
+        "Checks": "41 focused backend and cron tests pass. Three browser tests, type checking and the dashboard build pass. The UTC guard is checked at midnight and at other times, with a non-UTC server timezone. Upgrade tests cover disabled hosts, repeated runs and a failed cron change.",
         "Branch": "feat/auto-update-ui. Built locally; no Pilot commit or pull request yet.",
-        "Screens": "The real dashboard uses simulated release and source-install responses here. These previews do not change the host cron job."
+        "Screens": "The real dashboard uses simulated release and source-install responses here. These previews do not change the host cron job.",
+        "Schedule": "A short cron command checks the UTC clock each minute. It starts Pilot only at midnight UTC. The server timezone does not change this time. An upgrade patch replaces the old schedule only on hosts where automatic updates are already on."
       },
       "images": [
         {
@@ -235,6 +236,10 @@
     [
       "Follow-up",
       "Built and tested the automatic-update switch locally. The original eight changes remain merged."
+    ],
+    [
+      "Schedule",
+      "The automatic-update check now runs daily at 12:00 AM UTC. The UI keeps one switch and no time picker."
     ]
   ],
   "checks": [
@@ -408,7 +413,7 @@
         [
           "Schedule",
           "note",
-          "The cron job runs each day at 03:37 in the host timezone. It updates Pilot and restarts Admin for each bench."
+          "Pilot checks for updates daily at 12:00 AM UTC. A newer release updates Pilot and restarts Admin for each bench."
         ],
         [
           "Source installs",
