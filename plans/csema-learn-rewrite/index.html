@@ -35,7 +35,7 @@ ol li, ul li { margin:4px 0; }
 <body>
 <main>
 <h1>CSEMA learning content rewrite</h1>
-<p class="lead">Plan to redesign all learning paths and replace every lesson with one presentation format. Status: in progress, 6 Nov 2026. Counts come from the local database and the files directory on the same day.</p>
+<p class="lead">Plan to redesign all learning paths and replace every lesson with one presentation format. Status: in progress. Old counts come from the local database and the files directory on 6 Nov 2026. The track table and the new paths come from the rewrite folder.</p>
 
 <h2>Why we rewrite</h2>
 <p>CSEMA lessons use seven formats today. Each format has its own player, look and quality. Some lessons have a narrated deck, some have Marp slides, and many have only a short write-up. Many lessons also mix teaching and testing on one page.</p>
@@ -92,59 +92,86 @@ ol li, ul li { margin:4px 0; }
 <h2>Where the work lives</h2>
 <p>All work goes in <code>var/learn-rewrite/</code> in the CSEMA checkout. Content does not go in the code repository, so the folder is outside it. The folder has its own local Git history, so each change has a diff and can be undone. This work does not change the database or the app.</p>
 <pre>var/learn-rewrite/
-  PROGRESS.md                          status of every track, path and item
-  old/                                 old lessons, one source.json each
-  01-cryptography-foundations/
-    index.md                           path: title, summary, level, prerequisites, sections, sources
-    01-presentation-why-cryptography/
-      index.md                         title, description, outline, learner outcomes, sources
-    02-presentation-classical-ciphers/
-    03-quiz-ciphers-and-keys/
-      index.md                         title, description, what it tests, question count, sources
-    04-code-caesar-breaker/
-      index.md                         task, input, checks, sources</pre>
-<p>The number at the front of a folder sets the order. The kind is in the folder name, so the tree shows learning and evaluation at a glance. The path <code>index.md</code> lists the sections, so the folders stay flat.</p>
+  PROGRESS.md                          made by tools/progress.py, never edited by hand
+  01-cryptography/
+    index.md                           track: goal, path order, design notes, dropped old lessons
+    01-cryptography-foundations/
+      index.md                         path: title, summary, level, prerequisites, sections, items
+      01-presentation-why-cryptography/
+        index.md                       title, description, outline, learner outcomes, sources, status
+        deck.rabbit.yaml               the deck, added when the item is built
+        media/                         deck images
+      02-presentation-classical-ciphers/
+      03-quiz-ciphers-and-keys/
+        index.md                       title, description, what it checks, spec, sources, status
+  02-cyber-foundations/
+  ...
+  14-web3/
+  old/                                 old lessons, one source.json each, read-only
+  tools/                               export, Codex prompts, checker, writer, progress, this page</pre>
+<p>Numbers set the order inside each level, so a new path in one track does not rename folders in another track. The kind is in the item folder name, so the tree shows learning and evaluation at a glance. Sections are listed in the path <code>index.md</code>, so items stay flat inside a path.</p>
+<p>The <code>status</code> field in each item <code>index.md</code> is the only place that holds status: <code>designed</code>, <code>draft</code>, <code>review</code> or <code>done</code>. <code>tools/progress.py</code> reads all <code>index.md</code> files and writes <code>PROGRESS.md</code>. Rabbit build output (<code>audio/</code>, <code>dist/</code>, <code>review/</code>) is not in Git.</p>
 <p>An item <code>index.md</code> looks like this:</p>
 <pre>---
-kind: presentation
-title: Classical Ciphers
+kind: "presentation"
+title: "Classical Ciphers"
+section: "Foundations"
 minutes: 10
-section: Foundations
+status: "designed"
 sources:
-  - old/05-cryptography-part-1-foundations-classical-ciphers/03-...
+  - "old/05-cryptography-part-1-foundations-classical-ciphers/03-..."
 ---
+
 The learner sees how shift and substitution ciphers work, and why they fail.
 
 ## Outline
+
 1. ...
 
 ## Learner outcomes
+
 - Encrypt and break a shift cipher by hand.</pre>
 
-<h2>How one track moves</h2>
+<h2>How the work runs</h2>
+<p>An agent runs the work without a stop for owner approval. Codex reviews each step instead. The owner can read any track, path or deck at any time and send changes.</p>
+
+<h3>Design one track</h3>
 <p>We redesign one track at a time, because merges cross paths. For example, Cryptography has six old paths.</p>
 <ol>
-<li>Export every old lesson in the track: titles, sections, write-ups, old deck text and activities.</li>
+<li>Export every old lesson in the track: titles, sections, write-ups, old deck text and activities, plus the published practice challenges of the same category.</li>
 <li>Codex (<code>gpt-6-luna</code>, high effort) drafts the new paths and items from the rules above.</li>
 <li>A second Codex pass corrects the order, the size of each presentation and the one-job rule.</li>
-<li>Claude checks the draft against the sources, the old activities and the existing practice challenges.</li>
-<li>Claude writes the path and item folders with their <code>index.md</code> files, updates <code>PROGRESS.md</code> and commits in the local Git.</li>
-<li>The owner reviews the new tree. This page then shows it.</li>
+<li>A script checks lengths, words, slugs, sections, the evaluation rhythm, challenge links and that each old lesson is used or dropped.</li>
+<li>Codex reviews the design (<code>gpt-6-luna</code> high or <code>gpt-6-sol</code> medium) and the agent applies the fixes. This repeats until the review finds no major problem.</li>
+<li>The agent writes the track, path and item folders, runs <code>progress.py</code>, commits and updates this page.</li>
 </ol>
-<p>After all tracks have a design, each item is made one by one. A presentation gets a <code>deck.rabbit.yaml</code>, media and voice, and passes the Rabbit audit. An evaluation gets its questions, task or challenge. All output stays in the item folder.</p>
+
+<h3>Build one presentation</h3>
+<ol>
+<li>Write <code>deck.rabbit.yaml</code> from the item <code>index.md</code> and its sources, with the Rabbit skill. Codex writes the narration.</li>
+<li>Match the quality of the Rabbit reference decks: clear and calm slides, hand-drawn diagrams, light animation that follows the narration, and one idea at a time.</li>
+<li>Run <code>rabbit make</code>. Fix every audit problem.</li>
+<li>Codex reviews the narration, the facts and the review pages, and the agent applies the fixes. This repeats until the review finds no major problem.</li>
+<li>Set the item status, run <code>progress.py</code> and commit.</li>
+</ol>
+<p>Evaluation items keep their spec in <code>index.md</code> for now. They are built in a later phase.</p>
 
 <h2>Tracks</h2>
 <p>Old paths in the same track go into one redesign pass. The two paths in the old <code>Others</code> track join Operating Systems and Programming.</p>
 <div class="wrap"><table>
-<thead><tr><th>Track</th><th>Old paths</th><th class=n>Old lessons</th><th>Status</th></tr></thead>
-<tbody><tr><td><code>01</code> Cryptography</td><td><code>old/05-cryptography-part-1-foundations-classical-ciphers</code><br><code>old/06-cryptography-part-2-symmetric-cryptography-hashing</code><br><code>old/07-cyptolab</code><br><code>old/08-integrity-guard</code><br><code>old/09-rsa-encryption-learn</code><br><code>old/10-complete-cryptography-study-roadmap</code></td><td class=n>107</td><td>In progress</td></tr><tr><td><code>02</code> Cyber Foundations</td><td><code>old/11-cyber-foundations</code><br><code>old/12-cyber-foundations-part-1-computers-data-security-basics</code><br><code>old/13-cyber-foundations-part-2-windows-evidence</code><br><code>old/14-cyber-crime</code></td><td class=n>105</td><td>Todo</td></tr><tr><td><code>03</code> Operating Systems</td><td><code>old/24-operating-systems-part-1-foundations</code><br><code>old/25-operating-systems-part-2-linux-bash</code><br><code>old/26-operating-systems-part-3-os-internals</code><br><code>old/27-operating-systems-basics</code></td><td class=n>95</td><td>Todo</td></tr><tr><td><code>04</code> Network</td><td><code>old/17-networking-part-1-foundations-ethernet-ip-addressing</code><br><code>old/18-networking-part-2-switching-routing</code><br><code>old/19-networking-part-3-services-security-automation</code><br><code>old/20-networking-basics-fundamentals</code><br><code>old/21-wireshark-practical-guide</code><br><code>old/22-networking-deep-dive-part-1</code><br><code>old/23-networking-deep-dive-part-2</code></td><td class=n>219</td><td>Todo</td></tr><tr><td><code>05</code> Programming</td><td><code>old/28-python-programming-basics</code><br><code>old/29-python-from-zero-to-practical-automation</code></td><td class=n>64</td><td>Todo</td></tr><tr><td><code>06</code> Artificial Intelligence</td><td><code>old/02-introduction-to-ai-systems</code></td><td class=n>60</td><td>Todo</td></tr><tr><td><code>07</code> Cloud</td><td><code>old/04-cloud-security</code></td><td class=n>40</td><td>Todo</td></tr><tr><td><code>08</code> Forensics</td><td><code>old/15-digital-forensics</code><br><code>old/16-server-forensics-learning</code></td><td class=n>17</td><td>Todo</td></tr><tr><td><code>09</code> Web</td><td><code>old/33-api-security-learning</code><br><code>old/34-web-app-pen-test-basics-learning</code></td><td class=n>10</td><td>Todo</td></tr><tr><td><code>10</code> Active Directory</td><td><code>old/01-active-directory-fundamentals-zero-to-enterprise</code></td><td class=n>10</td><td>Todo</td></tr><tr><td><code>11</code> SOC</td><td><code>old/32-soc-analyst-level-1-beginner</code></td><td class=n>5</td><td>Todo</td></tr><tr><td><code>12</code> Reverse Engineering</td><td><code>old/30-reverse-engineering-learning</code><br><code>old/31-operation-blackcipher-advanced-malware-reverse-engineering</code></td><td class=n>10</td><td>Todo</td></tr><tr><td><code>13</code> Binary Exploitation</td><td><code>old/03-buffer-overflow-arena</code></td><td class=n>5</td><td>Todo</td></tr><tr><td><code>14</code> Web3</td><td><code>old/35-defi-protocol-security-lending-borrowing</code></td><td class=n>4</td><td>Todo</td></tr></tbody>
+<thead><tr><th>Track</th><th>Old paths</th><th class=n>Old lessons</th><th class=n>New paths</th><th class=n>Items</th><th>Status</th></tr></thead>
+<tbody><tr><td><code>01</code> Cryptography</td><td><code>old/05-cryptography-part-1-foundations-classical-ciphers</code><br><code>old/06-cryptography-part-2-symmetric-cryptography-hashing</code><br><code>old/07-cyptolab</code><br><code>old/08-integrity-guard</code><br><code>old/09-rsa-encryption-learn</code><br><code>old/10-complete-cryptography-study-roadmap</code></td><td class=n>107</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>02</code> Cyber Foundations</td><td><code>old/11-cyber-foundations</code><br><code>old/12-cyber-foundations-part-1-computers-data-security-basics</code><br><code>old/13-cyber-foundations-part-2-windows-evidence</code><br><code>old/14-cyber-crime</code></td><td class=n>105</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>03</code> Operating Systems</td><td><code>old/24-operating-systems-part-1-foundations</code><br><code>old/25-operating-systems-part-2-linux-bash</code><br><code>old/26-operating-systems-part-3-os-internals</code><br><code>old/27-operating-systems-basics</code></td><td class=n>95</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>04</code> Network</td><td><code>old/17-networking-part-1-foundations-ethernet-ip-addressing</code><br><code>old/18-networking-part-2-switching-routing</code><br><code>old/19-networking-part-3-services-security-automation</code><br><code>old/20-networking-basics-fundamentals</code><br><code>old/21-wireshark-practical-guide</code><br><code>old/22-networking-deep-dive-part-1</code><br><code>old/23-networking-deep-dive-part-2</code></td><td class=n>219</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>05</code> Programming</td><td><code>old/28-python-programming-basics</code><br><code>old/29-python-from-zero-to-practical-automation</code></td><td class=n>64</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>06</code> Artificial Intelligence</td><td><code>old/02-introduction-to-ai-systems</code></td><td class=n>60</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>07</code> Cloud</td><td><code>old/04-cloud-security</code></td><td class=n>40</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>08</code> Forensics</td><td><code>old/15-digital-forensics</code><br><code>old/16-server-forensics-learning</code></td><td class=n>17</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>09</code> Web</td><td><code>old/33-api-security-learning</code><br><code>old/34-web-app-pen-test-basics-learning</code></td><td class=n>10</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>10</code> Active Directory</td><td><code>old/01-active-directory-fundamentals-zero-to-enterprise</code></td><td class=n>10</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>11</code> SOC</td><td><code>old/32-soc-analyst-level-1-beginner</code></td><td class=n>5</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>12</code> Reverse Engineering</td><td><code>old/30-reverse-engineering-learning</code><br><code>old/31-operation-blackcipher-advanced-malware-reverse-engineering</code></td><td class=n>10</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>13</code> Binary Exploitation</td><td><code>old/03-buffer-overflow-arena</code></td><td class=n>5</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr><tr><td><code>14</code> Web3</td><td><code>old/35-defi-protocol-security-lending-borrowing</code></td><td class=n>4</td><td class=n>0</td><td class=n>0</td><td>Todo</td></tr></tbody>
 </table></div>
 <p class="muted">7 Cloud paths have no lessons, so they are not in the folder: <code>identity-and-access-management-iam-policies-permissions</code>, <code>network-security-vpc-security-architecture</code>, <code>advanced-network-security-waf-shield-network-firewall</code>, <code>network-monitoring-threat-detection</code>, <code>data-protection-encryption-at-rest</code>, <code>encryption-in-transit-tls-acm-cloudfront</code>, <code>cloud-security-fundamentals-aws-gcp</code>.</p>
 
+<h2>New paths</h2>
+<p class="muted">Open a path to see its items in order.</p>
+<p class=muted>No track has a new design yet.</p>
+
 <h2>How we check success</h2>
 <ul>
-<li>Every track has a new tree that the owner accepted.</li>
-<li>Every presentation is about 10 minutes, passes the Rabbit audit, and the owner accepted it.</li>
+<li>Every track has a new design that passed the Codex review.</li>
+<li>Every presentation is about 10 minutes, passes the Rabbit audit and the Codex review, and has the status <code>done</code>.</li>
 <li>No item both teaches and tests.</li>
 <li>No lesson uses Marp, a scene JSON deck, a canvas film, a video or the outside host.</li>
 </ul>
