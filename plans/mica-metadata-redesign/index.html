@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mica metadata redesign</title>
+<style>
+  :root { --text: #1d1d1f; --muted: #5f6368; --line: #d9d9de; --accent: #b4441b; --keep: #2f6f4f; --code: #f4f4f6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--text); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p, li { max-width: 68ch; }
+  .lede { color: var(--muted); margin: 0 0 24px; }
+  .status { display: inline-block; font-size: 0.85rem; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; color: var(--muted); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 4px; border-radius: 3px; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 6px; overflow-x: auto; font: 0.85rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.93rem; margin: 12px 0; display: block; overflow-x: auto; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; }
+  figure { margin: 20px 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+  .rule { border-left: 3px solid var(--accent); padding: 4px 14px; margin: 16px 0; }
+  .note { color: var(--muted); font-size: 0.93rem; }
+  ol li, ul li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>mica metadata redesign</h1>
+<p class="lede">A plan to make the S3 metadata of mica simple, and to make garbage collection cost follow the changes, not the bucket size.</p>
+<p><span class="status">Plan, not built. 2026-11-07.</span></p>
+
+<h2>1. The situation</h2>
+<p>mica keeps each disk in S3. A disk is a list of chunks, 256 KiB each by default. The metadata tells mica which chunk object holds which part of the disk.</p>
+<p>Today the metadata has these objects:</p>
+<ul>
+  <li><code>chunks/&lt;hash&gt;</code>: chunk data. The key is the SHA-256 of the data. All disks share one namespace, so equal chunks are one object.</li>
+  <li><code>pages/&lt;hash&gt;</code>: 1,024 chunk hashes. One page covers 256 MiB of disk.</li>
+  <li><code>manifests/&lt;hash&gt;</code>: the root. It lists the page hashes of one disk version, and points to its parent root.</li>
+  <li><code>disks/&lt;id&gt;/head</code>: the current root. mica overwrites it at each commit.</li>
+  <li><code>disks/&lt;id&gt;/attached</code>: the node that owns the disk now.</li>
+  <li><code>gc/lock</code> and <code>gc/last</code>: what a checkpoint knows about garbage collection (GC).</li>
+</ul>
+<p>Nothing in S3 tells which disk owns an object. So only a global GC can decide that an object is garbage. This causes two problems.</p>
+
+<h3>Problem 1: GC cost grows with the bucket</h3>
+<p>One GC run does these steps (<code>src/gc.rs</code>):</p>
+<ol>
+  <li>Read the head of each disk, one disk at a time. Follow up to 5 parent roots for each disk.</li>
+  <li>Read each live page once, and put each live chunk hash in a set in memory.</li>
+  <li>List every object in <code>chunks/</code>, <code>pages/</code> and <code>manifests/</code>.</li>
+  <li>Delete each object that is not live and is older than 24 hours.</li>
+</ol>
+<p>An estimate for 10,000 disks, with 2 GiB of written data each and 20 ms for each request:</p>
+<table>
+  <tr><th>Step</th><th>Work</th><th>Time or space</th></tr>
+  <tr><td>Heads and roots, in sequence</td><td>about 110,000 small requests</td><td>about 35 minutes</td></tr>
+  <tr><td>Live pages, 16 in parallel</td><td>about 1 million GETs</td><td>about 20 minutes</td></tr>
+  <tr><td>List all chunks</td><td>about 80 million keys, 80,000 LIST requests</td><td>keys in memory</td></tr>
+  <tr><td>Live chunk set</td><td>about 80 million hashes</td><td>several GB of RAM</td></tr>
+</table>
+<p class="note">These numbers are estimates from the code, not measurements.</p>
+<p>A long GC also slows every disk. While a GC runs, each checkpoint waits for it (up to 10 minutes), or reads back every object that it uploaded.</p>
+
+<h3>Problem 2: the safety rules are hard to keep correct</h3>
+<p>Chunk keys are content hashes. So a checkpoint can upload an object that has the same key as old garbage. GC can read the old age of that object, and then delete the new upload. mica has many parts only to prevent this race:</p>
+<ul>
+  <li>the 24-hour grace period</li>
+  <li><code>gc/lock</code> and <code>gc/last</code>, read about 6 times in each checkpoint</li>
+  <li>the repair step, which reads back each new object after a GC</li>
+  <li>held copies of staged chunks, and the <code>hold</code> file</li>
+  <li>the rule that a checkpoint uploads a chunk again, also when S3 can have it</li>
+</ul>
+<p>Ownership has a second gap. The head has no compare-and-swap. A node checks the <code>attached</code> marker, and then writes the head. After a forced takeover, the old node can still write the head one time.</p>
+
+<h2>2. Goals</h2>
+<ul>
+  <li>The cost of GC follows the data that changed. It does not follow the number of disks or objects.</li>
+  <li>No global scan. No global lock. No grace period for correct operation.</li>
+  <li>One commit is one atomic step that also checks ownership.</li>
+  <li>Snapshots and clones stay free: they copy no data.</li>
+  <li>S3 stays the only store. No database.</li>
+</ul>
+
+<h2>3. The design</h2>
+<p>The design has four rules. Each rule removes a part of the current protocol.</p>
+
+<h3>Rule 1: each object has one owner disk and is never written again</h3>
+<p>Each checkpoint writes its objects into a new <em>set</em>. A set is a folder with a new random ID:</p>
+<pre><code>d/&lt;disk&gt;/s/&lt;seq&gt;-&lt;random&gt;/c/&lt;chunk index&gt;     chunk data, compressed
+d/&lt;disk&gt;/s/&lt;seq&gt;-&lt;random&gt;/p/&lt;page index&gt;      page
+d/&lt;disk&gt;/s/&lt;seq&gt;-&lt;random&gt;/t/&lt;n&gt;               tree node above the pages
+d/&lt;disk&gt;/s/&lt;seq&gt;-&lt;random&gt;/root               root of this version</code></pre>
+<p>A page entry holds the location of a chunk and its SHA-256:</p>
+<pre><code>entry = owner (index into the owner table of the root)
+        set   (seq + random)
+        hash  (SHA-256 of the plain chunk, for checks and for "unchanged" skips)</code></pre>
+<p>A key is never used two times. So an upload can never get the key of garbage, and the race of problem 2 cannot occur. The grace period, <code>gc/lock</code>, <code>gc/last</code>, the repair step and held copies all go away.</p>
+<p>A chunk that the guest writes again with the same data keeps its old entry, as today. Clones still share the chunks of their snapshot, because their pages point to the same keys.</p>
+<p>The cost: two disks that write the same data separately store it two times. Today they share one object.</p>
+
+<h3>Rule 2: the head is the lock</h3>
+<p>The head holds the owner. mica changes the head only with <code>If-Match: &lt;etag&gt;</code>, a compare-and-swap in S3.</p>
+<pre><code>{
+  "root": "d/disk-1/s/000000000000002a-9f3c11/root",
+  "seq": 42,
+  "owner": { "node_id": "...", "claim": "...", "since": "..." },
+  "size": 21474836480,
+  "limits": { ... },
+  "profile": [ ... ]
+}</code></pre>
+<ul>
+  <li><strong>Attach:</strong> GET the head, then PUT it with our owner and <code>If-Match</code>. If the PUT fails, another node changed the head first.</li>
+  <li><strong>Commit:</strong> PUT the new head with <code>If-Match</code>. The PUT fails after a takeover. Then the old node stops, and it cannot write the head again.</li>
+  <li><strong>Detach:</strong> PUT the head without an owner, with <code>If-Match</code>.</li>
+</ul>
+<p>The <code>attached</code> object goes away, and also the second claim path for stores without conditional writes. The owner still reads the head once a minute, so an idle disk also sees a takeover.</p>
+<p>Only the owner of a disk deletes the objects of that disk. All GC work for one disk runs on one node, so it has no races with other nodes.</p>
+
+<h3>Rule 3: free an object when its neighbors do not have it</h3>
+<p>A disk has a list of <em>retained roots</em>, ordered by seq:</p>
+<ul>
+  <li>the last 5 checkpoints (<code>gc_keep_checkpoints</code>)</li>
+  <li>the root of each snapshot of the disk</li>
+</ul>
+<p>An object of the disk is in a continuous range of versions. It appears in the version that wrote it. It stays in each later version until the guest writes that chunk again. It never comes back, because of rule 1. So when mica drops one retained root, it must keep an object only if a neighbor root has it.</p>
+
+<div class="rule">
+<p><strong>Drop rule.</strong> To drop retained root X, find the retained roots just before X (P) and just after X (N). Delete each object of this disk that X has and that P and N do not have. Then delete X.</p>
+</div>
+
+<figure>
+<svg id="interval" viewBox="0 0 720 300" role="img" aria-label="Timeline of disk versions 1 to 13. Retained roots are version 3, which is a snapshot, and versions 9 to 13. Object A lives from version 2 to 4 and is kept by the snapshot. Object B lives from version 6 to 8 and is deleted when root 8 drops, because neither neighbor root 3 nor root 9 has it. Object C lives from version 4 to 11 and is kept because root 9 has it."></svg>
+<figcaption>Version 13 commits, so root 8 leaves the window of 5. Its neighbors are root 3 (a snapshot) and root 9. Only object B is in root 8 and in neither neighbor, so mica deletes B.</figcaption>
+</figure>
+
+<p>Why the rule is correct: an object lives in one continuous range. If any other retained root has the object, then the neighbor on that side has it too. So the two neighbors are enough.</p>
+<p>The work for each drop is a diff of three roots. Equal page keys mean equal pages, so mica reads only the pages that changed. The owner has these roots and pages in its local page store already. A drop needs no S3 reads. It sends one <code>DeleteObjects</code> request for each 1,000 deleted keys.</p>
+<p>The owner drops the oldest checkpoint root after each commit, in the background. If the node crashes during a drop, the next owner does the drop again. Deletes can run two times without harm. The root is deleted last, so an unfinished drop is easy to find.</p>
+
+<h3>Rule 4: clones keep their snapshot</h3>
+<p>A clone is a disk that starts from a snapshot of another disk. Its pages point to objects of the other disk. A clone never deletes objects of another owner.</p>
+
+<figure>
+<svg id="lineage" viewBox="0 0 720 250" role="img" aria-label="Disk D has a snapshot S. Clone C starts from S. C writes a marker under S, and this marker keeps S. S keeps the objects of D that its root has. C owns only its own new objects."></svg>
+<figcaption>A clone marker keeps the snapshot. The snapshot keeps the objects of D that the clone can read.</figcaption>
+</figure>
+
+<ul>
+  <li><strong>Clone:</strong> PUT <code>d/&lt;D&gt;/clones/&lt;S&gt;/&lt;C&gt;</code>. Then read the snapshot record. If the snapshot is marked as deleted, delete the marker and fail.</li>
+  <li><strong>Delete a snapshot:</strong> mark its record as deleted. Then list its clone markers. If there are none, drop its root with the drop rule. If there are clones, the snapshot is hidden, and its root stays retained.</li>
+  <li><strong>Delete a clone:</strong> delete its objects, then its clone marker. If its snapshot is marked as deleted and has no more markers, the snapshot drops.</li>
+</ul>
+<p>Each side writes first and reads second. So a clone and a snapshot delete at the same time always see each other. S3 has strong read-after-write consistency, so this needs no compare-and-swap.</p>
+<p>A disk with snapshots that the user deletes stays as a marked head. It keeps only its snapshot roots, until the last snapshot is gone. This is how a clone of a clone keeps its data: each level keeps the level below it.</p>
+
+<h3>Unfinished checkpoints</h3>
+<p>A checkpoint can upload objects and then fail before its commit. Before its first upload, the checkpoint writes <code>d/&lt;disk&gt;/open/&lt;set&gt;</code>. After the commit result is known, it deletes this marker. An open marker that is left over belongs to a set that never committed, if the head does not point into it. The owner deletes such sets at attach and once an hour. This also deletes the uploads of an old owner that continued after a takeover.</p>
+
+<h3>Work that the owner cannot do now</h3>
+<p>Some work belongs to a disk that another node has, or that no node has. Examples: a snapshot of a detached disk loses its last clone, or a user deletes a detached disk. The node that starts the work writes <code>gc/pending/&lt;disk&gt;</code>.</p>
+<ul>
+  <li>The owner of an attached disk does its pending work at attach, at detach and once an hour.</li>
+  <li><code>mica gc</code> lists <code>gc/pending/</code> only. For each detached disk, it takes the head with <code>If-Match</code>, does the work and gives the head back.</li>
+</ul>
+<p><code>mica gc</code> then costs one LIST plus the work that is pending. It does not read the other 10,000 disks.</p>
+
+<h3>A third tree level</h3>
+<p>Today the root lists every page. A root of a 1 TiB disk is about 128 KiB, and mica writes a new root at each checkpoint. The new format puts tree nodes of 1,024 entries between the root and the pages. A 1 TiB disk then has a root with 4 entries. A checkpoint writes the pages that changed, one tree node for each 256 GiB that changed, and a small root. The drop rule works on this tree in the same way: equal node keys mean equal subtrees.</p>
+
+<h2>4. Before and after</h2>
+<table>
+  <tr><th></th><th>Now</th><th>After</th></tr>
+  <tr><td>Small requests in each checkpoint, without data</td><td>marker GET, about 6 GC reads, head PUT</td><td>open marker PUT, head PUT with <code>If-Match</code>, marker DELETE</td></tr>
+  <tr><td>Checkpoint during a GC</td><td>waits, then reads back each new object</td><td>no effect</td></tr>
+  <tr><td>Root of a 1 TiB disk at each checkpoint</td><td>about 128 KiB</td><td>a few hundred bytes, plus changed tree nodes</td></tr>
+  <tr><td>GC of 10,000 disks</td><td>reads all heads, live pages and object lists</td><td>each owner frees its own garbage after each commit. <code>mica gc</code> lists <code>gc/pending/</code> only</td></tr>
+  <tr><td>GC memory</td><td>all live hashes of the bucket</td><td>pages of one disk at a time</td></tr>
+  <tr><td>Commit after a forced takeover</td><td>possible one time</td><td>not possible</td></tr>
+  <tr><td>Ways to claim a disk</td><td>2</td><td>1</td></tr>
+  <tr><td><code>mica disk ls</code></td><td>3 reads for each disk</td><td>1 read for each disk (size is in the head)</td></tr>
+  <tr><td>Equal data in two unrelated disks</td><td>one object</td><td>two objects</td></tr>
+</table>
+
+<p>Code that goes away: <code>gc/lock</code>, <code>gc/last</code>, <code>GcActivity</code>, the repair step, the held copies and the <code>hold</code> file, the early release of staged chunks, the <code>attached</code> marker and its watcher reads before each commit, the claim without conditional writes, and the global live set.</p>
+
+<h2>5. Options that this plan does not use</h2>
+<table>
+  <tr><th>Option</th><th>Why not</th></tr>
+  <tr><td>A database (etcd, Postgres, FoundationDB) for heads and references</td><td>It gives compare-and-swap, but it is one more service to run and back up. S3 with <code>If-Match</code> gives the same compare-and-swap.</td></tr>
+  <tr><td>SQLite or redb for each disk, on the node</td><td>The local dirty log and the <code>recent</code> bitmap are fast because a write sets one bit in memory. An append for each new chunk cut parallel writes from 1,651 to 421 MiB/s before. A database commit for each flush is not faster.</td></tr>
+  <tr><td>An LSM on object storage, such as SlateDB</td><td>It solves the problem, but it adds its own manifest, compaction and GC.</td></tr>
+  <tr><td>A reference count for each object in S3</td><td>Each count change needs a compare-and-swap on a shared object. A clone of a large disk changes millions of counts.</td></tr>
+  <tr><td>Content-hash keys inside each disk folder</td><td>Equal chunks at two places in one disk share one key. Then an old key can come back, and the race of problem 2 returns inside the disk.</td></tr>
+  <tr><td>Keep the global GC, but make it faster</td><td>Parallel head reads help step 1. The full listing and the live set in memory stay, and checkpoints still depend on GC.</td></tr>
+</table>
+
+<h2>6. Limits and open questions</h2>
+<ul>
+  <li><strong>Stores must support <code>If-Match</code> on PUT.</strong> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html">AWS S3</a> supports it. Cloudflare R2 and MinIO also support it. I did not check RustFS and Hetzner Object Storage yet. Garage does not support conditional writes, so mica drops Garage.</li>
+  <li><strong>No deduplication between unrelated disks.</strong> The cost is not known. Step 0 measures it on a real bucket.</li>
+  <li><strong>A deleted snapshot with live clones keeps its data.</strong> The user does not see it, but S3 stores it until the last clone is deleted. <code>mica snapshot ls</code> can show this space.</li>
+  <li><strong>Page entries grow from 32 to about 46 bytes.</strong> zstd removes most of the repeated owner and set fields. The size after compression needs a measurement.</li>
+  <li><strong>New format.</strong> mica keeps no compatibility with older data. Disks are created again.</li>
+</ul>
+
+<h2>7. Steps</h2>
+<ol>
+  <li><strong>Probe (about 10 minutes).</strong> Test PUT with <code>If-Match</code> and <code>DeleteObjects</code> on RustFS and Hetzner. Count the chunk hashes that two unrelated disks share in a real bucket. If <code>If-Match</code> is missing, stop and change this plan.</li>
+  <li><strong>Head as the lock.</strong> Owner in the head, <code>If-Match</code> on attach, commit and detach. Remove the <code>attached</code> marker. Run the takeover and crash tests.</li>
+  <li><strong>New keys.</strong> Sets, page entries with owner and set, the tree level, open markers. Remove <code>gc/lock</code>, <code>gc/last</code>, the repair step and held copies.</li>
+  <li><strong>Drop rule for checkpoints.</strong> The owner drops the oldest root after each commit.</li>
+  <li><strong>Snapshots, clones and deletes.</strong> Clone markers, deleted marks, <code>gc/pending/</code>, the new <code>mica gc</code>. Remove the global GC.</li>
+</ol>
+
+<h3>How to check the result</h3>
+<ul>
+  <li><strong>Model test.</strong> Run random writes, checkpoints, snapshots, clones and deletes against a memory store. After each step, check two facts: no root that is still reachable points to a deleted object, and no object stays that no reachable root needs.</li>
+  <li><strong>Crash tests.</strong> The current power-cut and daemon-kill tests on btrfs, XFS and ext4. Add kills during a drop and during a clone delete.</li>
+  <li><strong>Takeover test.</strong> Force a takeover while the old node uploads. The old node must fail its commit. Its leftover set must be gone after the next cleanup.</li>
+  <li><strong>Scale test.</strong> 10,000 small disks in the lab RustFS, with a few writes on each. Measure <code>mica gc</code> time and memory, and the drop time after each commit. Compare with the current GC on the same bucket.</li>
+  <li><strong>Checkpoint cost.</strong> The soak test on a 1 TiB disk. Measure the requests and the metadata bytes for each checkpoint, before and after.</li>
+</ul>
+
+</main>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  if (typeof rough === "undefined") return;
+  var NS = "http://www.w3.org/2000/svg";
+  var ink = "#1d1d1f", muted = "#5f6368", accent = "#b4441b", keep = "#2f6f4f";
+
+  function text(svg, x, y, value, opts) {
+    opts = opts || {};
+    var t = document.createElementNS(NS, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y);
+    t.setAttribute("font-size", opts.size || 14);
+    t.setAttribute("font-family", "system-ui, sans-serif");
+    t.setAttribute("fill", opts.color || ink);
+    t.setAttribute("text-anchor", opts.anchor || "middle");
+    if (opts.weight) t.setAttribute("font-weight", opts.weight);
+    t.textContent = value;
+    svg.appendChild(t);
+  }
+
+  // Timeline of versions and object lifetimes.
+  var a = document.getElementById("interval");
+  var rc = rough.svg(a);
+  var x0 = 70, step = 48;
+  function vx(v) { return x0 + (v - 1) * step; }
+  a.appendChild(rc.line(vx(1) - 10, 60, vx(13) + 10, 60, { stroke: muted, roughness: 0.6 }));
+  text(a, 20, 64, "version", { anchor: "start", size: 12, color: muted });
+  var retained = { 3: "snapshot", 8: "drops", 9: "", 10: "", 11: "", 12: "", 13: "new" };
+  for (var v = 1; v <= 13; v++) {
+    var isRetained = v in retained;
+    var color = v === 8 ? accent : (isRetained ? ink : muted);
+    a.appendChild(rc.circle(vx(v), 60, isRetained ? 16 : 8, {
+      stroke: color, fill: isRetained ? color : "none", fillStyle: "solid", roughness: 0.5
+    }));
+    text(a, vx(v), 40, String(v), { size: 13, color: color, weight: isRetained ? 600 : 400 });
+    if (retained[v]) text(a, vx(v), 88, retained[v], { size: 12, color: color });
+  }
+  function life(label, from, to, y, color, note) {
+    a.appendChild(rc.rectangle(vx(from) - 8, y - 12, vx(to) - vx(from) + 16, 24, {
+      stroke: color, fill: color, fillStyle: "hachure", hachureGap: 6, roughness: 0.8
+    }));
+    text(a, vx(from) - 22, y + 5, label, { size: 15, weight: 600, color: color });
+    text(a, vx(to) + 18, y + 5, note, { anchor: "start", size: 13, color: color });
+  }
+  life("A", 2, 4, 140, keep, "kept: snapshot 3 has it");
+  life("B", 6, 8, 195, accent, "deleted: 3 and 9 do not have it");
+  life("C", 4, 11, 250, keep, "kept: root 9 has it");
+  a.appendChild(rc.line(vx(8), 72, vx(8), 270, { stroke: accent, strokeLineDash: [6, 6], roughness: 0.4 }));
+
+  // Lineage of disk, snapshot and clone.
+  var b = document.getElementById("lineage");
+  var rb = rough.svg(b);
+  function box(x, y, w, h, title, sub, color) {
+    b.appendChild(rb.rectangle(x, y, w, h, { stroke: color || ink, roughness: 0.9 }));
+    text(b, x + w / 2, y + 26, title, { weight: 600, color: color || ink });
+    if (sub) text(b, x + w / 2, y + 48, sub, { size: 12, color: muted });
+  }
+  function arrow(x1, y1, x2, y2, label, color, ly) {
+    b.appendChild(rb.line(x1, y1, x2, y2, { stroke: color, roughness: 0.7 }));
+    var ang = Math.atan2(y2 - y1, x2 - x1), s = 10;
+    b.appendChild(rb.line(x2, y2, x2 - s * Math.cos(ang - 0.4), y2 - s * Math.sin(ang - 0.4), { stroke: color, roughness: 0.4 }));
+    b.appendChild(rb.line(x2, y2, x2 - s * Math.cos(ang + 0.4), y2 - s * Math.sin(ang + 0.4), { stroke: color, roughness: 0.4 }));
+    text(b, (x1 + x2) / 2, (ly !== undefined ? ly : (y1 + y2) / 2 - 8), label, { size: 12, color: color });
+  }
+  box(20, 30, 200, 70, "disk D", "owns d/D/...");
+  box(260, 30, 200, 70, "snapshot S", "a retained root of D");
+  box(500, 30, 200, 70, "clone C", "owns d/C/...");
+  box(20, 160, 200, 64, "objects of D", "in the root of S", keep);
+  box(500, 160, 200, 64, "objects of C", "new writes of C");
+  arrow(500, 65, 462, 65, "clone marker keeps S", accent, 22);
+  arrow(330, 102, 200, 158, "S keeps", keep);
+  arrow(560, 102, 560, 158, "C deletes only these", ink);
+  arrow(520, 120, 222, 180, "C reads, never deletes", muted, 140);
+})();
+</script>
+</body>
+</html>
