@@ -33,164 +33,175 @@
 <main>
 
 <h1>mica metadata redesign</h1>
-<p class="lede">A plan to make the S3 metadata of mica simple and fast. Each disk owns all of its objects. Only the snapshots of one disk share blocks, as in ZFS.</p>
-<p><span class="status">Plan, not built. Second version, 2026-11-07.</span></p>
+<p class="lede">A plan for simple and fast S3 metadata in mica. Each disk owns its objects. The node that has the disk attached cleans up after itself. There is no GC.</p>
+<p><span class="status">Plan, not built. Third version, 2026-11-07.</span></p>
 
 <h2>1. The situation</h2>
-<p>mica keeps each disk in S3. A disk is a list of chunks, 256 KiB each by default. The metadata tells mica which object holds which chunk.</p>
-<p>Today all disks share one namespace of chunks. The key of a chunk is the SHA-256 of its data, so equal chunks are one object. A clone of a snapshot uses the chunks of the snapshot. Nothing in S3 tells which disk owns an object. So only a global garbage collection (GC) can find garbage.</p>
-<p>This causes two problems:</p>
+<p>mica keeps each disk in S3. A disk is a list of chunks, 256 KiB each by default. Today all disks share one namespace of chunks. The key of a chunk is the SHA-256 of its data, so equal chunks are one object, also across disks.</p>
+<p>Nothing in S3 tells which disk owns an object. So only a global garbage collection (GC) can find garbage. This causes two problems:</p>
 <ul>
-  <li><strong>GC cost grows with the bucket.</strong> One GC run reads the head of each disk, one disk at a time. It reads each live page, keeps each live chunk hash in memory, and lists every object in the bucket. For 10,000 disks with 2 GiB of data each, the estimate is about 1 hour, 80 million keys to list, and several GB of RAM. These numbers are estimates from <code>src/gc.rs</code>, not measurements.</li>
-  <li><strong>The safety rules are hard to keep correct.</strong> A checkpoint can upload an object with the key of old garbage. GC can then delete the new upload. To prevent this, mica has a 24-hour grace period, <code>gc/lock</code> and <code>gc/last</code>, a repair step, held copies of chunks, and the <code>hold</code> file. A running GC also slows every checkpoint on every node.</li>
+  <li><strong>GC cost grows with the bucket.</strong> One GC run reads every disk and lists every object. For 10,000 disks with 2 GiB of data each, the estimate is about 1 hour and several GB of RAM. This is an estimate from <code>src/gc.rs</code>, not a measurement.</li>
+  <li><strong>The safety rules are hard to keep correct.</strong> A checkpoint can upload an object with the key of old garbage, and GC can then delete it. To prevent this, mica has a 24-hour grace period, <code>gc/lock</code>, <code>gc/last</code>, a repair step, held copies and the <code>hold</code> file. A running GC also slows the checkpoints of every disk.</li>
 </ul>
-<p>The head also has no compare-and-swap. After a forced takeover, the old node can write the head one more time.</p>
 
-<h2>2. The model</h2>
-<p>The new model has one idea: <strong>a disk never shares an object with another disk.</strong></p>
+<h2>2. The decisions</h2>
 <ul>
-  <li>Each object of a disk is under <code>d/&lt;disk&gt;/</code>. Only this disk uses it.</li>
-  <li>The snapshots of a disk share objects with the disk and with each other. This is the only sharing.</li>
-  <li>Only the node that owns the disk deletes its objects.</li>
-  <li>mica deletes an object at the moment it becomes garbage. There is no GC run.</li>
+  <li><strong>No sharing between disks.</strong> Equal data in two disks is two objects. The customer pays for the space that each disk uses.</li>
+  <li><strong>The snapshots of one disk share objects with the disk.</strong> A snapshot delete frees what only that snapshot uses, as in ZFS.</li>
+  <li><strong>No GC.</strong> The node that has the disk attached (the owner) deletes the garbage of that disk, and only of that disk. No command ever reads all disks.</li>
+  <li><strong>Fast transfers.</strong> A checkpoint sends one small request besides its data. A read never downloads a chunk that a cache on the node has.</li>
 </ul>
-<p>The model has these features:</p>
-<table>
-  <tr><th>Feature</th><th>How</th></tr>
-  <tr><td>Checkpoint</td><td>A commit of a new version. It is not kept as a restore point.</td></tr>
-  <tr><td>Snapshot</td><td>A named version of one disk. It shares objects with the disk.</td></tr>
-  <tr><td>Snapshot delete</td><td>Frees the objects that only this snapshot uses. The other objects stay with their neighbors.</td></tr>
-  <tr><td>Rollback</td><td>A new commit with the content of a snapshot.</td></tr>
-  <tr><td>New disk from a snapshot</td><td>A full copy inside S3 (<code>CopyObject</code>). The new disk owns its copies.</td></tr>
-</table>
 
-<h2>3. Keys</h2>
-<p>A <em>transaction</em> is one try to commit a new version. Each transaction has a number, the <code>txg</code>. The <code>txg</code> grows by one at each try, also after a failed try. Each transaction writes its objects into its own folder:</p>
-<pre><code>d/&lt;disk&gt;/head                               current version and owner
-d/&lt;disk&gt;/snap/&lt;name&gt;                        a snapshot: its root key and txg
-d/&lt;disk&gt;/t/&lt;txg&gt;-&lt;epoch&gt;/c/&lt;chunk index&gt;      chunk data, compressed
-d/&lt;disk&gt;/t/&lt;txg&gt;-&lt;epoch&gt;/p/&lt;page index&gt;       page: 1,024 chunk entries
-d/&lt;disk&gt;/t/&lt;txg&gt;-&lt;epoch&gt;/n/&lt;node index&gt;       tree node: 1,024 page entries
-d/&lt;disk&gt;/t/&lt;txg&gt;-&lt;epoch&gt;/root                root of this version</code></pre>
-<p>The <code>epoch</code> grows by one at each claim of the disk. Two owners can never write the same key.</p>
-<p>An entry in a page or a tree node holds the <code>txg</code> and <code>epoch</code> of its object and its SHA-256. The <code>txg</code> is the <em>birth</em> of the object. mica never writes a key two times. If the guest writes the same data again, the old entry stays.</p>
-<p>A tree node sits between the root and the pages. A 1 TiB disk then has a root of 4 entries. Today the root of a 1 TiB disk is about 128 KiB, and each checkpoint writes it again.</p>
+<h2>3. Objects in S3</h2>
+<pre><code>d/&lt;disk&gt;/head                        current version, owner, next txg
+d/&lt;disk&gt;/snap/&lt;name&gt;                 snapshot: txg of its version
+d/&lt;disk&gt;/&lt;txg&gt;/c/&lt;chunk index&gt;        chunk data, compressed
+d/&lt;disk&gt;/&lt;txg&gt;/p/&lt;page index&gt;         page: 1,024 chunk entries
+d/&lt;disk&gt;/&lt;txg&gt;/root                  root: one entry for each page</code></pre>
+<p>A <em>transaction</em> is one commit of a new version of the disk. Each transaction has a number, the <code>txg</code>, and writes its objects into its own folder. mica never writes a key two times.</p>
+<p>An entry in a page or a root has two fields:</p>
+<pre><code>txg    the folder of the object: its birth
+hash   SHA-256 of the plain data: for checks and for cache lookups</code></pre>
+<p>A zero entry means a zero chunk or a zero page. Zero chunks are not stored.</p>
 
 <h2>4. The head is the lock</h2>
-<p>mica changes the head only with <code>If-Match: &lt;etag&gt;</code>. This is a compare-and-swap in S3. The head holds the owner and the transaction that is in progress:</p>
+<p>mica changes the head only with <code>If-Match: &lt;etag&gt;</code>. This is a compare-and-swap in S3. If another node changed the head, the PUT fails.</p>
 <pre><code>{
-  "root": "t/42-3/root",
   "txg": 42,
-  "epoch": 3,
+  "next": 43,
   "owner": { "node_id": "...", "since": "..." },
-  "open": 43,
-  "last_snapshot_txg": 30,
+  "lost": [],
   "size": 21474836480,
   "limits": { ... },
   "profile": [ ... ]
 }</code></pre>
 <ul>
-  <li><strong>Attach:</strong> GET the head. PUT it with our owner, <code>epoch + 1</code> and <code>If-Match</code>.</li>
-  <li><strong>Open:</strong> before the first upload, PUT the head with <code>open</code> set to the new <code>txg</code>.</li>
-  <li><strong>Commit:</strong> PUT the head with the new root, <code>open</code> cleared, and <code>If-Match</code>.</li>
-  <li><strong>Detach:</strong> PUT the head without an owner.</li>
+  <li><code>txg</code> is the committed version. Its root is <code>d/&lt;disk&gt;/42/root</code>.</li>
+  <li><code>next</code> is the folder of the next transaction. Each commit sets it. So a checkpoint needs only one PUT of the head.</li>
+  <li><code>lost</code> lists folders of transactions that never committed. The owner deletes them.</li>
 </ul>
-<p>After a takeover, the old node fails its next PUT of the head. It cannot start a new transaction, and it cannot commit. The <code>attached</code> object, the claim without conditional writes, and the marker read before each commit all go away.</p>
-<p>If a transaction fails, <code>open</code> tells which folder holds its uploads. The owner deletes that folder at the next open or at attach. An old owner that still uploads after a takeover writes only into its own <code>epoch</code>, which the new owner deletes.</p>
 
-<h2>5. Commit and the free rule</h2>
-<p>A checkpoint uploads changed chunks, pages, tree nodes and a root. Then it commits the head. It knows the old entry of each changed chunk, page and tree node. These old objects are now <em>replaced</em>.</p>
+<h3>Attach</h3>
+<ol>
+  <li>GET the head.</li>
+  <li>If <code>next</code> has a folder, it holds uploads that never committed. Add it to <code>lost</code>.</li>
+  <li>PUT the head with our owner, <code>next</code> set to the next unused <code>txg</code>, and <code>If-Match</code>.</li>
+  <li>Delete each folder in <code>lost</code>, then clear <code>lost</code> at the next commit.</li>
+</ol>
+<p>After a forced takeover, the old node can still upload into its <code>next</code> folder for a short time. Its commit fails, because the head changed. The new owner deletes that folder at attach. It deletes the folder again at its detach, to catch uploads that arrived late.</p>
+
+<h3>Checkpoint</h3>
+<ol>
+  <li>Upload each changed chunk into <code>d/&lt;disk&gt;/&lt;next&gt;/c/</code>. Skip a chunk whose hash equals its current entry.</li>
+  <li>Upload each changed page, then the root.</li>
+  <li>PUT the head with <code>txg = next</code>, a new <code>next</code>, and <code>If-Match</code>.</li>
+  <li>Delete the garbage with the free rule, in the background.</li>
+</ol>
+<p>If the PUT of the head fails with a network error, GET the head to learn the result. If another node has the head, stop. Do not delete anything. If the commit did not happen, delete the keys that this try uploaded, then try again. The owner knows these keys, because it uploaded them.</p>
+
+<h2>5. The free rule</h2>
+<p>A commit replaces the old entry of each changed chunk and page. It also replaces the old root. The checkpoint has these old entries in memory.</p>
 
 <div class="rule">
-<p><strong>Free rule.</strong> After a commit, delete each replaced object that was born after the last snapshot. Keep each replaced object that was born before it, because that snapshot uses it.</p>
+<p><strong>Free rule.</strong> After a commit, delete each replaced object that was born after the newest snapshot. Keep each replaced object that was born before it, because that snapshot uses it.</p>
 </div>
 
-<p>ZFS uses the same rule for its blocks. The rule needs only the birth <code>txg</code> of the replaced entries, which the checkpoint has in memory. It needs no S3 reads. mica sends the deletes in batches of up to 1,000 keys with <code>DeleteObjects</code>, after the commit, in the background.</p>
-<p>The old root is replaced too. mica deletes it last. Each root names its parent root. If the node crashes before the deletes end, the parent of the head is still there at the next attach. The new owner compares the old root with the head and does the deletes again. Deletes can run two times without harm.</p>
+<p>ZFS uses the same rule for its blocks. The rule needs no S3 reads. mica deletes up to 1,000 keys in one <code>DeleteObjects</code> request.</p>
+<p>If the node crashes before the deletes end, the old root is still in S3, because mica deletes it last. At the next attach, the owner compares the old root with the head and does the deletes again. A delete can run two times without harm.</p>
 
 <figure>
-<svg id="timeline" viewBox="0 0 720 330" role="img" aria-label="Timeline of versions 1 to 10 with snapshot S1 at version 3, snapshot S2 at version 7, and the head at version 10. Object A is born at 2 and replaced at 5: S1 keeps it. Object B is born at 4 and replaced at 6: it is deleted at the commit of 6, because it was born after the last snapshot S1. Object C is born at 5 and replaced at 9: S2 keeps it. When S2 is deleted, C is freed, because neither S1 nor the head has it."></svg>
+<svg id="timeline" viewBox="0 0 720 330" role="img" aria-label="Timeline of versions 1 to 10 with snapshot S1 at version 3, snapshot S2 at version 7, and the head at version 10. Object A is born at 2 and replaced at 5: S1 keeps it. Object B is born at 4 and replaced at 6: it is deleted at the commit of 6, because it was born after the newest snapshot S1. Object C is born at 5 and replaced at 9: S2 keeps it. When S2 is deleted, C is freed, because neither S1 nor the head has it."></svg>
 <figcaption>B is deleted at once. A and C stay because a snapshot uses them. A delete of S2 frees C.</figcaption>
 </figure>
 
 <h2>6. Snapshots</h2>
 <h3>Create</h3>
-<p>The owner commits a checkpoint, then writes <code>d/&lt;disk&gt;/snap/&lt;name&gt;</code> with the root key and <code>txg</code>. Then it sets <code>last_snapshot_txg</code> in the head. For a detached disk, the node claims the disk first.</p>
+<p>The owner commits a checkpoint. Then it writes <code>d/&lt;disk&gt;/snap/&lt;name&gt;</code> with that <code>txg</code>. The owner keeps the list of snapshots in memory. It reads the list with one LIST at attach. A detached disk is claimed first, and given back after.</p>
 
 <h3>Delete</h3>
-<p>The snapshots and the head form one list, ordered by <code>txg</code>. To delete snapshot S, find its neighbors: the snapshot before it (P) and the next snapshot or the head (N).</p>
+<p>The snapshots and the head form one list, ordered by <code>txg</code>. To delete snapshot S, find the snapshot before it (P) and the next snapshot or the head (N).</p>
 <div class="rule">
 <p><strong>Merge rule.</strong> Delete each object of S that P and N do not have. Then delete the record of S.</p>
 </div>
-<p>If S was the last snapshot, the head gets the <code>txg</code> of P as <code>last_snapshot_txg</code>. The record of S goes last, so a crash leaves a delete that can run again.</p>
-<p>This is correct because an object lives in one continuous range of versions. It appears in the version that wrote it, and it stays until the guest writes that chunk again. It never comes back. So if any other snapshot has the object, the neighbor on that side has it too.</p>
-<p>Equal keys of pages and tree nodes mean equal content. So the diff reads only the parts of the tree that changed between P, S and N. Only the owner does this, so no other node changes the list at the same time.</p>
+<p>This is correct because an object lives in one continuous range of versions. It stays until the guest writes that chunk again, and it never comes back. So if another snapshot has the object, the neighbor on that side has it too.</p>
+<p>The record of S goes last. A crash leaves a delete that can run again. Equal page entries mean equal pages, so the diff reads only the pages that changed between P, S and N.</p>
 
 <h3>Rollback</h3>
-<p>A rollback commits a new root that has the entries of the snapshot. The free rule then handles the objects of the old head. A rollback does not delete later snapshots.</p>
+<p>A rollback to snapshot S first deletes each snapshot newer than S, with the merge rule. ZFS does the same. Then it commits a new root with the entries of S. The free rule deletes what only the old head used.</p>
+<p>The newer snapshots must go. If they stayed, an object of S could be in S and in the head, but not in the snapshots between them. Then a later merge could delete an object that the head still uses.</p>
 
 <h3>New disk from a snapshot</h3>
-<p>mica copies each object of the snapshot into the new disk with <code>CopyObject</code>. The data does not go through the node. Zero chunks are not stored, so they are not copied. The local cache of the snapshot can also be copied on the same node, so the new disk starts warm there.</p>
-<p>An estimate for 2 GiB of written data at 256 KiB chunks: about 8,200 copies. With 64 copies at a time and 20 ms each, this is about 3 seconds. The time grows with the data in the snapshot, not with the disk size.</p>
+<p>mica copies each object of the snapshot into the new disk with <code>CopyObject</code>. The data stays inside S3. An estimate for 2 GiB of written data: about 8,200 copies, about 3 seconds with 64 copies at a time.</p>
 
-<h2>7. Delete a disk</h2>
+<h2>7. Fast reads: check the node first</h2>
+<p>Each entry has the hash of its chunk. Before a download, mica looks for the hash in the cache indexes of all disks on the node. These indexes are in memory already. If another cache has the chunk, mica links the file into the cache of this disk. It does not download the chunk.</p>
+<p>This helps in these cases:</p>
+<ul>
+  <li>A new disk from a snapshot on the same node starts warm.</li>
+  <li>Many disks from the same image on one node download each chunk one time.</li>
+  <li>A rollback finds its old chunks in the cache.</li>
+</ul>
+<p>S3 stores the data one time for each disk. The node keeps it one time for each hash, while a cache has it.</p>
+
+<h2>8. Delete a disk</h2>
 <ol>
-  <li>Claim the head with <code>If-Match</code> and mark it as deleted.</li>
-  <li>List <code>d/&lt;disk&gt;/</code> and delete everything with <code>DeleteObjects</code>.</li>
+  <li>Claim the head and mark it as deleted.</li>
+  <li>List <code>d/&lt;disk&gt;/</code> and delete everything with <code>DeleteObjects</code>. The snapshots of the disk go with it.</li>
   <li>Delete the head last.</li>
 </ol>
-<p>If the node crashes, the marked head stays. <code>mica disk ls</code> shows the disk as "deleting", and the same command finishes the work. The snapshots of a disk go with it.</p>
+<p>If the node crashes, the marked head stays. <code>mica disk ls</code> shows the disk as "deleting", and the same command finishes the work.</p>
 
-<h2>8. Before and after</h2>
+<h2>9. Before and after</h2>
 <table>
   <tr><th></th><th>Now</th><th>After</th></tr>
-  <tr><td>Small requests in each checkpoint, without data</td><td>marker GET, about 6 GC reads, head PUT</td><td>2 head PUTs with <code>If-Match</code></td></tr>
+  <tr><td>Small requests in each checkpoint, without data</td><td>marker GET, about 6 GC reads, head PUT</td><td>1 head PUT with <code>If-Match</code></td></tr>
   <tr><td>Garbage in S3</td><td>stays until a GC run, plus 24 hours</td><td>deleted after the commit</td></tr>
-  <tr><td>GC of 10,000 disks</td><td>about 1 hour, all keys listed, GBs of RAM</td><td>no GC run. Each commit frees its own garbage</td></tr>
-  <tr><td>Checkpoint during a GC</td><td>waits, then reads back each object</td><td>no GC exists</td></tr>
-  <tr><td>Root of a 1 TiB disk in each checkpoint</td><td>about 128 KiB</td><td>a few hundred bytes, plus changed tree nodes</td></tr>
+  <tr><td>GC</td><td>global, about 1 hour for 10,000 disks</td><td>none. Each owner cleans its own disk</td></tr>
   <tr><td>Commit after a forced takeover</td><td>possible one time</td><td>not possible</td></tr>
   <tr><td>Delete a disk</td><td>delete the head, then wait for a GC</td><td>delete one folder</td></tr>
-  <tr><td>New disk from a snapshot</td><td>instant, shares chunks</td><td>a copy in S3, seconds for each few GiB</td></tr>
-  <tr><td>Equal data in two disks</td><td>one object</td><td>two objects</td></tr>
+  <tr><td>New disk from a snapshot</td><td>instant, shares chunks</td><td>a copy in S3, seconds for each few GiB, warm cache on the same node</td></tr>
+  <tr><td>Equal data in two disks</td><td>one object</td><td>two objects in S3, one file in the node cache</td></tr>
   <tr><td>Kept checkpoints</td><td>the last 5</td><td>none. Use snapshots</td></tr>
 </table>
-<p>Code that goes away: <code>src/gc.rs</code> and <code>mica gc</code>, <code>GcActivity</code>, the repair step, held copies and the <code>hold</code> file, the early release of staged chunks, the <code>attached</code> marker, the claim without conditional writes, and the snapshot check after a clone.</p>
+<p>Code that goes away: <code>src/gc.rs</code> and <code>mica gc</code>, <code>GcActivity</code>, the repair step, held copies and the <code>hold</code> file, the early release of staged chunks, the <code>attached</code> marker and its checks, the claim without conditional writes, and the snapshot check after a clone.</p>
 
-<h2>9. Options that this plan does not use</h2>
+<h2>10. What the earlier versions had, and why it went</h2>
 <table>
-  <tr><th>Option</th><th>Why not</th></tr>
-  <tr><td>Clones that share chunks with their snapshot (the first version of this plan)</td><td>It needs clone markers, a list of pending work, and owner tables in each root. A copy in S3 is slower to create, but the rest of the design becomes much simpler.</td></tr>
-  <tr><td>Keep the last 5 checkpoints as restore points</td><td>Each kept version needs the merge rule at each commit, and it reads pages. Without them, a commit frees its garbage from memory. A timed snapshot can give the same restore points later, with the same code.</td></tr>
-  <tr><td>Dead lists for each snapshot, as in ZFS</td><td>ZFS keeps a list of the blocks that each snapshot holds, so a delete needs no diff. In S3 these lists are more objects to keep correct. The diff of P, S and N reads only the changed parts of the tree.</td></tr>
-  <tr><td>A database (etcd, Postgres) or SQLite for each disk</td><td>S3 with <code>If-Match</code> gives the compare-and-swap that mica needs. A database is one more service, or slower local commits.</td></tr>
+  <tr><th>Part</th><th>Why it went</th></tr>
+  <tr><td>Clones that share chunks with their snapshot</td><td>It needs clone markers and work lists across disks. Duplicate data is acceptable, so a copy is simpler.</td></tr>
+  <tr><td>An epoch in each key</td><td>Each commit names the next folder, and the new owner never uses the folder of the old owner. So keys cannot collide without an epoch.</td></tr>
+  <tr><td>A second head PUT to open a transaction</td><td><code>next</code> is set by the commit before, so one PUT is enough.</td></tr>
+  <tr><td>A tree level between the root and the pages</td><td>A root of a 1 TiB disk is about 160 KiB, which is small next to the chunk data of a checkpoint. Add the level only if a measurement shows the cost.</td></tr>
+  <tr><td>The newest snapshot in the head</td><td>The owner reads the snapshot list at attach and keeps it in memory.</td></tr>
+  <tr><td>Kept checkpoints as restore points</td><td>Each kept version needs the merge rule at each commit. Timed snapshots can give restore points later, with the same code.</td></tr>
 </table>
 
-<h2>10. Limits and open questions</h2>
+<h2>11. Limits and open questions</h2>
 <ul>
   <li><strong>Stores must support <code>If-Match</code> on PUT.</strong> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html">AWS S3</a>, Cloudflare R2 and MinIO support it. RustFS and Hetzner Object Storage are not checked yet. Garage does not support it, so mica drops Garage.</li>
-  <li><strong>Many disks from one image cost a copy each.</strong> A fleet of 1,000 sandboxes from a 2 GiB image stores 2 TB, not 2 GiB. If this matters, sharing comes back as a separate feature later.</li>
-  <li><strong>No restore point without a snapshot.</strong> A bad write in the guest is lost after the next commit, unless a snapshot exists.</li>
-  <li><strong>Page entries grow from 32 to about 44 bytes.</strong> zstd removes most of the repeated <code>txg</code> fields. The size after compression needs a measurement.</li>
+  <li><strong>No restore point without a snapshot.</strong> After the next commit, the older version is gone.</li>
+  <li><strong>A rollback deletes the newer snapshots.</strong> To keep a newer snapshot, make a new disk from it before the rollback.</li>
+  <li><strong>A cache link shares one file between disks.</strong> Each disk budget counts the file. The real use of the node disk can be lower than the sum of the budgets.</li>
+  <li><strong>Page entries grow from 32 to 40 bytes.</strong> zstd removes most of the repeated <code>txg</code> fields.</li>
   <li><strong>New format.</strong> mica keeps no compatibility with older data. Disks are created again.</li>
 </ul>
 
-<h2>11. Steps</h2>
+<h2>12. Steps</h2>
 <ol>
   <li><strong>Probe (about 10 minutes).</strong> Test PUT with <code>If-Match</code>, <code>DeleteObjects</code> and <code>CopyObject</code> on RustFS and Hetzner. If <code>If-Match</code> is missing, stop and change this plan.</li>
-  <li><strong>Head as the lock.</strong> Owner, <code>epoch</code> and <code>open</code> in the head, <code>If-Match</code> on each change. Remove the <code>attached</code> marker.</li>
-  <li><strong>New keys and the free rule.</strong> Transaction folders, entries with birth, the tree level, deletes after commit. Remove GC, the repair step and held copies.</li>
-  <li><strong>Snapshots.</strong> Create, the merge rule, rollback, and new disk by copy.</li>
+  <li><strong>Head as the lock.</strong> Owner, <code>next</code> and <code>lost</code> in the head, <code>If-Match</code> on each change. Remove the <code>attached</code> marker.</li>
+  <li><strong>New keys and the free rule.</strong> Transaction folders, entries with birth and hash, deletes after commit. Remove GC, the repair step and held copies.</li>
+  <li><strong>Node cache lookup by hash</strong> before each download.</li>
+  <li><strong>Snapshots:</strong> create, the merge rule, rollback, and new disk by copy.</li>
   <li><strong>Delete a disk</strong> by folder.</li>
 </ol>
 
 <h3>How to check the result</h3>
 <ul>
-  <li><strong>Model test.</strong> Run random writes, commits, failed transactions, snapshots, snapshot deletes and rollbacks against a memory store. After each step, check two facts. No reachable root points to a missing object. No object stays that no reachable root needs.</li>
+  <li><strong>Model test.</strong> Run random writes, commits, failed commits, snapshots, snapshot deletes and rollbacks against a memory store. After each step, check two facts. No reachable root points to a missing object. No object stays that no reachable root needs.</li>
   <li><strong>Crash tests.</strong> The current power-cut and daemon-kill tests on btrfs, XFS and ext4. Add kills during the deletes after a commit and during a snapshot delete.</li>
-  <li><strong>Takeover test.</strong> Force a takeover while the old node uploads. The old node must fail its next head PUT. Its uploads must be gone after the next open of the new owner.</li>
-  <li><strong>Cost test.</strong> The soak test on a 1 TiB disk: requests and metadata bytes for each checkpoint, and bytes in S3 after one hour, before and after.</li>
-  <li><strong>Copy test.</strong> Time a new disk from a 2 GiB snapshot on RustFS and Hetzner.</li>
+  <li><strong>Takeover test.</strong> Force a takeover while the old node uploads. The old commit must fail. No folder of the old node may stay after the detach of the new owner.</li>
+  <li><strong>Transfer test.</strong> Checkpoint requests and time, cold reads, and a new disk from a 2 GiB snapshot on the same node and on another node. Compare with the current build.</li>
 </ul>
 
 </main>
@@ -231,14 +242,14 @@ d/&lt;disk&gt;/t/&lt;txg&gt;-&lt;epoch&gt;/root                root of this vers
     if (marked) text(svg, vx(v), 90, marks[v], { size: 13, weight: 600 });
   }
 
+  // Each bar runs from the birth of the object to the last version that has it.
   function life(label, from, to, y, color, note) {
-    svg.appendChild(rc.rectangle(vx(from) - 8, y - 12, vx(to) - vx(from) - 16 + 16, 24, {
+    svg.appendChild(rc.rectangle(vx(from) - 8, y - 12, vx(to) - vx(from) + 16, 24, {
       stroke: color, fill: color, fillStyle: "hachure", hachureGap: 6, roughness: 0.8
     }));
     text(svg, vx(from) - 24, y + 5, label, { size: 15, weight: 600, color: color });
-    text(svg, vx(to) + 8, y + 5, note, { anchor: "start", size: 12, color: color });
+    text(svg, vx(to) + 16, y + 5, note, { anchor: "start", size: 12, color: color });
   }
-  // Each bar runs from its birth to the version before the one that replaced it.
   life("A", 2, 4, 140, keep, "born 2, replaced 5: S1 keeps it");
   life("B", 4, 5, 200, accent, "born 4, replaced 6: deleted at 6");
   life("C", 5, 8, 260, keep, "born 5, replaced 9: S2 keeps it");
