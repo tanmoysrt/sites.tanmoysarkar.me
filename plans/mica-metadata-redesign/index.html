@@ -34,7 +34,7 @@
 
 <h1>mica metadata redesign</h1>
 <p class="lede">A plan for simple and fast S3 metadata in mica. Each disk owns its objects. The node that has the disk attached cleans up after itself. There is no GC.</p>
-<p><span class="status">Plan, not built. Third version, 2026-11-07.</span></p>
+<p><span class="status">Plan, not built. Third version, 2026-11-07. No rollback.</span></p>
 
 <h2>1. The situation</h2>
 <p>mica keeps each disk in S3. A disk is a list of chunks, 256 KiB each by default. Today all disks share one namespace of chunks. The key of a chunk is the SHA-256 of its data, so equal chunks are one object, also across disks.</p>
@@ -126,12 +126,11 @@ hash   SHA-256 of the plain data: for checks and for cache lookups</code></pre>
 <p>This is correct because an object lives in one continuous range of versions. It stays until the guest writes that chunk again, and it never comes back. So if another snapshot has the object, the neighbor on that side has it too.</p>
 <p>The record of S goes last. A crash leaves a delete that can run again. Equal page entries mean equal pages, so the diff reads only the pages that changed between P, S and N.</p>
 
-<h3>Rollback</h3>
-<p>A rollback to snapshot S first deletes each snapshot newer than S, with the merge rule. ZFS does the same. Then it commits a new root with the entries of S. The free rule deletes what only the old head used.</p>
-<p>The newer snapshots must go. If they stayed, an object of S could be in S and in the head, but not in the snapshots between them. Then a later merge could delete an object that the head still uses.</p>
-
-<h3>New disk from a snapshot</h3>
+<h3>Restore: a new disk from a snapshot</h3>
+<p>mica has no rollback. To go back to a snapshot, make a new disk from it. The old disk and all its snapshots stay as they are.</p>
 <p>mica copies each object of the snapshot into the new disk with <code>CopyObject</code>. The data stays inside S3. An estimate for 2 GiB of written data: about 8,200 copies, about 3 seconds with 64 copies at a time.</p>
+<p>A rollback in place would put old objects back into the head. Then an object could be in an old snapshot and in the head, but not in the snapshots between them, and a merge could delete it. A copy has new keys, so this cannot occur.</p>
+<p>A checkpoint is not kept after the next commit. To restore to a point in time, take a snapshot at that time.</p>
 
 <h2>7. Fast reads: check the node first</h2>
 <p>Each entry has the hash of its chunk. Before a download, mica looks for the hash in the cache indexes of all disks on the node. These indexes are in memory already. If another cache has the chunk, mica links the file into the cache of this disk. It does not download the chunk.</p>
@@ -139,7 +138,6 @@ hash   SHA-256 of the plain data: for checks and for cache lookups</code></pre>
 <ul>
   <li>A new disk from a snapshot on the same node starts warm.</li>
   <li>Many disks from the same image on one node download each chunk one time.</li>
-  <li>A rollback finds its old chunks in the cache.</li>
 </ul>
 <p>S3 stores the data one time for each disk. The node keeps it one time for each hash, while a cache has it.</p>
 
@@ -180,7 +178,7 @@ hash   SHA-256 of the plain data: for checks and for cache lookups</code></pre>
 <ul>
   <li><strong>Stores must support <code>If-Match</code> on PUT.</strong> <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html">AWS S3</a>, Cloudflare R2 and MinIO support it. RustFS and Hetzner Object Storage are not checked yet. Garage does not support it, so mica drops Garage.</li>
   <li><strong>No restore point without a snapshot.</strong> After the next commit, the older version is gone.</li>
-  <li><strong>A rollback deletes the newer snapshots.</strong> To keep a newer snapshot, make a new disk from it before the rollback.</li>
+  <li><strong>No rollback in place.</strong> A restore is a new disk, so the restored disk has a new name.</li>
   <li><strong>A cache link shares one file between disks.</strong> Each disk budget counts the file. The real use of the node disk can be lower than the sum of the budgets.</li>
   <li><strong>Page entries grow from 32 to 40 bytes.</strong> zstd removes most of the repeated <code>txg</code> fields.</li>
   <li><strong>New format.</strong> mica keeps no compatibility with older data. Disks are created again.</li>
@@ -192,13 +190,13 @@ hash   SHA-256 of the plain data: for checks and for cache lookups</code></pre>
   <li><strong>Head as the lock.</strong> Owner, <code>next</code> and <code>lost</code> in the head, <code>If-Match</code> on each change. Remove the <code>attached</code> marker.</li>
   <li><strong>New keys and the free rule.</strong> Transaction folders, entries with birth and hash, deletes after commit. Remove GC, the repair step and held copies.</li>
   <li><strong>Node cache lookup by hash</strong> before each download.</li>
-  <li><strong>Snapshots:</strong> create, the merge rule, rollback, and new disk by copy.</li>
+  <li><strong>Snapshots:</strong> create, the merge rule, and restore as a new disk by copy.</li>
   <li><strong>Delete a disk</strong> by folder.</li>
 </ol>
 
 <h3>How to check the result</h3>
 <ul>
-  <li><strong>Model test.</strong> Run random writes, commits, failed commits, snapshots, snapshot deletes and rollbacks against a memory store. After each step, check two facts. No reachable root points to a missing object. No object stays that no reachable root needs.</li>
+  <li><strong>Model test.</strong> Run random writes, commits, failed commits, snapshots, snapshot deletes and restores against a memory store. After each step, check two facts. No reachable root points to a missing object. No object stays that no reachable root needs.</li>
   <li><strong>Crash tests.</strong> The current power-cut and daemon-kill tests on btrfs, XFS and ext4. Add kills during the deletes after a commit and during a snapshot delete.</li>
   <li><strong>Takeover test.</strong> Force a takeover while the old node uploads. The old commit must fail. No folder of the old node may stay after the detach of the new owner.</li>
   <li><strong>Transfer test.</strong> Checkpoint requests and time, cold reads, and a new disk from a 2 GiB snapshot on the same node and on another node. Compare with the current build.</li>
