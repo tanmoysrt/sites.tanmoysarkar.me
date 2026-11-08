@@ -66,7 +66,7 @@
   <li><a href="#free">Freeing objects without a garbage collector</a></li>
   <li><a href="#move">Moving a disk, snapshots, restore</a></li>
   <li><a href="#crash">Crashes and restarts</a></li>
-  <li><a href="#bug">Two bugs the tests found</a></li>
+  <li><a href="#bug">Bugs the tests found</a></li>
   <li><a href="#numbers">Measurements</a></li>
   <li><a href="#cost">The cost of a 50 GB disk</a></li>
   <li><a href="#use">Using mica</a></li>
@@ -208,12 +208,15 @@ sudo mica disk attach photos && sudo mount -o discard /dev/mica/photos /mnt/phot
 </table>
 </div>
 <p>In the lab, the daemon was killed twice with <code>SIGKILL</code> while a guest wrote files with <code>fsync</code>. All 400 of 400 synced files were correct after each takeover, and again after a full download on a new node.</p>
+<p>A power-cut test goes further. The data folder of the daemon sits on a device-mapper device that can drop every write from one moment on, as a power cut does. A writer fills a disk with blocks that name their own version and flushes often. At a random moment, the writes stop reaching the device. Then the daemon is killed, the device is deleted, and the folder comes back as the device had it: a reboot. The daemon serves the disk again, a detach uploads all, and every block is checked against the last flush. In 6 of 6 cuts and 4 of 4 daemon kills, no flushed write was lost.</p>
 
-<h2 id="bug">10. Two bugs the tests found</h2>
+<h2 id="bug">10. Bugs the tests found</h2>
 <p>One MariaDB run failed after a restart of the daemon: InnoDB found a redo log of zeros. A chunk of that log was stored in the bucket as the zero entry, and the data file had a hole in its place.</p>
 <p>The cause was two daemons on one data folder. A stopped daemon runs its last transactions for up to one minute. The lab script started the next daemon after two seconds. The new daemon read the dirty log and took the chunk as local. Then the old daemon moved the chunk to the cache and cut its hole. The new daemon read zeros there and uploaded them.</p>
 <p>systemd waits for the old process before it starts a new one, so a normal service restart was safe. But a correct program must not depend on the care of its user. Now each daemon locks its data folder and its run folder, and a second daemon refuses to start. A replay with 1 GiB written just before the restart gave the same SHA-256 before and after the restart, and on a new node.</p>
 <p>The second bug hid in <code>mica status</code>. The status of a disk read several values, each under its own lock, in one Rust expression. In such an expression, each lock stays held until the whole expression ends. One of the values took the lock of the limits a second time, so the status waited for itself. This happened only when the disk had unsaved data, and then it also held the locks that writes need. A test of the CLI with real writes found it. Now each lock is taken alone, and a test calls the status of a disk with unsaved data.</p>
+<p>The power-cut test found the third. The daemon wrote a few small files without a sync: the random id of the node, the keys of a bucket, and the bucket of each disk. A cut soon after the first start left the id file empty. At the next start, the daemon did not know its own id, so it took its own disk for the disk of another node, and kept the local data aside as orphaned. Now each of these files is written as the state file always was: a new file, synced, renamed into place, and then the folder synced.</p>
+<p>A reboot of a real server found the fourth. A disk in <code>/etc/fstab</code> was not mounted at boot. mica made the link <code>/dev/mica/&lt;disk&gt;</code> itself, but systemd knows only the devices that udev names, so the mount waited for a device that never came. Now <code>mica service install</code> writes a udev rule, and udev names each mica device. After two reboots with unsaved data on the disk, the server mounted it each time, and the files had the same SHA-256.</p>
 
 <h2 id="numbers">11. Measurements</h2>
 <p><b>Setup.</b> These runs used the first settings of v2: chunks of 256 KiB and a transaction every 30 seconds. A Firecracker VM with 2 vCPUs and 2 GiB of RAM. It starts from a local root disk, and its data disk holds MariaDB with 3.1 GB of data: sysbench, 12 tables of 1 million rows, 8 threads, a 512 MiB buffer pool. The bucket is RustFS in a container on the same laptop, behind a link shaped to 800 Mbit/s with a round trip of 1 ms or 20 ms. "Local" is the same disk image as a plain file on the same SSD. "Cold" is a new node with an empty cache and no fill: each first read goes to the bucket.</p>
@@ -280,6 +283,21 @@ sudo mica disk attach photos && sudo mount -o discard /dev/mica/photos /mnt/phot
 <p>The new defaults cut the bill by 3 to 19 times. A longer interval helps because a hot chunk that changes 10 times in 5 minutes is uploaded once. From the business app up, the bill stops growing with the load. Almost the whole database changes in each 5-minute round: about 3,000 of its 3,100 chunks of 1 MiB. InnoDB writes its changed pages back about every 8 minutes, and the updates of secondary indexes fall all over the tables. So the cost is about one upload of the database for each interval.</p>
 <p>For comparison, a 50 GB gp3 disk on AWS EBS costs $4 a month.</p>
 
+<h3>Tune the database</h3>
+<p>The bill of a database depends most on one thing: does its data fit in its memory? Three more runs lasted 60 minutes each, long enough for the redo log to fill and wrap. They set <code>innodb_log_file_size=2G</code>, <code>innodb_adaptive_flushing_lwm=50</code> and <code>innodb_max_dirty_pages_pct=90</code>. The 3 GiB buffer pool ran in a VM with 4 GiB of RAM.</p>
+<div class="table">
+<table>
+<tr><th>Run</th><th class="n">Buffer pool</th><th class="n">Written each minute</th><th class="n">1 MiB chunks changed in 5 min</th><th class="n">R2, 1 MiB</th><th class="n">R2, 4 MiB</th></tr>
+<tr><td>Business app, default settings</td><td class="n">512 MiB</td><td class="n">383 MiB</td><td class="n">2,878</td><td class="n">$108</td><td class="n">$25</td></tr>
+<tr><td>Business app, 2 GiB redo log</td><td class="n">512 MiB</td><td class="n">322 MiB</td><td class="n">2,904</td><td class="n">$109</td><td class="n">$26</td></tr>
+<tr><td>Business app, 2 GiB redo log, data in memory</td><td class="n">3 GiB</td><td class="n">54 MiB</td><td class="n">138</td><td class="n">$1.10</td><td class="n">free</td></tr>
+<tr><td>Busy app, default settings</td><td class="n">512 MiB</td><td class="n">1.1 GiB</td><td class="n">3,050</td><td class="n">$114</td><td class="n">$26</td></tr>
+<tr><td>Busy app, 2 GiB redo log, data in memory</td><td class="n">3 GiB</td><td class="n">226 MiB</td><td class="n">446</td><td class="n">$13</td><td class="n">$0.21</td></tr>
+</table>
+</div>
+<p class="meta">Cloudflare R2 requests per month, in USD, at a 5-minute interval. "Free" means fewer than the free million requests. The runs with default settings lasted 15 minutes.</p>
+<p>A larger redo log alone changes nothing. A small buffer pool must write changed pages back to make room, so each round still changes almost the whole database. When the data fits in the buffer pool, InnoDB keeps the changed pages in memory and writes them back rarely. Most writes then go to the redo log, which is sequential and changes few chunks. The bill falls about 100 times for the business app, and about 9 times for the busy app.</p>
+
 <div class="table">
 <table>
 <tr><th>Provider</th><th>Works with mica</th><th class="n">Storage only</th><th class="n">Laptop</th><th class="n">Business app</th></tr>
@@ -294,11 +312,11 @@ sudo mica disk attach photos && sudo mount -o discard /dev/mica/photos /mnt/phot
 <p class="meta">USD per month, November 2026, 5-minute interval and 1 MiB chunks. The laptop writes 1 GB and reads 3 GB from the bucket each day. R2 includes 10 GB, one million writes and ten million reads free each month, and has no egress fee. Hetzner is a flat €6.49 for up to 1 TB with no request fees. Wasabi bills 1 TB at minimum, for at least 90 days.</p>
 
 <div class="note">
-<p><b>Recommendation.</b> For a laptop or a quiet data disk, use Cloudflare R2: about $0.60 a month for 50 GB, and the first 10 GB are free. For a database that writes all day, make the disk with 4 MiB chunks, for about $25 a month on R2. Or use a store with no request fees, such as Hetzner or a Garage server of your own. Run <code>mica disk create</code> on a new store first: its probe tells you if the store works with mica.</p>
+<p><b>Recommendation.</b> For a laptop or a quiet data disk, use Cloudflare R2: about $0.60 a month for 50 GB, and the first 10 GB are free. For a database that writes all day, give it a buffer pool that holds its data and a 2 GiB redo log: in the lab, this cut the bill of the business app from $108 to about $1 a month on R2. When the data cannot fit in memory, make the disk with 4 MiB chunks, for about $25 a month. Or use a store with no request fees, such as Hetzner or a Garage server of your own. Run <code>mica bucket add</code> on a new store first: its probe tells you if the store works with mica.</p>
 </div>
 
 <h2 id="use">13. Using mica</h2>
-<p>The <code>mica</code> command talks to the daemon. You give the bucket only once: at the first <code>disk create</code>, or at the first <code>disk attach</code> of a disk that another machine made. The daemon keeps each bucket that works, readable by root only. After that, a command needs only the name of the disk.</p>
+<p>The <code>mica</code> command talks to the daemon. You give the bucket only once: with <code>mica bucket add</code>, at the first <code>disk create</code>, or at the first <code>disk attach</code> of a disk that another machine made. The daemon keeps each bucket that works, readable by root only, and that is the only copy of its keys on the machine. After that, a command needs only the name of the disk. A machine with more than one bucket picks one by name, such as <code>--bucket photos</code>, with no keys. New keys for a bucket replace the old ones, and the attached disks use them at once.</p>
 <pre><code>sudo mica service install                                 # start mica now and at each boot
 sudo mica disk create data --size 50G --store s3.toml     # the bucket file, once
 sudo mica disk attach data                                # makes /dev/mica/data
@@ -335,7 +353,8 @@ dx-demo  4G    ○ detached                 -        859M   1 min ago  2</code><
 <tr><td><code>mica disk release &lt;disk&gt;</code></td><td>Free a disk whose machine is gone for good</td></tr>
 <tr><td><code>mica disk delete &lt;disk&gt;</code></td><td>Delete a disk and its snapshots</td></tr>
 <tr><td><code>mica snapshot create / delete &lt;disk&gt; &lt;name&gt;</code></td><td>Keep a version under a name. A create uploads all changes first.</td></tr>
-<tr><td><code>mica service install / uninstall / status</code></td><td>The systemd service. An install after an upgrade restarts mica.</td></tr>
+<tr><td><code>mica bucket add / ls / forget</code></td><td>The buckets that the machine keeps keys for</td></tr>
+<tr><td><code>mica service install / uninstall / status</code></td><td>The systemd service and the udev rule. An install after an upgrade restarts mica. An uninstall deletes the saved keys.</td></tr>
 </table>
 </div>
 
@@ -347,7 +366,7 @@ sudo mica disk attach photos
 sudo mkfs.ext4 /dev/mica/photos
 echo "/dev/mica/photos /home/me/photos ext4 discard,nofail,x-systemd.requires=mica.service 0 0" | sudo tee -a /etc/fstab
 mkdir -p ~/photos &amp;&amp; sudo mount ~/photos &amp;&amp; sudo chown "$USER:" ~/photos</code></pre>
-<p>At boot, the daemon attaches the disk again before it tells systemd that it is ready, so the fstab mount finds the device. At shutdown, mica runs one last transaction for at most one minute, and the rest of the unsaved data stays on the laptop. So a shutdown never waits for a full upload. Give the disk a large cache, so that most reads stay local without a network.</p>
+<p>At boot, the daemon attaches the disk again before it tells systemd that it is ready, and udev names the device, so the fstab mount finds it. This was tested with two reboots of a server. At shutdown, mica runs one last transaction for at most one minute, and the rest of the unsaved data stays on the laptop. So a shutdown never waits for a full upload. Give the disk a large cache, so that most reads stay local without a network.</p>
 <p>mica uses only ublk, a part of Linux 6.16 and later. It does not use FUSE.</p>
 
 <h2 id="limits">15. Limits and next steps</h2>
@@ -355,10 +374,11 @@ mkdir -p ~/photos &amp;&amp; sudo mount ~/photos &amp;&amp; sudo chown "$USER:" 
   <li><b>Linux only</b>, 6.16 or later, with root for the daemon.</li>
   <li><b>One node at a time</b> for each disk. Many readers of one disk need snapshots and restore.</li>
   <li><b>Read-write databases run at 40 to 50 % of local speed</b> in the lab. The next step is to measure on a server with ext4 or XFS on NVMe, not on a laptop file system that is 94% full.</li>
-  <li><b>A database that writes all day costs about $110 a month in R2 requests</b> with 1 MiB chunks, or about $25 with 4 MiB chunks. InnoDB settings that write pages back less often, such as a larger redo log, can cut this more. They need runs of about 2 hours, not done yet.</li>
-  <li><b>Not tested yet</b>: Hetzner, Wasabi, and a real reboot of a laptop with an fstab disk.</li>
+  <li><b>A database that writes all day costs $1 to $13 a month in R2 requests when its data fits in its buffer pool</b>, and about $110 with 1 MiB chunks or $25 with 4 MiB chunks when it does not.</li>
+  <li><b>Not tested yet</b>: Hetzner and Wasabi, for lack of an account. Their documents do not say if they keep conditional writes. <code>mica bucket add</code> tests a bucket before use.</li>
+  <li><b>A kernel warning.</b> Linux 7.0 logs a UBSAN warning in <code>io_buffer_register_bvec</code> once per boot, when the first ublk device starts. It shows on Fedora and on Ubuntu. The data checks pass with it.</li>
 </ul>
-<p>The code of v2 is about 6,700 lines of Rust in 37 files, against 9,000 in v1, with 28 tests. Two tests run random writes, flushes, transactions and restarts against a plain array, and many writers against background transactions.</p>
+<p>The code of v2 is about 7,200 lines of Rust in 39 files, against 9,000 in v1, with 32 tests. Two tests run random writes, flushes, transactions and restarts against a plain array, and many writers against background transactions.</p>
 
 <h2>Sources</h2>
 <ul>
