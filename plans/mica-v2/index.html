@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mica v2: disks that live in a bucket</title>
+<meta name="description" content="How mica v2 works, from the first idea to the storage rules, with lab measurements and the monthly cost of a 50 GB disk.">
+<style>
+  :root { --ink: #1d1d1f; --muted: #6b6b70; --line: #d9d9de; --soft: #f5f5f7; --accent: #b4441b; --good: #2f6f3e; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: #fff; color: var(--ink); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 800px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.45rem; margin: 56px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  p, li { max-width: 70ch; }
+  .lede { font-size: 1.15rem; color: var(--muted); margin: 0 0 24px; }
+  .meta { font-size: 0.9rem; color: var(--muted); }
+  code { font: 0.88em ui-monospace, "SF Mono", Menlo, monospace; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--soft); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font: 0.85rem/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 20px; font-size: 0.93rem; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; background: var(--soft); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .table { overflow-x: auto; }
+  figure { margin: 20px 0 28px; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { font-size: 0.9rem; color: var(--muted); margin-top: 6px; max-width: 70ch; }
+  .note { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 18px 0; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 16px 0; }
+  .levels div { background: var(--soft); border-radius: 8px; padding: 12px 14px; font-size: 0.95rem; }
+  .levels b { display: block; margin-bottom: 4px; }
+  nav ol { columns: 2; padding-left: 20px; font-size: 0.95rem; }
+  @media (max-width: 560px) { nav ol { columns: 1; } h1 { font-size: 1.7rem; } }
+  .yes { color: var(--good); font-weight: 600; }
+  .no { color: var(--accent); font-weight: 600; }
+  dl.words { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
+  dl.words dt { font-weight: 600; }
+  dl.words dd { margin: 0; }
+  @media (max-width: 560px) { dl.words { grid-template-columns: 1fr; } dl.words dd { margin-bottom: 8px; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>mica v2: disks that live in a bucket</h1>
+<p class="lede">How the new mica works, why it is built this way, and what it costs. The first sections need no background. Each section after them adds one idea.</p>
+<p class="meta">Plan and build log · November 2026 · branch <code>v2</code> of the mica repository</p>
+
+<div class="levels">
+  <div><b>New to this?</b>Read "The idea", "Words" and "A write". The pictures carry most of it.</div>
+  <div><b>An engineer?</b>Read "The head is the lock" and "Freeing objects without a garbage collector".</div>
+  <div><b>Deciding to use it?</b>Read "Measurements", "The cost of a 50 GB disk" and "Limits".</div>
+</div>
+
+<nav>
+<ol>
+  <li><a href="#idea">The idea</a></li>
+  <li><a href="#words">Words</a></li>
+  <li><a href="#layout">What the bucket holds</a></li>
+  <li><a href="#write">A write</a></li>
+  <li><a href="#read">A read</a></li>
+  <li><a href="#lock">The head is the lock</a></li>
+  <li><a href="#free">Freeing objects without a garbage collector</a></li>
+  <li><a href="#move">Moving a disk, snapshots, restore</a></li>
+  <li><a href="#crash">Crashes and restarts</a></li>
+  <li><a href="#bug">A bug the lab found</a></li>
+  <li><a href="#numbers">Measurements</a></li>
+  <li><a href="#cost">The cost of a 50 GB disk</a></li>
+  <li><a href="#laptop">A large disk for a laptop</a></li>
+  <li><a href="#limits">Limits and next steps</a></li>
+</ol>
+</nav>
+
+<h2 id="idea">1. The idea</h2>
+<p>A computer keeps files on a disk. A normal disk is a part inside one machine. When the machine breaks, or when you want the files on another machine, you must copy them.</p>
+<p>Cloud companies sell <b>object storage</b>, such as Amazon S3 or Cloudflare R2. It holds files of any size, called <b>objects</b>, in a <b>bucket</b>. It is cheap, it does not break, and it has no size limit. But it is slow: each request takes many milliseconds, and an object can only be written as a whole.</p>
+<p>mica joins the two. It gives Linux a normal disk, <code>/dev/mica/&lt;name&gt;</code>. The full content of the disk lives in a bucket. The machine keeps the newest writes and a cache on its local SSD, so most reads and writes run at the speed of the SSD. Another machine can take the disk, and it downloads only the parts that it reads.</p>
+<p>Think of a library and a notebook. The library (the bucket) has every page, but a trip there is slow. The notebook (the local SSD) has the pages you use now. You write in the notebook. From time to time, you take the new pages to the library.</p>
+
+<figure>
+<svg id="d-overview" viewBox="0 0 760 250" role="img" aria-label="A program writes to /dev/mica/data. The ublk driver in the kernel gives each request to the mica daemon. The daemon keeps the newest writes and a cache on the local SSD and uploads changes to an S3 bucket."></svg>
+<figcaption>One node. A program or a VM uses <code>/dev/mica/data</code> like any disk. The Linux driver <b>ublk</b> sends each request to the mica daemon, a normal program. The daemon uses the local SSD first and the bucket when it must.</figcaption>
+</figure>
+
+<p>The main use is a <b>data disk</b>: a VM starts from its own small local disk, and keeps its database or its files on a mica disk. A VM can also start from a mica disk, and a laptop can use one as a very large folder.</p>
+
+<h2 id="words">2. Words</h2>
+<p>This page uses each word with one meaning only.</p>
+<dl class="words">
+  <dt>Node</dt><dd>A Linux machine that runs mica.</dd>
+  <dt>Daemon</dt><dd>The one mica program on each node. It serves all disks of the node.</dd>
+  <dt>Chunk</dt><dd>The disk is a row of chunks of the same size, 256 KiB by default. A chunk is the unit of upload and download.</dd>
+  <dt>Entry</dt><dd>The name of the content of one chunk: the transaction that wrote it (its <b>birth</b>) and the SHA-256 of its bytes. A chunk of zeros has the zero entry and is never stored.</dd>
+  <dt>Page</dt><dd>The entries of 1,024 chunks, stored as one object.</dd>
+  <dt>Root</dt><dd>The entries of all pages: one root names one full version of the disk.</dd>
+  <dt>Transaction</dt><dd>One upload of changed chunks, then their pages, then a new root. Each transaction makes a new version, with the next number.</dd>
+  <dt>Head</dt><dd>A small object that names the current version, the owner and the snapshots. It is the only object that mica writes again.</dd>
+  <dt>Owner</dt><dd>The node that has the disk now. Only the owner writes to the disk.</dd>
+  <dt>Snapshot</dt><dd>A name for one version, kept until you delete it.</dd>
+  <dt>Local chunk</dt><dd>A chunk whose current bytes are in the <b>data file</b> on the node.</dd>
+  <dt>Unsaved</dt><dd>A local chunk whose bytes are not in the bucket yet.</dd>
+  <dt>Cache</dt><dd>Files of chunks that are also in the bucket, kept on the node to read them fast.</dd>
+</dl>
+
+<h2 id="layout">3. What the bucket holds</h2>
+<p>Each disk has its own folder in the bucket. Each transaction has its own folder in it. An object goes into the folder of the transaction that wrote it, and nothing ever writes it again. Only the head changes.</p>
+
+<figure>
+<svg id="d-layout" viewBox="0 0 760 300" role="img" aria-label="The head names transaction 41. The root of 41 names its pages. Page 0 was written by 41, page 1 by 37. Each page names chunks by birth and hash, so chunk 5 is in folder 41 and chunk 6 in folder 12."></svg>
+<figcaption>A read path through the bucket. The head names the root. The root names each page. Each page names each chunk. An entry gives the folder of its object, so mica never lists the bucket to find data.</figcaption>
+</figure>
+
+<pre><code>d/&lt;disk&gt;/head                          the only object that changes
+d/&lt;disk&gt;/0000000000000029/root         version 41
+d/&lt;disk&gt;/0000000000000029/p/0          a page written by transaction 41
+d/&lt;disk&gt;/000000000000000c/c/6          chunk 6, written by transaction 12</code></pre>
+
+<p>Chunks are compressed with zstd. A new disk of 1 TiB costs nothing until it is written: its root is empty, and pages and chunks of zeros are never stored. In the lab, a 3.1 GB MariaDB database used 1.3 GB in the bucket, and a 4 GiB boot disk used 206 MiB.</p>
+
+<h2 id="write">4. A write</h2>
+<p>Follow one write of 4 KiB from a database.</p>
+<ol>
+  <li>The kernel gives the request to a queue thread of the daemon.</li>
+  <li>The write falls into one chunk. If the chunk is local, the thread writes the bytes into the data file at once. The bytes go from the request to the file with no copy in memory.</li>
+  <li>If the chunk is not local, the daemon first puts the current bytes of the chunk into the data file, from the cache or from the bucket. Then it writes. The chunk is now local and unsaved.</li>
+  <li>The database asks for a <b>flush</b>: "make my writes safe from a power loss". The daemon syncs the data file to the SSD, then adds the new local chunks to the <b>dirty log</b>, a list of local chunks on the SSD.</li>
+  <li>Every 30 seconds, a transaction uploads the unsaved chunks, then their pages, then the root. Last, it writes the head. That one write makes the new version real.</li>
+</ol>
+
+<figure>
+<svg id="d-write" viewBox="0 0 760 300" role="img" aria-label="Write path. 1: the write goes into the sparse data file. 2: a flush syncs the data file and appends to the dirty log. 3: a transaction uploads chunks, pages and a root to the bucket. 4: the head write with If-Match commits the version."></svg>
+<figcaption>The write path. Steps 1 and 2 are on the node and take microseconds to milliseconds. Steps 3 and 4 run in the background. A crash before step 4 leaves only objects that no version names.</figcaption>
+</figure>
+
+<p>The data file is <b>sparse</b>: a chunk that is not local is a hole and uses no space. The order in a flush matters. The dirty log never lists a chunk before its bytes are on the SSD. After a power loss, mica cuts out every part of the data file that the log does not list, because these parts can hold half-written data.</p>
+<p>A saved chunk stays in the data file while the saved chunks are less than the cache budget of the disk. Then the oldest ones move into the cache, and their part of the data file becomes a hole again.</p>
+
+<h2 id="read">5. A read</h2>
+<p>mica looks for a chunk in four places, from fast to slow:</p>
+<ol>
+  <li>The data file, for a local chunk.</li>
+  <li>Nowhere, for a zero chunk: it returns zeros.</li>
+  <li>The cache.</li>
+  <li>The bucket. The download is checked against the hash in the entry, then kept in the cache.</li>
+</ol>
+<p>Reads of the data file and of the cache go from the file to the request with no copy in memory. Three helpers download data before it is read:</p>
+<ul>
+  <li><b>Profile.</b> The head keeps the first 64 MiB of chunks that the last session read. At the next start, these come first. A VM that started from a mica disk on a new node reached MariaDB in 4.4 s with the profile and fill, and in 7.3 s without them.</li>
+  <li><b>Read ahead.</b> Two reads in order start a download of the next 1 to 8 MiB.</li>
+  <li><b>Fill.</b> When the disk is quiet, the rest of the disk downloads into the cache, up to the cache budget.</li>
+</ul>
+<p>The cache is per node and by hash. Ten VMs made from one image download each chunk once for the node.</p>
+
+<h2 id="lock">6. The head is the lock</h2>
+<p>Two nodes must never write one disk at the same time. Each would make its own versions, and one would delete objects that the other needs. Many systems use a separate lock service for this. mica uses only the bucket.</p>
+<p>S3 has <b>conditional writes</b>. A write with <code>If-Match: &lt;tag&gt;</code> works only if the object did not change since you read it and got that tag. If the object changed, the bucket refuses the write with status 412. mica writes the head only this way.</p>
+
+<figure>
+<svg id="d-lock" viewBox="0 0 760 265" role="img" aria-label="Node A and node B both read the head with tag e1. Both write a new head with If-Match e1. The bucket accepts the first write, which makes tag e2, and refuses the second with 412."></svg>
+<figcaption>A race for one disk. Both nodes read the same head. Only one conditional write can win, because the first one changes the tag. The loser stops.</figcaption>
+</figure>
+
+<ul>
+  <li><b>Claim.</b> To take a disk, a node writes the head with itself as the owner. It refuses a disk that another node owns, unless you add <code>--force</code> because that node is gone.</li>
+  <li><b>Commit.</b> Each transaction ends with a head write. If it fails, another node took the disk. The old owner stops all I/O and keeps its local data as <b>orphaned</b>, for a person to look at.</li>
+  <li><b>Lost folders.</b> A forced claim cannot know if the old owner still uploads. So the new owner marks the old "next" folder as lost and deletes what is in it. The old owner cannot write anywhere else.</li>
+</ul>
+<p>Before <code>mica disk create</code>, mica tests the bucket: it makes a probe object and checks that the bucket refuses the wrong conditional writes. A bucket that ignores the conditions cannot hold mica disks.</p>
+
+<h2 id="free">7. Freeing objects without a garbage collector</h2>
+<p>A transaction replaces some chunks. Their old objects can be needed by a snapshot, or by nothing. Many systems run a <b>garbage collector</b>: a job that lists the whole bucket and finds objects that nothing uses. That job gets slower as the bucket grows, and it must not delete objects that a running upload is about to use.</p>
+<p>mica needs no such job. Two facts make this possible:</p>
+<ol>
+  <li>Each object belongs to one disk, and only the owner deletes.</li>
+  <li>The versions of a disk form one line. An old object is still used only if a snapshot holds a version from the time the object was alive.</li>
+</ol>
+
+<figure>
+<svg id="d-free" viewBox="0 0 760 250" role="img" aria-label="Transactions 1 to 10 on a line, with a snapshot at transaction 4. Transaction 9 replaces a chunk born at 6: no snapshot uses it, so it is deleted. Transaction 9 replaces a chunk born at 3: snapshot 4 uses it, so it stays."></svg>
+<figcaption>The free rule at transaction 9. The newest snapshot before 9 is at 4. A replaced object born after 4 has no snapshot that uses it: delete it now. An object born at 4 or before stays.</figcaption>
+</figure>
+
+<p><b>Free rule.</b> After transaction <i>n</i>, let <i>K</i> be the newest snapshot before <i>n</i>. Delete each chunk and page that <i>n</i> replaced and that was born after <i>K</i>. Then delete the old root. The root goes last, so a crash in the middle leaves a root that shows the work left.</p>
+<p><b>Merge rule.</b> To delete a snapshot <i>S</i>, compare it with the next version that is kept. Delete each object that only <i>S</i> has and that was born after the snapshot before <i>S</i>. Only pages that differ are read.</p>
+<p>The result: each transaction deletes exactly what it replaced, at once, with no list of the bucket. A disk with no snapshots holds one version in the bucket, no more.</p>
+
+<h2 id="move">8. Moving a disk, snapshots, restore</h2>
+<p><b>Detach</b> removes the device, runs transactions until nothing is unsaved, and writes the head with no owner. When it returns, any node can attach the disk. <b>Attach</b> claims the disk and makes the device. It downloads nothing at first.</p>
+<pre><code>mica disk unmount photos        # trim, unmount, upload all, detach
+mica disk mount photos /mnt/p   # on another node: attach, mount</code></pre>
+<p><b>A snapshot</b> is a name for a version. It is free: it only stops the free rule from deleting objects of that version.</p>
+<p>mica has no rollback. To go back, make a new disk from a snapshot. <code>mica disk restore db before-upgrade db-old</code> copies the objects inside the bucket with S3 <code>CopyObject</code>. The node downloads nothing, and the new disk does not depend on the old one.</p>
+
+<h2 id="crash">9. Crashes and restarts</h2>
+<div class="table">
+<table>
+<tr><th>What happens</th><th>What mica does</th></tr>
+<tr><td>mica restarts, for example for an upgrade</td><td>The kernel keeps each device paused. The new daemon takes it over with the <b>user recovery</b> feature of ublk. The guest sees a pause of about one second. File systems stay mounted.</td></tr>
+<tr><td>mica crashes</td><td>The same. The kernel sends the requests in flight again. A <b>recent bitmap</b> in memory lists the chunks written since the last flush, so none is lost.</td></tr>
+<tr><td>Power loss or reboot</td><td>Writes after the last flush can be lost, as on any disk with a write cache. The dirty log makes sure that no half-written data comes back. The local data stays, and the next attach goes on from it.</td></tr>
+<tr><td>The bucket is down</td><td>Local and cached data still work. Writes go on until the unsaved data reaches its budget, then wait. Transactions try again.</td></tr>
+<tr><td>Another node takes the disk</td><td>The old owner fails its next head write and stops.</td></tr>
+<tr><td>The SSD fails a sync</td><td>The disk stops for good. Linux reports such an error only once, so a later sync that works proves nothing.</td></tr>
+</table>
+</div>
+<p>In the lab, the daemon was killed twice with <code>SIGKILL</code> while a guest wrote files with <code>fsync</code>. All 400 of 400 synced files were correct after each takeover, and again after a full download on a new node.</p>
+
+<h2 id="bug">10. A bug the lab found</h2>
+<p>One MariaDB run failed after a restart of the daemon: InnoDB found a redo log of zeros. A chunk of that log was stored in the bucket as the zero entry, and the data file had a hole in its place.</p>
+<p>The cause was two daemons on one data folder. A stopped daemon runs its last transactions for up to one minute. The lab script started the next daemon after two seconds. The new daemon read the dirty log and took the chunk as local. Then the old daemon moved the chunk to the cache and cut its hole. The new daemon read zeros there and uploaded them.</p>
+<p>systemd waits for the old process before it starts a new one, so a normal service restart was safe. But a correct program must not depend on the care of its user. Now each daemon locks its data folder and its run folder, and a second daemon refuses to start. A replay with 1 GiB written just before the restart gave the same SHA-256 before and after the restart, and on a new node.</p>
+
+<h2 id="numbers">11. Measurements</h2>
+<p><b>Setup.</b> A Firecracker VM with 2 vCPUs and 2 GiB of RAM. It starts from a local root disk, and its data disk holds MariaDB with 3.1 GB of data: sysbench, 12 tables of 1 million rows, 8 threads, a 512 MiB buffer pool. The bucket is RustFS in a container on the same laptop, behind a link shaped to 800 Mbit/s with a round trip of 1 ms or 20 ms. "Local" is the same disk image as a plain file on the same SSD. "Cold" is a new node with an empty cache and no fill: each first read goes to the bucket.</p>
+
+<figure>
+<svg id="d-bench" viewBox="0 0 760 330" role="img" aria-label="Bar chart of transactions per second. Read-only: local 2180, mica cold 2131 to 2203, mica cold at 20 ms 2140, mica warm 2229 to 2270. Read-write: local 497 to 703, mica 207 to 250."></svg>
+<figcaption>sysbench transactions per second. Read-only is as fast as local, even cold and at 20 ms. Read-write is 40 to 50 % of local.</figcaption>
+</figure>
+
+<div class="table">
+<table>
+<tr><th>Run</th><th class="n">Read-only tps</th><th class="n">Read-write tps</th><th class="n">Read-write p95</th></tr>
+<tr><td>Local file (btrfs)</td><td class="n">2,180</td><td class="n">497–703</td><td class="n">25–28 ms</td></tr>
+<tr><td>mica, cold, round trip 1 ms</td><td class="n">2,131–2,203</td><td class="n">217–242</td><td class="n">119–128 ms</td></tr>
+<tr><td>mica, cold, round trip 20 ms</td><td class="n">2,140</td><td class="n">249</td><td class="n">98 ms</td></tr>
+<tr><td>mica, warm</td><td class="n">2,229–2,270</td><td class="n">207–250</td><td class="n">105–137 ms</td></tr>
+<tr><td>Local file (ext4)</td><td class="n">—</td><td class="n">421–485</td><td class="n">31–36 ms</td></tr>
+<tr><td>mica on ext4, warm</td><td class="n">—</td><td class="n">213–224</td><td class="n">72–83 ms</td></tr>
+</table>
+</div>
+
+<h3>Cold start</h3>
+<p>A cold disk is slow only at the start. At 1 ms, the read-only run gave 1,056 tps in its first 10 seconds and full speed after 30 seconds. At 20 ms, it gave 772 tps in the first 10 seconds and full speed after 30 seconds.</p>
+<div class="table">
+<table>
+<tr><th>Boot of the VM</th><th class="n">ssh ready</th><th class="n">MariaDB ready</th></tr>
+<tr><td>Local root disk, mica data disk, cold</td><td class="n">2.2 s</td><td class="n">2.4 s</td></tr>
+<tr><td>Root disk and data disk on mica, cold, no fill</td><td class="n">2.3 s</td><td class="n">7.3 s</td></tr>
+<tr><td>Both on mica, new node, profile and fill</td><td class="n">2.3 s</td><td class="n">4.4 s</td></tr>
+</table>
+</div>
+
+<h3>Why read-write is slower than local</h3>
+<p>The time goes to flushes. In a 60-second run, the syncs of the data file took 55 seconds: about 7,500 flushes of 7 ms each, one at a time. A flush must be one at a time, because Linux reports a write error only once per file. Flushes that wait at the same time already share one sync.</p>
+<p>Three things make a mica flush more expensive than a flush of a plain file:</p>
+<ul>
+  <li>The VM writes into the page cache of <code>/dev/ublkb0</code>. At each flush, these pages go through ublk into the data file, and then the data file is synced. The data passes the kernel twice.</li>
+  <li>A write into a chunk that is not local first copies the full chunk: 256 KiB for a 16 KiB database page.</li>
+  <li>The data file is sparse. On ext4 or XFS, a write into a hole allocates blocks, so the flush must also commit the file system journal.</li>
+</ul>
+<p>One change helped: saved chunks now stay local up to the cache budget. On ext4, this made read-write steady at 213–224 tps. Before it, three runs gave 217, 157 and 164 tps, and the chunk copies were about ten times more. Two other changes did not help speed. One data file for each disk, in place of one file per GiB, made the code simpler but gave the same results. With 64 KiB chunks, read-write fell to 120–185 tps.</p>
+
+<h2 id="cost">12. The cost of a 50 GB disk</h2>
+<p>A bucket bills three things: the stored bytes, the requests, and sometimes the bytes downloaded (<b>egress</b>). mica stores compressed chunks, so 50 GB of data can be less in the bucket. The table counts 50 GB stored. The request counts come from the lab:</p>
+<ul>
+  <li><b>Laptop</b>: 1 GB written and 3 GB read from the bucket each day. About 210,000 PUT and 410,000 GET each month, 90 GB of egress.</li>
+  <li><b>Busy database</b>: random writes over the whole database 8 hours each day. The lab measured 135 PUT each second for sysbench read-write, at the default transaction interval of 30 seconds. That gives about 117 million PUT each month. The cache holds the working set, so GETs are few.</li>
+</ul>
+
+<div class="table">
+<table>
+<tr><th>Provider</th><th>Works with mica</th><th class="n">Storage only</th><th class="n">Laptop</th><th class="n">Busy database</th></tr>
+<tr><td>Cloudflare R2</td><td><span class="yes">Yes</span>: documented If-Match and If-None-Match</td><td class="n">$0.60</td><td class="n">$0.60</td><td class="n">$521</td></tr>
+<tr><td>AWS S3 Standard</td><td><span class="yes">Yes</span>: documented</td><td class="n">$1.15</td><td class="n">$2.36</td><td class="n">$585</td></tr>
+<tr><td>Hetzner Object Storage</td><td>Probably: not tested</td><td class="n">$7.01</td><td class="n">$7.01</td><td class="n">$7.01</td></tr>
+<tr><td>Wasabi</td><td>Not checked</td><td class="n">$7.99</td><td class="n">$7.99</td><td class="n">$7.99</td></tr>
+<tr><td>Backblaze B2</td><td><span class="no">No</span>: rejects conditional writes</td><td class="n">$0.28</td><td class="n">—</td><td class="n">—</td></tr>
+</table>
+</div>
+<p>Prices in USD per month, November 2026. R2 includes 10 GB, one million writes and ten million reads free each month, and has no egress fee. Hetzner is a flat €6.49 for up to 1 TB with no request fees. Wasabi bills 1 TB at minimum, for at least 90 days.</p>
+
+<div class="note">
+<p><b>Recommendation.</b> For a laptop or a quiet data disk, use Cloudflare R2: about $0.60 a month for 50 GB, and the first 10 GB are free. For a database that writes all day, a provider with no request fees costs about 70 times less than R2 or S3. Hetzner is the candidate, but run <code>mica disk create</code> on it first: the probe tells you if its conditional writes work.</p>
+</div>
+<p>Each PUT is a chunk of up to 256 KiB, so the request count follows how many different chunks change in each 30 seconds. A database whose writes stay in a small part of the disk needs far fewer requests than sysbench, which writes all over.</p>
+
+<h2 id="laptop">13. A large disk for a laptop</h2>
+<p>mica can give a laptop a folder that holds terabytes, with the data in a bucket. sudo is needed once, to set it up. After that, you use the folder with no sudo.</p>
+<pre><code>sudo mica service install
+sudo mica --store ~/photos.toml disk create photos --size 1T --cache-size 20G
+sudo mica --store ~/photos.toml service add-disk photos ~/photos</code></pre>
+<p><code>add-disk</code> keeps the bucket file in <code>/etc/mica/disks</code>, readable by root only, and adds a systemd unit that mounts the disk at each boot. At shutdown, the unit only unmounts. mica then runs one last transaction for at most one minute, and the rest of the unsaved data stays on the laptop. So a shutdown never waits for a full upload. Give the disk a large cache, so that most reads stay local without a network.</p>
+<p>This was tested on a VM as a normal user: install, create, add-disk, writes with no sudo, a restart of mica with a file open, and a stop and start of both units with <code>/run</code> removed, as at a reboot. The test and a review of the units found two faults, now fixed: <code>service install</code> returned before the daemon was ready, and a restart of mica unmounted the disk. Now the daemon tells systemd when it is ready, and the disk unit only <i>wants</i> mica, so a restart of mica does not touch the mount.</p>
+<p>mica uses only ublk, a part of Linux 6.16 and later. It does not use FUSE.</p>
+
+<h2 id="limits">14. Limits and next steps</h2>
+<ul>
+  <li><b>Linux only</b>, 6.16 or later, with root for the daemon.</li>
+  <li><b>One node at a time</b> for each disk. Many readers of one disk need snapshots and restore.</li>
+  <li><b>Read-write databases run at 40 to 50 % of local speed</b> in the lab. The next step is to measure on a server with ext4 or XFS on NVMe, not on a laptop file system that is 94% full.</li>
+  <li><b>A busy database on a per-request provider is expensive.</b> A longer transaction interval helps only when the same chunks change again.</li>
+  <li><b>Not tested yet</b>: Hetzner, Wasabi, and a real reboot of a laptop with a disk unit.</li>
+</ul>
+<p>The code of v2 is about 6,100 lines of Rust in 33 files, against 9,000 in v1, with 22 tests. Two tests run random writes, flushes, transactions and restarts against a plain array, and many writers against background transactions.</p>
+
+<h2>Sources</h2>
+<ul>
+  <li><a href="https://developers.cloudflare.com/r2/pricing/">Cloudflare R2 pricing</a> and <a href="https://developers.cloudflare.com/r2/api/s3/api/">R2 S3 API compatibility</a> (conditional PutObject)</li>
+  <li><a href="https://aws.amazon.com/s3/pricing/">Amazon S3 pricing</a> and <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html">S3 conditional writes</a></li>
+  <li><a href="https://www.hetzner.com/storage/object-storage/">Hetzner Object Storage</a> and <a href="https://docs.hetzner.com/storage/object-storage/supported-actions/">its supported actions</a></li>
+  <li><a href="https://wasabi.com/pricing">Wasabi pricing</a></li>
+  <li><a href="https://www.backblaze.com/cloud-storage/pricing">Backblaze B2 pricing</a>, and reports that B2 rejects conditional writes: <a href="https://github.com/ClickHouse/ClickHouse/issues/127483">ClickHouse #127483</a>, <a href="https://github.com/patrick-hudson/put.gd-desktop/pull/267">put.gd #267</a></li>
+  <li><a href="https://docs.kernel.org/block/ublk.html">ublk in the Linux kernel documentation</a></li>
+</ul>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  var ink = "#1d1d1f", muted = "#6b6b70", accent = "#b4441b", good = "#2f6f3e", soft = "#f5f5f7";
+  var NS = "http://www.w3.org/2000/svg";
+
+  function text(svg, x, y, value, o) {
+    o = o || {};
+    var lines = String(value).split("\n");
+    lines.forEach(function (line, i) {
+      var t = document.createElementNS(NS, "text");
+      t.setAttribute("x", x);
+      t.setAttribute("y", y + i * (o.size || 14) * 1.25);
+      t.setAttribute("text-anchor", o.anchor || "middle");
+      t.setAttribute("font-family", o.mono ? "ui-monospace, Menlo, monospace" : "system-ui, sans-serif");
+      t.setAttribute("font-size", o.size || 14);
+      t.setAttribute("font-weight", o.weight || 400);
+      t.setAttribute("fill", o.color || ink);
+      t.textContent = line;
+      svg.appendChild(t);
+    });
+  }
+
+  function box(rc, svg, x, y, w, h, label, o) {
+    o = o || {};
+    svg.appendChild(rc.rectangle(x, y, w, h, {
+      stroke: o.stroke || ink, strokeWidth: o.width || 1.3, roughness: 0.9,
+      fill: o.fill, fillStyle: o.fill ? "solid" : undefined
+    }));
+    var lines = String(label).split("\n").length;
+    var size = o.size || 14;
+    text(svg, x + w / 2, y + h / 2 - (lines - 1) * size * 0.62 + size * 0.35, label, { size: size, weight: o.weight, mono: o.mono, color: o.color });
+  }
+
+  function arrow(rc, svg, x1, y1, x2, y2, o) {
+    o = o || {};
+    var color = o.color || ink;
+    svg.appendChild(rc.line(x1, y1, x2, y2, { stroke: color, strokeWidth: o.width || 1.3, roughness: 0.7 }));
+    var a = Math.atan2(y2 - y1, x2 - x1), s = 9;
+    svg.appendChild(rc.line(x2, y2, x2 - s * Math.cos(a - 0.45), y2 - s * Math.sin(a - 0.45), { stroke: color, strokeWidth: o.width || 1.3, roughness: 0.4 }));
+    svg.appendChild(rc.line(x2, y2, x2 - s * Math.cos(a + 0.45), y2 - s * Math.sin(a + 0.45), { stroke: color, strokeWidth: o.width || 1.3, roughness: 0.4 }));
+    if (o.label) text(svg, (x1 + x2) / 2 + (o.dx || 0), (y1 + y2) / 2 + (o.dy || -8), o.label, { size: 12, color: o.labelColor || muted, anchor: o.anchor });
+  }
+
+  function draw(id, fn) {
+    var svg = document.getElementById(id);
+    if (svg) fn(rough.svg(svg), svg);
+  }
+
+  draw("d-overview", function (rc, svg) {
+    box(rc, svg, 10, 30, 120, 60, "program\nor VM");
+    box(rc, svg, 200, 30, 150, 60, "/dev/mica/data", { mono: true, size: 13 });
+    box(rc, svg, 420, 30, 130, 60, "mica daemon", { weight: 600, fill: soft });
+    box(rc, svg, 640, 30, 110, 60, "S3 bucket\nall the data", { size: 13 });
+    arrow(rc, svg, 130, 60, 200, 60, { label: "I/O" });
+    arrow(rc, svg, 350, 60, 420, 60, { label: "ublk" });
+    arrow(rc, svg, 550, 50, 640, 50, { label: "upload", dy: -8 });
+    arrow(rc, svg, 640, 72, 550, 72, { label: "download", dy: 20 });
+    svg.appendChild(rc.rectangle(320, 150, 340, 86, { stroke: muted, strokeWidth: 1, roughness: 0.9, strokeLineDash: [5, 5] }));
+    text(svg, 335, 170, "local SSD", { anchor: "start", size: 12, color: muted });
+    box(rc, svg, 335, 180, 95, 44, "data file", { size: 13 });
+    box(rc, svg, 442, 180, 95, 44, "dirty log", { size: 13 });
+    box(rc, svg, 549, 180, 95, 44, "cache", { size: 13 });
+    arrow(rc, svg, 485, 90, 485, 180, {});
+    text(svg, 150, 196, "the kernel holds requests\nwhile mica restarts", { size: 12, color: muted });
+  });
+
+  draw("d-layout", function (rc, svg) {
+    box(rc, svg, 20, 120, 110, 56, "head\ntransaction 41", { size: 13, weight: 600, fill: soft });
+    box(rc, svg, 180, 120, 120, 56, "41/root", { mono: true, size: 13 });
+    box(rc, svg, 360, 50, 110, 50, "41/p/0", { mono: true, size: 13 });
+    box(rc, svg, 360, 196, 110, 50, "37/p/1", { mono: true, size: 13 });
+    box(rc, svg, 540, 20, 120, 44, "41/c/5", { mono: true, size: 13 });
+    box(rc, svg, 540, 84, 120, 44, "12/c/6", { mono: true, size: 13 });
+    box(rc, svg, 540, 176, 120, 44, "37/c/1030", { mono: true, size: 13 });
+    text(svg, 600, 252, "zero chunks: no object", { size: 12, color: muted });
+    arrow(rc, svg, 130, 148, 180, 148, {});
+    arrow(rc, svg, 300, 140, 360, 80, { label: "page 0", dx: -14 });
+    arrow(rc, svg, 300, 158, 360, 218, { label: "page 1", dx: -16, dy: 14 });
+    arrow(rc, svg, 470, 66, 540, 44, { label: "chunk 5", dy: -4 });
+    arrow(rc, svg, 470, 84, 540, 104, { label: "chunk 6", dy: 18 });
+    arrow(rc, svg, 470, 216, 540, 200, {});
+    text(svg, 75, 210, "written with\nIf-Match", { size: 12, color: accent });
+    text(svg, 415, 290, "each entry = birth + SHA-256 of the bytes", { size: 12, color: muted });
+  });
+
+  draw("d-write", function (rc, svg) {
+    box(rc, svg, 10, 40, 120, 54, "guest write\n4 KiB", { size: 13 });
+    box(rc, svg, 200, 40, 160, 54, "data file\n(sparse)", { size: 13, fill: soft });
+    box(rc, svg, 200, 180, 160, 54, "dirty log\nlog-a, log-b", { size: 13 });
+    box(rc, svg, 450, 40, 140, 54, "transaction", { size: 14, weight: 600 });
+    box(rc, svg, 640, 40, 110, 54, "bucket", { size: 14 });
+    box(rc, svg, 640, 180, 110, 54, "head", { size: 14, weight: 600, fill: soft });
+    arrow(rc, svg, 130, 67, 200, 67, { label: "1 write", labelColor: accent });
+    arrow(rc, svg, 280, 94, 280, 180, { label: "2 flush: sync,\nthen list", dx: 56, dy: -10, labelColor: accent, anchor: "start" });
+    arrow(rc, svg, 360, 67, 450, 67, { label: "every 30 s" });
+    arrow(rc, svg, 590, 67, 640, 67, { label: "3 upload", labelColor: accent });
+    arrow(rc, svg, 695, 94, 695, 180, { label: "4 If-Match", dx: -48, labelColor: accent });
+    text(svg, 520, 140, "chunks, then pages,\nthen the root", { size: 12, color: muted });
+    text(svg, 520, 270, "the head write is the commit", { size: 12, color: muted });
+  });
+
+  draw("d-lock", function (rc, svg) {
+    var A = 110, H = 380, B = 650;
+    box(rc, svg, A - 70, 10, 140, 40, "node A", { weight: 600 });
+    box(rc, svg, H - 80, 10, 160, 40, "head in the bucket", { size: 13, fill: soft });
+    box(rc, svg, B - 70, 10, 140, 40, "node B", { weight: 600 });
+    [A, H, B].forEach(function (x) { svg.appendChild(rc.line(x, 50, x, 225, { stroke: muted, strokeWidth: 1, roughness: 0.5, strokeLineDash: [4, 4] })); });
+    arrow(rc, svg, A, 85, H, 85, { label: "1  GET → tag e1" });
+    arrow(rc, svg, B, 85, H, 85, { label: "1  GET → tag e1" });
+    arrow(rc, svg, A, 140, H, 140, { label: "2  PUT If-Match: e1", color: good, labelColor: good });
+    text(svg, H + 12, 145, "200: the tag is now e2", { anchor: "start", size: 12, color: good });
+    arrow(rc, svg, B, 205, H, 205, { label: "3  PUT If-Match: e1", color: accent, labelColor: accent });
+    text(svg, H - 12, 210, "412: refused", { anchor: "end", size: 12, color: accent });
+    text(svg, A, 245, "owns the disk", { size: 12, color: good });
+    text(svg, B, 245, "stops", { size: 12, color: accent });
+  });
+
+  draw("d-free", function (rc, svg) {
+    var x0 = 70, step = 66;
+    function vx(v) { return x0 + (v - 1) * step; }
+    svg.appendChild(rc.line(vx(1) - 14, 70, vx(10) + 14, 70, { stroke: muted, roughness: 0.6 }));
+    text(svg, 6, 74, "version", { anchor: "start", size: 12, color: muted });
+    for (var v = 1; v <= 10; v++) {
+      var snap = v === 4, now = v === 9;
+      svg.appendChild(rc.circle(vx(v), 70, snap || now ? 18 : 9, {
+        stroke: snap ? ink : now ? accent : muted, fill: snap ? ink : now ? accent : "none", fillStyle: "solid", roughness: 0.5
+      }));
+      text(svg, vx(v), 46, String(v), { size: 13, color: snap || now ? ink : muted, weight: snap || now ? 600 : 400 });
+    }
+    text(svg, vx(4), 106, "snapshot K", { size: 12 });
+    text(svg, vx(9), 106, "transaction n", { size: 12, color: accent });
+    svg.appendChild(rc.line(vx(6), 140, vx(9), 140, { stroke: accent, strokeWidth: 2, roughness: 0.6 }));
+    svg.appendChild(rc.circle(vx(6), 140, 8, { stroke: accent, fill: accent, fillStyle: "solid" }));
+    text(svg, vx(6) - 12, 145, "born at 6", { anchor: "end", size: 12 });
+    text(svg, vx(9) + 14, 145, "replaced: delete", { anchor: "start", size: 12, color: accent, weight: 600 });
+    svg.appendChild(rc.line(vx(3), 190, vx(9), 190, { stroke: good, strokeWidth: 2, roughness: 0.6 }));
+    svg.appendChild(rc.circle(vx(3), 190, 8, { stroke: good, fill: good, fillStyle: "solid" }));
+    text(svg, vx(3) - 12, 195, "born at 3", { anchor: "end", size: 12 });
+    text(svg, vx(9) + 14, 195, "replaced: keep", { anchor: "start", size: 12, color: good, weight: 600 });
+    text(svg, vx(4), 230, "snapshot 4 still reads it", { size: 12, color: good });
+  });
+
+  draw("d-bench", function (rc, svg) {
+    var left = 210, scale = 500 / 2400;
+    var rows = [
+      ["read-only", null],
+      ["local file", 2180, muted],
+      ["mica cold, 1 ms", 2168, ink],
+      ["mica cold, 20 ms", 2140, ink],
+      ["mica warm", 2250, ink],
+      ["read-write", null],
+      ["local file", 575, muted],
+      ["mica cold, 1 ms", 230, accent],
+      ["mica cold, 20 ms", 249, accent],
+      ["mica warm", 229, accent]
+    ];
+    var y = 14;
+    rows.forEach(function (r) {
+      if (r[1] === null) { text(svg, 10, y + 16, r[0], { anchor: "start", size: 13, weight: 600 }); y += 30; return; }
+      text(svg, left - 12, y + 15, r[0], { anchor: "end", size: 13, color: muted });
+      svg.appendChild(rc.rectangle(left, y, r[1] * scale, 20, { stroke: r[2], fill: r[2], fillStyle: "hachure", hachureGap: 5, roughness: 0.8 }));
+      text(svg, left + r[1] * scale + 8, y + 15, r[1].toLocaleString("en-US"), { anchor: "start", size: 13 });
+      y += 30;
+    });
+    text(svg, left, y + 10, "transactions per second, middle of the measured range", { anchor: "start", size: 12, color: muted });
+  });
+})();
+</script>
+</body>
+</html>
