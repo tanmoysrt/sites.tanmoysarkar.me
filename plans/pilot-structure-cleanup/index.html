@@ -39,6 +39,7 @@ nav a{color:var(--fg)}
 <body>
 <main>
 <h1>Pilot structure cleanup</h1>
+<p class="note"><b>Status.</b> Phase 1 is open as <a href="https://github.com/frappe/pilot/pull/812">PR #812</a>. A correction since the first version of this page: the API <code>TypedDict</code> classes are <b>not</b> dead code. <code>scripts/generate_ts_types.py</code> builds the frontend TypeScript types from them on every install and build. That item is removed.</p>
 <p class="sub">Plan · 12 November 2026 · based on branch <code>perf/admin-api</code> at <code>b49ed96b</code></p>
 
 <nav><ol>
@@ -87,7 +88,6 @@ done = site.database_state.is_setup_complete</code></pre>
 <tr><td>Files with 10 or more loose functions</td><td class="n">34</td><td><code>site/config.py</code> 36, <code>utils.py</code> 34, <code>platform.py</code> 25</td></tr>
 <tr><td>Module wrappers in <code>site/__init__.py</code> that only re-import a function from <code>site/config.py</code> or <code>provisioning.py</code></td><td class="n">12</td><td><code>list_installed_apps</code>, <code>is_setup_complete</code>; two of them have 0 callers</td></tr>
 <tr><td>Same function name defined twice</td><td class="n">10</td><td><code>task_has_secrets</code> in <code>internal/tasks/args.py</code> and <code>managers/task/policy.py</code></td></tr>
-<tr><td>API response <code>TypedDict</code> classes not used anywhere outside <code>api/v1/types/</code></td><td class="n">116 of 135</td><td>1,102 lines in total; nothing generates code from them</td></tr>
 <tr><td><code>Path(current_app.config["BENCH_ROOT"])</code> in API code</td><td class="n">123</td><td>also 5 local <code>_bench()</code> / <code>_current_bench()</code> helpers</td></tr>
 <tr><td><code>except Exception</code> in API routes</td><td class="n">145</td><td>a global handler for <code>Exception</code> and <code>TaskConflictError</code> already exists in <code>api/errors.py</code></td></tr>
 <tr><td>Routes that read <code>Idempotency-Key</code> and queue a task by hand</td><td class="n">24</td><td>the 5 database quick-action routes are almost identical</td></tr>
@@ -105,14 +105,13 @@ done = site.database_state.is_setup_complete</code></pre>
 <p>Each phase below gives the same five parts: <b>problem</b>, <b>change</b> (file by file), <b>before → after</b> code, <b>callers</b> that must change, and <b>tests</b>.</p>
 
 <div class="phase">
-<h3>Phase 1: Delete dead and duplicate code <span class="tag risk-low">low risk</span> <span class="tag">about −1,200 lines</span></h3>
+<h3>Phase 1: Delete forwarding wrappers <span class="tag risk-low">low risk</span> <span class="tag">PR #812 · −175 lines</span></h3>
 <p><b>Problem.</b> Some code has no callers, and some functions have two copies. Every later phase must move this code, so delete it first.</p>
 <div class="wrap"><table>
 <tr><th>File</th><th>Change</th></tr>
-<tr><td><code>admin/backend/api/v1/types/*.py</code> (15 files)</td><td>Delete 116 <code>TypedDict</code> classes that nothing imports. Keep the 19 that code uses, in one <code>types.py</code>.</td></tr>
 <tr><td><code>pilot/core/site/__init__.py</code></td><td>Delete the 12 module wrappers at the bottom of the file (lines 440–533). Two of them (<code>_safe_site_config_path</code>, <code>_query_installed_apps_via_frappe</code>) have no callers.</td></tr>
 <tr><td><code>pilot/managers/task/policy.py</code></td><td>Delete the file. It only wraps <code>internal/tasks/args.task_has_secrets</code>. <code>managers/task/__init__.py</code> exports the real one.</td></tr>
-<tr><td><code>pilot/core/database/__init__.py</code></td><td>Delete <code>read_site_config(bench_root, site_name)</code>. Use the one in <code>site/config.py</code> (in phase 2 it moves to <code>SiteConfigFile</code>).</td></tr>
+<tr><td><code>pilot/core/database/__init__.py</code></td><td><code>read_site_config(bench_root, site_name)</code> also checks an untrusted site name, so it is not a plain copy. It moves into <code>SiteConfigFile</code> in phase 2, not in this phase.</td></tr>
 <tr><td><code>api/v1/benches/__init__.py</code>, <code>api/v1/sites/core.py</code></td><td>Delete the 4 shim routes that only import and call <code>cloning.py</code>. Register the <code>cloning.py</code> functions on the blueprints directly.</td></tr>
 <tr><td><code>providers/waf.py</code>, <code>providers/windowed_log.py</code></td><td>Two identical <code>_safe_json()</code> functions. Phase 5 merges them, so this phase does not change them.</td></tr>
 </table></div>
@@ -123,7 +122,7 @@ def is_setup_complete(bench_root: Path, site_name: str) -> bool | None:
     return _is_setup_complete(bench_root, site_name)
 
 # After: the wrapper is gone. Callers import from the module that owns the function.</code></pre>
-<p><b>Callers.</b> About 30 import lines change. Most of them are in tests.</p>
+<p><b>Callers.</b> 8 import lines changed.</p>
 <p><b>Tests.</b> Tests that only check a wrapper are deleted. Behavior tests stay as they are.</p>
 </div>
 
@@ -302,10 +301,10 @@ def restart_database():
 </div>
 
 <h2 id="tests">5. Tests</h2>
-<p>The suite has 3,889 test functions in 67,700 lines. A full local run takes about 7.5 minutes, and one test uses almost half of that. The suite is mostly useful. The problems are its layout and the tests that check private internals.</p>
+<p>The suite has 3,889 test functions in 67,700 lines. A full local run took about 7.5 minutes, and one test used almost half of that. The suite is mostly useful. The problems are its layout and the tests that check private internals.</p>
 <ul>
 <li><b>Delete with the code.</b> Tests of the wrappers and shims removed in phase 1 go away with them.</li>
-<li><b>Delete trivial tests.</b> 9 tests only assert <code>is not None</code>, <code>isinstance</code> or <code>hasattr</code>. Examples: <code>test_resolve_returns_list_of_resolvers</code> and <code>test_get_package_manager_macos</code>. A behavior test covers each one.</li>
+<li><b>Trivial tests.</b> A scan found 9 tests that only assert <code>isinstance</code>, <code>hasattr</code> or <code>is not None</code>. A review showed that 8 of them check real behavior (factory dispatch, patch rejection, public API shape). Only <code>test_resolve_returns_list_of_resolvers</code> was redundant, and PR #812 deletes it.</li>
 <li><b>Split catch-all files.</b> <code>test_core.py</code> (1,297 lines), <code>test_commands.py</code> (1,570) and <code>test_managers_extra.py</code> (972) go into files named for the object they test.</li>
 <li><b>Mirror the source tree.</b> The 76 flat files in <code>tests/pilot/core/</code> go into <code>site/</code>, <code>bench/</code>, <code>app/</code>, <code>database/</code> and <code>monitoring/</code> subfolders.</li>
 <li><b>Test through the public API.</b> 4 tests import private names and 483 places read private attributes. When a public method gives the same check, use it. The worst files are <code>test_setup_production.py</code> (30), <code>test_core.py</code> (23) and <code>test_monitor.py</code> (22).</li>
@@ -315,8 +314,7 @@ def restart_database():
 <p>I measured a full local run with <code>pytest --durations=40</code>: 4,482 passed in 447 s.</p>
 <div class="wrap"><table>
 <tr><th>Test</th><th>Time</th><th>Cause and fix</th></tr>
-<tr><td><code>test_site_rename.py::test_readers_keep_the_old_path_during_failed_renames_and_retries</code></td><td class="n">205 s</td><td>This one test is 46% of the whole run. It does 100 rounds of a failed rename plus a retry. During that time a reader thread spins without a pause and competes for the Python interpreter lock. Fix: use 10 rounds and add <code>time.sleep(0)</code> in the reader loop. The check stays the same: readers always see the old path.</td></tr>
-<tr><td>About 40 other tests in <code>test_site_rename.py</code>, <code>test_rename_site.py</code>, <code>test_hostname_alias_retarget.py</code>, <code>test_released_pin.py</code></td><td class="n">2–5 s each, about 100 s in total</td><td>Each rename costs about 2 s, even with mocks. Find the shared wait (probably a retry or poll in the rename flow) and make it configurable in tests.</td></tr>
+<tr><td><code>test_site_rename.py::test_readers_keep_the_old_path_during_failed_renames_and_retries</code> and about 40 other rename tests</td><td class="n">205 s + about 100 s</td><td><b>Fixed in PR #812.</b> Each rename called <code>cert_files_exist()</code>, which ran a real <code>sudo test -f /etc/letsencrypt/...</code> on the test machine. Without <code>-n</code>, sudo waited about 2.4 s for a password. The test setup already stubbed the other root-only certificate reads but not this one. Now the 205 s test takes 0.97 s.</td></tr>
 <tr><td><code>test_editor_path_fuzz.py</code> (2 tests)</td><td class="n">15 s</td><td>Fuzz tests. Keep them, but lower the number of examples in CI and keep a larger run for nightly builds.</td></tr>
 </table></div>
 <p>Expected result: the full suite goes from about 447 s to about 150 s.</p>
@@ -334,7 +332,6 @@ def restart_database():
 <tr><th>Measure</th><th>Now</th><th>Target</th></tr>
 <tr><td>Loose functions in <code>pilot/</code> (same scan)</td><td class="n">588</td><td class="n">under 300</td></tr>
 <tr><td>Files with 10 or more loose functions</td><td class="n">34</td><td class="n">under 8</td></tr>
-<tr><td>Lines in <code>api/v1/types/</code></td><td class="n">1,102</td><td class="n">about 200</td></tr>
 <tr><td><code>except Exception</code> in API routes</td><td class="n">145</td><td class="n">about 30</td></tr>
 <tr><td><code>BENCH_ROOT</code> reads in API code</td><td class="n">123</td><td class="n">1</td></tr>
 <tr><td>Reverse log readers</td><td class="n">5</td><td class="n">1</td></tr>
