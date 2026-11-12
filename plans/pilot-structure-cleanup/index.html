@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pilot Structure Cleanup</title>
+<meta name="description" content="A plan to move Pilot's loose functions into owned classes, remove duplicate code and dead code, and trim the tests.">
+<style>
+:root{--fg:#1d1d1f;--muted:#6b6b70;--line:#e3e3e6;--soft:#f6f6f7;--accent:#2f6fde;--warn:#b5651d;--ok:#2e7d4f;--bg:#fff}
+@media (prefers-color-scheme:dark){:root{--fg:#e9e9ec;--muted:#9a9aa2;--line:#2c2c31;--soft:#1a1a1e;--accent:#79a6ff;--warn:#e0a060;--ok:#6cc58f;--bg:#111114}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:28px;margin:0 0 6px;letter-spacing:-.01em}
+h2{font-size:20px;margin:44px 0 10px;padding-top:12px;border-top:1px solid var(--line)}
+h3{font-size:16px;margin:24px 0 6px}
+p,li{max-width:72ch}
+.sub{color:var(--muted);margin:0 0 24px}
+code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);padding:1px 5px;border-radius:4px}
+pre{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:10px 0 4px;font-size:14px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.wrap{overflow-x:auto}
+.tag{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:10px;border:1px solid var(--line);color:var(--muted);margin-left:6px;vertical-align:2px}
+.risk-low{color:var(--ok);border-color:currentColor}.risk-mid{color:var(--warn);border-color:currentColor}
+.phase{border:1px solid var(--line);border-radius:10px;padding:4px 18px 12px;margin:14px 0}
+.phase h3{margin-top:14px}
+.note{border-left:3px solid var(--accent);padding:4px 14px;background:var(--soft);border-radius:0 6px 6px 0}
+figure{margin:18px 0}
+figcaption{color:var(--muted);font-size:13px;margin-top:4px}
+svg{max-width:100%;height:auto;display:block}
+nav ol{padding-left:20px;color:var(--muted)}
+nav a{color:var(--fg)}
+</style>
+</head>
+<body>
+<main>
+<h1>Pilot structure cleanup</h1>
+<p class="sub">Plan · 12 November 2026 · based on branch <code>perf/admin-api</code> at <code>b49ed96b</code></p>
+
+<nav><ol>
+<li><a href="#why">Why do this</a></li>
+<li><a href="#rule">The rule: every behavior has an owner</a></li>
+<li><a href="#found">What the audit found</a></li>
+<li><a href="#phases">Phases</a></li>
+<li><a href="#tests">Tests</a></li>
+<li><a href="#not">What this plan does not change</a></li>
+<li><a href="#check">How to check success</a></li>
+</ol></nav>
+
+<h2 id="why">1. Why do this</h2>
+<p>Pilot has 51,600 lines of Python in <code>pilot/</code> and 14,000 in <code>admin/backend/</code>. The main objects (<code>Server</code>, <code>Bench</code>, <code>Site</code>, <code>App</code>) are good. But much of the behavior does not live on them. It lives in loose module-level functions that take <code>(bench_root, site_name)</code> and similar arguments.</p>
+<p>This causes three problems:</p>
+<ul>
+<li><b>No single place to look.</b> One task, for example "read a site's installed apps", has two copies in two modules.</li>
+<li><b>Callers repeat setup.</b> Each caller builds paths and passes the same arguments again.</li>
+<li><b>Code grows by copying.</b> There are five separate "read a log file backwards" functions.</li>
+</ul>
+<p>The goal is less code and one clear owner for each behavior. No behavior changes. Each phase is one small pull request (PR) that keeps all tests green.</p>
+
+<h2 id="rule">2. The rule: every behavior has an owner</h2>
+<p>A <b>loose function</b> is a function at module level that is not a method. This plan keeps a loose function only in these cases:</p>
+<ul>
+<li>A Flask route handler or a CLI command entry point (the framework needs a function).</li>
+<li>A small pure helper that has no state and no natural owner, for example <code>normalize_host()</code>.</li>
+</ul>
+<p>All other behavior goes onto a class. The class is owned by a domain object and you get it through that object:</p>
+<pre><code># Before: the caller passes the bench path and the site name
+from pilot.core.site.config import list_active_apps, is_setup_complete
+apps = list_active_apps(site_config, bench.path, "one.local")
+done = is_setup_complete(bench.path, "one.local")
+
+# After: the site owns its database facts
+site = bench.site("one.local")
+apps = site.database_state.active_apps
+done = site.database_state.is_setup_complete</code></pre>
+<p>This follows the repo rules in <code>CLAUDE.md</code>: object-owned syntax, <code>@property</code> for nouns, <code>get_*()</code> for work, and one owner for state.</p>
+
+<h2 id="found">3. What the audit found</h2>
+<p>All numbers are from static scans of the branch above (AST walks and <code>grep</code>).</p>
+<div class="wrap"><table>
+<tr><th>Finding</th><th>Count</th><th>Example</th></tr>
+<tr><td>Loose functions in <code>pilot/</code> (not counting commands, patches, <code>run</code>, <code>main</code>)</td><td class="n">588</td><td><code>core/site</code> 72, <code>internal/tasks</code> 66, <code>core/bench</code> 58</td></tr>
+<tr><td>Files with 10 or more loose functions</td><td class="n">34</td><td><code>site/config.py</code> 36, <code>utils.py</code> 34, <code>platform.py</code> 25</td></tr>
+<tr><td>Module wrappers in <code>site/__init__.py</code> that only re-import a function from <code>site/config.py</code> or <code>provisioning.py</code></td><td class="n">12</td><td><code>list_installed_apps</code>, <code>is_setup_complete</code>; two of them have 0 callers</td></tr>
+<tr><td>Same function name defined twice</td><td class="n">10</td><td><code>task_has_secrets</code> in <code>internal/tasks/args.py</code> and <code>managers/task/policy.py</code></td></tr>
+<tr><td>API response <code>TypedDict</code> classes not used anywhere outside <code>api/v1/types/</code></td><td class="n">116 of 135</td><td>1,102 lines in total; nothing generates code from them</td></tr>
+<tr><td><code>Path(current_app.config["BENCH_ROOT"])</code> in API code</td><td class="n">123</td><td>also 5 local <code>_bench()</code> / <code>_current_bench()</code> helpers</td></tr>
+<tr><td><code>except Exception</code> in API routes</td><td class="n">145</td><td>a global handler for <code>Exception</code> and <code>TaskConflictError</code> already exists in <code>api/errors.py</code></td></tr>
+<tr><td>Routes that read <code>Idempotency-Key</code> and queue a task by hand</td><td class="n">24</td><td>the 5 database quick-action routes are almost identical</td></tr>
+<tr><td>"Read a file backwards" implementations</td><td class="n">5</td><td><code>internal/jsonl_log.py</code>, <code>providers/logs.py</code>, <code>providers/waf.py</code>, <code>providers/windowed_log.py</code>, plus a safe-JSON parse in <code>hourly_rollup.py</code></td></tr>
+<tr><td>Flat folders with too many files</td><td class="n">—</td><td><code>pilot/tasks</code> 47, <code>tests/pilot/core</code> 76, <code>admin/backend/providers</code> 17</td></tr>
+</table></div>
+
+<figure>
+<div id="d1" role="img" aria-label="Before: site config.py has 36 loose functions with bench_root and site_name arguments, and site __init__ re-exports 12 of them. After: Site owns SiteConfigFile, SiteDatabaseState and ConfigPatch."></div>
+<figcaption>The site config module today, and its shape after phase 2.</figcaption>
+</figure>
+
+<h2 id="phases">4. Phases</h2>
+<p>The order is by risk. Deleting dead code is first because it makes the later moves smaller. Each phase is one PR. Each PR runs ruff, mypy (<code>mypy pilot admin/backend</code>) and the full suite in CI. No phase changes a URL, a JSON shape or a CLI command.</p>
+<p>Each phase below gives the same five parts: <b>problem</b>, <b>change</b> (file by file), <b>before → after</b> code, <b>callers</b> that must change, and <b>tests</b>.</p>
+
+<div class="phase">
+<h3>Phase 1: Delete dead and duplicate code <span class="tag risk-low">low risk</span> <span class="tag">about −1,200 lines</span></h3>
+<p><b>Problem.</b> Some code has no callers, and some functions have two copies. Every later phase must move this code, so delete it first.</p>
+<div class="wrap"><table>
+<tr><th>File</th><th>Change</th></tr>
+<tr><td><code>admin/backend/api/v1/types/*.py</code> (15 files)</td><td>Delete 116 <code>TypedDict</code> classes that nothing imports. Keep the 19 that code uses, in one <code>types.py</code>.</td></tr>
+<tr><td><code>pilot/core/site/__init__.py</code></td><td>Delete the 12 module wrappers at the bottom of the file (lines 440–533). Two of them (<code>_safe_site_config_path</code>, <code>_query_installed_apps_via_frappe</code>) have no callers.</td></tr>
+<tr><td><code>pilot/managers/task/policy.py</code></td><td>Delete the file. It only wraps <code>internal/tasks/args.task_has_secrets</code>. <code>managers/task/__init__.py</code> exports the real one.</td></tr>
+<tr><td><code>pilot/core/database/__init__.py</code></td><td>Delete <code>read_site_config(bench_root, site_name)</code>. Use the one in <code>site/config.py</code> (in phase 2 it moves to <code>SiteConfigFile</code>).</td></tr>
+<tr><td><code>api/v1/benches/__init__.py</code>, <code>api/v1/sites/core.py</code></td><td>Delete the 4 shim routes that only import and call <code>cloning.py</code>. Register the <code>cloning.py</code> functions on the blueprints directly.</td></tr>
+<tr><td><code>providers/waf.py</code>, <code>providers/windowed_log.py</code></td><td>Two identical <code>_safe_json()</code> functions. Phase 5 merges them, so this phase does not change them.</td></tr>
+</table></div>
+<p><b>Before → after</b> (<code>site/__init__.py</code>):</p>
+<pre><code># Before: a wrapper whose only job is to re-import the real function
+def is_setup_complete(bench_root: Path, site_name: str) -> bool | None:
+    from pilot.core.site.config import is_setup_complete as _is_setup_complete
+    return _is_setup_complete(bench_root, site_name)
+
+# After: the wrapper is gone. Callers import from the module that owns the function.</code></pre>
+<p><b>Callers.</b> About 30 import lines change. Most of them are in tests.</p>
+<p><b>Tests.</b> Tests that only check a wrapper are deleted. Behavior tests stay as they are.</p>
+</div>
+
+<div class="phase">
+<h3>Phase 2: Give <code>Site</code> its config and database facts <span class="tag risk-mid">medium risk</span></h3>
+<p><b>Problem.</b> <code>pilot/core/site/config.py</code> has 36 loose functions and no class. They do three unrelated jobs, and each one takes <code>(bench_root, site_name)</code> again. <code>SiteApps</code> already wraps four of them with local imports.</p>
+<p><b>Change.</b> Replace the file with a <code>site/config/</code> folder that holds three classes:</p>
+<div class="wrap"><table>
+<tr><th>New class (how to get it)</th><th>Job</th><th>Functions it replaces</th></tr>
+<tr><td><code>SiteConfigFile</code><br><code>site.config_file</code></td><td>Read and write <code>site_config.json</code>. Refuse a path that escapes the sites folder.</td><td><code>read_site_config</code>, <code>set_site_config_values</code>, <code>set_site_ssl_flag</code>, <code>clear_certificate_pin</code>, <code>safe_site_config_path</code>, <code>read_public_config</code>, <code>update_public_config</code></td></tr>
+<tr><td><code>SiteDatabaseState</code><br><code>site.database_state</code></td><td>Read facts from the site's own database.</td><td><code>list_installed_apps</code>, <code>list_active_apps</code>, <code>exclude_disabled_apps</code>, <code>query_installed_apps_via_db</code>, <code>query_disabled_apps_via_db</code>, <code>query_installed_apps_setting_via_db</code>, <code>has_app_disabling</code>, <code>has_module_defs_for_app</code>, <code>is_setup_complete</code>, <code>query_setup_wizard_apps_via_db</code>, <code>is_backup_encryption_enabled</code>, <code>query_installed_apps_via_frappe</code></td></tr>
+<tr><td><code>PublicConfig</code></td><td>Mask secrets for the Admin UI and check a config patch from it.</td><td><code>public_config</code>, <code>merge_public_config</code>, <code>config_patch_error</code>, <code>is_public_config_key</code>, <code>is_secret_config_key</code> and 9 private helpers</td></tr>
+</table></div>
+<p><b>Before → after:</b></p>
+<pre><code># Before (admin/backend/providers/sites.py and others)
+from pilot.core.site.config import list_active_apps, is_setup_complete
+apps = list_active_apps(site_config, bench_root, name)
+done = is_setup_complete(bench_root, name)
+
+# After
+site = Bench(bench_root).site(name)
+apps = site.database_state.active_apps          # @property
+done = site.database_state.is_setup_complete    # @property
+
+# Before (site/apps.py): a method that only imports and forwards
+def has_module_rows(self, app_name):
+    from pilot.core.site.config import has_module_defs_for_app
+    return has_module_defs_for_app(self.site.bench.path, self.site.config.name, app_name)
+
+# After: SiteApps uses the owner directly, and the forwarding method goes
+self.site.database_state.has_module_rows(app_name)</code></pre>
+<p><b>Callers.</b> <code>is_setup_complete</code> has 15 call sites, <code>query_installed_apps_via_db</code> 7 and <code>provision_from_backup</code> 6. Most are in <code>admin/backend/providers</code> and tests.</p>
+<p><b>Tests.</b> Move <code>test_site_config.py</code> and <code>test_config_patch.py</code> to <code>tests/pilot/core/site/</code>. Patch <code>SiteDatabaseState</code> methods in place of module functions.</p>
+</div>
+
+<div class="phase">
+<h3>Phase 3: Break up <code>pilot/utils.py</code> <span class="tag risk-mid">medium risk</span></h3>
+<p><b>Problem.</b> <code>utils.py</code> has 34 functions with five unrelated jobs, and 165 import lines point to it. When a file has no clear job, new code keeps landing in it.</p>
+<p><b>Change.</b> Move each job to an owner. The table shows how many importers each part has today.</p>
+<div class="wrap"><table>
+<tr><th>Functions now</th><th>New owner</th><th>Importers</th></tr>
+<tr><td><code>cli_root</code>, <code>benches_dir</code>, <code>iter_sibling_benches</code>, <code>admin_url</code></td><td><code>Server</code> properties: <code>server.root</code>, <code>server.benches_dir</code> (a wrapper already exists), a new <code>server.benches</code> property; <code>admin_url</code> → <code>BenchConfig.admin_url</code></td><td class="n">83</td></tr>
+<tr><td><code>run_command</code> + 6 private helpers</td><td><code>Command</code> class in <code>internal/command.py</code>. <code>run_command()</code> stays as the one public shortcut.</td><td class="n">46</td></tr>
+<tr><td><code>host_owner</code>, <code>matches_wildcard</code>, <code>wildcard_suffix</code>, <code>hosts_line_contains</code>, <code>_bench_hosts</code>, <code>_site_config_hosts</code></td><td><code>HostClaims</code> → <code>server.host_claims</code>. <code>normalize_host</code> stays a pure helper.</td><td class="n">28</td></tr>
+<tr><td><code>open_private</code>, <code>write_private_text</code>, <code>make_private_directory</code></td><td><code>PrivateFile</code> in <code>internal/atomic_file.py</code>, next to <code>atomic_write_private_text</code></td><td class="n">24</td></tr>
+<tr><td><code>validate_tar_archive</code>, <code>extract_tar_archive</code> + 6 helpers</td><td><code>TarArchive(path, limits)</code> with <code>validate()</code> and <code>extract_to(root)</code>, in <code>internal/archive.py</code></td><td class="n">2</td></tr>
+<tr><td><code>directory_bytes</code>, <code>pick_free_port</code>, <code>is_port_listening</code>, <code>installed_app_version</code>, <code>redact_text</code></td><td>Move onto the one object that uses each (<code>SiteStorage</code>, bench creation, <code>App</code>, <code>Command</code>)</td><td class="n">—</td></tr>
+</table></div>
+<p><b>Before → after:</b></p>
+<pre><code># Before
+from pilot.utils import cli_root, iter_sibling_benches
+for path, config in iter_sibling_benches(cli_root() / "benches" / ".rollup-placeholder"):
+    ...
+
+# After: Server gets a new `benches` property
+for bench in Server().benches:
+    ...</code></pre>
+<p>After this phase, <code>pilot/utils.py</code> is deleted.</p>
+<p><b>Tests.</b> <code>tests/pilot/test_utils.py</code> splits by new owner. The tar safety tests stay unchanged; only their imports change.</p>
+</div>
+
+<div class="phase">
+<h3>Phase 4: Platform, settings, alerts and task callbacks as objects <span class="tag risk-mid">medium risk</span></h3>
+<p><b>Problem.</b> Four modules hold related functions with no class. Each caller must know which loose function to import.</p>
+<div class="wrap"><table>
+<tr><th>Module now</th><th>Change</th></tr>
+<tr><td><code>managers/platform.py</code><br>25 functions</td><td><code>HostPlatform</code> with properties <code>distro</code>, <code>os_version</code>, <code>kernel_version</code>, <code>is_macos</code>, <code>is_linux</code>, <code>is_root</code>, <code>has_passwordless_sudo</code>, <code>native_process_manager</code>. <code>ServiceControl(name)</code> with <code>start()</code>, <code>enable()</code>, <code>disable()</code>, <code>is_running</code> in place of the 4 <code>service_*</code> functions. <code>HostsFile(path)</code> with <code>add(host)</code> and <code>remove(host)</code>.</td></tr>
+<tr><td><code>core/bench/settings.py</code><br>20 functions</td><td>The 11 <code>*_payload(config)</code> functions become methods on one <code>SettingsPayload(config)</code> class. <code>regenerate_configs</code>, <code>restart_running_workload</code> and the two restart helpers become <code>BenchSettings</code> methods.</td></tr>
+<tr><td><code>core/alerts.py</code><br>12 functions</td><td>Move into <code>core/notification/</code>, which already owns notifications. <code>AlertMail(mail_config)</code> handles SMTP, rendering and sending. <code>Notifier(bench)</code> → <code>bench.notifier</code> handles <code>send()</code>, webhooks, mail and Central.</td></tr>
+<tr><td><code>internal/tasks/callbacks.py</code><br>20 functions</td><td>One <code>TaskCallbacks(task)</code> class with one method for each hook.</td></tr>
+</table></div>
+<p><b>Before → after:</b></p>
+<pre><code># Before (api/v1/settings/__init__.py)
+"workers": worker_groups_payload(config),
+"firewall": firewall_payload(config),
+"proxy": proxy_payload(config),
+**waf_payload(config),
+
+# After
+payload = SettingsPayload(config)
+"workers": payload.worker_groups,
+"firewall": payload.firewall,
+"proxy": payload.proxy,
+**payload.waf,
+
+# Before (server/monitoring.py, certificates.py, notification/events.py)
+from pilot.core.alerts import notify
+notify(bench, payload)
+
+# After
+bench.notifier.send(payload)</code></pre>
+<p><b>Callers.</b> <code>notify</code> has 4 call sites. <code>platform</code> has about 40 import lines. The settings payloads have 2 callers.</p>
+</div>
+
+<div class="phase">
+<h3>Phase 5: One JSON-lines log reader <span class="tag risk-low">low risk</span> <span class="tag">about −120 lines</span></h3>
+<p><b>Problem.</b> Five modules each read a log file backwards, block by block, with their own copy of the same loop. Two of them also have the same <code>_safe_json()</code>.</p>
+<div class="wrap"><table>
+<tr><th>Copy now</th><th>Used for</th></tr>
+<tr><td><code>internal/jsonl_log.py</code> <code>_reversed_lines</code></td><td>Audit log and notifications</td></tr>
+<tr><td><code>providers/windowed_log.py</code> <code>_iter_lines_reversed</code> + <code>_safe_json</code></td><td>Site monitoring windows</td></tr>
+<tr><td><code>providers/waf.py</code> <code>_iter_records_reversed</code> + <code>_safe_json</code></td><td>WAF analytics</td></tr>
+<tr><td><code>providers/logs.py</code> <code>_read_tail_text</code></td><td>Logs page tail</td></tr>
+<tr><td><code>site/hourly_rollup.py</code> <code>_parse</code></td><td>Hourly rollups (reads forward from an offset)</td></tr>
+</table></div>
+<p><b>Change.</b> One class in <code>internal/jsonl_log.py</code>. All five callers use it:</p>
+<pre><code>class JsonLines:
+    """One JSON record per line. Reads from either end without loading the file."""
+    def __init__(self, path: Path) -> None: ...
+    def read_lines_newest_first(self) -> Iterator[bytes]: ...
+    def read_newest_first(self) -> Iterator[dict]: ...   # skips bad lines
+    def read_tail_text(self, min_lines: int) -> str: ...
+    @staticmethod
+    def parse(line: bytes) -> dict | None: ...</code></pre>
+<p>The weekly-sharded <code>JsonlLog</code> keeps its job and uses <code>JsonLines</code> for each shard.</p>
+<p><b>Tests.</b> One new <code>test_jsonl_lines.py</code> covers block edges, a partial last line and bad JSON. Provider tests stay and must pass unchanged.</p>
+</div>
+
+<div class="phase">
+<h3>Phase 6: Thin Admin API routes <span class="tag risk-mid">medium risk</span> <span class="tag">about −600 lines</span></h3>
+<p><b>Problem.</b> Routes repeat the same setup and error handling. <code>api/errors.py</code> already has global handlers for <code>Exception</code>, <code>TaskConflictError</code> and <code>ConfigError</code>, but routes catch these themselves 145 times.</p>
+<p><b>Change.</b> Add three helpers to <code>admin/backend/api/</code> and use them everywhere:</p>
+<div class="wrap"><table>
+<tr><th>Helper</th><th>Replaces</th></tr>
+<tr><td><code>current_bench() -&gt; Bench</code></td><td>123 <code>Path(current_app.config["BENCH_ROOT"])</code>, and the 5 local <code>_bench()</code> / <code>_current_bench()</code> / <code>_bench_root()</code> functions in <code>databases.py</code>, <code>migrations.py</code>, <code>git.py</code>, <code>ssh_keys.py</code>, <code>tasks.py</code></td></tr>
+<tr><td><code>json_body() -&gt; dict</code></td><td>55 <code>request.get_json(silent=True)</code> calls and their <code>isinstance(data, dict)</code> checks. It raises <code>ApiProblem("malformed_body", 400)</code>.</td></tr>
+<tr><td><code>queue_task(TaskClass, bench, **args)</code></td><td>24 hand-written blocks that read <code>Idempotency-Key</code>, call <code>.queue()</code> and build the 202 response</td></tr>
+</table></div>
+<p>Then delete each local <code>except</code> that returns the same response as the global handler. Keep a local catch only when the route returns a different code or message.</p>
+<p><b>Before → after</b> (<code>api/v1/databases.py</code>, real code):</p>
+<pre><code># Before: 18 lines
+@database_bp.post("/quick-actions/restart")
+def restart_database():
+    try:
+        _quick_actions().require_restart()
+        bench = _bench()
+        task_id = RestartDatabaseTask.queue(
+            bench,
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            resource_key=_DATABASE_RESOURCE_KEY,
+        )
+        return accepted_task_response(bench.path, task_id)
+    except (DatabaseError, TaskConflictError) as exc:
+        return error_response("database_action_unavailable", str(exc), 409)
+    except ValueError as exc:
+        return error_response("invalid_database_action", str(exc), 422)
+    except Exception:
+        return error_response("database_action_failed", "Could not queue the database restart.", 500)
+
+# After: 6 lines. DatabaseError → 409 is registered once for the blueprint.
+@database_bp.post("/quick-actions/restart")
+def restart_database():
+    bench = current_bench()
+    DatabaseQuickActions(bench).require_restart()
+    return queue_task(RestartDatabaseTask, bench, resource_key=_DATABASE_RESOURCE_KEY)</code></pre>
+<p>The five quick-action routes (restart, performance schema, buffer pool, max connections, memory share) have the same shape. After the change each one is about 8 lines.</p>
+<p><b>Risk and check.</b> The error <code>code</code> strings in responses must stay the same, because the frontend reads them. Before the change, a test records the code and status for every error branch in <code>test_databases_view.py</code> and the other view tests. The same test must pass after the change.</p>
+</div>
+
+<div class="phase">
+<h3>Phase 7: Group crowded folders <span class="tag risk-low">low risk, many files move</span></h3>
+<p><b>Problem.</b> Flat folders with many files make it hard to see which parts belong together.</p>
+<div class="wrap"><table>
+<tr><th>Folder now</th><th>New layout</th></tr>
+<tr><td><code>pilot/tasks/</code> (47 files)</td><td><code>tasks/site/</code> (new, restore, backup, rename, drop, reinstall, migrate, clone), <code>tasks/app/</code> (get, install, uninstall, remove, switch branch, revert), <code>tasks/bench/</code> (build, restart, nginx, letsencrypt, update, lite mode), <code>tasks/database/</code> (the 5 MariaDB setting tasks and restart), <code>tasks/migration/</code> (4 tasks). <code>pilot/tasks/__init__.py</code> keeps its explicit exports, so <code>from pilot.tasks import NewSiteTask</code> still works.</td></tr>
+<tr><td><code>admin/backend/providers/</code> (17 files)</td><td><code>providers/site/</code> (uptime, monitoring, access log, summaries, sites), <code>providers/database/</code> (database, slow queries, database monitoring), <code>providers/server/</code> (os, system monitoring, WAF, storage, logs)</td></tr>
+<tr><td><code>pilot/core/site/</code> (22 files)</td><td>Add <code>site/config/</code> (phase 2) and <code>site/backups/</code> (backups, retention, migration backup, restore, restore directories)</td></tr>
+</table></div>
+<p>This phase only moves files and fixes imports. It changes no code, so the review stays easy.</p>
+</div>
+
+<div class="phase">
+<h3>Phase 8: Frontend formatters <span class="tag risk-low">low risk</span></h3>
+<p><b>Problem.</b> Twelve components define their own formatters. <code>formatBytes</code> and <code>formatPercent</code> each have two local copies, and <code>utils/format.ts</code> already exports <code>formatBytes</code>.</p>
+<p><b>Change.</b> Move <code>formatPercent</code>, <code>formatSeconds</code>, <code>formatMegabytes</code> and <code>formatGB</code> into <code>utils/format.ts</code>. Move <code>formatDate</code>, <code>formatFullTime</code> and <code>formatTimeOnly</code> into <code>utils/time.ts</code>. Delete the local copies and add a new <code>utils/format.test.ts</code> next to the existing <code>time.test.ts</code>.</p>
+</div>
+
+<h2 id="tests">5. Tests</h2>
+<p>The suite has 3,889 test functions in 67,700 lines. A full local run takes about 7.5 minutes. The suite is mostly useful. The problems are its layout and the tests that check private internals.</p>
+<ul>
+<li><b>Delete with the code.</b> Tests of the wrappers and shims removed in phase 1 go away with them.</li>
+<li><b>Delete trivial tests.</b> 9 tests only assert <code>is not None</code>, <code>isinstance</code> or <code>hasattr</code>. Examples: <code>test_resolve_returns_list_of_resolvers</code> and <code>test_get_package_manager_macos</code>. A behavior test covers each one.</li>
+<li><b>Split catch-all files.</b> <code>test_core.py</code> (1,297 lines), <code>test_commands.py</code> (1,570) and <code>test_managers_extra.py</code> (972) go into files named for the object they test.</li>
+<li><b>Mirror the source tree.</b> The 76 flat files in <code>tests/pilot/core/</code> go into <code>site/</code>, <code>bench/</code>, <code>app/</code>, <code>database/</code> and <code>monitoring/</code> subfolders.</li>
+<li><b>Test through the public API.</b> 4 tests import private names and 483 places read private attributes. When a public method gives the same check, use it. The worst files are <code>test_setup_production.py</code> (30), <code>test_core.py</code> (23) and <code>test_monitor.py</code> (22).</li>
+<li><b>Merge into tables.</b> Groups of near-identical tests, for example the WAF patcher rejection tests, become one <code>pytest.mark.parametrize</code> table.</li>
+</ul>
+<div id="slow"></div>
+
+<h2 id="not">6. What this plan does not change</h2>
+<ul>
+<li><b>Imports inside functions (897 in <code>pilot/</code>).</b> Most of these keep CLI start-up fast or break import cycles. The plan removes the ones that belong to deleted wrappers. It does not remove the rest without an import-time measurement (<code>python -X importtime</code>).</li>
+<li><b>The <code>Bench</code> facade methods.</b> <code>bench.start()</code>, <code>bench.backups</code> and similar methods delegate to helper modules on purpose. They are the public object API, so they stay. Only private delegators go.</li>
+<li><b>Behavior, routes and CLI commands.</b> All URLs, JSON shapes and command names stay the same.</li>
+</ul>
+
+<h2 id="check">7. How to check success</h2>
+<div class="wrap"><table>
+<tr><th>Measure</th><th>Now</th><th>Target</th></tr>
+<tr><td>Loose functions in <code>pilot/</code> (same scan)</td><td class="n">588</td><td class="n">under 300</td></tr>
+<tr><td>Files with 10 or more loose functions</td><td class="n">34</td><td class="n">under 8</td></tr>
+<tr><td>Lines in <code>api/v1/types/</code></td><td class="n">1,102</td><td class="n">about 200</td></tr>
+<tr><td><code>except Exception</code> in API routes</td><td class="n">145</td><td class="n">about 30</td></tr>
+<tr><td><code>BENCH_ROOT</code> reads in API code</td><td class="n">123</td><td class="n">1</td></tr>
+<tr><td>Reverse log readers</td><td class="n">5</td><td class="n">1</td></tr>
+<tr><td>Duplicate function definitions</td><td class="n">10</td><td class="n">0</td></tr>
+<tr><td>Full test suite, local</td><td class="n">446 s</td><td class="n">equal or less</td></tr>
+</table></div>
+<p>Each phase must also keep ruff, mypy and the full CI suite green, and must not change any API response. The scan scripts that produced these numbers are small AST walks. They can go into <code>scripts/</code> so that CI can report the numbers on each PR.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function(){
+  var dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  var fg = dark ? '#e9e9ec' : '#1d1d1f', muted = dark ? '#9a9aa2' : '#6b6b70', accent = dark ? '#79a6ff' : '#2f6fde';
+  var ns = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 820 330');
+  document.getElementById('d1').appendChild(svg);
+  if (!window.rough) return;
+  var rc = rough.svg(svg);
+  function box(x,y,w,h,c){ svg.appendChild(rc.rectangle(x,y,w,h,{stroke:c||fg,roughness:1.1,strokeWidth:1.3})); }
+  function line(x1,y1,x2,y2,c){ svg.appendChild(rc.line(x1,y1,x2,y2,{stroke:c||muted,roughness:.8})); }
+  function arrow(x1,y1,x2,y2,c){ line(x1,y1,x2,y2,c); var a=Math.atan2(y2-y1,x2-x1),s=8;
+    line(x2,y2,x2-s*Math.cos(a-.4),y2-s*Math.sin(a-.4),c); line(x2,y2,x2-s*Math.cos(a+.4),y2-s*Math.sin(a+.4),c); }
+  function text(x,y,t,o){ o=o||{}; var e=document.createElementNS(ns,'text'); e.setAttribute('x',x); e.setAttribute('y',y);
+    e.setAttribute('fill',o.c||fg); e.setAttribute('font-size',o.s||13); e.setAttribute('font-family', o.mono?'ui-monospace,Menlo,monospace':'system-ui,sans-serif');
+    if(o.b) e.setAttribute('font-weight','600'); if(o.mid) e.setAttribute('text-anchor','middle'); e.textContent=t; svg.appendChild(e); }
+  text(20,24,'Before',{b:1,c:muted}); text(440,24,'After',{b:1,c:muted});
+  // before
+  box(20,40,170,60); text(105,66,'callers',{mid:1}); text(105,86,'(bench_root, site_name)',{mid:1,s:11,c:muted,mono:1});
+  box(220,40,190,60); text(315,66,'site/__init__.py',{mid:1,mono:1,s:12}); text(315,86,'12 re-export wrappers',{mid:1,s:11,c:muted});
+  box(120,160,250,140); text(245,184,'site/config.py',{mid:1,mono:1,s:12,b:1});
+  ['36 loose functions:','· site_config.json read/write','· SQL queries on the site DB','· public-config patch checks'].forEach(function(t,i){ text(140,210+i*22,t,{s:12,c:i?muted:fg}); });
+  arrow(105,100,190,160); arrow(315,100,290,160); arrow(190,70,220,70);
+  line(425,40,425,310,muted);
+  // after
+  box(460,40,120,50,accent); text(520,70,'Site',{mid:1,b:1});
+  box(620,40,180,50); text(710,70,'SiteApps',{mid:1,mono:1,s:12});
+  var ys=[150,210,270], names=['site.config_file','site.database_state','PublicConfig'], jobs=['SiteConfigFile','SiteDatabaseState','patch checks'];
+  ys.forEach(function(y,i){ box(560,y,240,46); text(680,y+20,names[i],{mid:1,mono:1,s:12}); text(680,y+37,jobs[i],{mid:1,s:11,c:muted}); arrow(520,90,560,y+23, i==2?muted:accent); });
+  arrow(710,90,700,150,muted); text(728,124,'uses',{s:11,c:muted});
+})();
+</script>
+</body>
+</html>
