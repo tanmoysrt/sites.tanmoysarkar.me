@@ -302,7 +302,7 @@ def restart_database():
 </div>
 
 <h2 id="tests">5. Tests</h2>
-<p>The suite has 3,889 test functions in 67,700 lines. A full local run takes about 7.5 minutes. The suite is mostly useful. The problems are its layout and the tests that check private internals.</p>
+<p>The suite has 3,889 test functions in 67,700 lines. A full local run takes about 7.5 minutes, and one test uses almost half of that. The suite is mostly useful. The problems are its layout and the tests that check private internals.</p>
 <ul>
 <li><b>Delete with the code.</b> Tests of the wrappers and shims removed in phase 1 go away with them.</li>
 <li><b>Delete trivial tests.</b> 9 tests only assert <code>is not None</code>, <code>isinstance</code> or <code>hasattr</code>. Examples: <code>test_resolve_returns_list_of_resolvers</code> and <code>test_get_package_manager_macos</code>. A behavior test covers each one.</li>
@@ -311,7 +311,16 @@ def restart_database():
 <li><b>Test through the public API.</b> 4 tests import private names and 483 places read private attributes. When a public method gives the same check, use it. The worst files are <code>test_setup_production.py</code> (30), <code>test_core.py</code> (23) and <code>test_monitor.py</code> (22).</li>
 <li><b>Merge into tables.</b> Groups of near-identical tests, for example the WAF patcher rejection tests, become one <code>pytest.mark.parametrize</code> table.</li>
 </ul>
-<div id="slow"></div>
+<h3>Slow tests</h3>
+<p>I measured a full local run with <code>pytest --durations=40</code>: 4,482 passed in 447 s.</p>
+<div class="wrap"><table>
+<tr><th>Test</th><th>Time</th><th>Cause and fix</th></tr>
+<tr><td><code>test_site_rename.py::test_readers_keep_the_old_path_during_failed_renames_and_retries</code></td><td class="n">205 s</td><td>This one test is 46% of the whole run. It does 100 rounds of a failed rename plus a retry. During that time a reader thread spins without a pause and competes for the Python interpreter lock. Fix: use 10 rounds and add <code>time.sleep(0)</code> in the reader loop. The check stays the same: readers always see the old path.</td></tr>
+<tr><td>About 40 other tests in <code>test_site_rename.py</code>, <code>test_rename_site.py</code>, <code>test_hostname_alias_retarget.py</code>, <code>test_released_pin.py</code></td><td class="n">2–5 s each, about 100 s in total</td><td>Each rename costs about 2 s, even with mocks. Find the shared wait (probably a retry or poll in the rename flow) and make it configurable in tests.</td></tr>
+<tr><td><code>test_editor_path_fuzz.py</code> (2 tests)</td><td class="n">15 s</td><td>Fuzz tests. Keep them, but lower the number of examples in CI and keep a larger run for nightly builds.</td></tr>
+</table></div>
+<p>Expected result: the full suite goes from about 447 s to about 150 s.</p>
+
 
 <h2 id="not">6. What this plan does not change</h2>
 <ul>
@@ -330,7 +339,7 @@ def restart_database():
 <tr><td><code>BENCH_ROOT</code> reads in API code</td><td class="n">123</td><td class="n">1</td></tr>
 <tr><td>Reverse log readers</td><td class="n">5</td><td class="n">1</td></tr>
 <tr><td>Duplicate function definitions</td><td class="n">10</td><td class="n">0</td></tr>
-<tr><td>Full test suite, local</td><td class="n">446 s</td><td class="n">equal or less</td></tr>
+<tr><td>Full test suite, local</td><td class="n">447 s</td><td class="n">about 150 s</td></tr>
 </table></div>
 <p>Each phase must also keep ruff, mypy and the full CI suite green, and must not change any API response. The scan scripts that produced these numbers are small AST walks. They can go into <code>scripts/</code> so that CI can report the numbers on each PR.</p>
 </main>
