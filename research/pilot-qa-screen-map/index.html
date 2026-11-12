@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pilot QA screen map</title>
+<meta name="description" content="Every Pilot admin screen tested on a fresh VM, drawn as flows, with the bugs found and fixed.">
+<style>
+  :root {
+    --ink: #1f2328; --muted: #59636e; --faint: #8c959f; --line: #d8dee4; --bg: #ffffff; --panel: #f6f8fa;
+    --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; --fixed: #0969da; --info: #6e7781;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .page { max-width: 1180px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0; }
+  h2 { font-size: 1.15rem; margin: 2.4rem 0 0.6rem; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  h3 { font-size: 1rem; margin: 0; }
+  p { max-width: 760px; }
+  .meta { color: var(--muted); margin-top: 4px; }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel); padding: 1px 4px; border-radius: 4px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 8px; }
+  .stat { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; min-width: 120px; }
+  .stat b { display: block; font-size: 1.4rem; line-height: 1.2; }
+  .stat span { color: var(--muted); font-size: 0.85rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .s-ok { background: var(--ok); } .s-warn { background: var(--warn); } .s-bug { background: var(--bad); } .s-fixed { background: var(--fixed); } .s-info { background: var(--info); }
+
+  .lane { margin: 28px 0 0; }
+  .lane-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 8px; }
+  .lane-head .from { color: var(--muted); font-size: 0.85rem; }
+  .lane-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  .canvas { position: relative; }
+  .canvas svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  .edge { fill: none; stroke: #8c959f; stroke-width: 1.4; }
+  .edge-label { font-size: 11px; fill: var(--muted); }
+  .card { position: absolute; width: 200px; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; overflow: hidden; }
+  .card:hover, .card:focus-visible { border-color: var(--ink); outline: none; }
+  .card img { display: block; width: 100%; height: 112px; object-fit: cover; object-position: 70% top; border-bottom: 1px solid var(--line); background: #fff; }
+  .card .t { display: flex; align-items: center; gap: 0; padding: 6px 8px 7px; font-size: 0.82rem; line-height: 1.3; }
+  .card .t span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 0 8px; border-radius: 10px; border: 1px solid currentColor; white-space: nowrap; }
+  .tag.fixed { color: var(--fixed); } .tag.open { color: var(--warn); } .tag.info { color: var(--info); }
+  .sev-high { color: var(--bad); font-weight: 600; } .sev-medium { color: var(--warn); font-weight: 600; } .sev-low, .sev-info { color: var(--muted); }
+  .link { background: none; border: 0; padding: 0; color: var(--fixed); cursor: pointer; font: inherit; text-decoration: underline; }
+  .table-scroll { overflow-x: auto; }
+
+  dialog { width: min(1100px, calc(100vw - 24px)); max-height: calc(100vh - 24px); padding: 0; border: 1px solid var(--line); border-radius: 10px; }
+  dialog::backdrop { background: rgba(31, 35, 40, 0.55); }
+  .dlg-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: #fff; }
+  .dlg-head h3 { flex: 1; }
+  .dlg-head button { border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 3px 10px; cursor: pointer; font: inherit; font-size: 0.85rem; }
+  .dlg-body { padding: 14px; }
+  .dlg-body img { width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; font-size: 0.9rem; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  @media (max-width: 640px) { .facts { grid-template-columns: 1fr; } .facts dt { margin-top: 6px; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Pilot QA screen map</h1>
+  <p class="meta">Pilot admin, <code>develop</code> plus fixes on branch <code>fix/qa-round</code>. Fresh VM: 2 vCPU, 7.8 GB RAM, Ubuntu, MariaDB, Frappe v16, ERPNext. Tested 12 November 2026.</p>
+
+  <p>Pilot is a CLI and admin dashboard that runs Frappe benches on one server. This page shows each admin screen that we opened during the test. Each screen is a card. An arrow shows the action that moves you from one screen to the next. Select a card to see the full screenshot and the notes.</p>
+  <p>We installed Pilot on an empty VM with the install script, ran the setup wizard, and created two sites. Then we used each screen as an operator would. Most of the work went to the features added after pre-release 100 and to the core paths: sites, app installs, backups, the DB analyzer, and the database settings. When a screen was wrong, we found the cause, fixed it on the branch, deployed the fix to the VM, and tested the screen again.</p>
+
+  <div class="stats" id="stats"></div>
+  <div class="legend">
+    <span><i class="dot s-ok"></i>Works</span>
+    <span><i class="dot s-fixed"></i>Was wrong, now fixed</span>
+    <span><i class="dot s-warn"></i>Works, with an open issue</span>
+    <span><i class="dot s-bug"></i>Broken</span>
+  </div>
+
+  <h2>Screens by flow</h2>
+  <div id="map"><p class="meta">Loading the screen map…</p></div>
+
+  <h2>Findings</h2>
+  <p>High-severity bugs come first. A fixed bug has a commit on <code>fix/qa-round</code> and was tested again on the VM.</p>
+  <div class="table-scroll"><table id="findings"></table></div>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <div class="dlg-head">
+    <h3 id="dlg-title"></h3>
+    <button type="button" id="prev" aria-label="Previous screen in this flow">←</button>
+    <button type="button" id="next" aria-label="Next screen in this flow">→</button>
+    <button type="button" id="close">Close</button>
+  </div>
+  <div class="dlg-body">
+    <dl class="facts" id="facts"></dl>
+    <img id="dlg-img" alt="">
+  </div>
+</dialog>
+
+<script>
+const CARD_W = 200, CARD_H = 146, GAP_X = 124, GAP_Y = 26, PAD = 18
+const STATUS = { ok: 'Works', fixed: 'Was wrong, now fixed', warn: 'Works, with an open issue', bug: 'Broken' }
+const SEVERITY = { high: 0, medium: 1, low: 2, info: 3 }
+
+const el = (tag, attrs = {}, text) => {
+  const node = document.createElement(tag)
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value)
+  if (text != null) node.textContent = text
+  return node
+}
+const svgEl = (tag, attrs) => {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag)
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value)
+  return node
+}
+
+let data, nodesById, flowOrder = []
+
+fetch('flows.json').then((response) => response.json()).then((json) => {
+  data = json
+  nodesById = Object.fromEntries(data.nodes.map((node) => [node.id, node]))
+  renderStats()
+  renderMap()
+  renderFindings()
+}).catch(() => {
+  document.getElementById('map').innerHTML = '<p class="meta">The screen map data (flows.json) did not load.</p>'
+})
+
+function renderStats() {
+  const fixed = data.findings.filter((f) => f.status === 'fixed').length
+  const open = data.findings.filter((f) => f.status === 'open').length
+  const items = [
+    [data.nodes.length, 'screens and states'],
+    [data.flows.length, 'flows'],
+    [fixed, 'bugs fixed'],
+    [open, 'open, low priority'],
+  ]
+  const box = document.getElementById('stats')
+  for (const [value, label] of items) {
+    const stat = el('div', { class: 'stat' })
+    stat.append(el('b', {}, value), el('span', {}, label))
+    box.append(stat)
+  }
+}
+
+// Longest path inside the flow gives each screen its column, so arrows point right.
+function layout(flow) {
+  const inFlow = new Set(flow.nodes)
+  const edges = data.edges.filter((e) => inFlow.has(e.from) && inFlow.has(e.to))
+  const depth = Object.fromEntries(flow.nodes.map((id) => [id, 0]))
+  for (let pass = 0; pass < flow.nodes.length; pass++) {
+    for (const edge of edges) depth[edge.to] = Math.max(depth[edge.to], depth[edge.from] + 1)
+  }
+  const columns = []
+  for (const id of flow.nodes) (columns[depth[id]] ??= []).push(id)
+  const position = {}
+  columns.forEach((ids, column) => ids.forEach((id, row) => {
+    position[id] = { x: PAD + column * (CARD_W + GAP_X), y: PAD + row * (CARD_H + GAP_Y) }
+  }))
+  const width = PAD * 2 + columns.length * CARD_W + (columns.length - 1) * GAP_X
+  const height = PAD * 2 + Math.max(...columns.map((c) => c.length)) * (CARD_H + GAP_Y) - GAP_Y
+  return { edges, position, width, height }
+}
+
+function renderMap() {
+  const map = document.getElementById('map')
+  map.textContent = ''
+  for (const flow of data.flows) {
+    const { edges, position, width, height } = layout(flow)
+    flowOrder.push(...flow.nodes)
+    const lane = el('section', { class: 'lane' })
+    const head = el('div', { class: 'lane-head' })
+    head.append(el('h3', {}, flow.title))
+    const entries = [...new Set(data.edges
+      .filter((e) => flow.nodes.includes(e.to) && !flow.nodes.includes(e.from))
+      .map((e) => nodesById[e.from]?.title).filter(Boolean))]
+    if (entries.length) head.append(el('span', { class: 'from' }, `Starts from: ${entries.join(', ')}`))
+    head.append(el('span', { class: 'from' }, `${flow.nodes.length} screens`))
+
+    const scroll = el('div', { class: 'lane-scroll' })
+    const canvas = el('div', { class: 'canvas' })
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
+    const svg = svgEl('svg', { width, height, 'aria-hidden': 'true' })
+    const marker = svgEl('marker', { id: `arrow-${flow.id}`, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto' })
+    marker.append(svgEl('path', { d: 'M0,0 L10,5 L0,10 z', fill: '#8c959f' }))
+    const defs = svgEl('defs', {})
+    defs.append(marker)
+    svg.append(defs)
+
+    for (const edge of edges) {
+      const a = position[edge.from], b = position[edge.to]
+      const x1 = a.x + CARD_W, y1 = a.y + 56, x2 = b.x - 2, y2 = b.y + 56
+      const bend = Math.max(30, (x2 - x1) / 2)
+      svg.append(svgEl('path', { class: 'edge', d: `M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2},${y2}`, 'marker-end': `url(#arrow-${flow.id})` }))
+      if (edge.action) {
+        const label = svgEl('text', { class: 'edge-label', x: x2 - 8, y: y2 - 7, 'text-anchor': 'end' })
+        const text = edge.action.length > 16 ? `${edge.action.slice(0, 15)}…` : edge.action
+        label.textContent = text
+        const title = svgEl('title', {})
+        title.textContent = edge.action
+        label.append(title)
+        svg.append(label)
+      }
+    }
+    canvas.append(svg)
+
+    for (const id of flow.nodes) {
+      const node = nodesById[id]
+      const card = el('button', { class: 'card', type: 'button', 'aria-label': `${node.title}: ${STATUS[node.status] ?? node.status}` })
+      card.style.left = `${position[id].x}px`
+      card.style.top = `${position[id].y}px`
+      card.append(el('img', { src: node.screenshot, alt: '', loading: 'lazy' }))
+      const title = el('div', { class: 't' })
+      title.append(el('i', { class: `dot s-${node.status}` }), el('span', {}, node.title))
+      card.append(title)
+      card.addEventListener('click', () => openNode(id))
+      canvas.append(card)
+    }
+    scroll.append(canvas)
+    lane.append(head, scroll)
+    map.append(lane)
+  }
+}
+
+function renderFindings() {
+  const table = document.getElementById('findings')
+  const head = el('tr')
+  for (const label of ['Severity', 'Finding', 'State', 'Screen']) head.append(el('th', {}, label))
+  table.append(head)
+  const rows = [...data.findings].sort((a, b) =>
+    (a.status === 'fixed' ? 0 : 1) - (b.status === 'fixed' ? 0 : 1) || (SEVERITY[a.severity] ?? 9) - (SEVERITY[b.severity] ?? 9))
+  for (const finding of rows) {
+    const row = el('tr')
+    row.append(el('td', { class: `sev-${finding.severity}` }, finding.severity))
+    const text = el('td')
+    text.append(el('strong', {}, finding.title), el('br'), document.createTextNode(finding.detail))
+    row.append(text)
+    const state = el('td')
+    state.append(el('span', { class: `tag ${finding.status}` }, finding.status))
+    row.append(state)
+    const screen = el('td')
+    if (finding.node && nodesById[finding.node]) {
+      const link = el('button', { class: 'link', type: 'button' }, nodesById[finding.node].title)
+      link.addEventListener('click', () => openNode(finding.node))
+      screen.append(link)
+    }
+    row.append(screen)
+    table.append(row)
+  }
+}
+
+const dlg = document.getElementById('dlg')
+let current = null
+
+function openNode(id) {
+  current = id
+  const node = nodesById[id]
+  document.getElementById('dlg-title').textContent = node.title
+  const facts = document.getElementById('facts')
+  facts.textContent = ''
+  const incoming = data.edges.filter((e) => e.to === id)
+    .map((e) => `${nodesById[e.from]?.title ?? e.from} → ${e.action || 'next'}`)
+  const items = [
+    ['Flow', data.flows.find((f) => f.id === node.flow)?.title ?? node.flow],
+    ['Route', node.route || '—'],
+    ['Reached by', incoming.join('; ') || 'Entry point'],
+    ['State', STATUS[node.status] ?? node.status],
+    ['Notes', node.note || '—'],
+  ]
+  for (const [term, value] of items) facts.append(el('dt', {}, term), el('dd', {}, value))
+  const img = document.getElementById('dlg-img')
+  img.src = node.screenshot
+  img.alt = `Screenshot: ${node.title}`
+  if (!dlg.open) dlg.showModal()
+}
+
+function step(delta) {
+  const flow = data.flows.find((f) => f.nodes.includes(current))
+  const index = flow.nodes.indexOf(current) + delta
+  if (index >= 0 && index < flow.nodes.length) openNode(flow.nodes[index])
+}
+
+document.getElementById('prev').addEventListener('click', () => step(-1))
+document.getElementById('next').addEventListener('click', () => step(1))
+document.getElementById('close').addEventListener('click', () => dlg.close())
+dlg.addEventListener('click', (event) => { if (event.target === dlg) dlg.close() })
+document.addEventListener('keydown', (event) => {
+  if (!dlg.open) return
+  if (event.key === 'ArrowLeft') step(-1)
+  if (event.key === 'ArrowRight') step(1)
+})
+</script>
+</body>
+</html>

@@ -1,0 +1,1174 @@
+{
+  "nodes": [
+    {
+      "id": "setup-database",
+      "title": "Setup wizard: database",
+      "flow": "setup",
+      "route": "/setup",
+      "screenshot": "shots/setup-database.jpg",
+      "note": "Opened from the sign-in link that 'pilot start' prints",
+      "status": "ok"
+    },
+    {
+      "id": "setup-engine",
+      "title": "Choose engine (MariaDB / PostgreSQL)",
+      "flow": "setup",
+      "route": "/setup",
+      "screenshot": "shots/setup-engine.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "setup-frappe",
+      "title": "Customize bench: Frappe branch + repo",
+      "flow": "setup",
+      "route": "/setup",
+      "screenshot": "shots/setup-frappe.jpg",
+      "note": "Repo is validated live (Found frappe)",
+      "status": "ok"
+    },
+    {
+      "id": "setup-progress",
+      "title": "Bench setup live log",
+      "flow": "setup",
+      "route": "/setup",
+      "screenshot": "shots/setup-progress.jpg",
+      "note": "Raw 'STEP init,<ts> Initialize bench' marker shows in the log",
+      "status": "warn"
+    },
+    {
+      "id": "setup-complete",
+      "title": "Setup complete: next commands",
+      "flow": "setup",
+      "route": "/setup",
+      "screenshot": "shots/setup-complete.jpg",
+      "note": "Shows dev start and production setup commands. Asks for --admin-domain again although 'pilot new' already set it.",
+      "status": "ok"
+    },
+    {
+      "id": "login",
+      "title": "Sign in (password)",
+      "flow": "auth",
+      "route": "/login",
+      "screenshot": "shots/login.jpg",
+      "note": "Production admin over HTTPS (Let's Encrypt). Has Forgot password link.",
+      "status": "ok"
+    },
+    {
+      "id": "onboard-github",
+      "title": "Onboarding 1/3: Connect GitHub",
+      "flow": "onboarding",
+      "route": "/sites",
+      "screenshot": "shots/onboard-github.jpg",
+      "note": "Username + PAT with repo scope; Skip / Finish later available",
+      "status": "ok"
+    },
+    {
+      "id": "onboard-storage",
+      "title": "Onboarding 2/3: S3 backup storage",
+      "flow": "onboarding",
+      "route": "/sites",
+      "screenshot": "shots/onboard-storage.jpg",
+      "note": "Bucket, region, endpoint, access/secret key",
+      "status": "ok"
+    },
+    {
+      "id": "onboard-site",
+      "title": "Onboarding 3/3: Launch first site",
+      "flow": "onboarding",
+      "route": "/sites",
+      "screenshot": "shots/onboard-site.jpg",
+      "note": "Fixed: the app picker was empty because parallel first loads of the marketplace registry raced on 'git clone'. Now one clone runs and the dialog shows a Retry when the list fails.",
+      "status": "fixed"
+    },
+    {
+      "id": "site-create-task",
+      "title": "New Site task: live steps",
+      "flow": "site-lifecycle",
+      "route": "/insights/tasks/:id",
+      "screenshot": "shots/site-create-task.jpg",
+      "note": "Redirects to task page with steps and live log. Get-started checklist ticks 'Create your first site' while the task is still running.",
+      "status": "ok"
+    },
+    {
+      "id": "site-detail-apps",
+      "title": "Site detail: Apps tab",
+      "flow": "site-lifecycle",
+      "route": "/sites/:name",
+      "screenshot": "shots/site-detail-apps.jpg",
+      "note": "Tabs: Apps, Backups, Config, Activity, Settings. Actions: View analytics, Install app, Setup site.",
+      "status": "ok"
+    },
+    {
+      "id": "sites-cards",
+      "title": "Sites list: cards with request sparkline + uptime",
+      "flow": "sites-list",
+      "route": "/sites",
+      "screenshot": "shots/sites-cards.jpg",
+      "note": "Fixed: a site still being created was pinged and counted as down, so a new site showed 92.1% uptime. Requests show once Frappe flushes its monitor log.",
+      "status": "fixed"
+    },
+    {
+      "id": "sites-list-view",
+      "title": "Sites list: table view",
+      "flow": "sites-list",
+      "route": "/sites",
+      "screenshot": "shots/sites-list-view.jpg",
+      "note": "Storage is empty for a new site until the next usage scan (every 6 hours). 'Refresh usage' in site settings measures it at once.",
+      "status": "warn"
+    },
+    {
+      "id": "marketplace-site",
+      "title": "Marketplace scoped to a site (128 apps)",
+      "flow": "marketplace",
+      "route": "/marketplace?site=:name",
+      "screenshot": "shots/marketplace-site.jpg",
+      "note": "Category tabs, site picker, sort by stars, Import app, New app",
+      "status": "ok"
+    },
+    {
+      "id": "marketplace-install-confirm",
+      "title": "Install ERPNext on: site picker",
+      "flow": "marketplace",
+      "route": "/marketplace",
+      "screenshot": "shots/marketplace-install-confirm.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "marketplace-install-task",
+      "title": "Fetch & Install App task",
+      "flow": "marketplace",
+      "route": "/insights/tasks/:id",
+      "screenshot": "shots/marketplace-install-task.jpg",
+      "note": "Steps: Fetch, Download (git clone), dependencies, build, install on site",
+      "status": "ok"
+    },
+    {
+      "id": "dba-size",
+      "title": "DB analyzer: Size tab (server-wide)",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer",
+      "screenshot": "shots/dba-size.jpg",
+      "note": "NEW after v100. Database table + server-wide breakdown: data/index/claimable, disk, engine, connections, lock timeout, performance schema, binlogs",
+      "status": "ok"
+    },
+    {
+      "id": "dba-size-site",
+      "title": "DB analyzer: per-table sizes for a site",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer?site=:name",
+      "screenshot": "shots/dba-size-site.jpg",
+      "note": "264 tables, 15 per page with Load more; numbers match information_schema",
+      "status": "ok"
+    },
+    {
+      "id": "dba-size-search",
+      "title": "DB analyzer: table search",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer?site=:name",
+      "screenshot": "shots/dba-size-search.jpg",
+      "note": "Filters to 18 of 18; Load more paged 15->30 first",
+      "status": "ok"
+    },
+    {
+      "id": "dba-size-sort",
+      "title": "DB analyzer: sort options",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer?site=:name",
+      "screenshot": "shots/dba-size-sort.jpg",
+      "note": "Largest, Most data, Most index, Most claimable",
+      "status": "ok"
+    },
+    {
+      "id": "dba-processes",
+      "title": "DB analyzer: Processes",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/processes",
+      "screenshot": "shots/dba-processes.jpg",
+      "note": "Shows live SLEEP(300) test query with Kill action",
+      "status": "ok"
+    },
+    {
+      "id": "dba-kill-confirm",
+      "title": "Kill database process: confirm",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/processes",
+      "screenshot": "shots/dba-kill-confirm.jpg",
+      "note": "Shows user, database, state, running time, full query",
+      "status": "ok"
+    },
+    {
+      "id": "dba-killed",
+      "title": "Process killed: empty state + toast",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/processes",
+      "screenshot": "shots/dba-killed.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "dba-locks",
+      "title": "DB analyzer: Locks (auto refresh)",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/locks",
+      "screenshot": "shots/dba-locks.jpg",
+      "note": "Fixed: Locks now shows the blocking connection with a Kill button, and auto refresh stops when a lock wait shows.",
+      "status": "fixed"
+    },
+    {
+      "id": "dba-queries-off",
+      "title": "DB analyzer: Queries (Performance Schema off)",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/queries",
+      "screenshot": "shots/dba-queries-off.jpg",
+      "note": "Empty state with 'Turn it on in Settings'",
+      "status": "ok"
+    },
+    {
+      "id": "dba-indexes-off",
+      "title": "DB analyzer: Indexes (Unused / Redundant)",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/indexes",
+      "screenshot": "shots/dba-indexes-off.jpg",
+      "note": "Also gated on Performance Schema",
+      "status": "ok"
+    },
+    {
+      "id": "dba-binlogs-off",
+      "title": "DB analyzer: Binary logs (binlog off)",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/binlogs",
+      "screenshot": "shots/dba-binlogs-off.jpg",
+      "note": "Fixed: the tab now says binary logging is off, and the size card has no green dot when it is off.",
+      "status": "fixed"
+    },
+    {
+      "id": "marketplace-install-failed",
+      "title": "Install failed: lock wait timeout (self-inflicted)",
+      "flow": "marketplace",
+      "route": "/insights/tasks/:id",
+      "screenshot": "shots/marketplace-install-failed.jpg",
+      "note": "Caused on purpose by a held row lock. The failed step and traceback show. Follow-up fix: a failed after_install now marks the app 'Install incomplete' with Retry.",
+      "status": "fixed"
+    },
+    {
+      "id": "new-site-dialog",
+      "title": "New Site dialog with app picker (after fix)",
+      "flow": "site-lifecycle",
+      "route": "/sites",
+      "screenshot": "shots/new-site-dialog.jpg",
+      "note": "App list loads after the registry-race fix. Card shows 161 requests/24h once Frappe monitor flushes.",
+      "status": "ok"
+    },
+    {
+      "id": "install-incomplete",
+      "title": "Install incomplete badge",
+      "flow": "marketplace",
+      "route": "/sites/two/apps",
+      "screenshot": "shots/install-incomplete.jpg",
+      "note": "New: Frappe listed erpnext but after_install failed; Pilot marks it and says so",
+      "status": "ok"
+    },
+    {
+      "id": "install-retry-menu",
+      "title": "Retry install menu",
+      "flow": "marketplace",
+      "route": "/sites/two/apps",
+      "screenshot": "shots/install-retry-menu.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "install-retry-task",
+      "title": "Retry install task (forced)",
+      "flow": "marketplace",
+      "route": "/insights/tasks/ID",
+      "screenshot": "shots/install-retry-task.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "dba-deadlocks",
+      "title": "Deadlocks tab",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/deadlocks",
+      "screenshot": "shots/dba-deadlocks.jpg",
+      "note": "Parsed from system/logs/mariadb-error.log",
+      "status": "ok"
+    },
+    {
+      "id": "dba-deadlock-detail",
+      "title": "Deadlock detail",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/deadlocks",
+      "screenshot": "shots/dba-deadlock-detail.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "dba-locks-blocker",
+      "title": "Lock wait with blocker",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/locks",
+      "screenshot": "shots/dba-locks-blocker.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "dba-kill-blocker",
+      "title": "Kill blocker",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/locks",
+      "screenshot": "shots/dba-kill-blocker.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "dba-locks-cleared",
+      "title": "Wait cleared",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/locks",
+      "screenshot": "shots/dba-locks-cleared.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "dba-slow-queries",
+      "title": "Slow queries (from slow log file)",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/queries",
+      "screenshot": "shots/dba-slow-queries.jpg",
+      "note": "Parsed from system/logs/mariadb-slow.log, grouped by normalized query",
+      "status": "ok"
+    },
+    {
+      "id": "site-backups",
+      "title": "Site backups",
+      "flow": "site-lifecycle",
+      "route": "/sites/:name/backups",
+      "screenshot": "shots/site-backups.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "site-backup-task",
+      "title": "Back up now task",
+      "flow": "site-lifecycle",
+      "route": "/insights/tasks/:id",
+      "screenshot": "shots/site-backup-task.jpg",
+      "note": "Done in 2s; 757 tables dumped",
+      "status": "ok"
+    },
+    {
+      "id": "site-config",
+      "title": "Site config",
+      "flow": "site-lifecycle",
+      "route": "/sites/:name/config",
+      "screenshot": "shots/site-config.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "site-activity",
+      "title": "Site activity",
+      "flow": "site-lifecycle",
+      "route": "/sites/:name/activity",
+      "screenshot": "shots/site-activity.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "site-settings",
+      "title": "Site settings",
+      "flow": "site-lifecycle",
+      "route": "/sites/:name/settings",
+      "screenshot": "shots/site-settings.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "storage",
+      "title": "Storage",
+      "flow": "server",
+      "route": "/storage",
+      "screenshot": "shots/storage.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "analytics",
+      "title": "Analytics",
+      "flow": "server",
+      "route": "/insights/analytics",
+      "screenshot": "shots/analytics.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "marketplace-catalog",
+      "title": "Marketplace catalog",
+      "flow": "marketplace",
+      "route": "/marketplace",
+      "screenshot": "shots/marketplace-catalog.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "updates",
+      "title": "Updates",
+      "flow": "operations",
+      "route": "/updates",
+      "screenshot": "shots/updates.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "tasks-list",
+      "title": "Tasks",
+      "flow": "operations",
+      "route": "/insights/tasks",
+      "screenshot": "shots/tasks-list.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "logs",
+      "title": "Logs",
+      "flow": "operations",
+      "route": "/insights/logs",
+      "screenshot": "shots/logs.jpg",
+      "note": "stderr INFO lines land in *.error.log and get a red marker",
+      "status": "warn"
+    },
+    {
+      "id": "notifications",
+      "title": "Notifications",
+      "flow": "operations",
+      "route": "(panel)",
+      "screenshot": "shots/notifications.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "search",
+      "title": "Search palette",
+      "flow": "operations",
+      "route": "(Ctrl+K)",
+      "screenshot": "shots/search.jpg",
+      "note": "Pages and actions only; sites are not searchable",
+      "status": "warn"
+    },
+    {
+      "id": "console-empty",
+      "title": "System console",
+      "flow": "dev-tools",
+      "route": "/console",
+      "screenshot": "shots/console-empty.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "console-sql",
+      "title": "SQL console",
+      "flow": "dev-tools",
+      "route": "/console?language=sql",
+      "screenshot": "shots/console-sql.jpg",
+      "note": "Repeated column names fixed",
+      "status": "ok"
+    },
+    {
+      "id": "console-python",
+      "title": "Python console",
+      "flow": "dev-tools",
+      "route": "/console?language=python",
+      "screenshot": "shots/console-python.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "editor",
+      "title": "Code editor",
+      "flow": "dev-tools",
+      "route": "/editor",
+      "screenshot": "shots/editor.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "settings-bench",
+      "title": "Settings: Bench",
+      "flow": "settings",
+      "route": "/settings/bench",
+      "screenshot": "shots/settings-bench.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "settings-database",
+      "title": "Settings: Database",
+      "flow": "settings",
+      "route": "/settings/database",
+      "screenshot": "shots/settings-database.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "db-configurations",
+      "title": "Database configurations",
+      "flow": "settings",
+      "route": "/settings/database/configurations",
+      "screenshot": "shots/db-configurations.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "db-var-edit",
+      "title": "Edit variable",
+      "flow": "settings",
+      "route": "/settings/database/configurations",
+      "screenshot": "shots/db-var-edit.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "db-var-task",
+      "title": "Variable updated",
+      "flow": "settings",
+      "route": "/insights/tasks/:id",
+      "screenshot": "shots/db-var-task.jpg",
+      "note": "Live and persisted to managed.cnf",
+      "status": "ok"
+    },
+    {
+      "id": "db-quick-actions",
+      "title": "Database quick actions",
+      "flow": "settings",
+      "route": "/settings/database/quick-actions",
+      "screenshot": "shots/db-quick-actions.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "perf-schema-confirm",
+      "title": "Enable Performance Schema",
+      "flow": "settings",
+      "route": "/settings/database/quick-actions",
+      "screenshot": "shots/perf-schema-confirm.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "perf-schema-task",
+      "title": "Performance Schema on",
+      "flow": "settings",
+      "route": "/insights/tasks/:id",
+      "screenshot": "shots/perf-schema-task.jpg",
+      "note": "Restart 2.4s; error/slow log settings kept",
+      "status": "ok"
+    },
+    {
+      "id": "dba-time-consuming",
+      "title": "Time consuming queries",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/queries",
+      "screenshot": "shots/dba-time-consuming.jpg",
+      "note": "",
+      "status": "ok"
+    },
+    {
+      "id": "dba-unused-indexes",
+      "title": "Unused indexes",
+      "flow": "db-analyzer",
+      "route": "/database/analyzer/indexes",
+      "screenshot": "shots/dba-unused-indexes.jpg",
+      "note": "",
+      "status": "ok"
+    }
+  ],
+  "edges": [
+    {
+      "from": "setup-database",
+      "to": "setup-engine",
+      "action": "Open engine dropdown"
+    },
+    {
+      "from": "setup-engine",
+      "to": "setup-frappe",
+      "action": "Next"
+    },
+    {
+      "from": "setup-frappe",
+      "to": "setup-progress",
+      "action": "Set up bench"
+    },
+    {
+      "from": "setup-progress",
+      "to": "setup-complete",
+      "action": "Init finishes (9m 24s on 2 vCPU)"
+    },
+    {
+      "from": "setup-complete",
+      "to": "login",
+      "action": "pilot setup production --tls (14s)"
+    },
+    {
+      "from": "login",
+      "to": "onboard-github",
+      "action": "Sign in (one-time link)"
+    },
+    {
+      "from": "onboard-github",
+      "to": "onboard-storage",
+      "action": "Skip"
+    },
+    {
+      "from": "onboard-storage",
+      "to": "onboard-site",
+      "action": "Skip"
+    },
+    {
+      "from": "onboard-site",
+      "to": "site-create-task",
+      "action": "Create site"
+    },
+    {
+      "from": "site-create-task",
+      "to": "site-detail-apps",
+      "action": "Task completes (~60s), auto-redirect"
+    },
+    {
+      "from": "site-detail-apps",
+      "to": "sites-cards",
+      "action": "Sidebar: Sites"
+    },
+    {
+      "from": "sites-cards",
+      "to": "sites-list-view",
+      "action": "Toggle list view"
+    },
+    {
+      "from": "site-detail-apps",
+      "to": "marketplace-site",
+      "action": "Install app"
+    },
+    {
+      "from": "marketplace-site",
+      "to": "marketplace-install-confirm",
+      "action": "Click install icon on ERPNext"
+    },
+    {
+      "from": "marketplace-install-confirm",
+      "to": "marketplace-install-task",
+      "action": "Install"
+    },
+    {
+      "from": "sites-cards",
+      "to": "dba-size",
+      "action": "Sidebar: DB analyzer"
+    },
+    {
+      "from": "dba-size",
+      "to": "dba-size-site",
+      "action": "Click database row"
+    },
+    {
+      "from": "dba-size-site",
+      "to": "dba-size-search",
+      "action": "Search 'user'"
+    },
+    {
+      "from": "dba-size-search",
+      "to": "dba-size-sort",
+      "action": "Open sort menu"
+    },
+    {
+      "from": "dba-size-sort",
+      "to": "dba-processes",
+      "action": "Processes tab"
+    },
+    {
+      "from": "dba-processes",
+      "to": "dba-kill-confirm",
+      "action": "Kill"
+    },
+    {
+      "from": "dba-kill-confirm",
+      "to": "dba-killed",
+      "action": "Kill process"
+    },
+    {
+      "from": "dba-killed",
+      "to": "dba-locks",
+      "action": "Locks tab (with a real row lock wait)"
+    },
+    {
+      "from": "dba-locks",
+      "to": "dba-queries-off",
+      "action": "Queries tab"
+    },
+    {
+      "from": "dba-queries-off",
+      "to": "dba-indexes-off",
+      "action": "Indexes tab"
+    },
+    {
+      "from": "dba-indexes-off",
+      "to": "dba-binlogs-off",
+      "action": "Binary logs tab"
+    },
+    {
+      "from": "marketplace-install-task",
+      "to": "marketplace-install-failed",
+      "action": "Install step hits MariaDB 1205"
+    },
+    {
+      "from": "sites-cards",
+      "to": "new-site-dialog",
+      "action": "New site"
+    },
+    {
+      "from": "marketplace-install-failed",
+      "to": "install-incomplete",
+      "action": "after_install hook failed (lock wait)"
+    },
+    {
+      "from": "install-incomplete",
+      "to": "install-retry-menu",
+      "action": "open app menu"
+    },
+    {
+      "from": "install-retry-menu",
+      "to": "install-retry-task",
+      "action": "Retry install"
+    },
+    {
+      "from": "dba-locks",
+      "to": "dba-deadlocks",
+      "action": "open Deadlocks"
+    },
+    {
+      "from": "dba-deadlocks",
+      "to": "dba-deadlock-detail",
+      "action": "click a row"
+    },
+    {
+      "from": "dba-locks",
+      "to": "dba-locks-blocker",
+      "action": "lock wait appears; auto refresh stops"
+    },
+    {
+      "from": "dba-locks-blocker",
+      "to": "dba-kill-blocker",
+      "action": "Kill"
+    },
+    {
+      "from": "dba-kill-blocker",
+      "to": "dba-locks-cleared",
+      "action": "Kill process"
+    },
+    {
+      "from": "dba-queries-off",
+      "to": "dba-slow-queries",
+      "action": "Queries tab, Slow queries"
+    },
+    {
+      "from": "site-detail-apps",
+      "to": "site-backups",
+      "action": "Backups tab"
+    },
+    {
+      "from": "site-backups",
+      "to": "site-backup-task",
+      "action": "Back up now"
+    },
+    {
+      "from": "site-detail-apps",
+      "to": "site-config",
+      "action": "Config tab"
+    },
+    {
+      "from": "site-detail-apps",
+      "to": "site-activity",
+      "action": "Activity tab"
+    },
+    {
+      "from": "site-detail-apps",
+      "to": "site-settings",
+      "action": "Settings tab"
+    },
+    {
+      "from": "login",
+      "to": "storage",
+      "action": "Storage"
+    },
+    {
+      "from": "login",
+      "to": "analytics",
+      "action": "Analytics"
+    },
+    {
+      "from": "login",
+      "to": "marketplace-catalog",
+      "action": "Marketplace"
+    },
+    {
+      "from": "login",
+      "to": "updates",
+      "action": "Updates"
+    },
+    {
+      "from": "login",
+      "to": "tasks-list",
+      "action": "Tasks"
+    },
+    {
+      "from": "login",
+      "to": "logs",
+      "action": "Logs"
+    },
+    {
+      "from": "login",
+      "to": "notifications",
+      "action": "Notifications"
+    },
+    {
+      "from": "login",
+      "to": "search",
+      "action": "Ctrl+K"
+    },
+    {
+      "from": "login",
+      "to": "console-empty",
+      "action": "System console"
+    },
+    {
+      "from": "console-empty",
+      "to": "console-sql",
+      "action": "pick site, SQL"
+    },
+    {
+      "from": "console-empty",
+      "to": "console-python",
+      "action": "pick site, Python"
+    },
+    {
+      "from": "login",
+      "to": "editor",
+      "action": "Code editor"
+    },
+    {
+      "from": "login",
+      "to": "settings-bench",
+      "action": "Settings"
+    },
+    {
+      "from": "settings-bench",
+      "to": "settings-database",
+      "action": "Database"
+    },
+    {
+      "from": "settings-database",
+      "to": "db-configurations",
+      "action": "Database configurations"
+    },
+    {
+      "from": "db-configurations",
+      "to": "db-var-edit",
+      "action": "edit innodb_lock_wait_timeout"
+    },
+    {
+      "from": "db-var-edit",
+      "to": "db-var-task",
+      "action": "Update 60"
+    },
+    {
+      "from": "settings-database",
+      "to": "db-quick-actions",
+      "action": "Quick actions"
+    },
+    {
+      "from": "db-quick-actions",
+      "to": "perf-schema-confirm",
+      "action": "toggle Performance Schema"
+    },
+    {
+      "from": "perf-schema-confirm",
+      "to": "perf-schema-task",
+      "action": "Enable and restart"
+    },
+    {
+      "from": "dba-slow-queries",
+      "to": "dba-time-consuming",
+      "action": "Time consuming"
+    },
+    {
+      "from": "dba-time-consuming",
+      "to": "dba-unused-indexes",
+      "action": "Indexes tab"
+    }
+  ],
+  "flows": [
+    {
+      "id": "setup",
+      "title": "First-run setup",
+      "nodes": [
+        "setup-database",
+        "setup-engine",
+        "setup-frappe",
+        "setup-progress",
+        "setup-complete"
+      ]
+    },
+    {
+      "id": "auth",
+      "title": "Sign in",
+      "nodes": [
+        "login"
+      ]
+    },
+    {
+      "id": "onboarding",
+      "title": "Onboarding",
+      "nodes": [
+        "onboard-github",
+        "onboard-storage",
+        "onboard-site"
+      ]
+    },
+    {
+      "id": "sites-list",
+      "title": "Sites list",
+      "nodes": [
+        "sites-cards",
+        "sites-list-view"
+      ]
+    },
+    {
+      "id": "site-lifecycle",
+      "title": "Site pages and actions",
+      "nodes": [
+        "site-create-task",
+        "site-detail-apps",
+        "new-site-dialog",
+        "site-backups",
+        "site-backup-task",
+        "site-config",
+        "site-activity",
+        "site-settings"
+      ]
+    },
+    {
+      "id": "marketplace",
+      "title": "Marketplace and app installs",
+      "nodes": [
+        "marketplace-site",
+        "marketplace-install-confirm",
+        "marketplace-install-task",
+        "marketplace-install-failed",
+        "install-incomplete",
+        "install-retry-menu",
+        "install-retry-task",
+        "marketplace-catalog"
+      ]
+    },
+    {
+      "id": "db-analyzer",
+      "title": "DB analyzer",
+      "nodes": [
+        "dba-size",
+        "dba-size-site",
+        "dba-size-search",
+        "dba-size-sort",
+        "dba-processes",
+        "dba-kill-confirm",
+        "dba-killed",
+        "dba-locks",
+        "dba-queries-off",
+        "dba-indexes-off",
+        "dba-binlogs-off",
+        "dba-deadlocks",
+        "dba-deadlock-detail",
+        "dba-locks-blocker",
+        "dba-kill-blocker",
+        "dba-locks-cleared",
+        "dba-slow-queries",
+        "dba-time-consuming",
+        "dba-unused-indexes"
+      ]
+    },
+    {
+      "id": "settings",
+      "title": "Settings and database settings",
+      "nodes": [
+        "settings-bench",
+        "settings-database",
+        "db-configurations",
+        "db-var-edit",
+        "db-var-task",
+        "db-quick-actions",
+        "perf-schema-confirm",
+        "perf-schema-task"
+      ]
+    },
+    {
+      "id": "dev-tools",
+      "title": "Dev tools",
+      "nodes": [
+        "console-empty",
+        "console-sql",
+        "console-python",
+        "editor"
+      ]
+    },
+    {
+      "id": "server",
+      "title": "Server views",
+      "nodes": [
+        "storage",
+        "analytics"
+      ]
+    },
+    {
+      "id": "operations",
+      "title": "Operations",
+      "nodes": [
+        "updates",
+        "tasks-list",
+        "logs",
+        "notifications",
+        "search"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "registry-clone-race",
+      "severity": "high",
+      "title": "First-site dialog shows no apps: concurrent registry clone fails",
+      "detail": "On a fresh bench, the first GET /api/v1/marketplace/apps calls arrive together. RegistryCache.ensure_fresh() (pilot/core/registry_cache.py) runs 'git clone' with no lock, so they race on shallow.lock, the failed clones delete the folder, and all return 503 registry_unavailable. Repro: remove system/registry-cache, send 3 parallel requests: 3x 503. useAppRegistry.load() swallows the error and nothing retries, so the dialog hides the app picker without a message.",
+      "node": "onboard-site",
+      "status": "fixed"
+    },
+    {
+      "id": "step-marker-leak",
+      "severity": "low",
+      "title": "Raw STEP marker in setup wizard log",
+      "detail": "Setup log shows 'STEP init,1794485147.982 Initialize bench', which is the internal progress protocol line.",
+      "node": "setup-progress",
+      "status": "open"
+    },
+    {
+      "id": "checklist-early",
+      "severity": "low",
+      "title": "Checklist marks first site done while task runs",
+      "detail": "Get started shows 'Create your first site' ticked while the New Site task is still running.",
+      "node": "site-create-task",
+      "status": "open"
+    },
+    {
+      "id": "network-parallel",
+      "severity": "info",
+      "title": "Direct :7000 dev server drops parallel loads from remote network (not Pilot)",
+      "detail": "Blank page over http://IP:7000 because some of 50 parallel asset requests time out from this client network. From inside the VM 50/50 succeed. Over nginx HTTP/2 all succeed. Network path issue, not a Pilot bug.",
+      "node": "setup-database",
+      "status": "info"
+    },
+    {
+      "id": "locks-no-blocker",
+      "severity": "medium",
+      "title": "Locks tab hides the blocking transaction",
+      "detail": "MariaDBEngine.get_lock_wait_rows() (pilot/core/database/engines/mariadb.py) selects only requesting_trx_id. blocking_trx_id and its thread id are not joined, so the operator sees the victim but not the connection to kill. Repro: session A SELECT ... FOR UPDATE + sleep; session B UPDATE same row: only B is listed.",
+      "node": "dba-locks",
+      "status": "fixed"
+    },
+    {
+      "id": "locks-started-tz",
+      "severity": "low",
+      "title": "Lock 'Started' shows raw server time without zone",
+      "detail": "trx_started is str(datetime) in server time (UTC here) while the rest of the UI shows browser local time.",
+      "node": "dba-locks",
+      "status": "open"
+    },
+    {
+      "id": "deadlocks-missing",
+      "severity": "high",
+      "title": "No Deadlocks view; MariaDB error log is only in journald",
+      "detail": "innodb_print_all_deadlocks=ON is set, but log_error is empty, so mariadbd writes to stderr and journald (pilot-mariadb.service). Pilot cannot scan it as a file, and the analyzer has no deadlock view. The 'error log' size readout (mariadb.py _variable_file_size(@@log_error)) reads an empty path. Repro: two transactions updating rows 1,2 in opposite order: ERROR 1213, and only journalctl shows the dump.",
+      "node": "dba-locks",
+      "status": "fixed"
+    },
+    {
+      "id": "binlog-off-state",
+      "severity": "low",
+      "title": "Binlog off looks like 'no files' with a green status dot",
+      "detail": "get_binlog_files() returns [] when log_bin=0, so the tab says 'The server has no binary log files' and the side panel shows a green dot with '0 files'. It should say binary logging is off.",
+      "node": "dba-binlogs-off",
+      "status": "fixed"
+    },
+    {
+      "id": "duplicate-columns",
+      "severity": "high",
+      "title": "MariaDB queries drop repeated column names",
+      "detail": "execute() built rows from a dict cursor by column name, so 'SELECT a.name, b.name' showed a.name twice (SQL console, lock wait blocker). Fixed: tuple cursor.",
+      "node": "dba-locks-blocker",
+      "status": "fixed"
+    },
+    {
+      "id": "failed-install-marker",
+      "severity": "high",
+      "title": "Failed after_install leaves app listed as installed",
+      "detail": "Frappe adds the app before after_install; a failure left it listed and a retry failed on duplicate Module Defs. Fixed: Pilot marks it 'Install incomplete' with a forced Retry.",
+      "node": "install-incomplete",
+      "status": "fixed"
+    },
+    {
+      "id": "slow-log-never-on",
+      "severity": "high",
+      "title": "Slow query monitoring never collected anything",
+      "detail": "Nothing enabled the MariaDB slow log and the collector required log_output=TABLE, so slow query charts were always empty. Fixed: my.cnf writes a slow log file; analyzer and monitor read it.",
+      "node": "dba-slow-queries",
+      "status": "fixed"
+    },
+    {
+      "id": "sql-console-columns",
+      "severity": "high",
+      "title": "SQL console showed the wrong column for repeated names",
+      "detail": "The result table keyed cells by column name, so 'SELECT u.name, r.name' showed r.name twice. Fixed: cells keyed by position.",
+      "node": "console-sql",
+      "status": "fixed"
+    },
+    {
+      "id": "unknown-route-blank",
+      "severity": "low",
+      "title": "Unknown URL renders an empty page",
+      "detail": "No catch-all route. Fixed: redirect home.",
+      "node": "updates",
+      "status": "fixed"
+    },
+    {
+      "id": "swap-tile-hidden",
+      "severity": "low",
+      "title": "Swap tile hidden at 0 GB",
+      "detail": "System info hid swap when 0. Fixed: shows 0 GB.",
+      "node": "settings-bench",
+      "status": "fixed"
+    },
+    {
+      "id": "error-log-red",
+      "severity": "low",
+      "title": "stderr INFO logs flagged as errors",
+      "detail": "gunicorn/uvicorn write INFO to stderr, so *.error.log files get a red marker in Logs.",
+      "node": "logs",
+      "status": "open"
+    },
+    {
+      "id": "search-no-sites",
+      "severity": "low",
+      "title": "Search palette does not find sites",
+      "detail": "Ctrl+K searches pages, actions and settings only; typing a site name gives no results.",
+      "node": "search",
+      "status": "open"
+    }
+  ]
+}
