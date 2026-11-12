@@ -39,7 +39,7 @@ nav a{color:var(--fg)}
 <body>
 <main>
 <h1>Pilot structure cleanup</h1>
-<p class="note"><b>Status.</b> Phase 1 is open as <a href="https://github.com/frappe/pilot/pull/812">PR #812</a>. Phase 2 is open as <a href="https://github.com/frappe/pilot/pull/813">PR #813</a>, stacked on #812. Phase 3 is open as <a href="https://github.com/frappe/pilot/pull/815">PR #815</a>, stacked on #813. Phase 4a (platform classes) is open as <a href="https://github.com/frappe/pilot/pull/816">PR #816</a>, stacked on #815. A correction since the first version of this page: the API <code>TypedDict</code> classes are <b>not</b> dead code. <code>scripts/generate_ts_types.py</code> builds the frontend TypeScript types from them on every install and build. That item is removed.</p>
+<p class="note"><b>Status.</b> Phase 1 is open as <a href="https://github.com/frappe/pilot/pull/812">PR #812</a>. Phase 2 is open as <a href="https://github.com/frappe/pilot/pull/813">PR #813</a>, stacked on #812. Phase 3 is open as <a href="https://github.com/frappe/pilot/pull/815">PR #815</a>, stacked on #813. Phase 4a (platform classes) is open as <a href="https://github.com/frappe/pilot/pull/816">PR #816</a>, 4b (settings and notifications) as <a href="https://github.com/frappe/pilot/pull/817">PR #817</a> and 4c (task callbacks) as <a href="https://github.com/frappe/pilot/pull/818">PR #818</a>. Phase 5 is open as <a href="https://github.com/frappe/pilot/pull/819">PR #819</a> and phase 6 as <a href="https://github.com/frappe/pilot/pull/820">PR #820</a>. Each PR is stacked on the one before it. Phase 8 (frontend) is dropped: this work does not change the frontend. A correction since the first version of this page: the API <code>TypedDict</code> classes are <b>not</b> dead code. <code>scripts/generate_ts_types.py</code> builds the frontend TypeScript types from them on every install and build. That item is removed.</p>
 <p class="sub">Plan · 12 November 2026 · based on branch <code>perf/admin-api</code> at <code>b49ed96b</code></p>
 
 <nav><ol>
@@ -309,7 +309,8 @@ def restart_database():
 </div>
 
 <div class="phase">
-<h3>Phase 8: Frontend formatters <span class="tag risk-low">low risk</span></h3>
+<h3>Phase 8: Frontend formatters <span class="tag risk-low">dropped</span></h3>
+<p class="note">Dropped. This cleanup does not change the frontend.</p>
 <p><b>Problem.</b> Twelve components define their own formatters. <code>formatBytes</code> and <code>formatPercent</code> each have two local copies, and <code>utils/format.ts</code> already exports <code>formatBytes</code>.</p>
 <p><b>Change.</b> Move <code>formatPercent</code>, <code>formatSeconds</code>, <code>formatMegabytes</code> and <code>formatGB</code> into <code>utils/format.ts</code>. Move <code>formatDate</code>, <code>formatFullTime</code> and <code>formatTimeOnly</code> into <code>utils/time.ts</code>. Delete the local copies and add a new <code>utils/format.test.ts</code> next to the existing <code>time.test.ts</code>.</p>
 </div>
