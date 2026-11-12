@@ -39,7 +39,7 @@ nav a{color:var(--fg)}
 <body>
 <main>
 <h1>Pilot structure cleanup</h1>
-<p class="note"><b>Status.</b> Phase 1 is open as <a href="https://github.com/frappe/pilot/pull/812">PR #812</a>. A correction since the first version of this page: the API <code>TypedDict</code> classes are <b>not</b> dead code. <code>scripts/generate_ts_types.py</code> builds the frontend TypeScript types from them on every install and build. That item is removed.</p>
+<p class="note"><b>Status.</b> Phase 1 is open as <a href="https://github.com/frappe/pilot/pull/812">PR #812</a>. Phase 2 is open as <a href="https://github.com/frappe/pilot/pull/813">PR #813</a>, stacked on #812. A correction since the first version of this page: the API <code>TypedDict</code> classes are <b>not</b> dead code. <code>scripts/generate_ts_types.py</code> builds the frontend TypeScript types from them on every install and build. That item is removed.</p>
 <p class="sub">Plan · 12 November 2026 · based on branch <code>perf/admin-api</code> at <code>b49ed96b</code></p>
 
 <nav><ol>
@@ -78,6 +78,13 @@ done = is_setup_complete(bench.path, "one.local")
 site = bench.site("one.local")
 apps = site.database_state.active_apps
 done = site.database_state.is_setup_complete</code></pre>
+<h3>Rules every phase follows</h3>
+<ul>
+<li><b>Clear names.</b> A reader knows what a method does from its name. Use <code>get_*()</code> for work that returns a value, <code>is_*</code> / <code>has_*</code> for booleans, and a noun <code>@property</code> for a computed value.</li>
+<li><b>A one-line docstring on every function and method</b>, private ones included. It says what the caller gets, not how the body works.</li>
+<li><b>No <code>_CONSTANTS</code>.</b> A value used once goes inline. A shared value becomes a plain class attribute on its owner, for example <code>PublicConfig.SECRET_MASK</code> or <code>SiteDatabaseState.connect_timeout</code>.</li>
+<li><b>Business logic apart from plumbing.</b> The domain rule (for example "a disabled app does not count as installed") sits in a short method. The SQL, subprocess, file or HTTP call that gets the data sits in a separate method under it.</li>
+</ul>
 <p>This follows the repo rules in <code>CLAUDE.md</code>: object-owned syntax, <code>@property</code> for nouns, <code>get_*()</code> for work, and one owner for state.</p>
 
 <h2 id="found">3. What the audit found</h2>
@@ -295,6 +302,13 @@ def restart_database():
 </div>
 
 <div class="phase">
+<h3>Phase 7b: Names, docstrings and constants <span class="tag risk-low">low risk, done package by package</span></h3>
+<p><b>Problem.</b> 2,629 of 3,871 functions and methods in <code>pilot/</code> and <code>admin/backend/</code> have no docstring. There are 346 module-level constants that start with an underscore.</p>
+<p><b>Change.</b> Each earlier phase applies the rules above to the code it moves. This phase does the same for the code that no phase moves, one package per PR: <code>core/bench</code>, <code>core/app</code>, <code>core/database</code>, <code>managers</code>, <code>internal</code> and <code>admin/backend</code>. Each PR renames unclear methods, adds the missing one-line docstrings, and inlines or moves the <code>_CONSTANTS</code>. Public CLI and API names stay the same.</p>
+<p><b>Check.</b> Two counts must reach zero for each package that is done: functions without a docstring, and <code>^_[A-Z]</code> module constants. A small AST script in <code>scripts/</code> reports both.</p>
+</div>
+
+<div class="phase">
 <h3>Phase 8: Frontend formatters <span class="tag risk-low">low risk</span></h3>
 <p><b>Problem.</b> Twelve components define their own formatters. <code>formatBytes</code> and <code>formatPercent</code> each have two local copies, and <code>utils/format.ts</code> already exports <code>formatBytes</code>.</p>
 <p><b>Change.</b> Move <code>formatPercent</code>, <code>formatSeconds</code>, <code>formatMegabytes</code> and <code>formatGB</code> into <code>utils/format.ts</code>. Move <code>formatDate</code>, <code>formatFullTime</code> and <code>formatTimeOnly</code> into <code>utils/time.ts</code>. Delete the local copies and add a new <code>utils/format.test.ts</code> next to the existing <code>time.test.ts</code>.</p>
@@ -335,6 +349,8 @@ def restart_database():
 <tr><td><code>except Exception</code> in API routes</td><td class="n">145</td><td class="n">about 30</td></tr>
 <tr><td><code>BENCH_ROOT</code> reads in API code</td><td class="n">123</td><td class="n">1</td></tr>
 <tr><td>Reverse log readers</td><td class="n">5</td><td class="n">1</td></tr>
+<tr><td>Functions and methods without a docstring</td><td class="n">2,629</td><td class="n">0</td></tr>
+<tr><td>Module constants that start with <code>_</code></td><td class="n">346</td><td class="n">0</td></tr>
 <tr><td>Duplicate function definitions</td><td class="n">10</td><td class="n">0</td></tr>
 <tr><td>Full test suite, local</td><td class="n">447 s</td><td class="n">about 150 s</td></tr>
 </table></div>
