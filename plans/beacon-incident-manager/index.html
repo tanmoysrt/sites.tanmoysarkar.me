@@ -47,7 +47,7 @@ figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
 <p class="meta">Plan · November 2026 · Final design (revision 4, with a last consistency pass) · Status: proposed · Reviewed in four rounds with two other models (GPT-6.1 Sol, high effort; Claude Fable 5.2, medium effort) · Mockups in moki: <code>beacon-status</code> v2</p>
 
 <div class="box">
-<b>Summary.</b> Beacon is one global Frappe app. Staff use Desk, and customers see only the status page. Every region keeps its own resource registry in Datum, and the services in that region fill it. Alert rules are ClickHouse SQL queries that return only the failing resources. Beacon stores one row for each alert episode and writes only state changes, so 100,000 resources per region are cheap. One invariant drives incidents: every firing alert that is not muted belongs to an open incident. Problems high in the tree, such as a host or a proxy, give one root-cause incident with derived impact, not one entry for each server. Datum needs four important changes: async inserts, a recent-data table sorted by metric, retention, and the registry.
+<b>Summary.</b> Beacon is one global Frappe app. Staff use Desk, and customers see only the status page. A few services in each region serve their resource lists on one endpoint, and Beacon pulls them into its registry. Alert rules are ClickHouse SQL queries that return only the failing resources. Beacon stores one row for each alert episode and writes only state changes, so 100,000 resources per region are cheap. One invariant drives incidents: every firing alert that is not muted belongs to an open incident. Problems high in the tree, such as a host or a proxy, give one root-cause incident with derived impact, not one entry for each server. Datum needs three important changes: async inserts, a recent-data table sorted by metric, and retention.
 </div>
 
 <ol class="toc">
@@ -109,14 +109,15 @@ figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
 <p>Up to 100,000 resources per region (most are sites), about 10 regions. The design must stay simple at that size. We do not design for millions.</p>
 
 <h2 id="architecture">3. Architecture</h2>
-<p>Beacon is one Frappe site. It runs outside the regions it watches. It reads each region's ClickHouse with a read-only user and writes nothing there. The status page is static files in an object storage bucket behind a CDN. Beacon uploads them every 30 seconds. So the status page stays up when Beacon is down, and it handles the traffic peaks that come with an outage.</p>
+<p>Beacon is one Frappe site. It runs outside the regions it watches. It pulls resource lists from a few services in each region. It reads each region's ClickHouse with a limited user and writes only one thing there: its registry mirror, in its own <code>beacon</code> database. The status page is static files in an object storage bucket behind a CDN. Beacon uploads them every 30 seconds. So the status page stays up when Beacon is down, and it handles the traffic peaks that come with an outage.</p>
 <figure>
-<svg id="arch" viewBox="0 0 860 470" role="img" aria-label="Architecture: each region has services that push metrics and resource lists to Datum, which writes to ClickHouse. Beacon, global and outside the regions, reads ClickHouse with SQL, stores state in MariaDB, pages people through Twilio, email and chat, uploads the static status page to a bucket behind a CDN, and in phase 4 sends events to Central."></svg>
-<figcaption>Each region owns its telemetry and its resource list. Beacon only reads them. All alert and incident state lives in Beacon's MariaDB.</figcaption>
+<svg id="arch" viewBox="0 0 860 470" role="img" aria-label="Architecture: each region has services that push metrics to Datum, which writes to ClickHouse, and serve their resource lists. Beacon, global and outside the regions, pulls the lists, reads ClickHouse with SQL, stores state in MariaDB, pages people through Twilio, email and chat, uploads the static status page to a bucket behind a CDN, and in phase 4 sends events to Central."></svg>
+<figcaption>Each region owns its telemetry and serves its resource lists. Beacon pulls the lists and reads the telemetry. All alert and incident state lives in Beacon's MariaDB.</figcaption>
 </figure>
 <table>
 <tr><th>Part</th><th>Job</th></tr>
-<tr><td>Datum + ClickHouse (per region)</td><td>Stores samples, logs, traces and the resource registry. Owns telemetry.</td></tr>
+<tr><td>Datum + ClickHouse (per region)</td><td>Stores samples, logs and traces. Owns telemetry.</td></tr>
+<tr><td>Registry sync</td><td>Every minute, pulls each Resource Source, updates MariaDB and writes the mirror to ClickHouse.</td></tr>
 <tr><td>Beacon evaluator</td><td>Scheduler jobs and an RQ queue named <code>beacon</code>. Runs rule and service queries and writes transitions.</td></tr>
 <tr><td>Beacon tick</td><td>One job every minute for time-based work: maintenance start and end, silence expiry, escalation steps, closing alerts of disabled rules, the heartbeat.</td></tr>
 <tr><td>Desk</td><td>Staff work incidents and configure everything. One Beacon workspace is the landing page.</td></tr>
@@ -127,7 +128,7 @@ figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
 <h2 id="decisions">4. Key decisions</h2>
 <div class="dec"><span class="id">D1</span><div><b>Rules are ClickHouse SQL.</b> A query returns only failing rows. ClickHouse evaluates all resources in one set-based query, and no samples leave ClickHouse. The current checks are already SQL. A read-only profile limits time, memory, threads and concurrency. We do not add Python <code>safe_exec</code>: it is a second runtime that is harder to review and to limit.</div></div>
 <div class="dec"><span class="id">D2</span><div><b>One result contract.</b> A rule returns <code>resource_id, alert_key, value, detail</code>. <code>alert_key</code> separates two problems on one resource, such as two disks. A missing row means "healthy" only after a successful query. Duplicate <code>(resource_id, alert_key)</code> rows, or more rows than the limit, fail the evaluation. Nothing is truncated.</div></div>
-<div class="dec"><span class="id">D3</span><div><b>Each region has a resource registry that its services fill.</b> It lives in Datum. Atlas registers hosts, VMs and service nodes. A server registers its sites. Central is not in the path. Beacon checks only resources that are Active, with Active ancestors, and not excluded. So an archived or stopped resource never looks "down".</div></div>
+<div class="dec"><span class="id">D3</span><div><b>Regional services serve their resource lists, and Beacon pulls them.</b> A few services in each region, such as Atlas and the service that owns sites, serve one endpoint with their full list. Beacon polls it every minute and replaces that source's list. Central is not in the path. Beacon checks only resources that are Active, with Active ancestors, and not excluded. So an archived or stopped resource never looks "down".</div></div>
 <div class="dec"><span class="id">D4</span><div><b>One Alert row per episode, written only on transitions.</b> A firing alert causes no writes. A mass outage writes its rows once.</div></div>
 <div class="dec"><span class="id">D5</span><div><b>The incident invariant.</b> After each evaluation and each tick, every Firing alert that is not suppressed must belong to an open incident. Beacon attaches it to an ancestor's incident, else to its group's incident, else reopens or creates one. This one rule covers new alerts, ended silences, ended maintenance and incidents that someone resolved too early.</div></div>
 <div class="dec"><span class="id">D6</span><div><b>One root-cause incident, impact derived.</b> An incident has a few scope rows, such as "host bom-h12 and everything under it" or "all sites in bom". The affected set is computed from the registry when someone asks. Child alerts join the parent incident and do not page.</div></div>
@@ -150,7 +151,7 @@ figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
 </ol>
 
 <h2 id="doctypes">6. Concepts and DocTypes</h2>
-<p>A new engineer needs six ideas: <b>Rule</b> (a query that finds problems), <b>Alert</b> (one problem on one resource), <b>Incident</b> (what people work on, and what customers may see), <b>Silence</b> (mute paging for a time), <b>Service</b> (one line on the status page) and <b>Registry</b> (what exists in a region). v1 has 12 DocTypes. All times are UTC.</p>
+<p>A new engineer needs six ideas: <b>Rule</b> (a query that finds problems), <b>Alert</b> (one problem on one resource), <b>Incident</b> (what people work on, and what customers may see), <b>Silence</b> (mute paging for a time), <b>Service</b> (one line on the status page) and <b>Registry</b> (what exists in a region). v1 has 13 DocTypes. All times are UTC.</p>
 <pre><code>Region
 ├── region               Data, PK        bom
 ├── title                Data            Mumbai
@@ -161,11 +162,20 @@ figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
 ├── telemetry_checked_at Datetime
 └── show_on_status_page, sort_order
 
-Resource                                 copy of the region registry, synced every 5 min
+Resource Source                          one per regional service that owns resources
+├── region, title        Link, Data      bom · Atlas
+├── base_url             Data            https://atlas.bom.example
+├── token                Password
+├── enabled              Check
+├── etag, last_success_at, last_error, row_count
+└── pending_shrink       Check           set when a big shrink is refused; "Apply pending list" clears it
+
+Resource                                 the region registry, filled from Resource Sources every minute
 ├── region, resource_id                  unique together
 ├── resource_type        Data            from the registry: Host, Server, Site, Proxy Server, ...
 ├── parent               Link Resource
-├── title, source        Data            read-only, owned by the registry
+├── title                Data            read-only, owned by the source
+├── source               Link Resource Source
 ├── status               Select          Pending | Active | Suspended | Terminated   read-only
 ├── active_since         Datetime        start of the new-resource grace
 ├── monitoring_disabled  Check           Beacon-owned: never check this resource
@@ -264,61 +274,43 @@ Notification                             delivery log; escalation reads it
 Phase 4 adds: Beacon Event (outbox to Central) and Alert Metric (catalog for customer rules).</code></pre>
 
 <h2 id="registry">7. Resource registry</h2>
-<p>Beacon must know what to track. If it looked only at telemetry, an archived resource would look like a dead one. So each region keeps a registry, and the services in the region fill it. It lives in that region's Datum, next to the metrics, so rules can join it and each region works on its own.</p>
+<p>Beacon must know what to track. If it looked only at telemetry, an archived resource would look like a dead one. So Beacon keeps a registry for each region. A few services in each region own the resources, and each one serves its full list on one endpoint. Beacon pulls the lists. Sources do not push, do not send deletes and keep no sync state.</p>
 <table>
-<tr><th>Source</th><th>Registers</th><th>Token</th></tr>
-<tr><td>Atlas</td><td>Hosts, VMs (servers), proxy and WireGuard gateway nodes, storage gateways and nodes, Atlas itself</td><td>Admin: any resource</td></tr>
-<tr><td>The agent on a server</td><td>Its sites, with <code>parent_id</code> = the server</td><td>Machine token: itself and its direct children only, at most 5,000 rows</td></tr>
+<tr><th>Source (in each region)</th><th>Serves</th></tr>
+<tr><td>Atlas</td><td>Hosts, VMs (servers), proxy and WireGuard gateway nodes, storage gateways and nodes, Atlas itself</td></tr>
+<tr><td>The service that owns sites</td><td>Sites, with <code>parent_id</code> = the server (see Open questions)</td></tr>
+<tr><td>Any other regional service</td><td>The resources it owns. A Beacon Admin adds a Resource Source in Desk.</td></tr>
 </table>
-<p><b>How a source sends.</b> It sends its full list every 15 minutes, and each change at once. A full list can span several requests. It is committed only when the last request arrives. A change (for example, "site archived") updates the committed list at once.</p>
-<pre><code>PUT /v1/resources                       source from the token; at most 10,000 rows per request
-{"snapshot_id": "atlas-1731480000", "final": true,
- "resources": [{"resource_id": "bom-h12", "resource_type": "Host", "parent_id": "",
-                "title": "bom-h12", "status": "Active"}, ...]}
-PUT /v1/resources  {"resources": [{"resource_id": "a1.example", "status": "Terminated", ...}]}
-                                         no snapshot_id: a change to the committed list</code></pre>
-<pre><code>CREATE TABLE datum.resources (
-  source LowCardinality(String), snapshot_id String, resource_id String,
-  resource_type LowCardinality(String), parent_id String, title String,
-  status Enum8('Pending' = 1, 'Active' = 2, 'Suspended' = 3, 'Terminated' = 4),
-  labels Map(LowCardinality(String), String),
-  version DateTime64(3) DEFAULT now64(3)          -- set by Datum, not by the producer clock
-) ENGINE = ReplacingMergeTree(version)
-ORDER BY (source, snapshot_id, resource_id)       -- changes use snapshot_id = 'changes'
-TTL toDateTime(version) + INTERVAL 30 DAY;
-
-CREATE TABLE datum.resource_snapshot_commits (
-  source LowCardinality(String), snapshot_id String, row_count UInt32,
-  started_at DateTime64(3),                       -- time of the snapshot's first request
-  committed_at DateTime64(3) DEFAULT now64(3)
-) ENGINE = MergeTree ORDER BY (source, started_at);
--- Datum refuses a commit whose started_at is older than the source's current one.
-
-CREATE VIEW datum.resources_latest AS
-WITH current AS (
-  SELECT source, argMax(snapshot_id, started_at) AS current_snapshot, max(started_at) AS current_start
-  FROM datum.resource_snapshot_commits GROUP BY source
-)
-SELECT r.resource_id AS resource_id,
-       argMax(r.resource_type, r.version) AS resource_type,
-       argMax(r.parent_id, r.version)     AS parent_id,
-       argMax(r.title, r.version)         AS title,
-       argMax(r.status, r.version)        AS status,
-       argMax(r.source, r.version)        AS owner_source
-FROM datum.resources AS r FINAL
-INNER JOIN current AS c ON c.source = r.source
-WHERE r.snapshot_id = c.current_snapshot
-   OR (r.snapshot_id = 'changes' AND r.version &gt; c.current_start)
-GROUP BY r.resource_id;</code></pre>
+<pre><code>GET {base_url}/api/beacon/resources        Authorization: Bearer &lt;token&gt;
+If-None-Match: "&lt;etag&gt;"                     -&gt; 304 when nothing changed
+200  ETag: "&lt;hash of the list&gt;"             one gzip response, at most 100,000 rows
+{"resources": [{"resource_id": "bom-h12", "resource_type": "Host", "parent_id": "",
+                "title": "bom-h12", "status": "Active", "labels": {}}, ...]}</code></pre>
+<p>The list is the source's current state from one read, so it is always consistent. 100,000 rows are about 15 MB of JSON and about 1.5 MB compressed. There is no paging, so a list can never be half-read.</p>
 <ul>
-<li><b>Tested.</b> The tables and the view above, and <code>counter_increase</code> below, were run with <code>clickhouse local</code> 26.10.3.7 against sample data: an old list, later changes, a new list, and a counter reset. The results were as expected.</li>
-<li><b>A full list replaces the old one.</b> A resource that is missing from its source's latest committed list is gone. We need no delete events and no reconcile job.</li>
-<li><b>Changes and lists do not overwrite each other.</b> A change is stored as a <code>changes</code> row. It wins over the committed list until a list that started after it is committed. A late commit of an older list is refused.</li>
-<li><b>A stale source does not shrink the list.</b> If a source has not committed a list for 1 hour, its last list stays in use and Beacon raises one "Registry stale" alert. Rows expire after 30 days, so a source that is silent for 30 days loses its list. The alert makes sure this never happens unnoticed.</li>
-<li><b>Moves between parents.</b> When a site moves to another server, both servers can list it for up to 15 minutes. The newest row wins. If a resource stays in two lists for more than 30 minutes, Beacon raises one Low "Registry conflict" alert.</li>
+<li><b>Poll.</b> Every minute, Beacon calls each enabled source with its last ETag. An unchanged list returns 304 and costs almost nothing.</li>
+<li><b>Replace, never merge.</b> A 200 replaces that source's whole list in one MariaDB transaction, and Beacon writes only the rows that changed. A resource that is missing from the list is gone. There are no delete events, no ordering rules and no race between a change and a full list, because the source always serves what is true now.</li>
+<li><b>Removing a resource.</b> The source stops listing it, or lists it as Suspended or Terminated. Within a minute, Beacon stops checking it, and its open alerts resolve as "Resource removed". That is not a recovery and pages no one. The default <code>pending_for</code> of "not reporting" rules (5 min) is longer than the poll interval, so an archived resource leaves the list before its alert can fire.</li>
+<li><b>A failed fetch changes nothing.</b> A timeout, a 5xx, bad JSON or a schema error keeps the last list. After 15 minutes of failed fetches, Beacon raises one "Registry stale" alert. If Atlas is down, its resources stay registered, so nothing looks down because of the registry.</li>
+<li><b>A big shrink is refused.</b> A response that removes more than 10% of the source's rows (and at least 50 rows) is not applied. The old list stays, and Beacon raises "Registry shrink refused". A Beacon Admin clicks "Apply pending list" in Desk if the shrink is real. This stops a buggy or empty response from quietly closing real alerts.</li>
+<li><b>One owner for each resource.</b> A <code>resource_id</code> is unique in a region. If a second source lists an ID that another source owns, Beacon ignores that row and raises one Low "Registry conflict" alert. A move inside one source, such as a site that moves to another server, is atomic: the next list has the new parent.</li>
 <li><b>What Beacon checks.</b> A resource is checked only if it is Active, all its ancestors are Active, <code>monitoring_disabled</code> is off, and it has been Active longer than the rule's <code>new_resource_grace</code>. A suspended host therefore also stops checks on its VMs and sites.</li>
-<li><b>Beacon's copy.</b> Every 5 minutes, Beacon reads <code>resources_latest</code> for each region (about 100,000 rows, a few MB). It compares the rows by hash with MariaDB and writes only the changes. Desk can then list resources, and Beacon can walk parents without asking ClickHouse.</li>
+<li><b>Mirror in ClickHouse.</b> "Not reporting" rules and service health queries join the registry. So when a region's copy changes, Beacon writes it to that region's ClickHouse, at most once a minute. It fills <code>beacon.resources_next</code> and swaps it in with <code>EXCHANGE TABLES</code>. There is one writer and one atomic swap of about 100,000 rows. If the write fails, the old mirror stays, and Beacon tries again the next minute.</li>
 </ul>
+<pre><code>CREATE DATABASE beacon;                 -- in each region's ClickHouse; only Beacon writes here
+CREATE TABLE beacon.resources (
+  resource_id String, resource_type LowCardinality(String), parent_id String,
+  status Enum8('Pending' = 1, 'Active' = 2, 'Suspended' = 3, 'Terminated' = 4),
+  checked Bool,                         -- Active, ancestors Active, monitoring not disabled
+  labels Map(LowCardinality(String), String)
+) ENGINE = MergeTree ORDER BY (resource_type, resource_id);
+CREATE TABLE beacon.resources_next AS beacon.resources;
+
+-- each sync
+TRUNCATE TABLE beacon.resources_next;
+INSERT INTO beacon.resources_next VALUES (...);
+EXCHANGE TABLES beacon.resources AND beacon.resources_next;</code></pre>
+<p><b>Tested.</b> The swap, a "not reporting" join on <code>beacon.resources</code> and <code>counter_increase</code> below ran in <code>clickhouse local</code> 26.10.3.7 against sample data: an old list, a new list without one site, and a counter reset. The results were as expected.</p>
 
 <h2 id="evaluation">8. Rule evaluation</h2>
 <figure>
@@ -397,9 +389,9 @@ host bom-h12            &lt;- scope row        proxy bom-proxy-2        &lt;- sc
 
 <h2 id="services">11. Service status and uptime</h2>
 <p>A service is one line on the status page, such as "Sites" or "Object Storage". A Region-scope service is defined once and evaluated in each region. A Global service, such as Dashboard or API, reads the ClickHouse of its <code>query_region</code>.</p>
-<p>Each minute, the health query returns <code>healthy</code> and <code>expected</code>. <code>expected</code> is the number of checked resources from the registry. A resource counts as healthy only if it has a sample from the last 5 minutes, so a resource that stops reporting counts as unhealthy. Beacon refuses a result with <code>healthy &lt; 0</code> or <code>healthy &gt; expected</code> and counts that minute as Unknown. Health counts platform failures only. A site that returns 500 from its own code is healthy for the platform. If it were not, a few broken customer apps in 100,000 sites would keep "Sites" Degraded.</p>
+<p>Each minute, the health query returns <code>healthy</code> and <code>expected</code>. <code>expected</code> is the number of checked resources in the registry mirror (<code>beacon.resources</code>). A resource counts as healthy only if it has a sample from the last 5 minutes, so a resource that stops reporting counts as unhealthy. Beacon refuses a result with <code>healthy &lt; 0</code> or <code>healthy &gt; expected</code> and counts that minute as Unknown. Health counts platform failures only. A site that returns 500 from its own code is healthy for the platform. If it were not, a few broken customer apps in 100,000 sites would keep "Sites" Degraded.</p>
 <pre><code>Checked in this order:
-region Unreachable, query error, invalid result, expected = 0, registry stale -&gt; Unknown
+region Unreachable, query error, invalid result, expected = 0 -&gt; Unknown
 In Progress maintenance lists this service + region (impact Maintenance) -&gt; Maintenance
 ratio = healthy / expected:  &gt;= 99.5% Operational, &gt;= 95% Degraded, &gt;= 80% Partial Outage, else Major Outage
 
@@ -513,9 +505,11 @@ uptime % = (eligible - down) / eligible             eligible = 0 -&gt; "no data"
 <tr><td>none</td><td>Listed as Pending, Active or Suspended</td><td>That status</td><td>Active sets <code>active_since</code></td></tr>
 <tr><td>Pending, Suspended, Terminated</td><td>Listed as Active</td><td>Active</td><td>New <code>active_since</code>, so the grace applies again</td></tr>
 <tr><td>Active</td><td>Listed as Suspended (stopped VM, suspended site)</td><td>Suspended</td><td>Its alerts, and those of its descendants, resolve as "Resource removed"</td></tr>
-<tr><td>Any</td><td>Listed as Terminated, or missing from the committed list</td><td>Terminated</td><td>Same. Beacon keeps its copy for 30 days.</td></tr>
+<tr><td>Any</td><td>Listed as Terminated, or missing from its source's latest list</td><td>Terminated</td><td>Same. Beacon keeps its copy for 30 days.</td></tr>
 <tr><td>Any</td><td>Parent changes (migration)</td><td>No change</td><td>Copy updated. Impact uses the current tree.</td></tr>
-<tr><td>Any</td><td>Its source commits nothing for 1 hour</td><td>No change (frozen)</td><td>One "Registry stale" alert, which resolves at the next commit</td></tr>
+<tr><td>Any</td><td>Fetches from its source fail for 15 min</td><td>No change (frozen)</td><td>One "Registry stale" alert, which resolves at the next good fetch</td></tr>
+<tr><td>Any</td><td>Its source returns a list that removes more than 10% (and at least 50) of its rows</td><td>No change</td><td>"Registry shrink refused" alert. A Beacon Admin applies the list or leaves it.</td></tr>
+<tr><td>Any</td><td>A second source lists the same <code>resource_id</code></td><td>No change</td><td>The row is ignored. One Low "Registry conflict" alert.</td></tr>
 </table>
 
 <h3>Rule evaluation, region telemetry, service</h3>
@@ -549,10 +543,11 @@ uptime % = (eligible - down) / eligible             eligible = 0 -&gt; "no data"
 <tr><td colspan="2"><b>Lifecycle</b></td></tr>
 <tr><td>A VM is still provisioning</td><td>Pending in the registry, so it is not checked. When it becomes Active, the 10-minute grace applies.</td></tr>
 <tr><td>A VM is stopped on purpose</td><td>Suspended. Its alerts and its sites' alerts resolve as "Resource removed". No page.</td></tr>
-<tr><td>A site is archived while its alert fires</td><td>Terminated. Resolved as "Resource removed", not a recovery.</td></tr>
-<tr><td>A site moves to another server</td><td>Both servers list it for a short time. The newest row wins. The parent changes in Beacon's copy within 5 min.</td></tr>
-<tr><td>Atlas stops sending lists</td><td>The registry is frozen. One "Registry stale" alert. No false "down" alerts from the registry.</td></tr>
-<tr><td>A buggy agent sends 50,000 sites</td><td>Over its 5,000-row cap: the request is refused and logged. The old list stays.</td></tr>
+<tr><td>A site is archived while its alert fires</td><td>Missing from the next list, within a minute. Resolved as "Resource removed", not a recovery.</td></tr>
+<tr><td>A site moves to another server</td><td>The site owner's next list has the new parent. Beacon's copy changes within a minute.</td></tr>
+<tr><td>Atlas is down, or its endpoint fails</td><td>Atlas resources stay as they were. One "Registry stale" alert after 15 min. No false "down" alerts from the registry.</td></tr>
+<tr><td>A bug makes a source return an empty or short list</td><td>More than 10% removed: not applied. "Registry shrink refused" alert. The old list stays, and real alerts keep firing.</td></tr>
+<tr><td>500 sites are archived in one batch</td><td>If that is more than 10% of the list, an admin applies it with one click. Until then, those sites stay checked and can alert as "not reporting".</td></tr>
 <tr><td>A new region is added</td><td>Staff add a Region. Rules with no region list and Region-scope services apply to it.</td></tr>
 <tr><td colspan="2"><b>Maintenance and muting</b></td></tr>
 <tr><td>Kernel update on 3 hosts, internal</td><td>Maintenance with scope rows for the hosts with descendants. No pages. No uptime exclusion: there is no affected service row, and none is needed.</td></tr>
@@ -580,7 +575,7 @@ uptime % = (eligible - down) / eligible             eligible = 0 -&gt; "no data"
 </table>
 
 <h2 id="dx">15. Integrating a V2 service</h2>
-<p>For a node that Atlas manages, a service team does <b>two things</b>: export metrics and write rules. Atlas already gives the node an identity, a Datum token and a registry entry. Standard rules (not reporting, disk, memory, OOM kills, clock, failed units) apply to every registered node that runs the standard Vector host metrics.</p>
+<p>For a node that Atlas manages, a service team does <b>two things</b>: export metrics and write rules. Atlas already gives the node an identity, a Datum token and a registry entry. A service that owns resources Atlas does not know about serves <code>GET /api/beacon/resources</code>, and a Beacon Admin adds it as a Resource Source. Standard rules (not reporting, disk, memory, OOM kills, clock, failed units) apply to every registered node that runs the standard Vector host metrics.</p>
 <h3>1. Export metrics</h3>
 <p>Go services expose Prometheus <code>/metrics</code> on localhost. The Vector on the node scrapes it and sends it with remote write. Datum already accepts remote write v1 on <code>/v1/ingest/remote</code>. Add a source and append it to the existing Datum sink:</p>
 <pre><code># /etc/vector/conf.d/http-proxy.toml
@@ -598,7 +593,7 @@ scrape_interval_secs = 15
 <tr><th>View</th><th>Returns</th></tr>
 <tr><td><code>counter_increase(metric, window)</code></td><td><code>resource_id, labels, increase</code>, with resets handled for each series</td></tr>
 <tr><td><code>latest_value(metric, window)</code></td><td><code>resource_id, labels, value, ts</code>, the newest sample in the window</td></tr>
-<tr><td><code>last_seen(window)</code></td><td><code>resource_id, last_ts</code>, for "not reporting" rules with <code>resources_latest</code></td></tr>
+<tr><td><code>last_seen(window)</code></td><td><code>resource_id, last_ts</code>, for "not reporting" rules joined with <code>beacon.resources</code></td></tr>
 </table>
 <pre><code>CREATE VIEW datum.counter_increase AS          -- parameterized view, shipped by Datum
 SELECT resource_id, labels, length(vals) AS samples,
@@ -646,6 +641,8 @@ $ beacon-rules sync beacon/                      # upsert; disable what this rep
 <tr><td colspan="3"><b>Rules and services from Git</b></td></tr>
 <tr><td><code>POST /api/beacon/rule-sets/{repository}/actions/test</code></td><td>Beacon Admin</td><td>Run candidate rules and services in each region. Saves nothing. A candidate with <code>"raw": true</code> returns up to 100 rows without contract checks.</td></tr>
 <tr><td><code>POST /api/beacon/rule-sets/{repository}/actions/sync</code></td><td>Beacon Admin</td><td>Upsert. Disable items of this repository that are missing from the request.</td></tr>
+<tr><td colspan="3"><b>Served by each Resource Source (Beacon calls it)</b></td></tr>
+<tr><td><code>GET /api/beacon/resources</code></td><td>Source token</td><td>The full current list, with ETag. See Resource registry.</td></tr>
 <tr><td colspan="3"><b>Incidents</b></td></tr>
 <tr><td><code>GET /api/beacon/incidents</code></td><td>Responder</td><td>Filters: <code>status</code>, <code>visibility</code>, and <code>region</code> + <code>resource_id</code> for "affecting" (ancestors checked)</td></tr>
 <tr><td><code>GET /api/beacon/incidents/{incident_id}</code></td><td>Responder</td><td>Incident with updates and alert count</td></tr>
@@ -691,22 +688,22 @@ $ beacon-rules sync beacon/                      # upsert; disable what this rep
 <tr><td>1 <span class="tag p1">P1</span></td><td>Each request is one ClickHouse insert, without <code>async_insert</code> (<code>providers/clickhouse.py</code>). Many small parts make merges fall behind, and then writes are refused.</td><td>Insert with <code>async_insert=1, wait_for_async_insert=1</code>. Size API concurrency for the flush wait. <b>Most valuable change.</b></td></tr>
 <tr><td>2 <span class="tag p1">P1</span></td><td><code>samples</code> is ordered by <code>(resource_id, metric, ts)</code>. Alert queries ask for "metric X, all resources, last minutes". CLAUDE.md says reads always name a machine. That is no longer true.</td><td>Add <code>samples_recent</code>: <code>ORDER BY (metric, ts, resource_id)</code>, daily partitions, TTL 2 days, filled by a materialized view. A projection cannot have its own TTL. Add the views <code>counter_increase</code>, <code>latest_value</code> and <code>last_seen</code>. Update CLAUDE.md.</td></tr>
 <tr><td>3 <span class="tag p1">P1</span></td><td><code>samples</code> and <code>logs</code> have no TTL. Only <code>traces</code> has one.</td><td>Set a budget, for example 30–45 days of raw samples and 14–30 days of logs, plus a 1-minute rollup of selected metrics for 13 months.</td></tr>
-<tr><td>4 <span class="tag p1">P1</span></td><td><code>resources</code> holds only ID and status. Writes need the admin token, one resource per call, 60 a minute (<code>routes/v1/resource.py</code>).</td><td>Build the registry from "Resource registry": the new columns, the commits table, <code>resources_latest</code>, batch <code>PUT /v1/resources</code>, source-token rules and caps.</td></tr>
+<tr><td>4 <span class="tag p2">P2</span></td><td><code>resources</code> holds only ID and status. Writes need the admin token, one resource per call, 60 a minute (<code>routes/v1/resource.py</code>).</td><td>No change for Beacon: it pulls lists from the regional services. Create the <code>beacon</code> database in each region and let the <code>beacon</code> user write only there.</td></tr>
 <tr><td>5 <span class="tag p2">P2</span></td><td>The <code>insights</code> reader can create and drop views and has no limits.</td><td>Add a <code>beacon</code> user with a read-only profile: <code>max_execution_time=20</code>, memory and thread limits, <code>max_concurrent_queries_for_user=4</code> and a quota.</td></tr>
 <tr><td>6 <span class="tag p2">P2</span></td><td>A write that ClickHouse refuses under load returns 400 (not retryable). The client timeout is 2 s and the server's is 30 s.</td><td>Return 503 for overload errors. Align the timeouts. Add jitter to producer flushes.</td></tr>
 <tr><td>7 <span class="tag p2">P2</span></td><td>Sample timestamps are not bounded.</td><td>Reject samples more than 5 min in the future or more than 2 days old.</td></tr>
 <tr><td>8 <span class="tag p2">P2</span></td><td><code>datum_client</code> removes a batch before it posts. It does not retry, and it logs "unreachable" only at debug level.</td><td>Log "unreachable" as a warning, rate-limited. Add <code>Datum.register()</code>. Keep "a gap beats a stalled producer".</td></tr>
 <tr><td>9 <span class="tag p3">P3</span></td><td>Rate limits are kept per process and per caller and route. Labels are a Map with few guards.</td><td>Document "one sink per machine". Later, move frequently used labels to columns and add series limits.</td></tr>
 </table>
-<p>Already good: remote write v1 support, compression codecs, payload caps, no shared ClickHouse session, the trace table and cached JWKS. Tokens last 7 days without a revocation list, and Atlas renews them daily. With the registry, a leaked machine token can also add children under its own resource. The 5,000-row cap limits that.</p>
+<p>Already good: remote write v1 support, compression codecs, payload caps, no shared ClickHouse session, the trace table and cached JWKS. Tokens last 7 days without a revocation list, and Atlas renews them daily.</p>
 
 <h2 id="scale">20. Scale numbers</h2>
 <table>
 <tr><th>Load</th><th>Per region</th><th>All regions</th></tr>
 <tr><td>Rule queries (60 rules, about 2 min average interval)</td><td>30/min</td><td>300/min, about 5 jobs/s</td></tr>
 <tr><td>Service queries (10 services, every minute)</td><td>10/min</td><td>100/min</td></tr>
-<tr><td>Registry writes (full lists every 15 min)</td><td>about 110 rows/s in batches</td><td></td></tr>
-<tr><td>Registry copy into MariaDB (every 5 min)</td><td>100,000 rows read, only changes written</td><td>10 reads every 5 min</td></tr>
+<tr><td>Registry polls (every minute, with ETag)</td><td>2–4 requests/min, mostly 304</td><td>20–40 requests/min</td></tr>
+<tr><td>Registry writes</td><td>Only changed rows into MariaDB. A mirror swap of about 100,000 rows, at most once a minute and only after a change.</td><td></td></tr>
 <tr><td>MariaDB writes, normal operation</td><td colspan="2">A few transitions a minute. Firing alerts cause no writes.</td></tr>
 <tr><td>MariaDB writes, 100,000 sites fail at once</td><td colspan="2">One time: 20 chunks of 5,000 rows. One incident.</td></tr>
 <tr><td>Status page</td><td colspan="2">One build every 30 s. The CDN takes all reader traffic.</td></tr>
@@ -717,7 +714,7 @@ $ beacon-rules sync beacon/                      # upsert; disable what this rep
 <table>
 <tr><th>Phase</th><th>Scope</th><th>Done when</th></tr>
 <tr><td>0. Datum</td><td>Changes 1–8. Measure the ingest rate.</td><td>A load test at the real producer count shows no part growth. A sample rule runs in under 2 s.</td></tr>
-<tr><td>1. Registry, rules, alerts</td><td>Atlas and agents send lists. Region, Resource, Alert Rule, Rule Evaluation, Alert, Silence, chat posts, <code>beacon-rules</code>. Port every check in <code>alerts.py</code>.</td><td>2 weeks next to the Insights alerts: every Insights post has a Beacon alert, with no duplicate episodes.</td></tr>
+<tr><td>1. Registry, rules, alerts</td><td>Atlas and the site owner serve <code>/api/beacon/resources</code>. Resource Source, Region, Resource, Alert Rule, Rule Evaluation, Alert, Silence, chat posts, <code>beacon-rules</code>. Port every check in <code>alerts.py</code>.</td><td>2 weeks next to the Insights alerts: every Insights post has a Beacon alert, with no duplicate episodes.</td></tr>
 <tr><td>2. Incidents and paging</td><td>Invariant, scope, merge, escalation, Twilio, email, maintenance, workspace, roles.</td><td>The scenario table passes on a game day.</td></tr>
 <tr><td>3. Status page</td><td>Services, uptime, Publish, unlisted links, static builder, bucket and CDN.</td><td>One month in which the page matches the incidents. Then turn off the Insights alerts.</td></tr>
 <tr><td>4. Central</td><td>Outbox, Central routes, customer rules.</td><td>Central shows unlisted incidents to the affected teams only.</td></tr>
@@ -734,7 +731,7 @@ $ beacon-rules sync beacon/                      # upsert; disable what this rep
 
 <h2 id="open">23. Open questions</h2>
 <ul>
-<li>Sites: does the agent on each server register them, or Pilot on that VM?</li>
+<li>Sites: which regional service serves the site list? It must know every site in the region and its server.</li>
 <li>Where does Beacon run? Which dead-man switch service, and which bucket and CDN host the status page outside our regions?</li>
 <li>What is the retention budget for raw samples and logs? Which metrics need a long-term rollup?</li>
 <li>Do proxies know which sites they serve? If yes, a proxy incident can scope to those sites only.</li>
@@ -784,7 +781,7 @@ $ beacon-rules sync beacon/                      # upsert; disable what this rep
   // regions
   a.appendChild(ra.rectangle(20, 20, 300, 430, { ...opt, strokeLineDash: [6, 5], stroke: '#888' }))
   text(a, 170, 44, 'Each region (bom, fra, iad, ...)', 13, 600, '#666')
-  box(ra, a, 50, 70, 240, 54, 'Regional services', 'metrics + resource lists')
+  box(ra, a, 50, 70, 240, 54, 'Regional services', 'metrics; GET resources')
   box(ra, a, 50, 190, 240, 54, 'Datum', 'write door, JWT')
   box(ra, a, 50, 310, 240, 70, 'ClickHouse', 'samples, samples_recent, logs', '#f3f6fb')
   arrow(ra, a, 170, 124, 170, 188, 'push samples', '#333', 222, 160)
@@ -796,7 +793,8 @@ $ beacon-rules sync beacon/                      # upsert; disable what this rep
   box(ra, a, 425, 170, 170, 54, 'MariaDB', 'alerts, incidents, uptime')
   box(ra, a, 425, 264, 170, 54, 'Desk', 'staff')
   box(ra, a, 425, 358, 170, 60, 'Status builder', 'HTML + JSON every 30 s')
-  arrow(ra, a, 423, 110, 292, 330, 'read-only SQL', '#2f6fde', 362, 96)
+  arrow(ra, a, 423, 82, 292, 92, 'pull lists', '#2f6fde', 357, 74)
+  arrow(ra, a, 423, 110, 292, 330, 'SQL', '#2f6fde', 343, 180)
   arrow(ra, a, 510, 130, 510, 168, '', '#333')
   // outside
   box(ra, a, 680, 60, 160, 50, 'Twilio', 'phone call + Gather')
