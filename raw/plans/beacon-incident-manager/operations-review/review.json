@@ -1,0 +1,1148 @@
+{
+  "title": "Beacon operator review",
+  "date": "2026-11-13",
+  "scope": "Read-only review of the native Desk dashboard, 14 main DocTypes, five child tables, incident and maintenance actions, and all public status routes.",
+  "principles": [
+    "Answer four questions first: what is wrong, where, who is responding, and what should happen next.",
+    "Show current status and the time of the last successful measurement together. A recent page refresh does not prove fresh telemetry.",
+    "Keep evidence and frequent actions on the first screen. Put credentials, SQL, identifiers and bookkeeping behind later tabs or collapsed sections.",
+    "Use one primary action for the current state. Keep deliberate confirmations for publication, suppression, destructive changes and paid phone calls.",
+    "Use native Desk forms, lists, Connections and document methods. Do not add a second operations frontend or a generic internal API.",
+    "Treat Unknown, suppressed, disabled and recovered as different conditions. Preserve the human decision to publish."
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "priority": "P1",
+      "title": "The UTC requirement is not enforced",
+      "scenario": "The reviewed local site uses a non-UTC time zone. Its naive clock differs from UTC by 5 hours 30 minutes. Service measurement compares that clock with Datum samples, and the public formatter adds a UTC suffix to naive timestamps.",
+      "effect": "Fresh samples can appear old. Operators and customers can see shifted incident or maintenance times.",
+      "evidence": "core/setup.py:17; core/service/measurement.py:163; frontend/src/api.js:16. The local System Settings and both clocks were read directly.",
+      "fix": "Enforce one UTC clock contract. Serialize timestamps with an explicit UTC offset. Show the chosen time zone in maintenance forms and confirmation dialogs. Repair the local development fixture separately after checking its timestamp history.",
+      "check": "A known UTC sample stays fresh; the same incident instant agrees in Desk and public views. A scheduled window starts at the displayed time. Do not bulk-shift existing rows without inspection."
+    },
+    {
+      "id": "F02",
+      "priority": "P1",
+      "title": "Publish discards affected services",
+      "scenario": "The Desk Publish dialog sends visibility and message. The controller assigns affected_services or an empty list, even when the operator already entered impact rows.",
+      "effect": "An incident can be published with no service impact. Its public status may not reflect the operator's intended scope.",
+      "evidence": "beacon/doctype/beacon_incident/beacon_incident.js:76; beacon/doctype/beacon_incident/beacon_incident.py:129. Source contract traced; no incident was published during review.",
+      "fix": "Keep existing impact rows when the argument is absent. Put service, region and impact rows in the publication preview. Distinguish an omitted table from an explicit empty table. Permit a deliberate information-only notice with an explicit explanation.",
+      "check": "Existing impact rows survive Publish. New rows and intentionally empty notices behave as shown in the preview. Unlisted incidents stay out of the public index."
+    },
+    {
+      "id": "F03",
+      "priority": "P1",
+      "title": "The incident has no working evidence panels",
+      "scenario": "Five HTML fields have no renderer: incident alerts and notifications, rule evaluations, resource current state, and silence matching alerts.",
+      "effect": "The responder must leave the incident to find its alerts, paging result or affected resource. Silence cannot show its scope before Save.",
+      "evidence": "alerts_html, notifications_html, evaluations_html, now_html and matching_html occur only in metadata or annotations. Blank incident, resource and silence panels were confirmed in the browser.",
+      "fix": "Populate these views with permission-aware native related lists or small form sections. Each row must link to the relevant document. Show empty, loading, failure and stale states explicitly.",
+      "check": "An incident exposes its linked alerts and latest notification result on the first tab. A new silence previews matching resources and alerts before Save. Failed panel reads do not look like zero matches."
+    },
+    {
+      "id": "F04",
+      "priority": "P1",
+      "title": "Public health can ignore a declared impact",
+      "scenario": "When an SLI state is Unknown, _get_service returns Unknown before applying a published incident's declared impact. Global-scope services are also excluded by the Region-only loop.",
+      "effect": "A declared outage can be obscured by missing telemetry. A supported Global service can be missing from the public page.",
+      "evidence": "core/status_page.py:67 and :244. Source-level findings; no public service state was changed during review.",
+      "fix": "Display measurement availability separately from an explicit published impact. Include visible Global services in a distinct public group and in the appropriate summary. Preserve the accepted rule that SLI health can worsen without a published incident.",
+      "check": "A published Major Outage remains visible when measurements are Unknown. A Global service appears once. Internal and unlisted impact rows do not leak."
+    },
+    {
+      "id": "F05",
+      "priority": "P2",
+      "title": "Refresh time is presented as health freshness",
+      "scenario": "The public updated_at value is the response-build time. Service checked_at and last_counted_minute are not returned. Desk overview has no prominent stale-evaluation or paging-paused summary.",
+      "effect": "A stopped scheduler can leave old health looking current. Zero firing alerts can be mistaken for healthy monitoring.",
+      "evidence": "core/status_page.py:81 and :234; Beacon Workspace definitions; Beacon Settings Safety tab. Live public page displayed a recent Updated label alongside Unknown service states.",
+      "fix": "Show last measured time and missing coverage independently from response refresh time. Put paused paging, failed sources and stale or broken evaluations near the top of the operator view. Derive this from existing records; do not create duplicate state.",
+      "check": "With measurement stopped, freshness becomes visibly stale while the page remains reachable. Unknown stays distinct from Operational. Agree the freshness threshold before implementation."
+    },
+    {
+      "id": "F06",
+      "priority": "P2",
+      "title": "Frequent actions take unnecessary steps",
+      "scenario": "Acknowledge, Test and Check Connection share the same confirmation helper as risky actions. Results render as raw JSON. Important actions are all peers in one Actions menu.",
+      "effect": "Operators confirm safe reads and scan implementation output when they need a quick answer.",
+      "evidence": "public/js/beacon.bundle.js:4; beacon_alert_rule.js; beacon_region.js; beacon_service.js.",
+      "fix": "Keep the established Actions group, but surface the current primary task. Run safe reads directly. Show result tables with region, success or error, duration, row count and a compact sample. Keep destructive actions separated and confirmed.",
+      "check": "Acknowledge takes one deliberate click. Test has no redundant confirmation. Publish, held removals, monitoring disable and phone calls still state their effects before submission."
+    },
+    {
+      "id": "F07",
+      "priority": "P2",
+      "title": "Incident context is split across tabs",
+      "scenario": "The current tab order is Overview, Impact, Updates, Paging, RCA. Acknowledgement, current escalation, latest update and customer impact are not combined at the point of response.",
+      "effect": "The responder changes tabs to learn who is acting, whether a page was delivered, and what customers can see.",
+      "evidence": "beacon/doctype/beacon_incident/beacon_incident.json field_order and the live form.",
+      "fix": "Keep a compact form-dashboard summary above tabs. The first tab shows alerts, scope, current response and latest update. Use Overview, Updates, Customer impact, Response and RCA. Keep RCA last and internal fields collapsed.",
+      "check": "At phone width, the responder can identify status, severity, acknowledgement, active alerts, paging state and the next action without visiting another tab."
+    },
+    {
+      "id": "F08",
+      "priority": "P2",
+      "title": "Suppression and held removals lack a clear impact review",
+      "scenario": "Silence has no live preview. The held-removal action shows only the first 20 resource IDs as JSON and does not state that the list is truncated.",
+      "effect": "A responder may silence too much or approve a resource removal without understanding descendants and monitoring coverage.",
+      "evidence": "beacon_silence.json matching_html; beacon_resource_source.py:82; core/resource/source.py:164. Blank silence preview was confirmed live.",
+      "fix": "Show matching count, sample, descendant scope, full filtered-list link, reason and expiry. Show held removals with total count, the truncation label, source freshness and the affected monitoring scope. Keep the existing no-empty-match and 30-day silence guards.",
+      "check": "A region-wide match is clearly broad. Preview and application use the same match logic. A 21-item removal displays 21 total, a labeled sample and access to the full set."
+    },
+    {
+      "id": "F09",
+      "priority": "P2",
+      "title": "Some read helpers use the acknowledgement guard",
+      "scenario": "get_private_link and get_affected_resources call _check_staff. On a Triggered incident that guard calls _acknowledge, which updates Call notification rows. Neither read helper persists the incident's acknowledgement state itself.",
+      "effect": "A read invoked through a committing document-method request can change notification state without a consistent incident acknowledgement.",
+      "evidence": "beacon_incident.py:165, :201, :381 and :345; Frappe handler.run_doc_method. Source-level trace; the mutating path was not exercised live.",
+      "fix": "Separate permission checks from acknowledgement. Read helpers must be side-effect free. Keep acknowledgement and its incident plus notification writes together in an action.",
+      "check": "Reading scope or copying a private link changes no incident or notification rows. Explicit Acknowledge updates both consistently."
+    },
+    {
+      "id": "F10",
+      "priority": "P2",
+      "title": "Form affordances disagree with backend ownership",
+      "scenario": "File-loaded rule fields look editable although Save refuses changes other than Enabled. The Incident Type selector remains editable after creation. Settings shows administrator-only actions to read-only responders. A test page permits a blank user for Call or Email. The responder Email field is not used by EmailNotifier, which reads User.email.",
+      "effect": "The operator discovers restrictions only after work, can attempt the wrong state flow, or misunderstands the effective notification address.",
+      "evidence": "beacon_alert_rule.py:47; beacon_incident.json type; beacon_settings.js:24; beacon_settings.py:98; core/incident/channels.py:57. Metadata, permissions and action methods were inspected.",
+      "fix": "Make source-managed fields visibly read-only, lock incident type after creation, and match action visibility to permissions. Require an active recipient for Call or Email and display the effective address. Keep backend checks authoritative.",
+      "check": "A responder sees only allowed actions. File-owned values cannot appear locally editable. Phone and email tests cannot submit without a valid recipient. No duplicate email source remains unexplained."
+    },
+    {
+      "id": "F11",
+      "priority": "P2",
+      "title": "Lists and drill-down links are not tuned for triage",
+      "scenario": "Lists rely on many in_list_view flags and default modified or creation sorting. Resources lead with source identifiers and internal hashes. Service configuration has no first-screen link to its current health records. Suppression reasons are plain text.",
+      "effect": "The most urgent record and its next diagnostic page take extra scanning or navigation.",
+      "evidence": "All main DocType field_order, in_list_view and sort settings; no app ListView settings files. Live forms confirmed the visible fields.",
+      "fix": "Use explicit per-list columns and filters. Prefer active or failed records in dedicated shortcuts, then severity and age where supported. Put status, reason and freshness before identifiers. Link incident, alert, rule, resource, evaluation, silence and source in both directions.",
+      "check": "A five-record mixed-status drill exposes the urgent record first. Each failing record reaches its rule, source or incident without a manual global search. Preserve history views."
+    },
+    {
+      "id": "F12",
+      "priority": "P2",
+      "title": "Public detail navigation and history need clearer behavior",
+      "scenario": "useCall loads on mount and a timer, but does not watch route parameters. History and detail do not set the site title. Uptime bars are spans with title-only details. The aggregate uptime period and coverage are not labeled in the service row.",
+      "effect": "Client-side incident navigation can keep an old detail until the next poll. Phone and keyboard users cannot reliably inspect daily uptime. A short sample can look like a full 90-day measurement.",
+      "evidence": "frontend/src/api.js:21; pages/IncidentPage.vue:53; HistoryPage.vue; components/UptimeBars.vue. Live public page has 270 bars and zero focusable day controls.",
+      "fix": "Reload and clear obsolete results when route identity changes, and guard response ordering. Use a shared site title, explicit time-zone labels, a period label and coverage details. Make day details tappable and keyboard-accessible. Keep public errors generic and private internals hidden.",
+      "check": "Moving between two public incidents immediately requests the correct record. An invalid or expired private link shows a safe state. A day detail works by tap, Enter and Escape. Partial coverage is visible."
+    }
+  ],
+  "pages": [
+    {
+      "id": "incident",
+      "name": "Incident",
+      "question": "What failed, who is acting, and what can I do now?",
+      "first": "Status, severity, visibility, acknowledged by, active alert count, next page time and last update. Put evidence, scope and response summary on Overview.",
+      "tabs": [
+        "Overview",
+        "Updates",
+        "Customer impact",
+        "Response",
+        "RCA"
+      ],
+      "fields": [
+        [
+          "Title",
+          "Host unreachable"
+        ],
+        [
+          "Status",
+          "Investigating"
+        ],
+        [
+          "Severity",
+          "High"
+        ],
+        [
+          "Visibility",
+          "Internal"
+        ],
+        [
+          "Acknowledged by",
+          "On-call engineer"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Active alerts",
+          "2 firing · 0 suppressed"
+        ],
+        [
+          "Last successful evaluation",
+          "30 seconds ago"
+        ]
+      ],
+      "later": "Internal group keys and share token stay collapsed. Public and internal RCA stay explicitly separate.",
+      "columns": "Title, severity, status, visibility, last activity; use the unresolved Incident filter. Do not promise a new region or owner column without an existing permission-safe query.",
+      "primary": "Post update",
+      "secondary": [
+        "Publish",
+        "Page on-call",
+        "Resolve"
+      ],
+      "links": [
+        "alert",
+        "resource",
+        "notification"
+      ],
+      "evidence": "Related alert rows link to Alert and Rule. Show the latest notification outcome and latest update without changing tabs."
+    },
+    {
+      "id": "maintenance",
+      "name": "Maintenance",
+      "question": "What will be affected, when, and will this window be excluded?",
+      "first": "State, start and end with time zone, scope, affected services, publication state and actual exclusion eligibility. Show the suppression grace period as context.",
+      "tabs": [
+        "Overview",
+        "Updates",
+        "Customer impact",
+        "Diagnostics"
+      ],
+      "fields": [
+        [
+          "Title",
+          "Planned host maintenance"
+        ],
+        [
+          "Status",
+          "Scheduled"
+        ],
+        [
+          "Scheduled start",
+          "14:00 UTC"
+        ],
+        [
+          "Scheduled end",
+          "14:30 UTC"
+        ],
+        [
+          "Scope",
+          "Region A · host-01 and descendants"
+        ],
+        [
+          "Visibility",
+          "Internal"
+        ],
+        [
+          "SLO exclusion",
+          "Not eligible until published before start"
+        ],
+        [
+          "Burn-alert mute",
+          "Enabled"
+        ]
+      ],
+      "later": "Keep source group metadata out of the operator path. Do not let the operator edit action-managed state directly.",
+      "columns": "Title, state, scheduled start, scheduled end, visibility. Filter Type to Maintenance.",
+      "primary": "Publish",
+      "secondary": [
+        "Start now",
+        "Cancel"
+      ],
+      "links": [
+        "resource",
+        "service"
+      ],
+      "evidence": "Before start: confirm the scope and publish in advance when exclusion is intended. During the window: show remaining time and Extend. After it: show Completed and observed exclusion."
+    },
+    {
+      "id": "alert",
+      "name": "Alert",
+      "question": "What signal fired, what does it mean, and where is its incident?",
+      "first": "Severity, firing state, suppression reason, region, resource, linked incident, evidence detail, value and fired time. Make the rule runbook reachable here.",
+      "tabs": [
+        "Overview",
+        "Diagnostics"
+      ],
+      "fields": [
+        [
+          "Title",
+          "Host unreachable"
+        ],
+        [
+          "Status",
+          "Firing"
+        ],
+        [
+          "Severity",
+          "High"
+        ],
+        [
+          "Suppression",
+          "Not suppressed"
+        ],
+        [
+          "Resource",
+          "host-01"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Incident",
+          "Current host incident"
+        ],
+        [
+          "Evidence",
+          "Host sync age exceeds the threshold"
+        ]
+      ],
+      "later": "Put open key, alert key and first/clean/resolved timestamps in Diagnostics, retaining the essential fired and last-success times above.",
+      "columns": "Title, status, severity, resource, incident, fired time. Separate Firing, Pending and Suppressed saved filters.",
+      "primary": "Open incident",
+      "secondary": [
+        "Open rule",
+        "Silence"
+      ],
+      "links": [
+        "incident",
+        "rule",
+        "resource",
+        "silence"
+      ],
+      "evidence": "An alert is system-owned. Do not offer direct edits to state. Explain Resource Removed, Disabled and Cleared without calling them successful recovery."
+    },
+    {
+      "id": "rule",
+      "name": "Alert Rule",
+      "question": "Is the rule running correctly, and what will it alert on?",
+      "first": "Enabled, kind, source ownership, severity, resource type, region scope, timings, runbook and a cross-region evaluation summary. Query errors must be visible.",
+      "tabs": [
+        "Overview",
+        "Query",
+        "Evaluations",
+        "Advanced"
+      ],
+      "fields": [
+        [
+          "Title",
+          "Host unreachable"
+        ],
+        [
+          "Enabled",
+          "Yes"
+        ],
+        [
+          "Kind",
+          "SQL"
+        ],
+        [
+          "Managed from file",
+          "Yes · only Enabled is editable here"
+        ],
+        [
+          "Severity",
+          "High"
+        ],
+        [
+          "Regions",
+          "All active regions"
+        ],
+        [
+          "Interval / pending / recovery",
+          "60 s / 120 s / 180 s"
+        ],
+        [
+          "Evaluation health",
+          "1 healthy region · no query errors"
+        ]
+      ],
+      "later": "Put SQL on Query, rule key and descendant grouping on Advanced. Keep service-owned burn rules clearly linked to their service.",
+      "columns": "Title, enabled, kind, severity, resource type. Use a visible evaluations summary instead of an empty HTML tab.",
+      "primary": "Test rule",
+      "secondary": [
+        "Open evaluations"
+      ],
+      "links": [
+        "evaluation",
+        "alert",
+        "service"
+      ],
+      "evidence": "A structured Test result shows each region, duration, matches, unknown resources and any contract error. File-owned fields must look read-only before Save."
+    },
+    {
+      "id": "evaluation",
+      "name": "Rule Evaluation",
+      "question": "Did this check run, and why did it fail?",
+      "first": "Rule, region, state, last successful run and full error summary. Put next run, duration, row count and unknown rows nearby.",
+      "tabs": [
+        "Overview",
+        "Diagnostics"
+      ],
+      "fields": [
+        [
+          "Rule",
+          "Host unreachable"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "State",
+          "Broken"
+        ],
+        [
+          "Last successful run",
+          "8 minutes ago"
+        ],
+        [
+          "Last attempt",
+          "30 seconds ago"
+        ],
+        [
+          "Next run",
+          "In 30 seconds"
+        ],
+        [
+          "Consecutive errors",
+          "3"
+        ],
+        [
+          "Last error",
+          "Query timed out"
+        ]
+      ],
+      "later": "Keep raw query diagnostics and duration details in Diagnostics. Run Now queues an evaluation; it does not prove success when the request returns.",
+      "columns": "Rule, region, state, last success, consecutive errors. Add Broken and Erroring filters.",
+      "primary": "Run now",
+      "secondary": [
+        "Open rule",
+        "Open region"
+      ],
+      "links": [
+        "rule",
+        "region",
+        "alert"
+      ],
+      "evidence": "After queueing, show Queued as transient UI feedback and refresh the persisted run result. Do not add a competing stored evaluation status."
+    },
+    {
+      "id": "resource",
+      "name": "Resource",
+      "question": "Is this resource monitored, and what incidents affect it?",
+      "first": "Resource identity, region, status, effective Checked state, disable reason, removal hold and startup grace. Show parent and live alerts or incidents next.",
+      "tabs": [
+        "Overview",
+        "Source & topology",
+        "Diagnostics"
+      ],
+      "fields": [
+        [
+          "Resource",
+          "host-01"
+        ],
+        [
+          "Type",
+          "Host"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Status",
+          "Active"
+        ],
+        [
+          "Monitoring",
+          "Enabled"
+        ],
+        [
+          "Effective check state",
+          "Checked"
+        ],
+        [
+          "Parent",
+          "Region A"
+        ],
+        [
+          "Active alerts",
+          "2"
+        ]
+      ],
+      "later": "Put source link and telemetry ID on Source & topology. Put row hash, path and missing fetch count in Diagnostics.",
+      "columns": "Title or resource ID, type, region, status, effective monitoring. Make disabled and held filters easy to reach.",
+      "primary": "Open incident",
+      "secondary": [
+        "Open source",
+        "Disable monitoring"
+      ],
+      "links": [
+        "incident",
+        "alert",
+        "source",
+        "silence"
+      ],
+      "evidence": "Show direct and inherited suppression separately. Explain why an active resource can still be unchecked or in startup grace."
+    },
+    {
+      "id": "source",
+      "name": "Resource Source",
+      "question": "Is discovery current, and what change needs my approval?",
+      "first": "Enabled, region, last success and attempt, error, row count, conflicts, orphans and held-removal total. Show the failure before connection configuration.",
+      "tabs": [
+        "Overview",
+        "Connection",
+        "Removal review",
+        "Diagnostics"
+      ],
+      "fields": [
+        [
+          "Source",
+          "Regional infrastructure source"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Enabled",
+          "Yes"
+        ],
+        [
+          "Last successful sync",
+          "12 minutes ago"
+        ],
+        [
+          "Last attempt",
+          "3 minutes ago"
+        ],
+        [
+          "Result",
+          "Failed; held removals need review"
+        ],
+        [
+          "Held removals",
+          "24 resources · sample is truncated"
+        ],
+        [
+          "Last error",
+          "Source timed out"
+        ]
+      ],
+      "later": "Keep the base URL and secret token on Connection. ETag belongs in Diagnostics. Removal review needs a full filtered-list link and descendant context.",
+      "columns": "Title, enabled, region, last success, held removals, error summary. Use attention filters for failed and held sources.",
+      "primary": "Fetch now",
+      "secondary": [
+        "Review removals",
+        "Apply held removals"
+      ],
+      "links": [
+        "resource",
+        "region"
+      ],
+      "evidence": "A fetch failure keeps resources. Apply held removals needs a precise preview and explicit approval. A sample of 20 must never imply only 20 exist."
+    },
+    {
+      "id": "region",
+      "name": "Region",
+      "question": "Can we trust this region's measurements?",
+      "first": "Operational enable state, telemetry state, checked time and host reporting percentage. Show failing services, rules and sources before credentials.",
+      "tabs": [
+        "Overview",
+        "Connection",
+        "Status page",
+        "Diagnostics"
+      ],
+      "fields": [
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Enabled",
+          "Yes"
+        ],
+        [
+          "Telemetry",
+          "Suspect"
+        ],
+        [
+          "Last checked",
+          "30 seconds ago"
+        ],
+        [
+          "Hosts reporting",
+          "42%"
+        ],
+        [
+          "Current service state",
+          "Unknown"
+        ],
+        [
+          "Source health",
+          "Last sync succeeded"
+        ],
+        [
+          "Evaluation health",
+          "One rule needs attention"
+        ]
+      ],
+      "later": "Connection credentials stay collapsed or on Connection. Public visibility and order belong on Status page; telemetry streak belongs in Diagnostics.",
+      "columns": "Title, enabled state, telemetry state, checked time and reporting coverage.",
+      "primary": "Check connection",
+      "secondary": [
+        "Open service health",
+        "Disable region"
+      ],
+      "links": [
+        "state",
+        "source",
+        "evaluation"
+      ],
+      "evidence": "Show a region probe success separately from service health. Before disabling, explain that rules stop checking and related alerts close as Disabled."
+    },
+    {
+      "id": "service",
+      "name": "Service",
+      "question": "What does this service measure, and how is it doing?",
+      "first": "Title, current region health links, measurement freshness, SLO and SLA targets, budget and Page on Burn. Keep configuration distinct from live state.",
+      "tabs": [
+        "Overview",
+        "Query & scope",
+        "Status page",
+        "Advanced"
+      ],
+      "fields": [
+        [
+          "Service",
+          "Sites"
+        ],
+        [
+          "Current state",
+          "Degraded · Region A"
+        ],
+        [
+          "Last measured",
+          "30 seconds ago"
+        ],
+        [
+          "SLO target",
+          "99.9%"
+        ],
+        [
+          "SLA target",
+          "99.5%"
+        ],
+        [
+          "Budget left",
+          "46%"
+        ],
+        [
+          "Page on burn",
+          "Enabled"
+        ],
+        [
+          "Managed from file",
+          "Yes"
+        ]
+      ],
+      "later": "Put SLI SQL, scope and selected regions on Query & scope. Put public description and ordering on Status page. Service key and source metadata belong in Advanced.",
+      "columns": "Title, scope, SLO target, Page on Burn, public visibility. Link to Service State rather than duplicating stored state here.",
+      "primary": "Test SLI",
+      "secondary": [
+        "Open service health"
+      ],
+      "links": [
+        "state",
+        "minute",
+        "day",
+        "rule"
+      ],
+      "evidence": "The file loader owns some values. Show that ownership before editing, and preserve the documented Desk-owned targets and visibility settings."
+    },
+    {
+      "id": "state",
+      "name": "Service State",
+      "question": "Is this a real outage, missing data, or a pending transition?",
+      "first": "Service, region, current status, last measured time, latest SLI, budget left and burn rates. Show Unknown and stale data explicitly.",
+      "tabs": [
+        "Overview",
+        "Transition details"
+      ],
+      "fields": [
+        [
+          "Service",
+          "Sites"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Status",
+          "Degraded"
+        ],
+        [
+          "Last measured",
+          "30 seconds ago"
+        ],
+        [
+          "SLI last minute",
+          "97.8%"
+        ],
+        [
+          "Budget left, 30 days",
+          "46%"
+        ],
+        [
+          "Burn rates",
+          "1 h: 3.1× · 6 h: 1.8×"
+        ],
+        [
+          "Candidate status",
+          "Operational · waiting for hold interval"
+        ]
+      ],
+      "later": "Keep candidate_since and last_counted_minute in Transition details. Give a short explanation of why the candidate has not become current.",
+      "columns": "Service, region, status, checked time, budget and burn. Add non-Operational and Unknown filters.",
+      "primary": "Open service",
+      "secondary": [
+        "View recent minutes",
+        "View daily history"
+      ],
+      "links": [
+        "service",
+        "minute",
+        "day",
+        "incident"
+      ],
+      "evidence": "Keep this read-only. Link to burn alerts and related incidents. A budget percentage is not a substitute for sample coverage."
+    },
+    {
+      "id": "silence",
+      "name": "Silence",
+      "question": "Exactly what will be muted, and until when?",
+      "first": "Reason, expiry with time zone, match fields and a live matching count or sample. Explain blank fields as wildcards and label descendant scope.",
+      "tabs": [
+        "Overview",
+        "History"
+      ],
+      "fields": [
+        [
+          "Reason",
+          "Planned host work"
+        ],
+        [
+          "Expires at",
+          "14:30 UTC"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Resource",
+          "host-01"
+        ],
+        [
+          "Rule",
+          "Host unreachable"
+        ],
+        [
+          "Descendants",
+          "Included"
+        ],
+        [
+          "Matching preview",
+          "3 resources · 2 open alerts"
+        ],
+        [
+          "Effective state",
+          "Active until expiry"
+        ]
+      ],
+      "later": "Revoked time and user belong in History. Put advanced alert-key matching behind a collapsed section.",
+      "columns": "Reason, expiry, region or resource, rule, revoked time. Offer Active and Expired filters without inventing a new stored state.",
+      "primary": "Save silence",
+      "secondary": [
+        "Extend",
+        "Revoke"
+      ],
+      "links": [
+        "alert",
+        "resource",
+        "rule"
+      ],
+      "evidence": "No matching data must differ from a preview error. Saving still requires at least one match field and an expiry within 30 days."
+    },
+    {
+      "id": "settings",
+      "name": "On-call & Settings",
+      "question": "Who will be called, and is notification delivery enabled?",
+      "first": "Effective primary responder, override expiry, paging pause and reason, enabled channels and responder order. Put a pause banner on operational pages too.",
+      "tabs": [
+        "On-call",
+        "Channels",
+        "Status page",
+        "Safety & advanced"
+      ],
+      "fields": [
+        [
+          "Effective primary",
+          "On-call engineer"
+        ],
+        [
+          "Override until",
+          "No override"
+        ],
+        [
+          "Paging",
+          "Paused"
+        ],
+        [
+          "Pause reason",
+          "Planned response drill"
+        ],
+        [
+          "Phone channel",
+          "Enabled"
+        ],
+        [
+          "Email channel",
+          "Enabled"
+        ],
+        [
+          "Chat channel",
+          "Enabled"
+        ],
+        [
+          "Active responders",
+          "3 · call order is visible"
+        ]
+      ],
+      "later": "Channel secrets stay on Channels. Repeat timing and backup timing stay near the roster. Heartbeat credentials and reopen policy belong in Safety & advanced.",
+      "columns": "Singleton form; no artificial list. Responders can inspect and override the primary, while admin-only controls stay hidden from them.",
+      "primary": "Override primary",
+      "secondary": [
+        "Resume paging",
+        "Send test page"
+      ],
+      "links": [
+        "notification",
+        "incident"
+      ],
+      "evidence": "Test delivery requires a valid effective recipient for Call or Email. A failed channel points to the exact notification result and configuration without exposing secrets."
+    },
+    {
+      "id": "notification",
+      "name": "Notification",
+      "question": "Did the responder receive it, and what failed?",
+      "first": "Delivery status, channel, incident, responder, readable message and error. Show sent and answered times together.",
+      "tabs": [
+        "Overview",
+        "Provider details"
+      ],
+      "fields": [
+        [
+          "Status",
+          "Failed"
+        ],
+        [
+          "Channel",
+          "Call"
+        ],
+        [
+          "Incident",
+          "Current host incident"
+        ],
+        [
+          "Responder",
+          "On-call engineer"
+        ],
+        [
+          "Sent at",
+          "Not sent"
+        ],
+        [
+          "Error",
+          "Provider rejected the destination"
+        ],
+        [
+          "Round",
+          "1"
+        ],
+        [
+          "Message",
+          "Host unreachable in Region A"
+        ]
+      ],
+      "later": "Keep provider reference and raw delivery bookkeeping on Provider details. Do not offer an unexplained automatic retry.",
+      "columns": "Status, channel, incident, responder, sent time. Add Failed and No Answer filters.",
+      "primary": "Open incident",
+      "secondary": [
+        "Open on-call settings"
+      ],
+      "links": [
+        "incident",
+        "settings"
+      ],
+      "evidence": "Delivery is an outbox record. Queueing is not delivery, and Sent is not human acknowledgement. Keep the provider failure clear."
+    },
+    {
+      "id": "minute",
+      "name": "Service Minute",
+      "question": "What sample produced this health result?",
+      "first": "Service, region, minute, status, good count, valid count and bad reporters. Keep this a short read-only form.",
+      "tabs": [
+        "Overview"
+      ],
+      "fields": [
+        [
+          "Service",
+          "Sites"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Minute",
+          "14:02 UTC"
+        ],
+        [
+          "Status",
+          "Degraded"
+        ],
+        [
+          "Good",
+          "978"
+        ],
+        [
+          "Valid",
+          "1000"
+        ],
+        [
+          "Bad reporters",
+          "3"
+        ],
+        [
+          "Measured ratio",
+          "97.8% · derived"
+        ]
+      ],
+      "later": "No extra tabs are needed for seven stored fields. Explain zero valid events as no usable sample.",
+      "columns": "Minute, service, region, status, good, valid. Sort latest minute first.",
+      "primary": "Open service health",
+      "secondary": [
+        "Open service"
+      ],
+      "links": [
+        "state",
+        "service",
+        "day"
+      ],
+      "evidence": "Keep direct creation and editing disabled. This record explains an observation; it does not control a service."
+    },
+    {
+      "id": "day",
+      "name": "Service Day",
+      "question": "How much of this day was measured, and what does uptime mean?",
+      "first": "Service, region, date, good, valid, observed minutes and the degraded, outage and maintenance minutes. Make coverage visible beside uptime.",
+      "tabs": [
+        "Overview"
+      ],
+      "fields": [
+        [
+          "Service",
+          "Sites"
+        ],
+        [
+          "Region",
+          "Region A"
+        ],
+        [
+          "Date",
+          "Example UTC day"
+        ],
+        [
+          "Observed minutes",
+          "720 / 1440"
+        ],
+        [
+          "Good / valid",
+          "998000 / 1000000"
+        ],
+        [
+          "Uptime",
+          "99.8% of measured events"
+        ],
+        [
+          "Outage / degraded",
+          "2 min / 8 min"
+        ],
+        [
+          "Maintenance",
+          "30 min"
+        ]
+      ],
+      "later": "No extra tabs. Explain that event-weighted uptime and minutes in a state are different measurements.",
+      "columns": "Date, service, region, observed minutes, good, valid. Sort latest date first.",
+      "primary": "Open service health",
+      "secondary": [
+        "View minutes"
+      ],
+      "links": [
+        "state",
+        "minute",
+        "service"
+      ],
+      "evidence": "A half-observed day must not be presented as a full day of coverage. Maintenance exclusion changes the eligible observations, not the stored history's meaning."
+    }
+  ],
+  "flows": [
+    {
+      "title": "1. Respond to an automatic incident",
+      "trigger": "A notification opens an incident.",
+      "steps": [
+        "Read status, severity, scope, acknowledgement and measurement freshness.",
+        "Acknowledge once if the incident is Triggered. Confirm that incident and notification state agree.",
+        "Inspect linked alerts, their evidence and their runbooks. Follow parent-resource context before treating every symptom independently.",
+        "Mitigate the infrastructure through its owning tool. Beacon records and coordinates; it does not repair hosts.",
+        "Post an internal update or use the explicit publication flow for customer communication.",
+        "Wait for current evaluations and service measurements. Resolve only when recovery is real or an intentional, scoped silence is confirmed."
+      ],
+      "success": "The response has one visible acknowledgement, current evidence, a working update record and a clear next action."
+    },
+    {
+      "title": "2. Publish customer impact",
+      "trigger": "Customers need an explanation or a planned notice.",
+      "steps": [
+        "Select service, region and impact. Blank region must visibly mean all regions.",
+        "Preview the title, visibility, customer message and impact rows together.",
+        "Choose Public or Unlisted deliberately. Preserve existing impact rows unless explicitly changed.",
+        "Publish through the Incident document method. Keep internal notes out of the customer message.",
+        "Open the public preview or copy the private link. Confirm that the intended service and region are affected."
+      ],
+      "success": "The customer view matches the submitted scope. Unknown telemetry does not erase an explicitly declared outage."
+    },
+    {
+      "title": "3. Schedule maintenance",
+      "trigger": "An operator plans work on resources.",
+      "steps": [
+        "Create a Maintenance incident. Enter start, end and time zone before the scope.",
+        "Select the region, resources and descendant behavior. Review the expanded scope.",
+        "Select the affected services and explain whether burn alerts are muted.",
+        "Publish before the start if public maintenance exclusion is intended. Show the actual eligibility rather than an editable promise.",
+        "At the start, verify In Progress, suppression and the displayed remaining window. Extend deliberately when work runs late.",
+        "Complete the window and observe the existing post-maintenance suppression grace. Recheck measurements and alerts after it."
+      ],
+      "success": "The declared window, suppression scope and actual SLO exclusion agree. Completing maintenance is distinct from resolving an incident."
+    },
+    {
+      "title": "4. Silence one problem",
+      "trigger": "A known problem should stop paging temporarily.",
+      "steps": [
+        "Start from the incident, alert or resource so known match fields are prefilled.",
+        "Enter the reason and expiry. Keep the UTC or local-time choice explicit.",
+        "Inspect the match count, sample and descendant scope. A preview failure blocks confirmation.",
+        "Save with the backend's existing match and expiry checks.",
+        "Confirm the suppressed reason on the alert. Extend or revoke from the same record when necessary."
+      ],
+      "success": "The operator can state what is muted, why, until when and how to undo it. The alert remains distinguishable from recovery."
+    },
+    {
+      "title": "5. Diagnose a rule that stopped checking",
+      "trigger": "A rule evaluation is Erroring, Broken or stale.",
+      "steps": [
+        "Open the failed evaluation from the rule or region summary.",
+        "Read last success, last attempt, error, duration and unknown-resource count.",
+        "Follow the rule and run its safe Test action. Use a structured per-region result.",
+        "For a file-owned rule, change the source file through the normal engineering workflow; do not imply Desk can edit it.",
+        "Run Now when permitted, then refresh the persisted result. A queued request is not a successful evaluation."
+      ],
+      "success": "The check returns to Healthy with a new successful run time. A query error never resolves an existing alert."
+    },
+    {
+      "title": "6. Review source removals",
+      "trigger": "A resource fetch fails or holds a large removal.",
+      "steps": [
+        "Read last success, last attempt, error and the held-removal count before editing credentials.",
+        "Compare the source response with the affected resources and descendants.",
+        "Use the full filtered list when the preview is truncated. Inspect conflicting and orphaned telemetry IDs separately.",
+        "Fetch again after the upstream cause is understood. A failed fetch keeps the existing resource list.",
+        "Apply held removals only after an explicit scope review and confirmation. Check monitoring coverage afterward."
+      ],
+      "success": "A transient or broken source does not silently remove resources or hide an active incident."
+    },
+    {
+      "title": "7. Diagnose Unknown service health",
+      "trigger": "A service is Unknown or its latest measurement is old.",
+      "steps": [
+        "Check Service State freshness and valid-event coverage first.",
+        "Inspect the region probe and resource source. Check the UTC clock contract before assuming samples are stale.",
+        "Open recent Service Minutes and the SLI Test result. Look for zero valid events, missing resource IDs or query failures.",
+        "Check public maintenance exclusion and cause alerts before interpreting silent reporters.",
+        "Verify a new measurement and its transition hold. Do not relabel Unknown as Operational to clear the screen."
+      ],
+      "success": "The operator can distinguish unavailable measurement from a measured outage or a pending healthy transition."
+    },
+    {
+      "title": "8. Diagnose a missed page",
+      "trigger": "A responder did not receive or acknowledge an expected notification.",
+      "steps": [
+        "Read the incident's escalation state, next page time and latest notification outcome.",
+        "Inspect the effective on-call order, override expiry and paging pause.",
+        "Open the notification error and its channel configuration. Display the actual recipient source.",
+        "If allowed, send an explicit test to a valid active recipient. Explain that a Call can contact a real phone and incur a charge.",
+        "Verify delivery and acknowledgement separately. Do not add an automatic resend policy as a UI shortcut."
+      ],
+      "success": "The delivery failure and next escalation are visible without guessing from a Queued or Sent label."
+    },
+    {
+      "title": "9. Resolve, hand over and write the RCA",
+      "trigger": "Mitigation is complete or the response changes hands.",
+      "steps": [
+        "Review unsuppressed firing alerts, latest measurements and the public message.",
+        "If alerts still fire, leave the incident open or explicitly choose a scoped silence with an expiry and reason.",
+        "Resolve with a message and deliberate audience. Keep customer publication separate from internal notes.",
+        "Record the root cause, mitigation and follow-up in the internal RCA. Publish only a reviewed public RCA.",
+        "For a handover, include current state, actions already taken, outstanding risk and the next check."
+      ],
+      "success": "A resolved incident is not merely acknowledged or muted. Internal RCA and customer RCA stay separate."
+    },
+    {
+      "title": "10. Inspect public status and history",
+      "trigger": "A customer or responder opens public status, a public incident, or an unlisted link.",
+      "steps": [
+        "Read current service impact, region, measurement availability and last measured time.",
+        "Open the incident timeline and inspect the latest customer-facing update.",
+        "Inspect a day through a tap or keyboard action, including uptime period and observed coverage.",
+        "Navigate to another incident and confirm that its content changes immediately.",
+        "Use a safe not-found state for unpublished, invalid and expired private links. Keep resource details, recipients, tokens and internal notes out of public output."
+      ],
+      "success": "Public status is readable on a phone, clearly labels missing data and does not expose operational internals."
+    }
+  ],
+  "child_tables": [
+    [
+      "Incident Scope",
+      "Region, resource type, resource ID and descendant choice stay together. Preview the expanded match and show blank fields as wildcards."
+    ],
+    [
+      "Incident Service",
+      "Service, region and impact stay on one row. Blank region means all regions and needs an explicit label."
+    ],
+    [
+      "Incident Update",
+      "Show time, status, full message and audience. Keep it read-only; Post update owns writes. Distinguish internal notes from customer updates."
+    ],
+    [
+      "Responder",
+      "Keep the call order visible and active state easy to scan. Show the effective phone and email sources without duplicating contradictory values."
+    ],
+    [
+      "Region Item",
+      "An empty selection means all active regions. State that beside the selector rather than making the operator infer it."
+    ]
+  ]
+}

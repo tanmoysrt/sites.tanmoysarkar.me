@@ -63,6 +63,7 @@ figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
 <main>
 
 <h1>Beacon: incident manager and status page for Frappe Cloud V2</h1>
+<div class="box"><b>Latest engineering review · 13 November 2026.</b> <a href="operations.html">Read the operator flows and page-by-page field hierarchy</a>. It separates current behavior, source findings and proposed layouts. UTC handling, Publish impact rows, related evidence and public health handling need corrections. <a href="https://moki.tanmoysarkar.me/#/p/beacon-operations/v1">Review the proposed forms in moki</a>.</div>
 <p class="lede">A design for one small Frappe app. It reads the health that each layer of Frappe Cloud already reports, finds problems before customers do, groups them into root-cause incidents, calls the on-call engineer, tracks SLOs and error budgets, and publishes a status page.</p>
 <p class="meta">Plan · November 2026 · Revision 6: each layer watches the layer below, SLO burn-rate alerts, an infrastructure-only resource registry · Status: proposed · Earlier rounds reviewed with GPT-6.1 Sol (high effort) and Claude Fable 5.2 (medium effort) · Mockups in moki: <code>beacon-status</code> v4</p>
 
@@ -71,6 +72,7 @@ figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
 </div>
 
 <ol class="toc">
+<li><a href="operations.html">Latest operator review and response flows</a></li>
 <li><a href="#situation">Situation</a></li>
 <li><a href="#goals">Goals, non-goals, scale</a></li>
 <li><a href="#architecture">Architecture</a></li>
@@ -248,6 +250,7 @@ figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
                                                          └── Notification     ──&gt; Beacon Responder</code></pre>
 
 <h2 id="doctype-reference">8. DocType reference</h2>
+<p><b>Original design layouts.</b> Every implemented DocType now has the <code>Beacon </code> prefix in the single Beacon module. The <a href="operations.html#layouts">operator review</a> gives the latest proposed form and tab order. These older diagrams do not certify that each evidence panel or action is complete.</p>
 <p>Each card shows one Desk form from top to bottom. Tabs come in order, and sections stack inside a tab. Columns sit side by side, and the field order in a column is the position on the form. A grey field is read-only: Beacon sets it, or an action changes it. A red star marks a required field. Below each form, the table lists its buttons. Permissions use the two roles from "Desk workflow and roles".</p>
 <p>Two rules keep the forms safe. First, a field that drives a state machine (status, visibility, escalation, paging paused) is read-only, and only an action changes it, so every change runs the same checks. Second, a document that Beacon writes (Alert, Rule Evaluation, Resource, Service State, Service Minute, Service Day, Notification) has no New button and no delete permission.</p>
 <div class="legend"><span class="f">Editable field</span><span class="f ro">Read-only field</span><span class="f"><span class="l req">Required</span></span></div>
@@ -611,34 +614,33 @@ FROM (
 
 
 <h2 id="api">19. REST API</h2>
-<p>The API uses the <a href="https://github.com/frappe/atlas/tree/develop/atlas/api">Atlas API style</a>. Routes are under <code>/api/beacon/</code> with Pydantic strict models. Actions use <code>/{id}/actions/&lt;verb&gt;</code>. Errors have codes such as <code>incident_not_found</code>. Desk and the Frappe REST API cover reading.</p>
+<p>Desk forms call whitelisted methods on their DocType with <code>frm.call</code>. Internal scripts call the same methods through native Frappe document routes. There is no custom internal <code>/api/beacon/</code> action layer.</p>
 <table>
 <tr><th>Method and path</th><th>Auth</th><th>Purpose</th></tr>
-<tr><td colspan="3"><b>Served by each Resource Source (Beacon calls it)</b></td></tr>
-<tr><td><code>GET /api/beacon/resources</code></td><td>Source token</td><td>Atlas: the full current infrastructure list, with ETag. See Resource registry.</td></tr>
-<tr><td><code>GET /api/beacon/telemetry-ids</code></td><td>Source token</td><td>Central: server ID → region and Atlas VM ID, with ETag.</td></tr>
-<tr><td colspan="3"><b>Incidents, for chat-ops and scripts</b></td></tr>
-<tr><td><code>POST /api/beacon/incidents/{incident_id}/actions/acknowledge</code></td><td>Responder</td><td>Same as the Desk button</td></tr>
-<tr><td><code>POST /api/beacon/incidents/{incident_id}/actions/resolve</code></td><td>Responder</td><td>Same guard as Desk: refused while unsuppressed alerts fire</td></tr>
-<tr><td colspan="3"><b>Twilio callbacks (Twilio signature)</b></td></tr>
-<tr><td><code>POST /api/beacon/webhooks/twilio/voice</code></td><td>Twilio</td><td>Returns TwiML with <code>&lt;Gather&gt;</code></td></tr>
-<tr><td><code>POST /api/beacon/webhooks/twilio/gather</code></td><td>Twilio</td><td><code>Digits=1</code> acknowledges</td></tr>
-<tr><td><code>POST /api/beacon/webhooks/twilio/status</code></td><td>Twilio</td><td>Call status updates the Notification</td></tr>
+<tr><td><code>POST /api/v2/document/Beacon%20Incident/{name}/method/acknowledge</code></td><td>Responder</td><td>The same acknowledgement guard as Desk.</td></tr>
+<tr><td><code>POST /api/v2/document/Beacon%20Incident/{name}/method/resolve</code></td><td>Responder</td><td>Refuses resolution while unsuppressed alerts fire.</td></tr>
+<tr><td><code>POST /api/v2/document/{encoded DocType}/{name}/method/{method}</code></td><td>Authorized staff</td><td>Other internal document actions. Each controller owns its permission and state checks.</td></tr>
+<tr><td><code>GET /api/beacon/resources</code></td><td>Source token</td><td>External Resource Source contract that Beacon reads; this is not an internal Beacon action route.</td></tr>
+<tr><td><code>GET /api/beacon/telemetry-ids</code></td><td>Source token</td><td>External telemetry mapping contract that Beacon reads.</td></tr>
+<tr><td><code>POST /api/method/beacon.api.twilio.voice</code></td><td>Twilio signature</td><td>Returns the call prompt and Gather response.</td></tr>
+<tr><td><code>POST /api/method/beacon.api.twilio.gather</code></td><td>Twilio signature</td><td>Digit 1 acknowledges the incident.</td></tr>
+<tr><td><code>POST /api/method/beacon.api.twilio.status</code></td><td>Twilio signature</td><td>Updates notification delivery status.</td></tr>
 </table>
-<p><b>Public status</b> is the Vue app at <code>/</code> of the Beacon site. It calls guest methods: <code>get_status</code>, <code>get_history</code>, <code>get_incident(name)</code> and <code>get_unlisted_incident(token)</code>. Each result stays in <code>frappe.cache</code> for 60 seconds. Publish, Post update and Regenerate private link clear the keys they change.</p>
-<p><b>Phase 4 (Central)</b> adds an outbox of signed incident events, affected resources for an incident, and customer rules. It is out of scope for v1.</p>
-
+<p>The public Vue app at <code>/</code> calls guest methods under <code>/api/method/beacon.api.status.</code>: <code>get_status</code>, <code>get_history</code>, <code>get_incident</code> and <code>get_unlisted_incident</code>. Only published data is returned. Cached results last 60 seconds. Publication and public changes clear the affected cache keys.</p>
+<p>The <a href="operations.html#findings">current review</a> identifies gaps in impact preservation, side-effect-free read helpers and public freshness. These are proposed corrections, not new action routes.</p>
+<p>Customer rules and the Central event outbox remain outside the first version.</p>
 
 <h2 id="statuspage">20. Status page</h2>
 <p>The mockups are in moki, project <code>beacon-status</code>, version 4. They have three layouts for the main page, a public incident page, an unlisted incident page and a history page. The ideas come from DigitalOcean (regions as rows), Railway and Cloudflare (90-day bars), Fly.io (region grid) and Hetzner (unlisted incident links).</p>
 <ul>
 <li><b>Recommended: regions first.</b> At the top there is a banner, then active incidents and maintenance. Below that, each region is one row that opens to its services with 90-day bars. The global services come last.</li>
-<li>Beacon serves the page at <code>/</code> as a small Vue app. Nothing is built or uploaded on publish. The app shows "Updated &lt;time&gt;" from the API response.</li>
+<li>Beacon serves the page at <code>/</code> as a small Vue app. Nothing is built or uploaded on publish. The app currently shows "Updated &lt;time&gt;" from response generation. This does not prove that measurements are current; see <a href="operations.html#F05">the freshness finding</a>.</li>
 <li>A region with Unknown status shows grey "Status unavailable", never its last green state.</li>
 </ul>
 
 
 <h2 id="desk">21. Desk control panel and roles</h2>
+<p><b>Design intent.</b> The implemented dashboard currently has six counts, two Quick Lists and shortcuts. The operational banners and evidence described below are proposed work. See the <a href="operations.html#layouts">reviewed hierarchy</a>.</p>
 <p><b>The Beacon workspace is the control panel.</b> From top to bottom:</p>
 <ul>
 <li>Red banners: <code>paging_paused</code>, no active responder with a phone, an escalation with no answer, a heartbeat problem.</li>

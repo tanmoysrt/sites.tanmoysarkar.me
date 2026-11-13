@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beacon operations: form and action review</title>
+<meta name="description" content="Proposed native Desk hierarchy for every Beacon form. Evidence first, useful tabs, list priorities and explicit action previews. All data is illustrative; no live operations.">
+<link rel="stylesheet" href="style.css"><script src="/kit/theme.js"></script>
+</head>
+<body data-page="region">
+<header class="review"><strong>Beacon operations review</strong><span>Proposed native Desk layouts · illustrative data · no live actions</span></header>
+<div class="shell">
+<aside><a class="brand" href="?page=incident"><img src="logo.svg" alt=""><b>Beacon</b></a><label class="page-picker">Review a page<select id="page-picker"></select></label><nav id="sidebar" aria-label="Beacon pages"></nav><p class="side-note">Existing dashboard and sidebar stay. This round reviews forms, evidence and actions.</p></aside>
+<main id="main"></main>
+</div>
+<dialog id="dialog"><form method="dialog"><div id="dialog-body"></div><div class="dialog-actions"><button value="cancel">Cancel</button><button id="confirm" class="primary" value="confirm">Confirm in demo</button></div></form></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="data.js"></script><script src="panels.js"></script><script src="app.js"></script>
+</body></html>

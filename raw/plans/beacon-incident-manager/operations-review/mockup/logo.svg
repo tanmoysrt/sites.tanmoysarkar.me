@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128" role="img" aria-label="Beacon logo">
+  <rect width="128" height="128" rx="23" fill="#0785EA"/>
+  <g fill="none" stroke="#fff" stroke-width="5.7" stroke-linecap="round">
+    <path d="M34 30C23 42 23 56 34 67"/>
+    <path d="M43 37C35 45 35 54 43 61"/>
+    <path d="M94 30C105 42 105 56 94 67"/>
+    <path d="M85 37C93 45 93 54 85 61"/>
+  </g>
+  <g fill="#fff">
+    <path d="M52 45a12 12 0 0 1 24 0v3H52z"/>
+    <rect x="49" y="52" width="30" height="8" rx="3"/>
+    <path fill-rule="evenodd" d="M53 64H75L82 95Q83 99 79 99H49Q45 99 46 95Z M59 94H69V87A5 5 0 0 0 59 87Z"/>
+  </g>
+</svg>
