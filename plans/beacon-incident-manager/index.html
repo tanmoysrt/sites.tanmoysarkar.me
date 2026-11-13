@@ -2,12 +2,755 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="robots" content="noindex">
-<meta http-equiv="refresh" content="0; url=../tower-incident-manager/">
-<title>Moved: the Beacon plan is now Tower</title>
-<link rel="canonical" href="../tower-incident-manager/">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon: incident manager and status page for Frappe Cloud V2</title>
+<meta name="description" content="Final design for a simple incident manager, alerting engine and public status page on top of Datum (ClickHouse per region).">
+<style>
+:root { --ink:#1a1a1a; --ink2:#4a4a4a; --ink3:#7a7a7a; --line:#e6e6e6; --bg2:#f7f7f5; --accent:#2f6fde; --ok:#2f9e5f; --warn:#d9900f; --bad:#d23b3b; --maint:#6b4fd8; }
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); background: #fff; font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 48px 24px 96px; }
+h1 { font-size: 34px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 10px; }
+h2 { font-size: 24px; margin: 64px 0 12px; padding-top: 20px; border-top: 1px solid var(--line); letter-spacing: -0.01em; }
+h3 { font-size: 18px; margin: 32px 0 8px; }
+p, li { color: var(--ink2); }
+a { color: var(--accent); }
+.lede { font-size: 18px; color: var(--ink2); }
+.meta { font-size: 14px; color: var(--ink3); }
+code { font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg2); padding: 1px 5px; border-radius: 4px; }
+pre { font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg2); padding: 16px 18px; border-radius: 10px; overflow-x: auto; color: #222; }
+pre code { background: none; padding: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 12px 0 8px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--ink); background: var(--bg2); }
+td { color: var(--ink2); }
+.box { border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 16px 0; background: #fcfcfb; }
+.box b { color: var(--ink); }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 5px; background: var(--bg2); color: var(--ink2); margin-right: 4px; }
+.tag.p1 { background: #fde8e8; color: var(--bad); } .tag.p2 { background: #fff3dc; color: #a26a00; } .tag.p3 { background: #e9f1ff; color: var(--accent); }
+figure { margin: 20px 0; }
+figure svg { width: 100%; height: auto; display: block; }
+figcaption { font-size: 14px; color: var(--ink3); margin-top: 6px; }
+.toc { columns: 2; font-size: 15px; padding-left: 18px; }
+.toc li { margin: 2px 0; }
+.dec { display: grid; grid-template-columns: 54px 1fr; gap: 4px 12px; margin: 14px 0; }
+.dec b { color: var(--ink); }
+.dec .id { font: 600 13px ui-monospace, monospace; color: var(--accent); padding-top: 3px; }
+.dt { border: 1px solid var(--line); border-radius: 12px; margin: 22px 0; overflow: hidden; }
+.dt-h { padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--line); }
+.dt-h b { font-size: 17px; margin-right: 10px; } .dt-h span { font-size: 13px; color: var(--ink3); }
+.dt-b { padding: 4px 16px 12px; }
+.tab { margin: 16px 0 0; padding: 4px 0; font-size: 13px; font-weight: 600; color: var(--ink); border-bottom: 2px solid var(--ink); display: inline-block; }
+.sec { margin-top: 10px; }
+.sec-t { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink3); margin-bottom: 5px; }
+.sec-t i { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.cols { display: grid; gap: 6px 14px; } .c1 { grid-template-columns: 1fr; } .c2 { grid-template-columns: 1fr 1fr; } .c3 { grid-template-columns: 1fr 1fr 1fr; } .c4 { grid-template-columns: repeat(4, 1fr); }
+.col { display: flex; flex-direction: column; gap: 6px; }
+.f { font-size: 13.5px; line-height: 1.35; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.f.ro { background: var(--bg2); }
+.f .l { color: var(--ink); font-weight: 500; } .f .l.req::after { content: " *"; color: var(--bad); }
+.f code { font-size: 11.5px; padding: 0 3px; background: none; color: var(--ink3); }
+.f .t { float: right; margin-left: 6px; font-size: 11.5px; color: var(--accent); }
+.f .n { display: block; font-size: 12px; color: var(--ink3); margin-top: 1px; }
+.acts { font-size: 13.5px; margin-top: 14px; } .acts td:first-child { white-space: nowrap; }
+.dt-x { font-size: 14px; margin: 8px 0 0; }
+.legend { display: flex; gap: 8px; margin: 10px 0; } .legend .f { display: inline-block; }
+@media (max-width: 640px) { .c2, .c3, .c4 { grid-template-columns: 1fr; } .acts td:first-child { white-space: normal; } }
+@media (max-width: 640px) { main { padding: 32px 16px 64px; } h1 { font-size: 27px; } .toc { columns: 1; } table { font-size: 13px; } }
+</style>
 </head>
 <body>
-<p>This plan was renamed to Tower. It is now at <a href="../tower-incident-manager/">plans/tower-incident-manager</a>.</p>
+<main>
+
+<h1>Beacon: incident manager and status page for Frappe Cloud V2</h1>
+<p class="lede">A design for one small Frappe app. It turns Datum metrics into alerts, groups alerts into root-cause incidents, calls the on-call engineer, and publishes a status page.</p>
+<p class="meta">Plan · November 2026 · Final design (revision 5: pull-based resource registry, DocType reference) · Status: proposed · Reviewed in four rounds with two other models (GPT-6.1 Sol, high effort; Claude Fable 5.2, medium effort) · Mockups in moki: <code>beacon-status</code> v4</p>
+
+<div class="box">
+<b>Summary.</b> Beacon is one global Frappe app. Staff use Desk, and customers see only the status page. A few services in each region serve their resource lists on one endpoint, and Beacon pulls them into its registry. Alert rules are ClickHouse SQL queries that return only the failing resources. Beacon stores one row for each alert episode and writes only state changes, so 100,000 resources per region are cheap. One invariant drives incidents: every firing alert that is not muted belongs to an open incident. Problems high in the tree, such as a host or a proxy, give one root-cause incident with derived impact, not one entry for each server. Datum needs three important changes: async inserts, a recent-data table sorted by metric, and retention.
+</div>
+
+<ol class="toc">
+<li><a href="#situation">Situation</a></li>
+<li><a href="#goals">Goals, non-goals, scale</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#decisions">Key decisions</a></li>
+<li><a href="#trace">One alert, end to end</a></li>
+<li><a href="#doctypes">Concepts and DocTypes</a></li>
+<li><a href="#doctype-reference">DocType reference</a></li>
+<li><a href="#registry">Resource registry</a></li>
+<li><a href="#evaluation">Rule evaluation</a></li>
+<li><a href="#incidents">Incidents and impact</a></li>
+<li><a href="#maintenance">Maintenance and muting</a></li>
+<li><a href="#services">Service status and uptime</a></li>
+<li><a href="#oncall">On-call and paging</a></li>
+<li><a href="#states-table">State handling</a></li>
+<li><a href="#scenarios">Scenarios</a></li>
+<li><a href="#dx">Integrating a V2 service</a></li>
+<li><a href="#api">REST API</a></li>
+<li><a href="#statuspage">Status page</a></li>
+<li><a href="#desk">Desk workflow and roles</a></li>
+<li><a href="#datum">Datum changes</a></li>
+<li><a href="#scale">Scale numbers</a></li>
+<li><a href="#rollout">Rollout and checks</a></li>
+<li><a href="#notbuilding">What we do not build</a></li>
+<li><a href="#open">Open questions</a></li>
+<li><a href="#sources">Sources</a></li>
+</ol>
+
+<h2 id="situation">1. Situation</h2>
+<p>Frappe Cloud V2 sends telemetry to <a href="https://github.com/frappe/datum">Datum</a>. Datum is a write-only service in front of ClickHouse. There is one Datum and one ClickHouse in each region. Readers query ClickHouse directly with a read-only account.</p>
+<p>Today, alerts are temporary. A script in <a href="https://github.com/frappe/atlas/tree/develop/scripts/insights">frappe/atlas</a> makes three Insights Alerts: P1 every 5 minutes, and two P2 alerts every hour. Each one is a large SQL query that joins about 50 checks. When it returns rows, Insights posts a Markdown message to a chat webhook. The problems:</p>
+<ul>
+<li>There is no state. The same problem posts on every run, and nothing says "resolved".</li>
+<li>There is no acknowledgement, paging or escalation.</li>
+<li>You cannot mute one host or one check, or schedule maintenance.</li>
+<li>One failing check hides in a long message. There is no history for each resource.</li>
+<li>The Insights SQL size limit splits one logical alert into two.</li>
+</ul>
+<p>Frappe Cloud V1 (<a href="https://github.com/frappe/press">frappe/press</a>) had a full incident system: Prometheus rules, Alertmanager webhook logs, an Incident with Validating → Confirmed → Acknowledged → Resolved, Twilio calls, night shifts and silenced alerts. We keep its ideas. We drop three things: a second alerting stack to operate, "the call was answered" as acknowledgement, and mute flags spread across many DocTypes.</p>
+
+<h2 id="goals">2. Goals, non-goals, scale</h2>
+<h3>Goals</h3>
+<ol>
+<li>Alerts that are easy to write and have state: Pending → Firing → Resolved, one episode per problem, no duplicates.</li>
+<li>Root-cause incidents with paging, acknowledgement, updates and a root cause analysis (RCA).</li>
+<li>A status page with regions, one status for each service, 90-day uptime bars, incidents and maintenance.</li>
+<li>Unlisted incidents with a private link for affected customers, like Hetzner does.</li>
+<li>Maintenance windows that stop paging and, when planned in advance, do not count against uptime.</li>
+<li>A short integration path, so every V2 service can use it.</li>
+</ol>
+<h3>Non-goals for v1</h3>
+<ul>
+<li>A staff web app. Staff use Desk.</li>
+<li>Customer alert rules and incidents in the Central dashboard. That is phase 4, and Central owns that UI. Central already shows metrics from Atlas and Datum.</li>
+<li>Python rule scripts, probes run by Beacon, email subscriptions, AI investigation, several on-call teams.</li>
+</ul>
+<h3>Scale target</h3>
+<p>Up to 100,000 resources per region (most are sites), about 10 regions. The design must stay simple at that size. We do not design for millions.</p>
+
+<h2 id="architecture">3. Architecture</h2>
+<p>Beacon is one Frappe site. It runs outside the regions it watches. It pulls resource lists from a few services in each region. It reads each region's ClickHouse with a limited user and writes only one thing there: its registry mirror, in its own <code>beacon</code> database. The status page is static files in an object storage bucket behind a CDN. Beacon uploads them every 30 seconds. So the status page stays up when Beacon is down, and it handles the traffic peaks that come with an outage.</p>
+<figure>
+<svg id="arch" viewBox="0 0 860 470" role="img" aria-label="Architecture: each region has services that push metrics to Datum, which writes to ClickHouse, and serve their resource lists. Beacon, global and outside the regions, pulls the lists, reads ClickHouse with SQL, stores state in MariaDB, pages people through Twilio, email and chat, uploads the static status page to a bucket behind a CDN, and in phase 4 sends events to Central."></svg>
+<figcaption>Each region owns its telemetry and serves its resource lists. Beacon pulls the lists and reads the telemetry. All alert and incident state lives in Beacon's MariaDB.</figcaption>
+</figure>
+<table>
+<tr><th>Part</th><th>Job</th></tr>
+<tr><td>Datum + ClickHouse (per region)</td><td>Stores samples, logs and traces. Owns telemetry.</td></tr>
+<tr><td>Registry sync</td><td>Every minute, pulls each Resource Source, updates MariaDB and writes the mirror to ClickHouse.</td></tr>
+<tr><td>Beacon evaluator</td><td>Scheduler jobs and an RQ queue named <code>beacon</code>. Runs rule and service queries and writes transitions.</td></tr>
+<tr><td>Beacon tick</td><td>One job every minute for time-based work: maintenance start and end, silence expiry, escalation steps, closing alerts of disabled rules, the heartbeat.</td></tr>
+<tr><td>Desk</td><td>Staff work incidents and configure everything. One Beacon workspace is the landing page.</td></tr>
+<tr><td>Status builder</td><td>Renders static HTML and JSON every 30 s and uploads only changed files.</td></tr>
+<tr><td>Notifiers</td><td>Twilio voice, email (Frappe Email Account), a chat webhook.</td></tr>
+</table>
+
+<h2 id="decisions">4. Key decisions</h2>
+<div class="dec"><span class="id">D1</span><div><b>Rules are ClickHouse SQL.</b> A query returns only failing rows. ClickHouse evaluates all resources in one set-based query, and no samples leave ClickHouse. The current checks are already SQL. A read-only profile limits time, memory, threads and concurrency. We do not add Python <code>safe_exec</code>: it is a second runtime that is harder to review and to limit.</div></div>
+<div class="dec"><span class="id">D2</span><div><b>One result contract.</b> A rule returns <code>resource_id, alert_key, value, detail</code>. <code>alert_key</code> separates two problems on one resource, such as two disks. A missing row means "healthy" only after a successful query. Duplicate <code>(resource_id, alert_key)</code> rows, or more rows than the limit, fail the evaluation. Nothing is truncated.</div></div>
+<div class="dec"><span class="id">D3</span><div><b>Regional services serve their resource lists, and Beacon pulls them.</b> A few services in each region, such as Atlas and the service that owns sites, serve one endpoint with their full list. Beacon polls it every minute and replaces that source's list. Central is not in the path. Beacon checks only resources that are Active, with Active ancestors, and not excluded. So an archived or stopped resource never looks "down".</div></div>
+<div class="dec"><span class="id">D4</span><div><b>One Alert row per episode, written only on transitions.</b> A firing alert causes no writes. A mass outage writes its rows once.</div></div>
+<div class="dec"><span class="id">D5</span><div><b>The incident invariant.</b> After each evaluation and each tick, every Firing alert that is not suppressed must belong to an open incident. Beacon attaches it to an ancestor's incident, else to its group's incident, else reopens or creates one. This one rule covers new alerts, ended silences, ended maintenance and incidents that someone resolved too early.</div></div>
+<div class="dec"><span class="id">D6</span><div><b>One root-cause incident, impact derived.</b> An incident has a few scope rows, such as "host bom-h12 and everything under it" or "all sites in bom". The affected set is computed from the registry when someone asks. Child alerts join the parent incident and do not page.</div></div>
+<div class="dec"><span class="id">D7</span><div><b>One Incident DocType with type Incident or Maintenance</b>, as in the owner's model. Both have updates, scope, affected services and visibility. A separate small Silence mutes paging for a set time.</div></div>
+<div class="dec"><span class="id">D8</span><div><b>A person decides what customers see.</b> Beacon never publishes an incident and never reopens a public one. The only automatic public signal is the computed service status.</div></div>
+<div class="dec"><span class="id">D9</span><div><b>Uptime counters live in MariaDB</b>, one row per service, region and UTC day. Minutes that Beacon did not observe count as unknown, never as healthy.</div></div>
+<div class="dec"><span class="id">D10</span><div><b>Desk is the admin UI. The API is small.</b> It covers rule sync from Git, staff actions and Twilio callbacks. The public status page is static files, so it needs no API.</div></div>
+<div class="dec"><span class="id">D11</span><div><b>Fail loudly, never silently resolve.</b> A query error never resolves an alert. A region with broken telemetry gives one alert, not one for each rule. If Beacon stops, an external dead-man switch calls us.</div></div>
+<div class="dec"><span class="id">D12</span><div><b>Central integration waits for phase 4.</b> The outbox, customer rules and Central routes are designed here but not built in v1.</div></div>
+
+<h2 id="trace">5. One alert, end to end</h2>
+<p>Follow a host failure in Mumbai. The host <code>bom-h12</code> has 30 VMs and 400 sites.</p>
+<ol>
+<li><b>07:12.</b> The host loses power. VMs and sites stop reporting. Their "not reporting" rules return rows, and the alerts become Pending.</li>
+<li><b>07:14.</b> A VM alert reaches its <code>pending_for</code> and becomes Firing. No incident covers it, so Beacon creates an Internal incident in status Triggered. The VM has a parent, so paging waits <code>page_delay</code> (90 s).</li>
+<li><b>07:15.</b> "Host not reporting" becomes Firing. Beacon creates the host incident with scope "bom-h12, include descendants". The VM incident is not acknowledged and the host covers it, so it is merged. Every VM and site alert now joins the host incident.</li>
+<li>The host has no parent, so the host incident pages at once. Severity High calls the primary responder. The call says "Press 1 to acknowledge". There is no key press. After 5 minutes, Beacon calls the second responder, who presses 1. The incident moves to Investigating.</li>
+<li>The engineer uses the Publish action: visibility Unlisted, first public update, affected service "Servers · bom" with impact Major Outage. Support copies the private link and the list of affected resources from Desk and sends it to the affected teams. In phase 4, Central does this.</li>
+<li>The power supply is replaced. The alerts get clean results and become Resolved (Recovered) after <code>resolve_after</code>. The incident is Unlisted, so Beacon posts "all alerts resolved" to chat. The engineer posts a final update and resolves it.</li>
+</ol>
+
+<h2 id="doctypes">6. Concepts and DocTypes</h2>
+<p>A new engineer needs six ideas: <b>Rule</b> (a query that finds problems), <b>Alert</b> (one problem on one resource), <b>Incident</b> (what people work on, and what customers may see), <b>Silence</b> (mute paging for a time), <b>Service</b> (one line on the status page) and <b>Registry</b> (what exists in a region). v1 has 13 DocTypes. All times are UTC.</p>
+<table>
+<tr><th>DocType</th><th>One row per</th><th>Written by</th><th>Name</th></tr>
+<tr><td><a href="#dt-incident">Incident</a></td><td>Incident or maintenance</td><td>Beacon and staff</td><td>INC-00412</td></tr>
+<tr><td><a href="#dt-alert">Alert</a></td><td>Alert episode</td><td>Beacon only</td><td>random</td></tr>
+<tr><td><a href="#dt-silence">Silence</a></td><td>Mute</td><td>Staff</td><td>SIL-00042</td></tr>
+<tr><td><a href="#dt-alert-rule">Alert Rule</a></td><td>Rule</td><td>Git sync or an admin</td><td>rule_key</td></tr>
+<tr><td><a href="#dt-rule-evaluation">Rule Evaluation</a></td><td>Rule and region</td><td>Beacon</td><td>random</td></tr>
+<tr><td><a href="#dt-resource">Resource</a></td><td>Resource in a region</td><td>Registry sync (admins: monitoring fields)</td><td>random, shown as resource_id</td></tr>
+<tr><td><a href="#dt-resource-source">Resource Source</a></td><td>Regional service that owns resources</td><td>Admin</td><td>bom-atlas</td></tr>
+<tr><td><a href="#dt-region">Region</a></td><td>Region</td><td>Admin</td><td>bom</td></tr>
+<tr><td><a href="#dt-service">Service</a></td><td>Line on the status page</td><td>Git sync or an admin</td><td>sites</td></tr>
+<tr><td><a href="#dt-service-state">Service State</a></td><td>Service and region</td><td>Beacon</td><td>random</td></tr>
+<tr><td><a href="#dt-service-day">Service Day</a></td><td>Service, region and UTC day</td><td>Beacon</td><td>random</td></tr>
+<tr><td><a href="#dt-beacon-settings">Beacon Settings</a></td><td>Single</td><td>Admin</td><td>n/a</td></tr>
+<tr><td><a href="#dt-notification">Notification</a></td><td>Call, email or chat post</td><td>Beacon</td><td>random</td></tr>
+</table>
+<p>Child tables: Incident Scope, Incident Service, Incident Update, Beacon Responder, and Region Item (for region pickers). Phase 4 adds Beacon Event (an outbox to Central) and Alert Metric (a catalog for customer rules).</p>
+<pre><code>Region ── Resource Source ── fills ──&gt; Resource ──&gt; Resource (parent)
+   └──── Rule Evaluation &lt;── Alert Rule ──&gt; Alert ──&gt; Incident
+                                              ^          ├── Incident Scope   ──&gt; matches Resource
+                       Silence ── mutes ──────┘          ├── Incident Service ──&gt; Service ──&gt; Service State, Service Day
+                                                         ├── Incident Update
+                                                         └── Notification     ──&gt; Beacon Responder (in Beacon Settings)</code></pre>
+
+<h2 id="doctype-reference">7. DocType reference</h2>
+<p>Each card shows one Desk form from top to bottom. Tabs come in order, and sections stack inside a tab. Columns sit side by side, and the field order in a column is the position on the form. A grey field is read-only: Beacon sets it, or an action changes it. A red star marks a required field. Below each form, the table lists its buttons. Permissions use the two roles from "Desk workflow and roles".</p>
+<p>Two rules keep the forms safe. First, a field that drives a state machine (status, visibility, escalation, paging paused) is read-only, and only an action changes it, so every change runs the same checks. Second, a document that Beacon writes (Alert, Rule Evaluation, Resource, Service State, Service Day, Notification) has no New button and no delete permission.</p>
+<div class="legend"><span class="f">Editable field</span><span class="f ro">Read-only field</span><span class="f"><span class="l req">Required</span></span></div>
+<div class="dt" id="dt-incident"><div class="dt-h"><b>Incident</b><span>Named INC-.##### · track changes · Responder: create, read, write · nobody deletes</span></div><div class="dt-b"><div class="tab">Tab · Overview</div><div class="sec"><div class="cols c3"><div class="col"><div class="f"><span class="t">Data</span><span class="l req">Title</span> <code>title</code></div><div class="f"><span class="t">Select</span><span class="l req">Type</span> <code>type</code><span class="n">Incident · Maintenance. Set once.</span></div><div class="f"><span class="t">Select</span><span class="l">Severity</span> <code>severity</code><span class="n">Low · Medium · High · Critical. Beacon raises it, never lowers it.</span></div></div><div class="col"><div class="f ro"><span class="t">Select</span><span class="l">Status</span> <code>status</code><span class="n">Triggered · Investigating · Identified · Monitoring · Resolved · Merged<br>Maintenance: Scheduled · In Progress · Completed · Cancelled. Changed only by actions.</span></div><div class="f ro"><span class="t">Select</span><span class="l">Visibility</span> <code>visibility</code><span class="n">Internal · Unlisted · Public. Changed only by Publish.</span></div><div class="f ro"><span class="t">Link Incident</span><span class="l">Merged into</span> <code>merged_into</code><span class="n">Shown when Merged</span></div></div><div class="col"><div class="f ro"><span class="t">Link User</span><span class="l">Acknowledged by</span> <code>acknowledged_by</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Acknowledged at</span> <code>acknowledged_at</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Resolved at</span> <code>resolved_at</code></div></div></div></div><div class="sec"><div class="sec-t">Maintenance window <i>shown for Maintenance</i></div><div class="cols c3"><div class="col"><div class="f"><span class="t">Datetime</span><span class="l req">Scheduled start</span> <code>scheduled_start</code><span class="n">Locked when it starts</span></div></div><div class="col"><div class="f"><span class="t">Datetime</span><span class="l req">Scheduled end</span> <code>scheduled_end</code><span class="n">Can be extended until it passes</span></div></div><div class="col"><div class="f ro"><span class="t">Check</span><span class="l">Excluded from uptime</span> <code>excluded_from_uptime</code><span class="n">1 only if created before the start</span></div></div></div></div><div class="sec"><div class="sec-t">Scope</div><div class="cols c1"><div class="f wide"><span class="t">Table · Incident Scope</span><span class="l">Scope</span> <code>scope</code><span class="n">Columns: region*, resource_type, resource_id, include_descendants. Blank = any. Locked when a maintenance starts.</span></div></div></div><div class="sec"><div class="sec-t">Alerts</div><div class="cols c1"><div class="f ro wide"><span class="t">HTML</span><span class="l">Alerts</span> <code>alerts_html</code><span class="n">Counts by status, the 50 newest Firing alerts, a link to the full Alert list</span></div></div></div><div class="sec"><div class="sec-t">Internal <i>collapsed</i></div><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Check</span><span class="l">Created by Beacon</span> <code>created_by_beacon</code></div></div><div class="col"><div class="f ro"><span class="t">Data</span><span class="l">Group key</span> <code>group_key</code><span class="n">rule|region or rule|region|resource</span></div></div><div class="col"><div class="f ro"><span class="t">Data</span><span class="l">Share token</span> <code>share_token</code><span class="n">Hidden. Read by "Copy private link".</span></div></div></div></div><div class="tab">Tab · Impact</div><div class="sec"><div class="cols c1"><div class="f wide"><span class="t">Table · Incident Service</span><span class="l">Affected services</span> <code>affected_services</code><span class="n">Columns: service*, region, impact* (Degraded · Partial Outage · Major Outage · Maintenance). The status page uses it only when visibility is not Internal.</span></div></div></div><div class="tab">Tab · Updates</div><div class="sec"><div class="cols c1"><div class="f ro wide"><span class="t">Table · Incident Update</span><span class="l">Updates</span> <code>updates</code><span class="n">Columns: posted_at, status, message, is_public, posted_by. Added only by "Post update". Rows are read-only.</span></div></div></div><div class="tab">Tab · Paging</div><div class="sec"><div class="cols c2"><div class="col"><div class="f ro"><span class="t">Select</span><span class="l">Escalation</span> <code>escalation</code><span class="n">None · Waiting · Calling · Paused · Exhausted · Stopped</span></div><div class="f ro"><span class="t">Int</span><span class="l">Page round</span> <code>page_round</code></div></div><div class="col"><div class="f ro"><span class="t">Int</span><span class="l">Page index</span> <code>page_index</code><span class="n">Position in the responder list</span></div><div class="f ro"><span class="t">Datetime</span><span class="l">Next page at</span> <code>next_page_at</code><span class="n">The tick acts at this time</span></div></div></div></div><div class="sec"><div class="sec-t">Notifications</div><div class="cols c1"><div class="f ro wide"><span class="t">HTML</span><span class="l">Notifications</span> <code>notifications_html</code><span class="n">Calls, emails and chat posts for this incident, newest first</span></div></div></div><div class="tab">Tab · RCA</div><div class="sec"><div class="cols c1"><div class="f wide"><span class="t">Text Editor</span><span class="l">Internal RCA</span> <code>rca</code><span class="n">Staff only</span></div><div class="f wide"><span class="t">Text Editor</span><span class="l">Public RCA</span> <code>public_rca</code><span class="n">Shown on the incident page when it is published and resolved</span></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Acknowledge</b></td><td>Triggered, or paging is active</td><td>Responder</td><td>Stops paging. Sets acknowledged_by and acknowledged_at. Triggered → Investigating.</td></tr><tr><td><b>Post update</b></td><td>Not Resolved or Merged</td><td>Responder</td><td>Dialog: next status, message*, public (on by default when not Internal). Adds an Incident Update row. Picking Resolved runs the Resolve check.</td></tr><tr><td><b>Publish</b></td><td>Internal</td><td>Responder</td><td>Dialog: Unlisted or Public, affected services with impact, first public message*. Unlisted creates the 32-character share_token.</td></tr><tr><td><b>Change visibility</b></td><td>Unlisted or Public</td><td>Responder</td><td>Public ↔ Unlisted, or back to Internal. Internal asks for confirmation, takes the page down and clears the token.</td></tr><tr><td><b>Copy private link</b></td><td>Unlisted</td><td>Responder</td><td>Copies <code>https://status…/i/&lt;token&gt;/</code>.</td></tr><tr><td><b>Regenerate private link</b></td><td>Unlisted</td><td>Responder</td><td>Creates a new token. The old link stops working at the next build.</td></tr><tr><td><b>Page on-call</b></td><td>Escalation None, Stopped or Exhausted</td><td>Responder</td><td>Starts paging at round 1, without page_delay.</td></tr><tr><td><b>Merge into</b></td><td>Open</td><td>Responder</td><td>Pick an open incident. Alerts and scope rows move to it. Status → Merged. A published incident cannot merge into an Internal one.</td></tr><tr><td><b>Export affected resources</b></td><td>Always</td><td>Responder</td><td>CSV of the scope, expanded from the registry.</td></tr><tr><td><b>Resolve</b></td><td>Open incident</td><td>Responder</td><td>Dialog: final message, public. Refused while unsuppressed alerts fire, and offers "Silence the remaining N alerts for 4 hours and resolve".</td></tr><tr><td><b>Reopen</b></td><td>Resolved less than 7 days ago</td><td>Responder</td><td>→ Investigating. Paging stays off until "Page on-call".</td></tr><tr><td><b>Start now</b></td><td>Maintenance, Scheduled</td><td>Responder</td><td>→ In Progress. Locks the start and the scope.</td></tr><tr><td><b>Extend</b></td><td>Maintenance, In Progress</td><td>Responder</td><td>Sets a later scheduled_end.</td></tr><tr><td><b>Complete</b></td><td>Maintenance, In Progress</td><td>Responder</td><td>→ Completed. Alerts that still fail go into one incident.</td></tr><tr><td><b>Cancel</b></td><td>Maintenance, Scheduled</td><td>Responder</td><td>→ Cancelled.</td></tr></table><p class="dt-x"><b>On save.</b> type and created_by_beacon cannot change. A maintenance needs start &lt; end. A Public maintenance with no Maintenance impact row shows a warning.</p><p class="dt-x"><b>List view.</b> name, title, type, status, severity, visibility, modified. Default filter: open only. The list has a "New maintenance" button. Colors: Triggered red, Investigating and Identified orange, Monitoring blue, Resolved green, maintenance purple.</p></div></div><div class="dt" id="dt-alert"><div class="dt-h"><b>Alert</b><span>Random name · title "&lt;rule title&gt; · &lt;resource_id&gt;" · written only by Beacon · read-only for everyone</span></div><div class="dt-b"><div class="sec"><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Select</span><span class="l">Status</span> <code>status</code><span class="n">Pending · Firing · Resolved</span></div><div class="f ro"><span class="t">Select</span><span class="l">Resolution</span> <code>resolution</code><span class="n">Cleared · Recovered · Resource removed · Disabled</span></div><div class="f ro"><span class="t">Select</span><span class="l">Severity</span> <code>severity</code></div></div><div class="col"><div class="f ro"><span class="t">Link Alert Rule</span><span class="l">Rule</span> <code>rule</code></div><div class="f ro"><span class="t">Link Region</span><span class="l">Region</span> <code>region</code></div><div class="f ro"><span class="t">Link Incident</span><span class="l">Incident</span> <code>incident</code></div></div><div class="col"><div class="f ro"><span class="t">Link Resource</span><span class="l">Resource</span> <code>resource</code></div><div class="f ro"><span class="t">Data</span><span class="l">Resource type</span> <code>resource_type</code></div><div class="f ro"><span class="t">Data</span><span class="l">Alert key</span> <code>alert_key</code><span class="n">For example the mount point</span></div></div></div></div><div class="sec"><div class="sec-t">Values</div><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Float</span><span class="l">First value</span> <code>first_value</code></div></div><div class="col"><div class="f ro"><span class="t">Float</span><span class="l">Value</span> <code>value</code><span class="n">Refreshed at most every 10 min</span></div></div><div class="col"><div class="f ro"><span class="t">Data</span><span class="l">Detail</span> <code>detail</code></div></div></div></div><div class="sec"><div class="sec-t">Timeline</div><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Datetime</span><span class="l">Started at</span> <code>started_at</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Fired at</span> <code>fired_at</code></div></div><div class="col"><div class="f ro"><span class="t">Datetime</span><span class="l">Clean since</span> <code>clean_since</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Resolved at</span> <code>resolved_at</code></div></div><div class="col"><div class="f ro"><span class="t">Check</span><span class="l">Suppressed</span> <code>suppressed</code></div><div class="f ro"><span class="t">Data</span><span class="l">Suppressed by</span> <code>suppressed_by</code><span class="n">SIL-00042 or a maintenance</span></div></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Silence</b></td><td>Pending or Firing</td><td>Responder</td><td>Dialog with region, resource, rule and alert_key filled in. Duration 1 h, 4 h, 1 day, 7 days or custom (at most 30 days). Reason*. Creates a Silence.</td></tr><tr><td><b>Move to incident</b></td><td>Firing</td><td>Responder</td><td>Pick another open incident. The alert moves there.</td></tr><tr><td><b>Open runbook</b></td><td>The rule has a runbook URL</td><td>Responder</td><td>Opens it.</td></tr></table><p class="dt-x"><b>Hidden.</b> <code>open_key</code> (unique, NULL once resolved).</p><p class="dt-x"><b>List view.</b> resource, rule, severity, status, incident, started_at. Default filter: Pending or Firing. Sidebar filters: region, rule, resource_type, suppressed. Colors: Firing red, Pending orange, suppressed grey, Resolved green.</p></div></div><div class="dt" id="dt-silence"><div class="dt-h"><b>Silence</b><span>Named SIL-.##### · Responder: create, read, write</span></div><div class="dt-b"><div class="sec"><div class="sec-t">Match <i>blank = any; at least one is required</i></div><div class="cols c3"><div class="col"><div class="f"><span class="t">Link Region</span><span class="l">Region</span> <code>region</code></div><div class="f"><span class="t">Data</span><span class="l">Resource type</span> <code>resource_type</code></div></div><div class="col"><div class="f"><span class="t">Data</span><span class="l">Resource ID</span> <code>resource_id</code></div><div class="f"><span class="t">Data</span><span class="l">Alert key</span> <code>alert_key</code></div></div><div class="col"><div class="f"><span class="t">Link Alert Rule</span><span class="l">Rule</span> <code>rule</code></div></div></div></div><div class="sec"><div class="sec-t">Time</div><div class="cols c2"><div class="col"><div class="f"><span class="t">Datetime</span><span class="l req">Starts at</span> <code>starts_at</code><span class="n">Default: now</span></div><div class="f"><span class="t">Datetime</span><span class="l req">Expires at</span> <code>expires_at</code><span class="n">At most 30 days after the start</span></div></div><div class="col"><div class="f ro"><span class="t">Select</span><span class="l">State</span> <code>state</code><span class="n">Scheduled · Active · Expired · Revoked. Computed.</span></div><div class="f ro"><span class="t">Link User</span><span class="l">Revoked by</span> <code>revoked_by</code></div></div></div></div><div class="sec"><div class="cols c1"><div class="f wide"><span class="t">Small Text</span><span class="l req">Reason</span> <code>reason</code></div><div class="f ro wide"><span class="t">HTML</span><span class="l">Matching alerts</span> <code>matching_html</code><span class="n">How many open alerts it matches now</span></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Revoke</b></td><td>Scheduled or Active</td><td>Responder</td><td>Ends it now. Matching alerts are no longer suppressed at the next tick and join an incident.</td></tr><tr><td><b>Extend</b></td><td>Active</td><td>Responder</td><td>Sets a later expires_at, at most 30 days from now.</td></tr><tr><td><b>Show matching alerts</b></td><td>Always</td><td>Responder</td><td>Opens the Alert list with the same filters.</td></tr></table><p class="dt-x"><b>On save.</b> The match fields lock when the silence starts. Create a new silence instead.</p><p class="dt-x"><b>List view.</b> name, reason, resource_id, rule, expires_at, state. Default filter: not expired.</p></div></div><div class="dt" id="dt-alert-rule"><div class="dt-h"><b>Alert Rule</b><span>Named by rule_key · Admin: create, write · Responder: read</span></div><div class="dt-b"><div class="tab">Tab · Rule</div><div class="sec"><div class="cols c2"><div class="col"><div class="f"><span class="t">Data</span><span class="l req">Title</span> <code>title</code></div><div class="f"><span class="t">Data</span><span class="l req">Rule key</span> <code>rule_key</code><span class="n">repo:path, or desk:&lt;slug&gt;. Read-only when synced.</span></div><div class="f"><span class="t">Select</span><span class="l req">Severity</span> <code>severity</code><span class="n">Low · Medium · High · Critical</span></div><div class="f"><span class="t">Data</span><span class="l req">Resource type</span> <code>resource_type</code><span class="n">Host, Server, Site, …</span></div></div><div class="col"><div class="f"><span class="t">Check</span><span class="l">Enabled</span> <code>enabled</code></div><div class="f"><span class="t">Data</span><span class="l">Owner team</span> <code>owner_team</code></div><div class="f"><span class="t">Data</span><span class="l">Runbook URL</span> <code>runbook_url</code></div><div class="f ro"><span class="t">Data</span><span class="l">Repository</span> <code>repository</code><span class="n">Set by sync</span></div></div></div></div><div class="sec"><div class="sec-t">Query</div><div class="cols c1"><div class="f wide"><span class="t">Code · SQL</span><span class="l req">Query</span> <code>query</code><span class="n">Returns resource_id, alert_key, value, detail</span></div></div></div><div class="sec"><div class="sec-t">Timing</div><div class="cols c3"><div class="col"><div class="f"><span class="t">Int · s</span><span class="l">Interval</span> <code>interval</code><span class="n">60</span></div><div class="f"><span class="t">Int · s</span><span class="l">Pending for</span> <code>pending_for</code><span class="n">300</span></div></div><div class="col"><div class="f"><span class="t">Int · s</span><span class="l">Resolve after</span> <code>resolve_after</code><span class="n">120</span></div><div class="f"><span class="t">Int · s</span><span class="l">New resource grace</span> <code>new_resource_grace</code><span class="n">600</span></div></div><div class="col"><div class="f"><span class="t">Select</span><span class="l">Grouping</span> <code>grouping</code><span class="n">Rule and region · Resource</span></div></div></div></div><div class="sec"><div class="sec-t">Regions</div><div class="cols c1"><div class="f wide"><span class="t">Table MultiSelect · Region Item</span><span class="l">Regions</span> <code>regions</code><span class="n">Empty = all regions</span></div></div></div><div class="tab">Tab · Evaluations</div><div class="sec"><div class="cols c1"><div class="f ro wide"><span class="t">HTML</span><span class="l">Evaluations</span> <code>evaluations_html</code><span class="n">One row per region: state, last success, duration, rows, last error</span></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Test</b></td><td>Always</td><td>Admin</td><td>Runs the query in the chosen regions. Shows rows, duration, 20 sample rows and contract errors. Saves nothing.</td></tr><tr><td><b>Run now</b></td><td>Enabled</td><td>Admin</td><td>Queues the evaluation in every region.</td></tr><tr><td><b>Silence rule</b></td><td>Always</td><td>Responder</td><td>Opens a new Silence with this rule.</td></tr></table><p class="dt-x"><b>On save.</b> A synced rule is read-only except <code>enabled</code>. Sync never changes <code>enabled</code> on an existing rule, except to disable a removed one. Save runs the contract check in one region and refuses an error. It creates or disables the Rule Evaluation rows.</p><p class="dt-x"><b>List view.</b> title, severity, resource_type, enabled, repository. Red when an evaluation is Broken, orange when Erroring.</p></div></div><div class="dt" id="dt-rule-evaluation"><div class="dt-h"><b>Rule Evaluation</b><span>Random name · unique (rule, region) · written by Beacon · read-only</span></div><div class="dt-b"><div class="sec"><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Link Alert Rule</span><span class="l">Rule</span> <code>rule</code></div><div class="f ro"><span class="t">Link Region</span><span class="l">Region</span> <code>region</code></div><div class="f ro"><span class="t">Select</span><span class="l">State</span> <code>state</code><span class="n">Healthy · Erroring · Broken</span></div></div><div class="col"><div class="f ro"><span class="t">Datetime</span><span class="l">Next run at</span> <code>next_run_at</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Last run at</span> <code>last_run_at</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Last success at</span> <code>last_success_at</code></div></div><div class="col"><div class="f ro"><span class="t">Int · ms</span><span class="l">Last duration</span> <code>last_duration_ms</code></div><div class="f ro"><span class="t">Int</span><span class="l">Last row count</span> <code>last_row_count</code></div><div class="f ro"><span class="t">Int</span><span class="l">Unknown rows</span> <code>unknown_rows</code><span class="n">Rows for resources not in the registry</span></div></div></div></div><div class="sec"><div class="sec-t">Errors</div><div class="cols c2"><div class="col"><div class="f ro"><span class="t">Int</span><span class="l">Consecutive errors</span> <code>consecutive_errors</code></div></div><div class="col"><div class="f ro"><span class="t">Code</span><span class="l">Last error</span> <code>last_error</code></div></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Run now</b></td><td>The rule is enabled</td><td>Admin</td><td>Queues this evaluation now.</td></tr></table><p class="dt-x"><b>List view.</b> rule, region, state, last_success_at, last_duration_ms. Sorted by state, Broken first.</p></div></div><div class="dt" id="dt-resource"><div class="dt-h"><b>Resource</b><span>Random name · unique (region, resource_id) · links show resource_id · filled by the registry sync · no New button</span></div><div class="dt-b"><div class="sec"><div class="sec-t">From the source</div><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Data</span><span class="l">Resource ID</span> <code>resource_id</code></div><div class="f ro"><span class="t">Data</span><span class="l">Resource type</span> <code>resource_type</code></div><div class="f ro"><span class="t">Select</span><span class="l">Status</span> <code>status</code><span class="n">Pending · Active · Suspended · Terminated</span></div></div><div class="col"><div class="f ro"><span class="t">Link Region</span><span class="l">Region</span> <code>region</code></div><div class="f ro"><span class="t">Link Resource</span><span class="l">Parent</span> <code>parent_resource</code></div><div class="f ro"><span class="t">Link Resource Source</span><span class="l">Source</span> <code>source</code></div></div><div class="col"><div class="f ro"><span class="t">Data</span><span class="l">Title</span> <code>title</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Active since</span> <code>active_since</code><span class="n">Start of the new-resource grace</span></div><div class="f ro"><span class="t">JSON</span><span class="l">Labels</span> <code>labels</code></div></div></div></div><div class="sec"><div class="sec-t">Monitoring <i>changed only by the actions</i></div><div class="cols c2"><div class="col"><div class="f ro"><span class="t">Check</span><span class="l">Monitoring disabled</span> <code>monitoring_disabled</code><span class="n">Never check this resource</span></div><div class="f ro"><span class="t">Small Text</span><span class="l">Reason</span> <code>disabled_reason</code></div></div><div class="col"><div class="f ro"><span class="t">Link User</span><span class="l">Disabled by</span> <code>disabled_by</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Disabled at</span> <code>disabled_at</code></div></div></div></div><div class="sec"><div class="sec-t">Now</div><div class="cols c1"><div class="f ro wide"><span class="t">HTML</span><span class="l">Now</span> <code>now_html</code><span class="n">Open alerts on this resource, and open incidents that affect it through an ancestor</span></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Disable monitoring</b></td><td>Monitoring on</td><td>Admin</td><td>Dialog: reason*. Open alerts resolve as Disabled.</td></tr><tr><td><b>Enable monitoring</b></td><td>Monitoring off</td><td>Admin</td><td>Checks start again after the grace.</td></tr><tr><td><b>Silence</b></td><td>Always</td><td>Responder</td><td>Opens a new Silence for this resource.</td></tr><tr><td><b>Children</b></td><td>Always</td><td>Responder</td><td>Opens the Resource list filtered by parent.</td></tr><tr><td><b>Incidents affecting this</b></td><td>Always</td><td>Responder</td><td>Opens the Incident list with region and resource_id (ancestors checked).</td></tr></table><p class="dt-x"><b>Cleanup.</b> Beacon deletes Terminated rows 30 days after they leave the list.</p><p class="dt-x"><b>List view.</b> resource_id, resource_type, status, region, parent. Sidebar filters: region, type, status, monitoring disabled.</p></div></div><div class="dt" id="dt-resource-source"><div class="dt-h"><b>Resource Source</b><span>Named {region}-{source_key}, for example bom-atlas · Admin: create, write · Responder: read</span></div><div class="dt-b"><div class="sec"><div class="cols c2"><div class="col"><div class="f"><span class="t">Link Region</span><span class="l req">Region</span> <code>region</code></div><div class="f"><span class="t">Data</span><span class="l req">Source key</span> <code>source_key</code><span class="n">atlas, sites, …</span></div><div class="f"><span class="t">Data</span><span class="l">Title</span> <code>title</code><span class="n">Atlas</span></div></div><div class="col"><div class="f"><span class="t">Check</span><span class="l">Enabled</span> <code>enabled</code></div><div class="f"><span class="t">Data</span><span class="l req">Base URL</span> <code>base_url</code><span class="n">Beacon calls {base_url}/api/beacon/resources</span></div><div class="f"><span class="t">Password</span><span class="l req">Token</span> <code>token</code></div></div></div></div><div class="sec"><div class="sec-t">Last sync</div><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Datetime</span><span class="l">Last attempt at</span> <code>last_attempt_at</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Last success at</span> <code>last_success_at</code></div></div><div class="col"><div class="f ro"><span class="t">Int</span><span class="l">Row count</span> <code>row_count</code></div><div class="f ro"><span class="t">Int</span><span class="l">Consecutive failures</span> <code>consecutive_failures</code></div></div><div class="col"><div class="f ro"><span class="t">Data</span><span class="l">ETag</span> <code>etag</code></div><div class="f ro"><span class="t">Small Text</span><span class="l">Last error</span> <code>last_error</code></div></div></div></div><div class="sec"><div class="sec-t">Pending list <i>shown when a shrink is held</i></div><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Check</span><span class="l">Shrink held</span> <code>pending_shrink</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Received at</span> <code>pending_received_at</code></div></div><div class="col"><div class="f ro"><span class="t">Int</span><span class="l">Rows</span> <code>pending_row_count</code></div><div class="f ro"><span class="t">Int</span><span class="l">Rows it removes</span> <code>pending_removed_count</code></div></div><div class="col"><div class="f ro"><span class="t">Attach</span><span class="l">List</span> <code>pending_list</code><span class="n">Private JSON file</span></div></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Fetch now</b></td><td>Enabled</td><td>Admin</td><td>Fetches now without the ETag. Shows added, changed and removed rows.</td></tr><tr><td><b>Apply pending list</b></td><td>Shrink held</td><td>Admin</td><td>Confirm dialog with the count and the first 20 removed IDs. Applies the list.</td></tr><tr><td><b>Discard pending list</b></td><td>Shrink held</td><td>Admin</td><td>Keeps the current list. The next fetch is checked again.</td></tr></table><p class="dt-x"><b>List view.</b> title, region, enabled, row_count, last_success_at. Red when stale (no good fetch for 15 min), orange when a shrink is held.</p></div></div><div class="dt" id="dt-region"><div class="dt-h"><b>Region</b><span>Named by region code · Admin: create, write · Responder: read</span></div><div class="dt-b"><div class="sec"><div class="cols c2"><div class="col"><div class="f"><span class="t">Data</span><span class="l req">Region</span> <code>region</code><span class="n">bom. Set once.</span></div><div class="f"><span class="t">Data</span><span class="l req">Title</span> <code>title</code><span class="n">Mumbai</span></div></div><div class="col"><div class="f"><span class="t">Select</span><span class="l">Status</span> <code>status</code><span class="n">Active · Disabled</span></div><div class="f"><span class="t">Data</span><span class="l">Wildcard domain</span> <code>wildcard_domain</code><span class="n">bom.frappe.cloud</span></div></div></div></div><div class="sec"><div class="sec-t">ClickHouse <i>collapsed</i></div><div class="cols c2"><div class="col"><div class="f"><span class="t">Data</span><span class="l req">URL</span> <code>clickhouse_url</code></div><div class="f"><span class="t">Data</span><span class="l">Database</span> <code>clickhouse_database</code><span class="n">datum</span></div></div><div class="col"><div class="f"><span class="t">Data</span><span class="l req">User</span> <code>clickhouse_user</code><span class="n">beacon</span></div><div class="f"><span class="t">Password</span><span class="l req">Password</span> <code>clickhouse_password</code></div></div></div></div><div class="sec"><div class="sec-t">Telemetry</div><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Select</span><span class="l">State</span> <code>telemetry_state</code><span class="n">OK · Unreachable · Suspect</span></div></div><div class="col"><div class="f ro"><span class="t">Datetime</span><span class="l">Checked at</span> <code>telemetry_checked_at</code></div></div><div class="col"><div class="f ro"><span class="t">Percent</span><span class="l">Reporting</span> <code>reporting_percent</code><span class="n">Checked resources with a sample in 5 min</span></div></div></div></div><div class="sec"><div class="sec-t">Status page</div><div class="cols c2"><div class="col"><div class="f"><span class="t">Check</span><span class="l">Show on status page</span> <code>show_on_status_page</code></div></div><div class="col"><div class="f"><span class="t">Int</span><span class="l">Sort order</span> <code>sort_order</code></div></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Check connection</b></td><td>Always</td><td>Admin</td><td>Runs SELECT 1 as the beacon user, checks the beacon database and its grants, and shows the latency.</td></tr><tr><td><b>Disable / Enable</b></td><td>Always</td><td>Admin</td><td>Disabled: no evaluation. The tick closes its open alerts as Disabled.</td></tr></table><p class="dt-x"><b>List view.</b> title, region, status, telemetry_state (green OK, orange Suspect, red Unreachable).</p></div></div><div class="dt" id="dt-service"><div class="dt-h"><b>Service</b><span>Named by service_key, for example sites · Admin: create, write · Responder: read</span></div><div class="dt-b"><div class="sec"><div class="cols c2"><div class="col"><div class="f"><span class="t">Data</span><span class="l req">Title</span> <code>title</code><span class="n">Sites</span></div><div class="f"><span class="t">Data</span><span class="l req">Service key</span> <code>service_key</code><span class="n">Read-only when synced</span></div><div class="f"><span class="t">Select</span><span class="l req">Scope</span> <code>scope</code><span class="n">Region · Global</span></div></div><div class="col"><div class="f"><span class="t">Check</span><span class="l">Show on status page</span> <code>show_on_status_page</code></div><div class="f"><span class="t">Int</span><span class="l">Sort order</span> <code>sort_order</code></div><div class="f ro"><span class="t">Data</span><span class="l">Repository</span> <code>repository</code><span class="n">Set by sync</span></div></div></div></div><div class="sec"><div class="sec-t">Where</div><div class="cols c2"><div class="col"><div class="f"><span class="t">Table MultiSelect · Region Item</span><span class="l">Regions</span> <code>regions</code><span class="n">Region scope. Empty = all.</span></div></div><div class="col"><div class="f"><span class="t">Link Region</span><span class="l">Query region</span> <code>query_region</code><span class="n">Global scope: the ClickHouse that has its telemetry</span></div></div></div></div><div class="sec"><div class="sec-t">Health</div><div class="cols c1"><div class="f wide"><span class="t">Small Text</span><span class="l">Description</span> <code>description</code><span class="n">Public. Shown under the service name.</span></div><div class="f wide"><span class="t">Code · SQL</span><span class="l req">Health query</span> <code>health_query</code><span class="n">Returns healthy, expected</span></div></div></div><div class="sec"><div class="sec-t">Thresholds</div><div class="cols c3"><div class="col"><div class="f"><span class="t">Percent</span><span class="l">Degraded below</span> <code>degraded_below</code><span class="n">99.5</span></div></div><div class="col"><div class="f"><span class="t">Percent</span><span class="l">Partial below</span> <code>partial_below</code><span class="n">95</span></div></div><div class="col"><div class="f"><span class="t">Percent</span><span class="l">Major below</span> <code>major_below</code><span class="n">80</span></div></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Test</b></td><td>Always</td><td>Admin</td><td>Runs the health query in each region. Shows healthy, expected, the ratio and the status it would get.</td></tr><tr><td><b>View status</b></td><td>Always</td><td>Responder</td><td>Opens Service State for this service.</td></tr></table><p class="dt-x"><b>List view.</b> title, scope, show_on_status_page, repository.</p></div></div><div class="dt" id="dt-service-state"><div class="dt-h"><b>Service State</b><span>Random name · unique (service, region) · written by Beacon every minute · read-only</span></div><div class="dt-b"><div class="sec"><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Link Service</span><span class="l">Service</span> <code>service</code></div><div class="f ro"><span class="t">Link Region</span><span class="l">Region</span> <code>region</code></div></div><div class="col"><div class="f ro"><span class="t">Select</span><span class="l">Status</span> <code>status</code><span class="n">Operational · Degraded · Partial Outage · Major Outage · Maintenance · Unknown</span></div><div class="f ro"><span class="t">Datetime</span><span class="l">Checked at</span> <code>checked_at</code></div></div><div class="col"><div class="f ro"><span class="t">Int</span><span class="l">Healthy</span> <code>healthy</code></div><div class="f ro"><span class="t">Int</span><span class="l">Expected</span> <code>expected</code></div></div></div></div><p class="dt-x"><b>Hidden.</b> <code>last_counted_minute</code>, so a minute is never counted twice in Service Day.</p><p class="dt-x"><b>List view.</b> service, region, status (colored), healthy, expected, checked_at.</p></div></div><div class="dt" id="dt-service-day"><div class="dt-h"><b>Service Day</b><span>Random name · unique (service, region, date) · written by Beacon · read-only</span></div><div class="dt-b"><div class="sec"><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Link Service</span><span class="l">Service</span> <code>service</code></div></div><div class="col"><div class="f ro"><span class="t">Link Region</span><span class="l">Region</span> <code>region</code></div></div><div class="col"><div class="f ro"><span class="t">Date</span><span class="l">Date</span> <code>date</code><span class="n">UTC day</span></div></div></div></div><div class="sec"><div class="sec-t">Minutes</div><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Int</span><span class="l">Operational</span> <code>operational_minutes</code></div><div class="f ro"><span class="t">Int</span><span class="l">Degraded</span> <code>degraded_minutes</code></div></div><div class="col"><div class="f ro"><span class="t">Int</span><span class="l">Partial outage</span> <code>partial_minutes</code></div><div class="f ro"><span class="t">Int</span><span class="l">Major outage</span> <code>major_minutes</code></div></div><div class="col"><div class="f ro"><span class="t">Int</span><span class="l">Maintenance</span> <code>maintenance_minutes</code><span class="n">Excluded maintenance only</span></div><div class="f ro"><span class="t">Int</span><span class="l">Unknown</span> <code>unknown_minutes</code></div></div></div></div><div class="sec"><div class="sec-t">Result</div><div class="cols c2"><div class="col"><div class="f ro"><span class="t">Percent</span><span class="l">Uptime</span> <code>uptime_percent</code><span class="n">(eligible − partial − major) / eligible</span></div></div><div class="col"><div class="f ro"><span class="t">Percent</span><span class="l">Coverage</span> <code>coverage_percent</code><span class="n">Minutes with a known state</span></div></div></div></div><p class="dt-x"><b>List view.</b> Report view grouped by service and region. The status page builder reads 90 days.</p></div></div><div class="dt" id="dt-beacon-settings"><div class="dt-h"><b>Beacon Settings</b><span>Single · Admin: write · Responder: read (passwords hidden)</span></div><div class="dt-b"><div class="tab">Tab · On-call</div><div class="sec"><div class="cols c1"><div class="f wide"><span class="t">Table · Beacon Responder</span><span class="l">Responders</span> <code>responders</code><span class="n">Columns: user*, phone, email (fetched from the user), active. Row order is the call order.</span></div></div></div><div class="sec"><div class="sec-t">Primary</div><div class="cols c2"><div class="col"><div class="f ro"><span class="t">Link User</span><span class="l">Primary override</span> <code>primary_override</code><span class="n">Changed by "Set primary override"</span></div></div><div class="col"><div class="f ro"><span class="t">Datetime</span><span class="l">Override until</span> <code>override_until</code></div></div></div></div><div class="sec"><div class="sec-t">Timing</div><div class="cols c3"><div class="col"><div class="f"><span class="t">Int · s</span><span class="l">Page delay</span> <code>page_delay_seconds</code><span class="n">90</span></div><div class="f"><span class="t">Int · min</span><span class="l">Repeat every</span> <code>repeat_every_minutes</code><span class="n">15</span></div></div><div class="col"><div class="f"><span class="t">Int · min</span><span class="l">Backup after, Critical</span> <code>backup_after_minutes_critical</code><span class="n">2</span></div><div class="f"><span class="t">Int · min</span><span class="l">Backup after, High</span> <code>backup_after_minutes_high</code><span class="n">5</span></div></div><div class="col"><div class="f"><span class="t">Int</span><span class="l">Max rounds</span> <code>max_rounds</code><span class="n">3</span></div></div></div></div><div class="tab">Tab · Channels</div><div class="sec"><div class="cols c3"><div class="col"><div class="f"><span class="t">Check</span><span class="l">Phone calls</span> <code>phone_calls_enabled</code></div><div class="f"><span class="t">Data</span><span class="l">Twilio account SID</span> <code>twilio_account_sid</code></div><div class="f"><span class="t">Password</span><span class="l">Twilio auth token</span> <code>twilio_auth_token</code></div><div class="f"><span class="t">Data</span><span class="l">From number</span> <code>twilio_from_number</code></div></div><div class="col"><div class="f"><span class="t">Check</span><span class="l">Email</span> <code>email_enabled</code></div><div class="f"><span class="t">Link Email Account</span><span class="l">Email account</span> <code>email_account</code></div></div><div class="col"><div class="f"><span class="t">Check</span><span class="l">Chat</span> <code>chat_enabled</code></div><div class="f"><span class="t">Password</span><span class="l">Chat webhook URL</span> <code>chat_webhook_url</code></div></div></div></div><div class="tab">Tab · Status page</div><div class="sec"><div class="cols c3"><div class="col"><div class="f"><span class="t">Data</span><span class="l req">Title</span> <code>status_page_title</code><span class="n">Frappe Cloud Status</span></div><div class="f"><span class="t">Data</span><span class="l req">Domain</span> <code>status_page_domain</code></div></div><div class="col"><div class="f"><span class="t">Data</span><span class="l req">Bucket URL</span> <code>bucket_url</code></div><div class="f"><span class="t">Data</span><span class="l req">Access key</span> <code>bucket_access_key</code></div><div class="f"><span class="t">Password</span><span class="l req">Secret key</span> <code>bucket_secret_key</code></div></div><div class="col"><div class="f ro"><span class="t">Datetime</span><span class="l">Last build at</span> <code>last_build_at</code></div><div class="f ro"><span class="t">Small Text</span><span class="l">Last build error</span> <code>last_build_error</code></div></div></div></div><div class="tab">Tab · Safety</div><div class="sec"><div class="cols c2"><div class="col"><div class="f ro"><span class="t">Check</span><span class="l">Paging paused</span> <code>paging_paused</code><span class="n">Changed only by the actions</span></div><div class="f ro"><span class="t">Small Text</span><span class="l">Paused reason</span> <code>paused_reason</code></div></div><div class="col"><div class="f"><span class="t">Password</span><span class="l">Heartbeat URL</span> <code>heartbeat_url</code><span class="n">Dead-man switch</span></div><div class="f"><span class="t">Int · min</span><span class="l">Reopen window</span> <code>reopen_window_minutes</code><span class="n">30</span></div></div></div></div><div class="sec"><div class="sec-t">Retention</div><div class="cols c3"><div class="col"><div class="f"><span class="t">Int · days</span><span class="l">Resolved alerts</span> <code>resolved_alert_days</code><span class="n">90</span></div></div><div class="col"><div class="f"><span class="t">Int · days</span><span class="l">Cleared alerts</span> <code>cleared_alert_days</code><span class="n">7</span></div></div><div class="col"><div class="f"><span class="t">Int · days</span><span class="l">Notifications</span> <code>notification_days</code><span class="n">180</span></div></div></div></div><table class="acts"><tr><th>Action</th><th>Shown when</th><th>Role</th><th>What it does</th></tr><tr><td><b>Set primary override</b></td><td>Always</td><td>Responder</td><td>Dialog: active responder and until. Paging calls this person first.</td></tr><tr><td><b>Pause paging / Resume paging</b></td><td>Always</td><td>Admin</td><td>Dialog: reason*. Escalations become Paused, and resume when paging resumes.</td></tr><tr><td><b>Send test page</b></td><td>Always</td><td>Admin</td><td>Dialog: responder and channel. Sends a test call, email or chat post.</td></tr><tr><td><b>Rebuild status page</b></td><td>Always</td><td>Admin</td><td>Builds and uploads now.</td></tr></table><p class="dt-x"><b>On save.</b> Phone calls need at least one active responder with a phone number.</p></div></div><div class="dt" id="dt-notification"><div class="dt-h"><b>Notification</b><span>Random name · written by Beacon · read-only</span></div><div class="dt-b"><div class="sec"><div class="cols c3"><div class="col"><div class="f ro"><span class="t">Link Incident</span><span class="l">Incident</span> <code>incident</code></div><div class="f ro"><span class="t">Link User</span><span class="l">Responder</span> <code>responder</code></div><div class="f ro"><span class="t">Select</span><span class="l">Channel</span> <code>channel</code><span class="n">Call · Email · Chat</span></div></div><div class="col"><div class="f ro"><span class="t">Select</span><span class="l">Status</span> <code>status</code><span class="n">Queued · Sent · Answered · No answer · Acknowledged · Failed</span></div><div class="f ro"><span class="t">Int</span><span class="l">Round</span> <code>page_round</code></div><div class="f ro"><span class="t">Data</span><span class="l">Provider ref</span> <code>provider_ref</code><span class="n">Twilio CallSid</span></div></div><div class="col"><div class="f ro"><span class="t">Datetime</span><span class="l">Sent at</span> <code>sent_at</code></div><div class="f ro"><span class="t">Datetime</span><span class="l">Answered at</span> <code>answered_at</code></div><div class="f ro"><span class="t">Small Text</span><span class="l">Error</span> <code>error</code></div></div></div></div><p class="dt-x"><b>List view.</b> incident, responder, channel, status, sent_at. The escalation step reads it.</p></div></div>
+
+<h2 id="registry">8. Resource registry</h2>
+<p>Beacon must know what to track. If it looked only at telemetry, an archived resource would look like a dead one. So Beacon keeps a registry for each region. A few services in each region own the resources, and each one serves its full list on one endpoint. Beacon pulls the lists. Sources do not push, do not send deletes and keep no sync state.</p>
+<table>
+<tr><th>Source (in each region)</th><th>Serves</th></tr>
+<tr><td>Atlas</td><td>Hosts, VMs (servers), proxy and WireGuard gateway nodes, storage gateways and nodes, Atlas itself</td></tr>
+<tr><td>The service that owns sites</td><td>Sites, with <code>parent_id</code> = the server (see Open questions)</td></tr>
+<tr><td>Any other regional service</td><td>The resources it owns. A Beacon Admin adds a Resource Source in Desk.</td></tr>
+</table>
+<pre><code>GET {base_url}/api/beacon/resources        Authorization: Bearer &lt;token&gt;
+If-None-Match: "&lt;etag&gt;"                     -&gt; 304 when nothing changed
+200  ETag: "&lt;hash of the list&gt;"             one gzip response, at most 100,000 rows
+{"resources": [{"resource_id": "bom-h12", "resource_type": "Host", "parent_id": "",
+                "title": "bom-h12", "status": "Active", "labels": {}}, ...]}</code></pre>
+<p>The list is the source's current state from one read, so it is always consistent. 100,000 rows are about 15 MB of JSON and about 1.5 MB compressed. There is no paging, so a list can never be half-read.</p>
+<ul>
+<li><b>Poll.</b> Every minute, Beacon calls each enabled source with its last ETag. An unchanged list returns 304 and costs almost nothing.</li>
+<li><b>Replace, never merge.</b> A 200 replaces that source's whole list in one MariaDB transaction, and Beacon writes only the rows that changed. A resource that is missing from the list is gone. There are no delete events, no ordering rules and no race between a change and a full list, because the source always serves what is true now.</li>
+<li><b>Removing a resource.</b> The source stops listing it, or lists it as Suspended or Terminated. Within a minute, Beacon stops checking it, and its open alerts resolve as "Resource removed". That is not a recovery and pages no one. The default <code>pending_for</code> of "not reporting" rules (5 min) is longer than the poll interval, so an archived resource leaves the list before its alert can fire.</li>
+<li><b>A failed fetch changes nothing.</b> A timeout, a 5xx, bad JSON or a schema error keeps the last list. After 15 minutes of failed fetches, Beacon raises one "Registry stale" alert. If Atlas is down, its resources stay registered, so nothing looks down because of the registry.</li>
+<li><b>A big shrink is refused.</b> A response that removes more than 10% of the source's rows (and at least 50 rows) is not applied. The old list stays, and Beacon raises "Registry shrink refused". A Beacon Admin clicks "Apply pending list" in Desk if the shrink is real. This stops a buggy or empty response from quietly closing real alerts.</li>
+<li><b>One owner for each resource.</b> A <code>resource_id</code> is unique in a region. If a second source lists an ID that another source owns, Beacon ignores that row and raises one Low "Registry conflict" alert. A move inside one source, such as a site that moves to another server, is atomic: the next list has the new parent.</li>
+<li><b>What Beacon checks.</b> A resource is checked only if it is Active, all its ancestors are Active, <code>monitoring_disabled</code> is off, and it has been Active longer than the rule's <code>new_resource_grace</code>. A suspended host therefore also stops checks on its VMs and sites.</li>
+<li><b>Mirror in ClickHouse.</b> "Not reporting" rules and service health queries join the registry. So when a region's copy changes, Beacon writes it to that region's ClickHouse, at most once a minute. It fills <code>beacon.resources_next</code> and swaps it in with <code>EXCHANGE TABLES</code>. There is one writer and one atomic swap of about 100,000 rows. If the write fails, the old mirror stays, and Beacon tries again the next minute.</li>
+</ul>
+<pre><code>CREATE DATABASE beacon;                 -- in each region's ClickHouse; only Beacon writes here
+CREATE TABLE beacon.resources (
+  resource_id String, resource_type LowCardinality(String), parent_id String,
+  status Enum8('Pending' = 1, 'Active' = 2, 'Suspended' = 3, 'Terminated' = 4),
+  checked Bool,                         -- Active, ancestors Active, monitoring not disabled
+  labels Map(LowCardinality(String), String)
+) ENGINE = MergeTree ORDER BY (resource_type, resource_id);
+CREATE TABLE beacon.resources_next AS beacon.resources;
+
+-- each sync
+TRUNCATE TABLE beacon.resources_next;
+INSERT INTO beacon.resources_next VALUES (...);
+EXCHANGE TABLES beacon.resources AND beacon.resources_next;</code></pre>
+<p><b>Tested.</b> The swap, a "not reporting" join on <code>beacon.resources</code> and <code>counter_increase</code> below ran in <code>clickhouse local</code> 26.10.3.7 against sample data: an old list, a new list without one site, and a counter reset. The results were as expected.</p>
+
+<h2 id="evaluation">9. Rule evaluation</h2>
+<figure>
+<svg id="states" viewBox="0 0 860 250" role="img" aria-label="Alert states: a failing row creates Pending. Pending becomes Firing after pending_for of continuous failure. A clean result while Pending clears the alert. Firing becomes Resolved after resolve_after of continuous clean time. A failing row while recovering resets the clean timer. Errors never count as clean."></svg>
+<figcaption>Timers measure continuous time. A gap of more than 3 intervals without a successful query resets them.</figcaption>
+</figure>
+<p>Every minute, the scheduler queues each due Rule Evaluation as a job with ID <code>evaluate:{rule}:{region}</code>, with some jitter. Each job does this:</p>
+<pre><code>1. Region telemetry Unreachable?             -&gt; skip. The region alert covers it.
+2. Take an advisory lock for (rule, region).
+3. Run the SQL with the beacon profile.
+   Error, duplicates, or over 250,000 rows?   -&gt; consecutive_errors += 1; stop. Nothing changes.
+4. Gap since last_success_at &gt; 3 x interval? -&gt; reset started_at (Pending) and clean_since.
+5. Filter rows with Beacon's Resource copy:
+   unknown resource_id                        -&gt; drop, count in unknown_rows
+   not checked (status, ancestors, disabled, grace) -&gt; drop
+6. Close open alerts whose resource is no longer checked:
+   Resolved (Resource removed) or Resolved (Disabled). These never count as recovery.
+7. Diff the rest with open alerts:
+   new row                       -&gt; Pending (Firing at once if pending_for = 0)
+   row, alert Pending            -&gt; Firing once failing for pending_for
+   row, alert Firing             -&gt; clear clean_since
+   no row, alert Pending         -&gt; Resolved (Cleared)
+   no row, alert Firing          -&gt; set clean_since; Resolved (Recovered) after resolve_after
+8. Recompute suppressed for open alerts (Silence, In Progress maintenance scope).
+9. Write changes in chunks of 5,000 rows in one transaction. Update Rule Evaluation.
+10. Enforce the incident invariant for this region (see Incidents).</code></pre>
+<p><b>Time-based work</b> runs in the tick every minute. It starts and ends maintenance, recomputes suppression when a silence ends, steps escalations, and closes the open alerts of disabled rules and regions with "Disabled". After each step it enforces the invariant. The tick sends the heartbeat only if no Rule Evaluation is overdue by more than 2 intervals.</p>
+<p><b>Region telemetry</b> is checked first, every minute. <b>Unreachable</b>: the ClickHouse probe fails. <b>Suspect</b>: fewer than 50% of the region's checked resources sent a sample in the last 5 minutes. Rules still run and page, because it can be a real outage. Only the public status of that region is frozen. Two good checks return the region to OK.</p>
+
+<h2 id="incidents">10. Incidents and impact</h2>
+<h3>The invariant</h3>
+<p>After every evaluation and every tick, Beacon takes one advisory lock for the region and checks each Firing alert that is not suppressed and is not in an open incident. In order:</p>
+<ol>
+<li><b>Ancestor.</b> If an open incident has a scope row that covers the alert's resource through an ancestor, join it. No page.</li>
+<li><b>Group.</b> If an open incident has the alert's <code>group_key</code> (rule and region by default), join it. A higher severity raises the incident and notifies again (see Paging).</li>
+<li><b>Reopen.</b> If an incident with that <code>group_key</code> was resolved less than <code>reopen_window_minutes</code> ago, was Internal and was created by Beacon, reopen it to Triggered.</li>
+<li><b>Create.</b> Otherwise create an Internal incident in Triggered with that <code>group_key</code>. If the resource has no parent, paging starts at once. Otherwise it waits <code>page_delay</code>, so a parent incident can merge it.</li>
+</ol>
+<p>When an incident opens with a scope that covers other open incidents, Beacon merges each covered incident that nobody acknowledged and that is Internal. Their alerts move, their status becomes Merged, and <code>merged_into</code> is set. Staff can also merge by hand, for example to join one problem across regions.</p>
+<p>An incident created by Beacon from a "not reporting" rule for a resource with children gets the scope row "this resource, include descendants". Other incidents start with the scope of their alerts. Staff can add scope rows.</p>
+<h3>Impact without one row for each resource</h3>
+<pre><code>Case 1: one host goes down                  Case 2: one proxy node drops connections
+
+host bom-h12            &lt;- scope row        proxy bom-proxy-2        &lt;- scope row 1
+├── vm server-a            include_descendants
+│   ├── site a1.example                     scope row 2: region bom, type Site, any
+│   └── site a2.example                     affected service: Sites · bom = Degraded
+└── vm server-b                             (shown to customers once the incident is Public)
+    └── site b1.example
+
+1 incident, 1 update stream, 1 private link. No row for each server or site.</code></pre>
+<p><b>Is X affected?</b> Beacon walks up the parent chain of X (at most 4 steps). X is affected if a scope row matches X, matches an ancestor with <code>include_descendants</code>, or matches its region and type with a blank ID. A scope row with only a region covers the whole region.</p>
+<p><b>Who is affected?</b> Desk has "Export affected resources" (CSV), which expands the scope from the registry. In v1, support uses it with "Copy private link" to tell customers. In phase 4, Central does this through the API.</p>
+<h3>Closing</h3>
+<ul>
+<li>An Internal incident created by Beacon resolves itself when all its alerts are resolved, in any open status.</li>
+<li>An Unlisted or Public incident waits for a person. Beacon posts "all alerts resolved" to chat after 30 minutes.</li>
+<li>Staff cannot resolve an incident while it has Firing alerts that are not suppressed. The Resolve dialog offers "Silence the remaining alerts for N hours and resolve". So no alert is left without an incident.</li>
+</ul>
+<h3>Publishing</h3>
+<p>The <b>Publish</b> action is one dialog: visibility (Unlisted or Public), affected services with impact, and the first public message, which is required. After that, new updates are public by default. Unlisted creates a 32-character token. Internal clears it. Each visibility change is in the document history.</p>
+
+<h2 id="maintenance">11. Maintenance and muting</h2>
+<table>
+<tr><th>Use</th><th>When</th><th>Alerts</th><th>Uptime</th></tr>
+<tr><td><b>Maintenance</b></td><td>Planned work with a start and an end, internal or announced</td><td>Recorded, suppressed in its scope</td><td>Excluded only for its affected services with impact Maintenance, and only if created before it starts</td></tr>
+<tr><td><b>Silence</b></td><td>A short mute for a known problem, up to 30 days, with a reason</td><td>Recorded, suppressed</td><td>Never excluded</td></tr>
+<tr><td><b><code>monitoring_disabled</code></b></td><td>A resource we never want to check (test machines, special customers), with a reason</td><td>Not evaluated</td><td>Not applicable</td></tr>
+</table>
+<ul>
+<li>A maintenance's start and scope are locked when it starts. Its end can be extended until it passes.</li>
+<li>Saving a Public maintenance without an affected service of impact Maintenance shows a warning, because then nothing is excluded from uptime.</li>
+<li><b>No storm after a long window.</b> When a maintenance ends, Beacon looks at the alerts in its scope that still fire. Alerts that another silence or maintenance still covers stay suppressed. Alerts that are already in an open incident stay there. All others go into one incident, "Still failing after &lt;maintenance title&gt;". Then normal paging applies.</li>
+<li>A silence can match one disk: <code>resource_id</code> plus <code>alert_key</code>. A silence with a future <code>starts_at</code> takes effect at that time.</li>
+</ul>
+
+<h2 id="services">12. Service status and uptime</h2>
+<p>A service is one line on the status page, such as "Sites" or "Object Storage". A Region-scope service is defined once and evaluated in each region. A Global service, such as Dashboard or API, reads the ClickHouse of its <code>query_region</code>.</p>
+<p>Each minute, the health query returns <code>healthy</code> and <code>expected</code>. <code>expected</code> is the number of checked resources in the registry mirror (<code>beacon.resources</code>). A resource counts as healthy only if it has a sample from the last 5 minutes, so a resource that stops reporting counts as unhealthy. Beacon refuses a result with <code>healthy &lt; 0</code> or <code>healthy &gt; expected</code> and counts that minute as Unknown. Health counts platform failures only. A site that returns 500 from its own code is healthy for the platform. If it were not, a few broken customer apps in 100,000 sites would keep "Sites" Degraded.</p>
+<pre><code>Checked in this order:
+region Unreachable, query error, invalid result, expected = 0 -&gt; Unknown
+In Progress maintenance lists this service + region (impact Maintenance) -&gt; Maintenance
+ratio = healthy / expected:  &gt;= 99.5% Operational, &gt;= 95% Degraded, &gt;= 80% Partial Outage, else Major Outage
+
+Shown on the page: worst(computed, impact of open Public incidents)
+Unknown, or region Suspect: worst(last computed state before the freeze, impact of open Public incidents),
+                             with "data delayed"</code></pre>
+<pre><code>Minute counted as: Unknown or Suspect -&gt; unknown; Maintenance -&gt; maintenance if excluded_from_uptime,
+                   else by ratio; otherwise the computed state. Idempotent through last_counted_minute.
+
+observed = all minutes - unknown_minutes
+eligible = observed - maintenance_minutes
+down     = partial_minutes + major_minutes          (Degraded counts as up)
+uptime % = (eligible - down) / eligible             eligible = 0 -&gt; "no data"</code></pre>
+<p>This is <i>service-status uptime</i>. It is not the share of successful customer requests. The page shows coverage (observed ÷ all minutes) next to it.</p>
+
+<h2 id="oncall">13. On-call and paging</h2>
+<table>
+<tr><th>Severity</th><th>Chat</th><th>Email to responders</th><th>Phone call</th><th>Backup after</th></tr>
+<tr><td>Critical</td><td>Yes</td><td>Yes</td><td>Yes</td><td>2 min</td></tr>
+<tr><td>High</td><td>Yes</td><td>Yes</td><td>Yes</td><td>5 min</td></tr>
+<tr><td>Medium</td><td>Yes</td><td>Yes</td><td>No</td><td>n/a</td></tr>
+<tr><td>Low</td><td>Yes</td><td>No</td><td>No</td><td>n/a</td></tr>
+</table>
+<ul>
+<li><b>Who is called.</b> The primary override until <code>override_until</code>, if that person is an active responder, else the first active responder, then down the list in order. A responder on leave is set inactive. With no active responder who has a phone, phone calls cannot be enabled, and the workspace shows a red warning.</li>
+<li><b>Acknowledgement is a key press.</b> Twilio <code>&lt;Gather&gt;</code> asks for 1. Only <code>Digits=1</code> counts. Beacon matches the CallSid to the Notification and the incident, checks the Twilio signature, and ignores repeated callbacks. Email links open a confirm page that sends a POST, so a mail scanner cannot acknowledge.</li>
+<li><b>Escalation state is stored on the incident</b> (<code>escalation</code>, <code>page_round</code>, <code>page_index</code>, <code>next_page_at</code>). The tick moves it.</li>
+<li><b>Desk buttons:</b> "Page on-call" for an incident that staff created, and "Send test page" in Beacon Settings to check phone numbers.</li>
+<li><b>Paging pause.</b> <code>paging_paused</code> stops all calls and emails, for example after a database restore. The workspace shows it in red.</li>
+</ul>
+
+<h2 id="states-table">14. State handling</h2>
+<p>Each object with a lifecycle has one table. Beacon changes state only on these events. Any other change is a bug and raises an error.</p>
+
+<h3>Alert</h3>
+<table>
+<tr><th>From</th><th>Event</th><th>To</th><th>Side effects</th></tr>
+<tr><td>none</td><td>Row returned for a checked resource</td><td>Pending, or Firing if <code>pending_for</code> = 0</td><td>Insert, <code>started_at</code> = now</td></tr>
+<tr><td>Pending</td><td>Row returned, failing for <code>pending_for</code></td><td>Firing</td><td><code>fired_at</code>. Invariant attaches it to an incident.</td></tr>
+<tr><td>Pending</td><td>No row</td><td>Resolved (Cleared)</td><td>Never paged. Purged after <code>cleared_alert_days</code>.</td></tr>
+<tr><td>Firing</td><td>No row</td><td>Firing</td><td>Set <code>clean_since</code> if empty</td></tr>
+<tr><td>Firing</td><td>Row returned</td><td>Firing</td><td>Clear <code>clean_since</code></td></tr>
+<tr><td>Firing</td><td>No row, clean for <code>resolve_after</code></td><td>Resolved (Recovered)</td><td><code>open_key</code> = NULL. Incident may close.</td></tr>
+<tr><td>Pending, Firing</td><td>Query error, region Unreachable</td><td>No change</td><td>The gap rule applies at the next success</td></tr>
+<tr><td>Pending, Firing</td><td>Next success after a gap &gt; 3 × interval</td><td>No change</td><td>Reset <code>started_at</code> (Pending) and <code>clean_since</code></td></tr>
+<tr><td>Pending, Firing</td><td>Resource or an ancestor no longer Active, or gone from the registry</td><td>Resolved (Resource removed)</td><td>Not a recovery. Note on the incident.</td></tr>
+<tr><td>Pending, Firing</td><td><code>monitoring_disabled</code>, rule disabled, region disabled</td><td>Resolved (Disabled)</td><td>Evaluation step 6, or the tick for disabled rules and regions</td></tr>
+<tr><td>Pending, Firing</td><td>A Silence or In Progress maintenance starts to cover it</td><td>No change</td><td><code>suppressed</code> = 1</td></tr>
+<tr><td>Pending, Firing</td><td>The last cover ends</td><td>No change</td><td><code>suppressed</code> = 0. Invariant runs.</td></tr>
+<tr><td>Resolved</td><td>Any</td><td>Resolved</td><td>Immutable. A new failure is a new episode.</td></tr>
+</table>
+
+<h3>Incident (type Incident)</h3>
+<table>
+<tr><th>From</th><th>Event</th><th>To</th><th>Side effects</th></tr>
+<tr><td>none</td><td>Invariant creates it</td><td>Triggered</td><td>Internal. Chat post. Escalation starts (see below).</td></tr>
+<tr><td>none</td><td>Staff create it in Desk</td><td>Investigating</td><td>No paging until "Page on-call"</td></tr>
+<tr><td>Triggered</td><td>Acknowledge: key 1, email confirm, Desk, API</td><td>Investigating</td><td><code>acknowledged_by</code>. Escalation Stopped.</td></tr>
+<tr><td>Triggered</td><td>An incident opens whose scope covers it, and it is Internal</td><td>Merged</td><td>Alerts and scope move. <code>merged_into</code> set. Escalation Stopped.</td></tr>
+<tr><td>Any open</td><td>Staff post an update</td><td>Investigating, Identified or Monitoring</td><td>Update row. Public if the incident is not Internal, unless unticked.</td></tr>
+<tr><td>Any open</td><td>Publish</td><td>No change</td><td>Visibility, affected services, first public update</td></tr>
+<tr><td>Any open</td><td>An alert with higher severity joins</td><td>No change</td><td>Severity raised. Triggered: escalation restarts at the new level. Acknowledged: the acknowledger gets one notification at the new level.</td></tr>
+<tr><td>Investigating, Identified, Monitoring</td><td>One of its alerts stops being suppressed</td><td>No change</td><td>The acknowledger gets one chat and email notification. No call.</td></tr>
+<tr><td>Any open</td><td>All alerts resolved, Internal, created by Beacon</td><td>Resolved</td><td>Chat post. Escalation Stopped.</td></tr>
+<tr><td>Any open</td><td>All alerts resolved, Unlisted or Public</td><td>No change</td><td>Chat reminder after 30 min</td></tr>
+<tr><td>Any open</td><td>Staff resolve, no unsuppressed Firing alerts</td><td>Resolved</td><td>Escalation Stopped</td></tr>
+<tr><td>Any open</td><td>Staff resolve with unsuppressed Firing alerts</td><td>Refused</td><td>Dialog offers "Silence remaining alerts and resolve"</td></tr>
+<tr><td>Resolved</td><td>Invariant, same <code>group_key</code>, within the reopen window, Internal, created by Beacon</td><td>Triggered</td><td>Reopened. Escalation starts again.</td></tr>
+<tr><td>Resolved</td><td>The same, but Unlisted or Public</td><td>No change</td><td>The invariant creates a new Internal incident instead</td></tr>
+<tr><td>Any</td><td>Staff merge it into another</td><td>Merged</td><td>Alerts and scope move</td></tr>
+</table>
+
+<h3>Incident (type Maintenance)</h3>
+<table>
+<tr><th>From</th><th>Event</th><th>To</th><th>Side effects</th></tr>
+<tr><td>none</td><td>Created before <code>scheduled_start</code></td><td>Scheduled</td><td><code>excluded_from_uptime</code> = 1</td></tr>
+<tr><td>none</td><td>Created after <code>scheduled_start</code></td><td>In Progress</td><td><code>excluded_from_uptime</code> = 0. It suppresses alerts only.</td></tr>
+<tr><td>Scheduled</td><td>Edit times or scope</td><td>Scheduled</td><td>Allowed</td></tr>
+<tr><td>Scheduled</td><td>Cancel</td><td>Cancelled</td><td>Nothing was excluded</td></tr>
+<tr><td>Scheduled</td><td>Tick: <code>scheduled_start</code> reached</td><td>In Progress</td><td>Start and scope locked. Alerts in scope suppressed.</td></tr>
+<tr><td>In Progress</td><td>Extend <code>scheduled_end</code> before it passes</td><td>In Progress</td><td>The extension is excluded on the same terms</td></tr>
+<tr><td>In Progress</td><td>Tick: <code>scheduled_end</code> reached, or staff complete it</td><td>Completed</td><td>Still-firing alerts in scope go into one "Still failing after ..." incident</td></tr>
+</table>
+
+<h3>Silence</h3>
+<table>
+<tr><th>Condition</th><th>Effect</th></tr>
+<tr><td><code>starts_at</code> ≤ now &lt; <code>expires_at</code> and not revoked</td><td>Active: matching alerts are suppressed</td></tr>
+<tr><td>Before <code>starts_at</code></td><td>Upcoming: no effect yet</td></tr>
+<tr><td>Expired or revoked</td><td>The tick recomputes <code>suppressed</code>. The invariant and escalation resume.</td></tr>
+</table>
+
+<h3>Escalation (fields on Incident)</h3>
+<table>
+<tr><th>From</th><th>Event</th><th>To</th><th>Side effects</th></tr>
+<tr><td>None</td><td>Incident Triggered, severity Low or Medium</td><td>Stopped</td><td>Chat (and email for Medium) only</td></tr>
+<tr><td>None</td><td>Triggered, High or Critical, resource has a parent</td><td>Waiting</td><td><code>next_page_at</code> = now + <code>page_delay</code></td></tr>
+<tr><td>None, Waiting</td><td>No parent, or the delay passed, still Triggered</td><td>Calling</td><td>Call responder <code>page_index</code>. Notification row.</td></tr>
+<tr><td>Calling</td><td>No key 1 by <code>next_page_at</code>, or Twilio failed</td><td>Calling</td><td>Next responder. On failure, also "call failed" to chat and email. After the last responder, wait <code>repeat_every_minutes</code> and start the next round.</td></tr>
+<tr><td>Calling</td><td><code>max_rounds</code> done</td><td>Exhausted</td><td>Chat and email to all: "unacknowledged". Incident stays Triggered.</td></tr>
+<tr><td>Waiting, Calling</td><td>All its Firing alerts become suppressed</td><td>Paused</td><td>Cancel the queued call</td></tr>
+<tr><td>Paused</td><td>An alert is no longer suppressed, still Triggered</td><td>Calling</td><td>Continue from the current responder</td></tr>
+<tr><td>Waiting, Calling</td><td><code>paging_paused</code> turned on</td><td>Paused</td><td>Cancel the queued call</td></tr>
+<tr><td>Paused</td><td><code>paging_paused</code> turned off, still Triggered, unsuppressed alerts</td><td>Calling</td><td>Continue from the current responder</td></tr>
+<tr><td>Any</td><td>Acknowledged, resolved or merged</td><td>Stopped</td><td>Cancel the queued call</td></tr>
+</table>
+
+<h3>Registry resource</h3>
+<table>
+<tr><th>From</th><th>Event</th><th>To</th><th>Side effects</th></tr>
+<tr><td>none</td><td>Listed as Pending, Active or Suspended</td><td>That status</td><td>Active sets <code>active_since</code></td></tr>
+<tr><td>Pending, Suspended, Terminated</td><td>Listed as Active</td><td>Active</td><td>New <code>active_since</code>, so the grace applies again</td></tr>
+<tr><td>Active</td><td>Listed as Suspended (stopped VM, suspended site)</td><td>Suspended</td><td>Its alerts, and those of its descendants, resolve as "Resource removed"</td></tr>
+<tr><td>Any</td><td>Listed as Terminated, or missing from its source's latest list</td><td>Terminated</td><td>Same. Beacon keeps its copy for 30 days.</td></tr>
+<tr><td>Any</td><td>Parent changes (migration)</td><td>No change</td><td>Copy updated. Impact uses the current tree.</td></tr>
+<tr><td>Any</td><td>Fetches from its source fail for 15 min</td><td>No change (frozen)</td><td>One "Registry stale" alert, which resolves at the next good fetch</td></tr>
+<tr><td>Any</td><td>Its source returns a list that removes more than 10% (and at least 50) of its rows</td><td>No change</td><td>"Registry shrink refused" alert. A Beacon Admin applies the list or leaves it.</td></tr>
+<tr><td>Any</td><td>A second source lists the same <code>resource_id</code></td><td>No change</td><td>The row is ignored. One Low "Registry conflict" alert.</td></tr>
+</table>
+
+<h3>Rule evaluation, region telemetry, service</h3>
+<table>
+<tr><th>Object</th><th>States and moves</th></tr>
+<tr><td>Rule Evaluation</td><td>Healthy → Erroring at the first error. Erroring → Broken at 3 errors in a row, which raises a "Rule broken" alert (severity High). Any success → Healthy, which resolves that alert. A disabled rule is not scheduled.</td></tr>
+<tr><td>Region telemetry</td><td>Precedence: Unreachable &gt; Suspect &gt; OK. Each check sets the state. Leaving Unreachable or Suspect needs two good checks in a row. Unreachable and Suspect each raise one alert for the region.</td></tr>
+<tr><td>Service State</td><td>Computed every minute with the order in "Service status and uptime". It is never set by hand. Incidents change only what the page shows.</td></tr>
+</table>
+
+<h2 id="scenarios">15. Scenarios</h2>
+<p>These cases are the acceptance tests and the phase 2 game day list.</p>
+<table>
+<tr><th>Scenario</th><th>Expected result</th></tr>
+<tr><td colspan="2"><b>Detection</b></td></tr>
+<tr><td>One host disk goes under 10% free</td><td>Pending, then Firing after 5 min. One incident. High, so a call. It resolves 2 clean minutes after the fix.</td></tr>
+<tr><td>A metric moves up and down across the limit</td><td>The continuous timers stop flapping pages. A Pending alert that clears is never paged.</td></tr>
+<tr><td>Two disks fill on one host</td><td>Two alerts with different <code>alert_key</code>, one incident through the group key</td></tr>
+<tr><td>A customer's site returns 500 from its own code</td><td>No staff page. Standard rules and Sites health count only platform failures (502, 504, unreachable).</td></tr>
+<tr><td>A counter resets after a process restart</td><td><code>counter_increase</code> counts the new value as growth. No negative spike.</td></tr>
+<tr><td>A producer clock runs 10 minutes fast</td><td>Datum rejects samples more than 5 min in the future. The resource shows "not reporting", and the clock rule fires.</td></tr>
+<tr><td>A rule returns 400,000 rows after a bad edit</td><td>Over the limit: the evaluation fails. Nothing changes. After 3 runs, "Rule broken".</td></tr>
+<tr><td>A rule returns a resource that is not in the registry</td><td>Dropped and counted in <code>unknown_rows</code>. If this lasts 1 hour, one Low alert.</td></tr>
+<tr><td colspan="2"><b>Topology</b></td></tr>
+<tr><td>A host fails with 30 VMs and 400 sites</td><td>One host incident with descendants. VM incidents merge into it. Child alerts join. One call.</td></tr>
+<tr><td>The host alert fires more than 90 s after the VM alerts</td><td>The VM incident may page first. When the host incident opens, the VM incident merges if nobody acknowledged it, or staff merge it by hand. At most one extra call.</td></tr>
+<tr><td>One proxy node drops connections</td><td>One incident. Scope: the proxy node and "all sites in bom". Sites · bom shows Degraded after the incident is published.</td></tr>
+<tr><td>40 servers on different hosts stop reporting</td><td>One incident for the rule and region, with 40 alerts</td></tr>
+<tr><td>One rack loses its network path to Datum</td><td>Those hosts stop reporting. They share no parent, so you get one incident per rule and region. That is correct: we are blind there.</td></tr>
+<tr><td>A problem spans bom and fra</td><td>Two incidents (one per region). Staff merge them. Each region's alerts recover on their own.</td></tr>
+<tr><td colspan="2"><b>Lifecycle</b></td></tr>
+<tr><td>A VM is still provisioning</td><td>Pending in the registry, so it is not checked. When it becomes Active, the 10-minute grace applies.</td></tr>
+<tr><td>A VM is stopped on purpose</td><td>Suspended. Its alerts and its sites' alerts resolve as "Resource removed". No page.</td></tr>
+<tr><td>A site is archived while its alert fires</td><td>Missing from the next list, within a minute. Resolved as "Resource removed", not a recovery.</td></tr>
+<tr><td>A site moves to another server</td><td>The site owner's next list has the new parent. Beacon's copy changes within a minute.</td></tr>
+<tr><td>Atlas is down, or its endpoint fails</td><td>Atlas resources stay as they were. One "Registry stale" alert after 15 min. No false "down" alerts from the registry.</td></tr>
+<tr><td>A bug makes a source return an empty or short list</td><td>More than 10% removed: not applied. "Registry shrink refused" alert. The old list stays, and real alerts keep firing.</td></tr>
+<tr><td>500 sites are archived in one batch</td><td>If that is more than 10% of the list, an admin applies it with one click. Until then, those sites stay checked and can alert as "not reporting".</td></tr>
+<tr><td>A new region is added</td><td>Staff add a Region. Rules with no region list and Region-scope services apply to it.</td></tr>
+<tr><td colspan="2"><b>Maintenance and muting</b></td></tr>
+<tr><td>Kernel update on 3 hosts, internal</td><td>Maintenance with scope rows for the hosts with descendants. No pages. No uptime exclusion: there is no affected service row, and none is needed.</td></tr>
+<tr><td>Announced object storage upgrade in sin</td><td>Public maintenance, Object Storage · sin = Maintenance. Excluded from uptime. Purple bar.</td></tr>
+<tr><td>Region-wide network maintenance in fra</td><td>One scope row with only the region. At the end, what still fails goes into one incident.</td></tr>
+<tr><td>Maintenance created after the outage started</td><td>Suppresses alerts, but <code>excluded_from_uptime</code> = 0. The downtime stays visible.</td></tr>
+<tr><td>A silence expires while the alert still fires</td><td>The invariant runs. A Paused escalation resumes. If the incident was acknowledged, the acknowledger gets one notification.</td></tr>
+<tr><td colspan="2"><b>Paging</b></td></tr>
+<tr><td>Nobody answers</td><td>Down the list for <code>max_rounds</code>, then Exhausted. Chat and email to all. The incident stays Triggered.</td></tr>
+<tr><td>The responder picks up but does not press 1</td><td>Not acknowledged. Escalation continues.</td></tr>
+<tr><td>Twilio fails</td><td>Notification Failed. "Call failed" to chat and email. The next responder is called.</td></tr>
+<tr><td>The primary is on leave</td><td>Set inactive, or set a primary override. An override to an inactive person is ignored.</td></tr>
+<tr><td>The problem returns 10 min after an auto-resolve</td><td>The same Internal incident reopens. A Public one is not reopened. A new Internal incident starts.</td></tr>
+<tr><td colspan="2"><b>Platform failures</b></td></tr>
+<tr><td>A region's ClickHouse is down</td><td>Unreachable. One alert. Rules skipped, nothing resolves. Services Unknown, shown as "data delayed".</td></tr>
+<tr><td>Half the reporting stops in a region</td><td>Suspect. Rules still page. The public status for that region is frozen until a person publishes or the region recovers.</td></tr>
+<tr><td>Beacon is down for 20 minutes</td><td>The dead-man switch calls. The static status page stays up with its last time. After restart, the gap rule resets timers. Those minutes are unknown.</td></tr>
+<tr><td>Beacon's database is restored from a backup</td><td>Run the restore with <code>paging_paused</code> on. Let one cycle reconcile alerts. Review open incidents. Then turn paging back on.</td></tr>
+<tr><td>Two workers run the same evaluation</td><td>The advisory lock lets one run. The unique <code>open_key</code> blocks duplicates.</td></tr>
+<tr><td colspan="2"><b>Configuration</b></td></tr>
+<tr><td>A rule's SQL changes</td><td>CI tests the new SQL before sync. Open alerts are kept and resolve normally.</td></tr>
+<tr><td>A rule file is deleted from a repository</td><td>Sync disables it, but only rules of that repository. Its open alerts resolve as "Disabled".</td></tr>
+<tr><td>A wrong incident was made Public</td><td>Change the visibility. The next build removes it from the page and feeds.</td></tr>
+<tr><td>An unlisted link leaks</td><td>Regenerate the token. The builder deletes the old files.</td></tr>
+</table>
+
+<h2 id="dx">16. Integrating a V2 service</h2>
+<p>For a node that Atlas manages, a service team does <b>two things</b>: export metrics and write rules. Atlas already gives the node an identity, a Datum token and a registry entry. A service that owns resources Atlas does not know about serves <code>GET /api/beacon/resources</code>, and a Beacon Admin adds it as a Resource Source. Standard rules (not reporting, disk, memory, OOM kills, clock, failed units) apply to every registered node that runs the standard Vector host metrics.</p>
+<h3>1. Export metrics</h3>
+<p>Go services expose Prometheus <code>/metrics</code> on localhost. The Vector on the node scrapes it and sends it with remote write. Datum already accepts remote write v1 on <code>/v1/ingest/remote</code>. Add a source and append it to the existing Datum sink:</p>
+<pre><code># /etc/vector/conf.d/http-proxy.toml
+[sources.http_proxy]
+type = "prometheus_scrape"
+endpoints = ["http://127.0.0.1:9180/metrics"]
+scrape_interval_secs = 15
+
+# the node's existing sink: add "http_proxy" to inputs. One sink per machine, because
+# Datum allows 12 requests a minute per token; keep batch.timeout_secs at 10 or more.</code></pre>
+<p>Frappe apps and Python daemons use <code>datum_client</code> (<code>Batch</code>, <code>record</code>). Name metrics <code>&lt;namespace&gt;_&lt;subsystem&gt;_&lt;target&gt;_&lt;unit&gt;</code>, for example <code>proxy_http_responses_total</code>. Keep labels small and stable.</p>
+<h3>2. Write rules</h3>
+<p>Put each rule in <code>beacon/rules/&lt;name&gt;.sql</code> in the service's repository. The header keys are the Alert Rule field names. Use the standard views, which Datum provides, so that counters and freshness are right:</p>
+<table>
+<tr><th>View</th><th>Returns</th></tr>
+<tr><td><code>counter_increase(metric, window)</code></td><td><code>resource_id, labels, increase</code>, with resets handled for each series</td></tr>
+<tr><td><code>latest_value(metric, window)</code></td><td><code>resource_id, labels, value, ts</code>, the newest sample in the window</td></tr>
+<tr><td><code>last_seen(window)</code></td><td><code>resource_id, last_ts</code>, for "not reporting" rules joined with <code>beacon.resources</code></td></tr>
+</table>
+<pre><code>CREATE VIEW datum.counter_increase AS          -- parameterized view, shipped by Datum
+SELECT resource_id, labels, length(vals) AS samples,
+       arraySum(arrayMap((d, v) -&gt; if(d &gt;= 0, d, v), arrayDifference(vals), vals)) AS increase
+FROM (
+  SELECT resource_id, labels, arrayMap(x -&gt; x.2, arraySort(groupArray((ts, value)))) AS vals
+  FROM datum.samples_recent
+  WHERE metric = {metric:String} AND ts &gt; now() - toIntervalSecond({window:UInt32})
+  GROUP BY resource_id, labels
+);
+-- The first sample in the window is the baseline. A drop means a reset: the new value is growth.
+-- A series with fewer than 2 samples has increase 0; rules can require samples &gt;= 2.</code></pre>
+<pre><code>-- beacon/rules/upstream-errors.sql
+-- title: Proxy 502/504 above 5% of requests
+-- owner_team: http-proxy
+-- severity: High
+-- resource_type: Proxy Server
+-- interval: 60
+-- pending_for: 600
+-- resolve_after: 300
+-- runbook_url: https://github.com/frappe/atlas/blob/develop/docs/operate/proxy.md
+SELECT resource_id, '' AS alert_key,
+       sumIf(increase, labels['code'] IN ('502', '504')) / nullIf(sum(increase), 0) * 100 AS value,
+       concat(toString(round(value, 1)), '% upstream errors') AS detail
+FROM datum.counter_increase(metric = 'proxy_http_responses_total', window = 600)
+GROUP BY resource_id
+HAVING value &gt; 5</code></pre>
+<p>The rule does not need to filter for Active resources. Beacon does that with its registry copy (evaluation step 5). A customer-facing service adds <code>beacon/services/&lt;name&gt;.sql</code> with a health query that returns <code>healthy, expected</code>.</p>
+<h3>3. Test and sync from CI</h3>
+<pre><code>$ beacon-rules query --region bom "SELECT ..."   # ad-hoc read-only query, for writing SQL
+$ beacon-rules test beacon/                      # every candidate rule and service in every region
+$ beacon-rules sync beacon/                      # upsert; disable what this repository removed</code></pre>
+<p><code>beacon-rules</code> is one standard-library Python script in the Beacon repository. It calls two API routes with a staff token. <code>query</code> sends one candidate with <code>"raw": true</code> to the test route: no contract checks, at most 100 rows, the same read-only limits. Developers do not need ClickHouse credentials. <code>test</code> runs the <i>candidate</i> SQL, not the saved rule. It checks the contract (columns, types, duplicates, row limit) and reports rows, duration and errors for each region. An unreachable region is a warning, not a failure. <code>sync</code> touches only rules and services of that repository, and each <code>rule_key</code> is <code>&lt;repository&gt;:&lt;path&gt;</code>.</p>
+<h3>4. Only for nodes Atlas does not manage</h3>
+<ul>
+<li>Ask Atlas for a Datum token for the machine. Atlas renews tokens daily into the node's config file.</li>
+<li>Register the machine and its children with <code>Datum.register(resources, full=True)</code> every 15 minutes, and send changes at once.</li>
+<li>A new <code>resource_type</code> is a plain string. It needs no Beacon release.</li>
+</ul>
+
+<h2 id="api">17. REST API</h2>
+<p>The API uses the <a href="https://github.com/frappe/atlas/tree/develop/atlas/api">Atlas API style</a>. Routes are under <code>/api/beacon/</code> with Pydantic strict models. Lists use <code>{items, offset, limit, has_more}</code>. Actions use <code>/{id}/actions/&lt;verb&gt;</code>. Errors have codes such as <code>incident_not_found</code>.</p>
+<table>
+<tr><th>Method and path</th><th>Auth</th><th>Purpose</th></tr>
+<tr><td colspan="3"><b>Rules and services from Git</b></td></tr>
+<tr><td><code>POST /api/beacon/rule-sets/{repository}/actions/test</code></td><td>Beacon Admin</td><td>Run candidate rules and services in each region. Saves nothing. A candidate with <code>"raw": true</code> returns up to 100 rows without contract checks.</td></tr>
+<tr><td><code>POST /api/beacon/rule-sets/{repository}/actions/sync</code></td><td>Beacon Admin</td><td>Upsert. Disable items of this repository that are missing from the request.</td></tr>
+<tr><td colspan="3"><b>Served by each Resource Source (Beacon calls it)</b></td></tr>
+<tr><td><code>GET /api/beacon/resources</code></td><td>Source token</td><td>The full current list, with ETag. See Resource registry.</td></tr>
+<tr><td colspan="3"><b>Incidents</b></td></tr>
+<tr><td><code>GET /api/beacon/incidents</code></td><td>Responder</td><td>Filters: <code>status</code>, <code>visibility</code>, and <code>region</code> + <code>resource_id</code> for "affecting" (ancestors checked)</td></tr>
+<tr><td><code>GET /api/beacon/incidents/{incident_id}</code></td><td>Responder</td><td>Incident with updates and alert count</td></tr>
+<tr><td><code>POST /api/beacon/incidents/{incident_id}/actions/acknowledge</code></td><td>Responder</td><td>For chat-ops and scripts</td></tr>
+<tr><td><code>POST /api/beacon/incidents/{incident_id}/actions/resolve</code></td><td>Responder</td><td>Same guard as Desk: refused while unsuppressed alerts fire</td></tr>
+<tr><td colspan="3"><b>Twilio callbacks (Twilio signature)</b></td></tr>
+<tr><td><code>POST /api/beacon/webhooks/twilio/voice</code></td><td>Twilio</td><td>Returns TwiML with <code>&lt;Gather&gt;</code></td></tr>
+<tr><td><code>POST /api/beacon/webhooks/twilio/gather</code></td><td>Twilio</td><td><code>Digits=1</code> acknowledges</td></tr>
+<tr><td><code>POST /api/beacon/webhooks/twilio/status</code></td><td>Twilio</td><td>Call status updates the Notification</td></tr>
+</table>
+<p><b>Public status is static files</b> on the CDN: <code>/</code>, <code>/history/</code>, <code>/incidents/&lt;id&gt;/</code>, <code>/i/&lt;token&gt;/</code>, <code>/status.json</code>, <code>/incidents.json</code> and <code>/feed.atom</code>. The builder writes only Public items into lists and feeds. Unlisted files have <code>noindex</code>, and the CDN sends <code>Referrer-Policy: no-referrer</code>.</p>
+<p><b>Phase 4 (Central):</b> <code>GET /incidents/{id}/affected-resources</code>, customer rules (<code>/alert-rules</code> with kind Custom and an <code>owner_ref</code>), <code>GET /alert-metrics</code>, and <code>PUT /resources/{region}/{resource_id}</code> for <code>monitoring_disabled</code>. Outbound events are signed with HMAC-SHA256, carry <code>event_id</code> and a per-incident <code>sequence</code>, and are delivered at least once:</p>
+<pre><code>{"event_id": "evt_01JD3W7Q2N8Y", "event": "incident.updated", "sequence": 4,
+ "incident": {"id": "INC-0412", "status": "Identified", "severity": "High",
+              "visibility": "Unlisted", "url": "https://status.frappe.cloud/i/&lt;token&gt;/"},
+ "scope": [{"region": "bom", "resource_type": "Host", "resource_id": "bom-h12",
+            "include_descendants": true}],
+ "occurred_at": "2026-11-13T07:31:00Z"}</code></pre>
+
+<h2 id="statuspage">18. Status page</h2>
+<p>The mockups are in moki, project <code>beacon-status</code>, version 4. They have three layouts for the main page, a public incident page, an unlisted incident page and a history page. The ideas come from DigitalOcean (regions as rows), Railway and Cloudflare (90-day bars), Fly.io (region grid) and Hetzner (unlisted incident links).</p>
+<ul>
+<li><b>Recommended: regions first.</b> At the top there is a banner, then active incidents and maintenance. Below that, each region is one row that opens to its services with 90-day bars. The global services come last.</li>
+<li>The page is static HTML that works without JavaScript. It shows "Updated &lt;time&gt;", so a stale page is visible.</li>
+<li>A frozen region (Unknown or Suspect) shows its last state with "data delayed".</li>
+</ul>
+
+<h2 id="desk">19. Desk workflow and roles</h2>
+<p><b>The Beacon workspace</b> is the landing page. It shows open incidents, Firing alerts that are not suppressed, broken rules, stale registries and regions, who is primary now, and red banners for <code>paging_paused</code> or a missing responder.</p>
+<p><b>Working an incident:</b> Acknowledge → Post update → Publish (if customers need to know) → Resolve → write the RCA. Buttons on the form: Acknowledge, Post update, Publish, Page on-call, Merge into, Copy private link, Export affected resources, Resolve. On an alert: Silence. On the list: New maintenance. The <a href="#doctype-reference">DocType reference</a> lists every button and when it shows.</p>
+<table>
+<tr><th>Role</th><th>Can</th></tr>
+<tr><td>Beacon Responder</td><td>Acknowledge, update, publish and resolve incidents. Create maintenance and silences. See private links. Set the primary override.</td></tr>
+<tr><td>Beacon Admin</td><td>Everything above. Also rules, services, regions, resource sources, monitoring on resources, the responder list, channels, paging pause, and the staff API token for rule sync.</td></tr>
+</table>
+<p>The Beacon site's system time zone is UTC. Forms show UTC next to time fields, so a maintenance start is never ambiguous around daylight saving changes.</p>
+
+<h2 id="datum">20. Datum changes</h2>
+<p>We reviewed <a href="https://github.com/frappe/datum">frappe/datum</a> for the expected load and the new uses. We checked each finding in the code. All numbers are per region.</p>
+<div class="box"><b>Sizing assumption.</b> 100,000 sites × 10 series every 60 s, plus 5,000 servers and hosts × 200 series every 15 s. That is about 83,000 rows/s, or 7.2 billion rows/day, which is 70–220 GB/day at 10–30 bytes per compressed row. Measure the real rate with <code>daily_ingestion_stats</code> before you set retention.</div>
+<table>
+<tr><th>#</th><th>Finding (verified)</th><th>Change</th></tr>
+<tr><td>1 <span class="tag p1">P1</span></td><td>Each request is one ClickHouse insert, without <code>async_insert</code> (<code>providers/clickhouse.py</code>). Many small parts make merges fall behind, and then writes are refused.</td><td>Insert with <code>async_insert=1, wait_for_async_insert=1</code>. Size API concurrency for the flush wait. <b>Most valuable change.</b></td></tr>
+<tr><td>2 <span class="tag p1">P1</span></td><td><code>samples</code> is ordered by <code>(resource_id, metric, ts)</code>. Alert queries ask for "metric X, all resources, last minutes". CLAUDE.md says reads always name a machine. That is no longer true.</td><td>Add <code>samples_recent</code>: <code>ORDER BY (metric, ts, resource_id)</code>, daily partitions, TTL 2 days, filled by a materialized view. A projection cannot have its own TTL. Add the views <code>counter_increase</code>, <code>latest_value</code> and <code>last_seen</code>. Update CLAUDE.md.</td></tr>
+<tr><td>3 <span class="tag p1">P1</span></td><td><code>samples</code> and <code>logs</code> have no TTL. Only <code>traces</code> has one.</td><td>Set a budget, for example 30–45 days of raw samples and 14–30 days of logs, plus a 1-minute rollup of selected metrics for 13 months.</td></tr>
+<tr><td>4 <span class="tag p2">P2</span></td><td><code>resources</code> holds only ID and status. Writes need the admin token, one resource per call, 60 a minute (<code>routes/v1/resource.py</code>).</td><td>No change for Beacon: it pulls lists from the regional services. Create the <code>beacon</code> database in each region and let the <code>beacon</code> user write only there.</td></tr>
+<tr><td>5 <span class="tag p2">P2</span></td><td>The <code>insights</code> reader can create and drop views and has no limits.</td><td>Add a <code>beacon</code> user with a read-only profile: <code>max_execution_time=20</code>, memory and thread limits, <code>max_concurrent_queries_for_user=4</code> and a quota.</td></tr>
+<tr><td>6 <span class="tag p2">P2</span></td><td>A write that ClickHouse refuses under load returns 400 (not retryable). The client timeout is 2 s and the server's is 30 s.</td><td>Return 503 for overload errors. Align the timeouts. Add jitter to producer flushes.</td></tr>
+<tr><td>7 <span class="tag p2">P2</span></td><td>Sample timestamps are not bounded.</td><td>Reject samples more than 5 min in the future or more than 2 days old.</td></tr>
+<tr><td>8 <span class="tag p2">P2</span></td><td><code>datum_client</code> removes a batch before it posts. It does not retry, and it logs "unreachable" only at debug level.</td><td>Log "unreachable" as a warning, rate-limited. Add <code>Datum.register()</code>. Keep "a gap beats a stalled producer".</td></tr>
+<tr><td>9 <span class="tag p3">P3</span></td><td>Rate limits are kept per process and per caller and route. Labels are a Map with few guards.</td><td>Document "one sink per machine". Later, move frequently used labels to columns and add series limits.</td></tr>
+</table>
+<p>Already good: remote write v1 support, compression codecs, payload caps, no shared ClickHouse session, the trace table and cached JWKS. Tokens last 7 days without a revocation list, and Atlas renews them daily.</p>
+
+<h2 id="scale">21. Scale numbers</h2>
+<table>
+<tr><th>Load</th><th>Per region</th><th>All regions</th></tr>
+<tr><td>Rule queries (60 rules, about 2 min average interval)</td><td>30/min</td><td>300/min, about 5 jobs/s</td></tr>
+<tr><td>Service queries (10 services, every minute)</td><td>10/min</td><td>100/min</td></tr>
+<tr><td>Registry polls (every minute, with ETag)</td><td>2–4 requests/min, mostly 304</td><td>20–40 requests/min</td></tr>
+<tr><td>Registry writes</td><td>Only changed rows into MariaDB. A mirror swap of about 100,000 rows, at most once a minute and only after a change.</td><td></td></tr>
+<tr><td>MariaDB writes, normal operation</td><td colspan="2">A few transitions a minute. Firing alerts cause no writes.</td></tr>
+<tr><td>MariaDB writes, 100,000 sites fail at once</td><td colspan="2">One time: 20 chunks of 5,000 rows. One incident.</td></tr>
+<tr><td>Status page</td><td colspan="2">One build every 30 s. The CDN takes all reader traffic.</td></tr>
+</table>
+<p>4–8 RQ workers on the <code>beacon</code> queue are enough. Most queries take 0.1–2 s on <code>samples_recent</code>.</p>
+
+<h2 id="rollout">22. Rollout and checks</h2>
+<table>
+<tr><th>Phase</th><th>Scope</th><th>Done when</th></tr>
+<tr><td>0. Datum</td><td>Changes 1–8. Measure the ingest rate.</td><td>A load test at the real producer count shows no part growth. A sample rule runs in under 2 s.</td></tr>
+<tr><td>1. Registry, rules, alerts</td><td>Atlas and the site owner serve <code>/api/beacon/resources</code>. Resource Source, Region, Resource, Alert Rule, Rule Evaluation, Alert, Silence, chat posts, <code>beacon-rules</code>. Port every check in <code>alerts.py</code>.</td><td>2 weeks next to the Insights alerts: every Insights post has a Beacon alert, with no duplicate episodes.</td></tr>
+<tr><td>2. Incidents and paging</td><td>Invariant, scope, merge, escalation, Twilio, email, maintenance, workspace, roles.</td><td>The scenario table passes on a game day.</td></tr>
+<tr><td>3. Status page</td><td>Services, uptime, Publish, unlisted links, static builder, bucket and CDN.</td><td>One month in which the page matches the incidents. Then turn off the Insights alerts.</td></tr>
+<tr><td>4. Central</td><td>Outbox, Central routes, customer rules.</td><td>Central shows unlisted incidents to the affected teams only.</td></tr>
+</table>
+
+<h2 id="notbuilding">23. What we do not build</h2>
+<ul>
+<li>A staff web app, Python rules, our own probes, a copy of the metrics.</li>
+<li>A CRUD API that copies Desk.</li>
+<li>Shift calendars, SMS, a severity × channel matrix, several on-call teams.</li>
+<li>Email subscriptions. Feeds and JSON first.</li>
+<li>Automatic publishing or automatic reopening of public incidents.</li>
+</ul>
+
+<h2 id="open">24. Open questions</h2>
+<ul>
+<li>Sites: which regional service serves the site list? It must know every site in the region and its server.</li>
+<li>Where does Beacon run? Which dead-man switch service, and which bucket and CDN host the status page outside our regions?</li>
+<li>What is the retention budget for raw samples and logs? Which metrics need a long-term rollup?</li>
+<li>Do proxies know which sites they serve? If yes, a proxy incident can scope to those sites only.</li>
+<li>Is a primary override enough on day one, or do we bring back the V1 night-shift table?</li>
+</ul>
+
+<h2 id="sources">25. Sources</h2>
+<ul>
+<li><a href="https://github.com/frappe/datum">frappe/datum</a>: README, <code>datum/migrations/*.sql</code>, <code>datum/api/routes/v1/</code>, <code>providers/clickhouse.py</code>, <code>datum_client/</code></li>
+<li><a href="https://github.com/frappe/atlas/tree/develop/scripts/insights">frappe/atlas scripts/insights</a>, <a href="https://github.com/frappe/atlas/tree/develop/atlas/api">Atlas API</a>, <code>metal/internal/telemetry</code></li>
+<li><a href="https://github.com/frappe/press/tree/develop/press/press/doctype/incident">frappe/press Incident</a>, Incident Settings, Prometheus Alert Rule, Alertmanager Webhook Log, Silenced Alert</li>
+<li><a href="https://github.com/frappe/central">frappe/central</a>: Region and the notification module</li>
+<li>ClickHouse: <a href="https://clickhouse.com/docs/optimize/asynchronous-inserts">asynchronous inserts</a>, <a href="https://clickhouse.com/docs/data-modeling/projections">projections</a>, <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/replacingmergetree">ReplacingMergeTree</a>, <a href="https://clickhouse.com/docs/sql-reference/statements/create/view#parameterized-view">parameterized views</a>, <a href="https://clickhouse.com/docs/operations/settings/settings-profiles">settings profiles</a></li>
+<li><a href="https://www.twilio.com/docs/voice/twiml/gather">Twilio &lt;Gather&gt;</a>, <a href="https://vector.dev/docs/reference/configuration/sources/prometheus_scrape/">Vector prometheus_scrape</a></li>
+<li>Status pages: <a href="https://status.digitalocean.com">DigitalOcean</a>, <a href="https://status.railway.com">Railway</a>, <a href="https://www.cloudflarestatus.com">Cloudflare</a>, <a href="https://status.flyio.net">Fly.io</a>, <a href="https://status.hetzner.com">Hetzner</a></li>
+</ul>
+
+</main>
+
+<script src="https://unpkg.com/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  if (!window.rough) return
+  const NS = 'http://www.w3.org/2000/svg'
+  const opt = { roughness: 1.1, stroke: '#333', strokeWidth: 1.3 }
+  function text(svg, x, y, s, size = 14, weight = 400, color = '#222', anchor = 'middle') {
+    const t = document.createElementNS(NS, 'text')
+    t.setAttribute('x', x); t.setAttribute('y', y); t.setAttribute('text-anchor', anchor)
+    t.setAttribute('font-family', 'Inter, system-ui, sans-serif'); t.setAttribute('font-size', size)
+    t.setAttribute('font-weight', weight); t.setAttribute('fill', color); t.textContent = s
+    svg.appendChild(t)
+  }
+  function box(rc, svg, x, y, w, h, title, sub, fill) {
+    svg.appendChild(rc.rectangle(x, y, w, h, { ...opt, fill: fill || 'none', fillStyle: 'solid' }))
+    text(svg, x + w / 2, y + h / 2 + (sub ? -4 : 5), title, 14, 600)
+    if (sub) text(svg, x + w / 2, y + h / 2 + 14, sub, 12, 400, '#666')
+  }
+  function arrow(rc, svg, x1, y1, x2, y2, label, color = '#333', lx, ly) {
+    svg.appendChild(rc.line(x1, y1, x2, y2, { ...opt, stroke: color }))
+    const a = Math.atan2(y2 - y1, x2 - x1), L = 10
+    svg.appendChild(rc.line(x2, y2, x2 - L * Math.cos(a - 0.4), y2 - L * Math.sin(a - 0.4), { ...opt, stroke: color }))
+    svg.appendChild(rc.line(x2, y2, x2 - L * Math.cos(a + 0.4), y2 - L * Math.sin(a + 0.4), { ...opt, stroke: color }))
+    if (label) text(svg, lx ?? (x1 + x2) / 2, ly ?? (y1 + y2) / 2 - 6, label, 12, 400, '#555')
+  }
+
+  const a = document.getElementById('arch'), ra = rough.svg(a)
+  // regions
+  a.appendChild(ra.rectangle(20, 20, 300, 430, { ...opt, strokeLineDash: [6, 5], stroke: '#888' }))
+  text(a, 170, 44, 'Each region (bom, fra, iad, ...)', 13, 600, '#666')
+  box(ra, a, 50, 70, 240, 54, 'Regional services', 'metrics; GET resources')
+  box(ra, a, 50, 190, 240, 54, 'Datum', 'write door, JWT')
+  box(ra, a, 50, 310, 240, 70, 'ClickHouse', 'samples, samples_recent, logs', '#f3f6fb')
+  arrow(ra, a, 170, 124, 170, 188, 'push samples', '#333', 222, 160)
+  arrow(ra, a, 170, 244, 170, 308, 'insert', '#333', 200, 280)
+  // beacon
+  a.appendChild(ra.rectangle(400, 20, 220, 430, { ...opt, strokeLineDash: [6, 5], stroke: '#888' }))
+  text(a, 510, 44, 'Beacon (global, outside regions)', 13, 600, '#666')
+  box(ra, a, 425, 70, 170, 60, 'Evaluator', 'scheduler + RQ "beacon"', '#eef7f1')
+  box(ra, a, 425, 170, 170, 54, 'MariaDB', 'alerts, incidents, uptime')
+  box(ra, a, 425, 264, 170, 54, 'Desk', 'staff')
+  box(ra, a, 425, 358, 170, 60, 'Status builder', 'HTML + JSON every 30 s')
+  arrow(ra, a, 423, 82, 292, 92, 'pull lists', '#2f6fde', 357, 74)
+  arrow(ra, a, 423, 110, 292, 330, 'SQL', '#2f6fde', 343, 180)
+  arrow(ra, a, 510, 130, 510, 168, '', '#333')
+  // outside
+  box(ra, a, 680, 60, 160, 50, 'Twilio', 'phone call + Gather')
+  box(ra, a, 680, 130, 160, 50, 'Email, chat', 'Email Account, webhook')
+  box(ra, a, 680, 250, 160, 54, 'Central', 'phase 4: events')
+  box(ra, a, 680, 360, 160, 54, 'Bucket + CDN', 'status page, outside')
+  text(a, 760, 440, 'customers read here', 12, 400, '#555')
+  arrow(ra, a, 597, 92, 678, 85, 'page', '#d23b3b', 636, 76)
+  arrow(ra, a, 597, 110, 678, 152, '', '#d23b3b')
+  arrow(ra, a, 597, 196, 678, 276, 'outbox', '#999', 650, 226)
+  arrow(ra, a, 597, 387, 678, 387, 'upload', '#555', 638, 380)
+
+  const s = document.getElementById('states'), rs = rough.svg(s)
+  function st(x, y, label, fill) { s.appendChild(rs.ellipse(x, y, 140, 60, { ...opt, fill, fillStyle: 'solid' })); text(s, x, y + 5, label, 15, 600) }
+  st(120, 120, 'Pending', '#fff6e0'); st(430, 120, 'Firing', '#fde8e8'); st(740, 120, 'Resolved', '#e8f6ee')
+  arrow(rs, s, 192, 112, 358, 112, 'failing for pending_for', '#333', 275, 100)
+  arrow(rs, s, 502, 112, 668, 112, 'clean for resolve_after', '#333', 585, 100)
+  arrow(rs, s, 20, 120, 48, 120, '', '#333')
+  text(s, 30, 100, 'row', 12, 400, '#555')
+  s.appendChild(rs.arc(120, 170, 120, 70, 0.2, Math.PI - 0.2, false, { ...opt, stroke: '#888' }))
+  text(s, 120, 228, 'clean before pending_for: cleared', 12, 400, '#555')
+  s.appendChild(rs.arc(430, 170, 120, 70, 0.2, Math.PI - 0.2, false, { ...opt, stroke: '#888' }))
+  text(s, 430, 228, 'row again: clean timer resets', 12, 400, '#555')
+  text(s, 740, 190, 'immutable; recurrence = new episode', 12, 400, '#555')
+  text(s, 430, 40, 'Query errors never count as clean. Silenced alerts are stored, not paged.', 13, 500, '#d23b3b')
+})()
+</script>
 </body>
 </html>
