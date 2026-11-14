@@ -169,8 +169,13 @@ figcaption { color: var(--muted); font-size: 0.88rem; }
 <tr><td><code>central-dashboard-unreachable</code></td><td>HTTP</td><td><code>{central_url}/dashboard</code>. Fails for 3 minutes.</td><td>Set in Desk</td><td>High</td></tr>
 <tr><td><code>central-api-unreachable</code></td><td>HTTP</td><td><code>{central_url}/api/method/ping</code>. Fails for 3 minutes.</td><td>Set in Desk</td><td>High</td></tr>
 <tr><td><code>central-certificate</code></td><td>TLS</td><td><code>{central_url}</code>, at least 14 days left</td><td>Set in Desk</td><td>Medium</td></tr>
+<tr><td><code>object-storage-unreachable</code></td><td>HTTP</td><td><code>https://s3-admin-svc.{wildcard_domain}/health</code>, through the gateway to Garage. Fails for 3 minutes.</td><td>All</td><td>High</td></tr>
+<tr><td><code>telemetry-unreachable</code></td><td>HTTP</td><td><code>https://telemetry-svc.{wildcard_domain}/health</code>. Fails for 3 minutes.</td><td>All</td><td>High</td></tr>
+<tr><td><code>object-storage-certificate</code></td><td>TLS</td><td><code>s3-svc.{wildcard_domain}</code>, at least 14 days left</td><td>All</td><td>Medium</td></tr>
+<tr><td><code>telemetry-certificate</code></td><td>TLS</td><td><code>telemetry-svc.{wildcard_domain}</code>, at least 14 days left</td><td>All</td><td>Medium</td></tr>
+<tr><td><code>telemetry-read-certificate</code></td><td>TLS</td><td><code>telemetry-read-svc.{wildcard_domain}</code>, at least 14 days left. Beacon reads ClickHouse on this name.</td><td>All</td><td>Medium</td></tr>
 </tbody></table></div>
-<p>The proxies have their own health check, so Beacon does not call a test site behind them. The Central checks name no region, because the Central Telemetry Region depends on the site.</p>
+<p>S3 itself has no health route and refuses a request that is not signed, so Beacon checks only the certificate of <code>s3-svc</code>, and the health route of <code>s3-admin-svc</code> on the same gateway. The proxies have their own health check, so Beacon does not call a test site behind them. The Central checks name no region, because the Central Telemetry Region depends on the site.</p>
 </section>
 <section id="customer">
 <h2>Customer or infrastructure</h2>
@@ -224,6 +229,10 @@ figcaption { color: var(--muted); font-size: 0.88rem; }
 <p>Beacon drops a rule row whose resource type is not in the <code>resource_type</code> of the rule. A fleet-wide rule leaves out the resources with monitoring disabled through <code>{excluded:Array(String)}</code>, so a server that a person turned off does not count toward a threshold.</p></div>
 <div class="box fixed"><h4>Cargo signs the Datum tokens of its services <span class="tag">cargo#141</span> <span class="tag">central#714</span> <span class="tag">datum#20</span></h4>
 <p>Atlas runs the VMs, and Cargo runs the regional services, so Cargo signs for them with its own Ed25519 key. Central no longer gives Cargo tokens. Roll out Cargo first, run setup again on each Datum Server and object storage cluster, then deploy Central. See <a href="#issuers">Who signs the token</a>.</p></div>
+<div class="box fixed"><h4>Checks of object storage and telemetry from outside <span class="tag">cargo#141</span></h4>
+<p>Beacon now calls the object storage gateway and the telemetry endpoint of each region, and reads the certificates of <code>s3-svc</code>, <code>telemetry-svc</code> and <code>telemetry-read-svc</code>. The rules inside the region do not see a wrong DNS record, a stopped Caddy or an expired certificate. See <a href="#endpoints">Endpoint checks</a>.</p></div>
+<div class="box fixed"><h4>Passwords stay out of the process list <span class="tag">datum#20</span> <span class="tag">cargo#141</span></h4>
+<p><code>datum-migrate</code> reads every user password from the environment, and Cargo passes them with <code>su -w</code>. Before, the insights and default passwords were flags that <code>ps</code> showed.</p></div>
 <div class="box fixed"><h4>Journal fields stay valid attributes <span class="tag">datum#20</span></h4>
 <p>The Datum agent makes the field names of a JSON journal line valid attribute names and sends at most 64, so one line cannot make Datum refuse its batch.</p></div>
 <div class="box open"><h4>Open: Grove is not covered</h4>
