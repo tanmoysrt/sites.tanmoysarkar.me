@@ -51,7 +51,7 @@ ol.checks li, ul.checks li { margin: 4px 0; }
 <main>
 <h1>Beacon telemetry rollout</h1>
 <p class="lede">How to move the Frappe Cloud V2 regions that run now to the Beacon telemetry contract. This plan gives the order, the steps, a check for each step, the rollback, and the gaps to close first.</p>
-<p class="meta">Plan written on 14 November 2026. Nothing is deployed yet. Related page: <a href="../../research/beacon-telemetry-map/">Beacon telemetry map</a>.</p>
+<p class="meta">Plan written on 14 November 2026. Updated the same day: Beacon is deployed later, in a separate phase. Nothing is deployed yet. Related page: <a href="../../research/beacon-telemetry-map/">Beacon telemetry map</a>.</p>
 <nav>
   <a href="#context">Context</a>
   <a href="#gaps">Gaps to close first</a>
@@ -67,6 +67,7 @@ ol.checks li, ul.checks li { margin: 4px 0; }
 <p>The regions already run Datum, Atlas, Cargo, object storage clusters, Central and Pilot. So the rollout must change machines that run now, with data that exists now. Two changes make the order strict:</p>
 <ul>
   <li><strong>The token issuer changes.</strong> Cargo now signs the Datum tokens of its own services with its own key. Before, Central gave these tokens through a route that the Central pull request removes. So each Cargo machine must get the new Cargo token before Central removes the old route.</li>
+  <li><strong>Beacon comes later.</strong> The products change first. Beacon is deployed in a later phase, so until then the Insights alerts are the only alerts. Keep them.</li>
   <li><strong>The Datum schema changes.</strong> Migration <code>006_beacon.sql</code> adds the Beacon tables, views and user, and it changes how long ClickHouse keeps old rows. It runs when Cargo sets up the Datum host again.</li>
 </ul>
 
@@ -110,7 +111,7 @@ ol.checks li, ul.checks li { margin: 4px 0; }
 
 <h2 id="order">Order</h2>
 <figure>
-<svg id="order" viewBox="0 0 820 560" role="img" aria-label="Rollout order. 0: close the gaps. 1: merge Datum to main. 2: deploy Cargo and set up each Datum Server again. 3: set up each object storage cluster again. 4: deploy Atlas and release Pilot, in parallel. 5: deploy Central. 6: configure Beacon and sync. 7: watch, then turn paging on and clean up."></svg>
+<svg id="order" viewBox="0 0 820 560" role="img" aria-label="Rollout order. 0: close the gaps. 1: merge Datum to main. 2: deploy Cargo and set up each Datum Server again. 3: set up each object storage cluster again. 4: deploy Atlas and release Pilot, in parallel. 5: deploy Central. Later, in a separate phase, 6: deploy and configure Beacon. 7: watch, then turn paging on and clean up."></svg>
 <figcaption>Each arrow means "must be done before". Atlas and Pilot can go at the same time. Central goes last of the products, because it removes the old token route.</figcaption>
 </figure>
 
@@ -128,7 +129,6 @@ FROM system.parts
 WHERE database = 'datum' AND active AND table IN ('samples', 'logs')
 GROUP BY table;</code></pre></li>
   <li>Get a review of all five pull requests.</li>
-  <li>In Beacon, turn on <strong>Paging Paused</strong> in Beacon Settings. The first syncs make many alerts, and nobody must be paged for them.</li>
 </ol>
 <p><strong>Check:</strong> CI of Datum #20 passes. The other four wait for step 1.</p>
 </div>
@@ -195,13 +195,19 @@ GROUP BY table;</code></pre></li>
   <li>Deploy Central. The migration adds new indexes. Read the size of the tables first, and deploy at a time of low traffic.</li>
   <li>Set <strong>Central Telemetry Region</strong> on one Region. Until then, Central sends nothing.</li>
 </ol>
+<p>Central sends its data to Datum now, also when Beacon is not deployed. Datum keeps it, so Beacon can read it later.</p>
 <p><strong>Check:</strong> rows arrive with <code>resource_id = 'central'</code>. A Pilot that renews its token sends under its Atlas Virtual Machine name.</p>
 </div>
 
+<h3 id="beacon">Later: the Beacon phase</h3>
+<p>Steps 0 to 5 are complete without Beacon. The products send the contract data, and Datum keeps it. Do steps 6 and 7 when Beacon is deployed. Nothing in steps 0 to 5 waits for them.</p>
+<p>Until step 7 ends, the Insights alerts on each Insights site continue to page. Atlas #607 removes only the script that made them. The records stay until you delete them. Their metric names still appear in the new code, but I did not check every label and query, so look at each Insights alert one time after step 4.</p>
+
 <div class="step" id="step-6">
-<h3>6. Configure Beacon and sync</h3>
-<p class="who">Beacon, with Paging Paused still on.</p>
+<h3>6. Deploy and configure Beacon, and sync</h3>
+<p class="who">Beacon. After steps 0 to 5 in every region.</p>
 <ol>
+  <li>Deploy Beacon. Before the first sync, turn on <strong>Paging Paused</strong> in Beacon Settings. The first syncs make many alerts, and nobody must be paged for them.</li>
   <li>For each region, make or update the Beacon Region. Set URL to the read endpoint of ClickHouse, Database to <code>datum</code>, User to <code>beacon</code>, and Password to the beacon password of the Datum Server. Get the password with <strong>Show Password</strong> on the Datum Server. Set the Wildcard Domain.</li>
   <li>Add the Atlas resource list of each region as a Beacon Resource Source.</li>
   <li>In Beacon Settings, set <strong>Central URL</strong> and the GitHub Token.</li>
@@ -214,7 +220,7 @@ GROUP BY table;</code></pre></li>
 <div class="step" id="step-7">
 <h3>7. Watch, then turn paging on</h3>
 <p class="who">Beacon. One day or more.</p>
-<p>Read each Firing alert. Each alert must be a real problem, or a rule to fix. Fix the noisy rules in the repository of their product, then sync again. When the alerts are correct, turn off <strong>Paging Paused</strong>.</p>
+<p>Read each Firing alert. Each alert must be a real problem, or a rule to fix. Fix the noisy rules in the repository of their product, then sync again. When the alerts are correct, turn off <strong>Paging Paused</strong>. Then do the cleanup below.</p>
 </div>
 
 <h2 id="rollback">Rollback</h2>
@@ -228,8 +234,9 @@ GROUP BY table;</code></pre></li>
 </table></div>
 
 <h2 id="cleanup">Cleanup</h2>
+<p>Do the first item only after step 7, when Beacon pages. Before that, the Insights alerts are the only alerts.</p>
 <ul>
-  <li>On each Insights site, delete the old Insights Alert records by hand. Beacon sends the alerts now.</li>
+  <li>On each Insights site, delete the old Insights Alert records by hand.</li>
   <li>In Insights, delete the six Cargo charts that have no data.</li>
   <li>When all is stable, remove <code>/etc/vector/vector.yaml</code> from the machines. The new agent does not read it.</li>
 </ul>
@@ -239,7 +246,8 @@ GROUP BY table;</code></pre></li>
   <li>Every Datum host, object storage node, host, service VM and Pilot server sends under its Beacon resource ID.</li>
   <li>No Cargo machine calls the Central route, and the route is gone.</li>
   <li>Datum logs no 401 lines from a known sender.</li>
-  <li>Beacon has no Broken rule, and paging is on.</li>
+  <li>Products phase: the items above are true. The Insights alerts still page.</li>
+  <li>Beacon phase: Beacon has no Broken rule, and paging is on.</li>
   <li>The old Insights alerts and charts are deleted.</li>
 </ul>
 
@@ -304,7 +312,7 @@ GROUP BY table;</code></pre></li>
   arrow(360, 340, 220, 368);
   arrow(460, 340, 600, 368);
   arrow(410, 340, 410, 458);
-  text(410, 548, "then 6. configure Beacon and sync, and 7. watch, then turn paging on", 14, muted);
+  text(410, 548, "Later, a separate phase: 6. deploy Beacon and sync, 7. watch, then turn paging on", 14, muted);
 })();
 </script>
 </body>
