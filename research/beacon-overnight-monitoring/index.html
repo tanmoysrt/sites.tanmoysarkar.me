@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon Overnight Report</title>
+<meta name="description" content="End-to-end monitoring for Frappe Cloud V2 with Beacon: what changed, what was tested, and what is still open.">
+<style>
+:root { --text:#1d1f23; --muted:#5d636b; --line:#e2e4e8; --accent:#2457c5; --ok:#1f7a4d; --warn:#9a5b00; --bg:#fff; --code:#f4f5f7; }
+@media (prefers-color-scheme: dark) { :root { --text:#e8eaed; --muted:#a6adb6; --line:#363b42; --accent:#7ea6ff; --ok:#5fc38f; --warn:#e0a84a; --bg:#16181b; --code:#23262b; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width:50rem; margin:0 auto; padding:2.5rem 1rem 5rem; }
+h1 { font-size:1.75rem; line-height:1.25; margin:0 0 .5rem; }
+h2 { font-size:1.2rem; margin:2.5rem 0 .75rem; padding-top:1rem; border-top:1px solid var(--line); }
+h3 { font-size:1rem; margin:1.5rem 0 .5rem; }
+p, li { max-width:44rem; }
+.lead { color:var(--muted); font-size:1.05rem; }
+code { background:var(--code); padding:.1rem .3rem; border-radius:4px; font-size:.88em; }
+pre { background:var(--code); padding:.9rem 1rem; border-radius:6px; overflow-x:auto; font-size:.85rem; line-height:1.5; }
+pre code { background:none; padding:0; }
+table { border-collapse:collapse; width:100%; font-size:.92rem; margin:.75rem 0; display:block; overflow-x:auto; }
+th, td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-weight:600; }
+.ok { color:var(--ok); font-weight:600; }
+.warn { color:var(--warn); font-weight:600; }
+a { color:var(--accent); }
+figure { margin:1.25rem 0; }
+figcaption { color:var(--muted); font-size:.88rem; }
+#flow { width:100%; height:auto; }
+.pills a { display:inline-block; margin:.2rem .4rem .2rem 0; padding:.2rem .65rem; border:1px solid var(--line); border-radius:999px; text-decoration:none; font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Beacon: end-to-end monitoring for Frappe Cloud V2</h1>
+<p class="lead">Overnight report, 14 November 2026. Beacon is the incident manager, SLO panel and public status page. This note records what changed, what was tested on a local region, and what is still open.</p>
+<p class="pills"><a href="https://github.com/frappe/atlas/pull/607">Atlas #607</a><a href="https://github.com/frappe/pilot/pull/828">Pilot #828</a><a href="https://github.com/frappe/central/pull/714">Central #714</a><span> Beacon: uncommitted, because it has no GitHub repository yet.</span></p>
+
+<h2>The problem</h2>
+<p>Beacon reads telemetry from Datum, the regional ClickHouse store. It raises an alert when a rule query returns a row. A person sees an incident, and customers see the status page.</p>
+<p>Before tonight, many failures did not reach Beacon. Atlas sent no Error Logs to Datum. The Atlas error gauge was always 0. Two SLI queries read metrics that no service sent. Central had no telemetry at all. Pilot sent no site states and kept no record of failed deliveries to Central.</p>
+<p>A failure that does not reach Datum cannot become an alert. So the first job was to close those gaps, then to write rules, then to break things and look at the result.</p>
+
+<h2>How data reaches an incident</h2>
+<figure>
+<svg id="flow" viewBox="0 0 760 250" role="img" aria-label="Atlas, Cargo, Pilot and Central send metrics and logs to Datum. Beacon reads Datum with rules, raises alerts, groups them into incidents, and sends chat, email and call pages. Customers subscribe to an incident by email or RSS."></svg>
+<figcaption>Producers write to Datum. Beacon only reads Datum. A person decides what customers see.</figcaption>
+</figure>
+
+<h2>What changed</h2>
+<h3>Producers</h3>
+<table>
+<tr><th>App</th><th>Change</th><th>Why</th></tr>
+<tr><td>Atlas</td><td><code>GET /api/atlas/beacon/resources</code>, Central only, with an ETag. It lists Atlas itself, hosts, VMs, service nodes and Cargo.</td><td>Beacon must match telemetry to a resource. Alerts about Atlas now land on the <code>atlas</code> resource, not on every resource of the region.</td></tr>
+<tr><td>Atlas</td><td>The Error Log gauge counts through the Error Log controller.</td><td>Error Log is a virtual DocType in its own log database. The old count read a stale table and was always 0.</td></tr>
+<tr><td>Atlas</td><td>The Error Log publisher cursor uses the stored time form.</td><td>The log store compares time as text. The ISO cursor with a <code>T</code> excluded every new row, so nothing was ever sent. After the fix, 81 lines reached Datum in the first run.</td></tr>
+<tr><td>Atlas</td><td><code>service_proxy_requests_total</code> gets an <code>origin</code> label from <code>upstream_header_time</code>.</td><td>A site can send its own 502. Only a 5xx that the proxy made counts against the Networking SLO.</td></tr>
+<tr><td>Pilot</td><td><code>pilot_sites{state}</code> after each round of uptime pings, with zeroes.</td><td>The Sites SLI read a metric that did not exist.</td></tr>
+<tr><td>Pilot</td><td><code>notifications.json.log</code>: one line for each delivery to Central, with <code>delivered</code> and <code>error</code>.</td><td>Beacon can now alert when Pilot events do not reach Central.</td></tr>
+<tr><td>Central</td><td>Each minute, new Error Logs go to the Datum of the region in <code>telemetry_region</code>, as resource <code>central</code>.</td><td>Central is global and has no Datum. Its errors were visible only in Desk.</td></tr>
+</table>
+
+<h3>Beacon</h3>
+<ul>
+<li><b>25 rules and 3 services</b> as files, with a runbook for each High and Critical rule (15 runbooks). Areas: Atlas control plane, hosts, regional services, Cargo builds, object storage, Central errors and Pilot delivery.</li>
+<li><b>Incident subscriptions.</b> A visitor subscribes to one incident by email (confirm link first) or reads its RSS feed. A public update sends one email to each confirmed subscriber. A replayed job sends nothing, because the update row records that subscribers were told.</li>
+<li><b>SLO paging.</b> A burn alert pages only when, in one minute of its short window, 3 reporters were bad, or every reporter when fewer than 3 reported. Before, a service with 2 proxies could never page.</li>
+<li>Resource Source paths are relative to an API root, and Beacon signs in with a Frappe API key.</li>
+<li>Links in customer emails come from the configured status page domain, never from the request host, which a guest controls.</li>
+</ul>
+
+<h2>Rule fixes from review</h2>
+<p>Codex (gpt-6.1-sol, high effort) reviewed every rule and every code change. These are the defects that would have hidden a real outage:</p>
+<table>
+<tr><th>Rule</th><th>Defect</th><th>Fix</th></tr>
+<tr><td><code>host-down</code></td><td>Atlas stops sending sync age after one hour, so a dead host resolved itself after about 75 minutes.</td><td>Start from the host inventory. A Running host with no report stays failing.</td></tr>
+<tr><td><code>object-storage-unavailable</code></td><td>When every Garage node went silent, the alert resolved.</td><td>A node that reported in the last hour and stopped counts as down. Only a fresh healthy report resolves it.</td></tr>
+<tr><td><code>proxy-error-spike</code></td><td><code>max - min</code> on a counter is wrong after a restart.</td><td>Reset-aware <code>counter_increase</code>.</td></tr>
+<tr><td><code>atlas-public-ips-exhausted</code></td><td>Atlas makes allocations lazily, so a large healthy pool looked empty.</td><td>Free = capacity minus allocations that are not Available, at one collection time.</td></tr>
+<tr><td><code>atlas-service-nodes-failed</code>, <code>cargo-build-stuck</code></td><td>The last Failed or stuck sample stayed after recovery.</td><td>Read only the latest collection.</td></tr>
+</table>
+
+<h2>Tests on the local region</h2>
+<table>
+<tr><th>Scenario</th><th>Result</th></tr>
+<tr><td>Real Atlas job failures and Error Logs</td><td class="ok">Alerts fired and opened incident "Atlas jobs failing"</td></tr>
+<tr><td>Garage cluster unavailable (synthetic)</td><td class="ok">Critical alert, severity of the incident raised, chat post sent</td></tr>
+<tr><td>All Garage nodes silent (synthetic)</td><td class="ok">Rule stays failing; one fresh healthy node clears it</td></tr>
+<tr><td>Cargo build failed and stuck (synthetic)</td><td class="ok">Alerts fired and joined the incident</td></tr>
+<tr><td>Simulated Central failure, 6 Error Logs</td><td class="ok">Lines reached Datum; <code>central-errors</code> went Pending</td></tr>
+<tr><td>Pilot deliveries to Central fail with HTTP 502 (synthetic logs)</td><td class="ok"><code>pilot-central-delivery</code> returned the row</td></tr>
+<tr><td>Subscribe, confirm, publish, replay, unsubscribe</td><td class="ok">One email per public update, none on replay, none after unsubscribe; RSS valid</td></tr>
+<tr><td>Proxy origin label, 10 log lines in Vector 0.46.1</td><td class="ok">All correct, also for old proxy images</td></tr>
+<tr><td>Host sync loss on one host (synthetic sample)</td><td class="warn">No new alert: a real Atlas sample in the same window reset the latest value. A real test needs the host stopped.</td></tr>
+</table>
+<p>Unit and integration tests: Atlas route, error log and router tests pass; Pilot 41 tests and mypy pass; Central 3 new tests pass. Ruff passes in every changed app. Beacon has no tests yet, by its own rule.</p>
+
+<h2>Real findings</h2>
+<ul>
+<li>Atlas job <code>delete_virtual_machine_image</code> fails about 140 times in 15 minutes on the local region.</li>
+<li>Atlas logs each expected guest 403 on <code>/</code> as an unhandled Error Log, about 165 in 15 minutes. This is noise that hides real errors.</li>
+</ul>
+
+<h2>Still open</h2>
+<ul>
+<li>Data-plane probes: a request through the proxy, traffic through the WireGuard gateway, and routed IPv6. Atlas does not probe IPv6 routers.</li>
+<li>A real failed-job counter and an oldest queued-job age in Atlas. The queue rules use registry size and queue length today.</li>
+<li>Register Cargo telemetry IDs (<code>cargo:&lt;machine&gt;</code>) in Central, so Cargo rules can name the node.</li>
+<li>Durable Central delivery state in Pilot, with retry counts and the oldest undelivered age.</li>
+<li>Central forwarding events to customers is not measured yet.</li>
+<li>The site ping runs app request hooks, so an app fault can count against the Sites SLO.</li>
+<li>The status page design gets a refactor later; the functions are in place.</li>
+</ul>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/roughjs/4.6.6/rough.min.js"></script>
+<script>
+(function () {
+  var svg = document.getElementById("flow");
+  if (!window.rough) return;
+  var dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  var ink = dark ? "#e8eaed" : "#1d1f23", accent = dark ? "#7ea6ff" : "#2457c5";
+  var rc = rough.svg(svg), ns = "http://www.w3.org/2000/svg";
+  function box(x, y, w, h, label, color) {
+    svg.appendChild(rc.rectangle(x, y, w, h, { stroke: color || ink, roughness: 1.2 }));
+    var t = document.createElementNS(ns, "text");
+    t.setAttribute("x", x + w / 2); t.setAttribute("y", y + h / 2 + 5);
+    t.setAttribute("text-anchor", "middle"); t.setAttribute("fill", ink);
+    t.setAttribute("font-size", "14"); t.setAttribute("font-family", "system-ui, sans-serif");
+    t.textContent = label; svg.appendChild(t);
+  }
+  function arrow(x1, y1, x2, y2, label) {
+    svg.appendChild(rc.line(x1, y1, x2, y2, { stroke: ink }));
+    var a = Math.atan2(y2 - y1, x2 - x1), s = 9;
+    svg.appendChild(rc.line(x2, y2, x2 - s * Math.cos(a - 0.4), y2 - s * Math.sin(a - 0.4), { stroke: ink }));
+    svg.appendChild(rc.line(x2, y2, x2 - s * Math.cos(a + 0.4), y2 - s * Math.sin(a + 0.4), { stroke: ink }));
+    if (label) {
+      var t = document.createElementNS(ns, "text");
+      t.setAttribute("x", (x1 + x2) / 2); t.setAttribute("y", (y1 + y2) / 2 - 6);
+      t.setAttribute("text-anchor", "middle"); t.setAttribute("fill", ink);
+      t.setAttribute("font-size", "11"); t.setAttribute("font-family", "system-ui, sans-serif");
+      t.textContent = label; svg.appendChild(t);
+    }
+  }
+  var producers = ["Atlas", "Cargo", "Pilot", "Central"];
+  producers.forEach(function (name, i) { box(10, 15 + i * 58, 110, 40, name); arrow(122, 35 + i * 58, 228, 125); });
+  box(230, 100, 110, 50, "Datum");
+  arrow(342, 125, 418, 125, "rules read");
+  box(420, 100, 120, 50, "Beacon", accent);
+  arrow(542, 112, 618, 60, "alerts");
+  box(620, 35, 130, 44, "Incident");
+  arrow(685, 81, 685, 142, "pages");
+  box(620, 145, 130, 40, "Chat, email, call");
+  arrow(542, 140, 618, 222, "public updates");
+  box(620, 200, 130, 40, "Subscribers");
+})();
+</script>
+</body>
+</html>
