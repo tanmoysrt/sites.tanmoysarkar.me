@@ -137,7 +137,7 @@ figcaption { color: var(--muted); font-size: 0.88rem; }
 <tr><td>HTTP</td><td><code>beacon/rules/&lt;key&gt;.http</code></td><td>The request fails, the status is not the expected status (200 by default), or the body does not contain the expected text</td></tr>
 <tr><td>TLS</td><td><code>beacon/rules/&lt;key&gt;.tls</code></td><td>The connection or the handshake fails, the certificate does not verify for the host, or fewer days are left than the minimum (14 by default)</td></tr>
 </tbody></table></div>
-<p>A check can also be a Custom rule made in Desk. The <code>region</code> header names one region, or <code>all</code> for every active region. Each region then has its own alert. The URL and the host can use variables, so one file works in every region:</p>
+<p>A check can also be a Custom rule made in Desk. The <code>region</code> header names one region, or <code>all</code> for every active region. Each region then has its own alert. A file with no <code>region</code> header makes a check that is off. Desk then sets its Regions and turns it on. The URL and the host can use variables, so one file works in every region:</p>
 <div class="scroll"><table>
 <thead><tr><th>Variable</th><th>Value</th><th>Kept in</th></tr></thead>
 <tbody>
@@ -146,7 +146,18 @@ figcaption { color: var(--muted); font-size: 0.88rem; }
 <tr><td><code>{atlas_url}</code></td><td>The scheme and host of the region's Atlas</td><td>The Base URL of the <code>atlas</code> Resource Source</td></tr>
 <tr><td><code>{central_url}</code></td><td>The Central address</td><td>Beacon Settings</td></tr>
 </tbody></table></div>
-<p>Beacon refuses an unknown variable when the rule is saved. When a variable has no value in a region, Beacon logs an error and skips the check there, so its alert keeps its state. No checks are configured yet. The team adds them later.</p>
+<p>Beacon refuses an unknown variable when the rule is saved. When a variable has no value in a region, Beacon logs an error and skips the check there, so its alert keeps its state.</p>
+<h3>Configured checks</h3>
+<div class="scroll"><table>
+<thead><tr><th>Check</th><th>Kind</th><th>Target</th><th>Regions</th><th>Severity</th></tr></thead>
+<tbody>
+<tr><td><code>atlas-api-unreachable</code></td><td>HTTP</td><td><code>{atlas_url}/api/atlas/jwks.json</code>, which needs no sign-in. Fails for 3 minutes.</td><td>All</td><td>High</td></tr>
+<tr><td><code>atlas-certificate</code></td><td>TLS</td><td><code>{atlas_url}</code>, at least 14 days left</td><td>All</td><td>Medium</td></tr>
+<tr><td><code>central-dashboard-unreachable</code></td><td>HTTP</td><td><code>{central_url}/dashboard</code>. Fails for 3 minutes.</td><td>Set in Desk</td><td>High</td></tr>
+<tr><td><code>central-api-unreachable</code></td><td>HTTP</td><td><code>{central_url}/api/method/ping</code>. Fails for 3 minutes.</td><td>Set in Desk</td><td>High</td></tr>
+<tr><td><code>central-certificate</code></td><td>TLS</td><td><code>{central_url}</code>, at least 14 days left</td><td>Set in Desk</td><td>Medium</td></tr>
+</tbody></table></div>
+<p>The proxies have their own health check, so Beacon does not call a test site behind them. The Central checks name no region, because the Central Telemetry Region depends on the site.</p>
 </section>
 <section id="customer">
 <h2>Customer or infrastructure</h2>
@@ -187,13 +198,13 @@ figcaption { color: var(--muted); font-size: 0.88rem; }
 <div class="box fixed"><h4>SLOs for the dashboard, the API and server actions <span class="tag">central#714</span></h4>
 <p>Two global services: Dashboard and API at 99.9%, and Server actions at 99%. Both report on the region, because Central is in no resource list. The Central Telemetry Region depends on the site, so Desk sets their Query Region.</p></div>
 <div class="box fixed"><h4>HTTP and TLS checks with variables <span class="tag">beacon</span></h4>
-<p>Beacon has a TLS rule kind beside HTTP. Both can use <code>{region}</code>, <code>{wildcard_domain}</code>, <code>{atlas_url}</code> and <code>{central_url}</code>, and <code>region: all</code>. See <a href="#endpoints">Endpoint checks</a>.</p></div>
+<p>Beacon has a TLS rule kind beside HTTP. Both can use <code>{region}</code>, <code>{wildcard_domain}</code>, <code>{atlas_url}</code> and <code>{central_url}</code>, and <code>region: all</code>. A file can leave out the region, and Desk sets it. See <a href="#endpoints">Endpoint checks</a>.</p></div>
 <div class="box fixed"><h4>Certificate alerts reach Central <span class="tag">central#714</span> <span class="tag">pilot#828</span></h4>
 <p>Central defines <code>certificate_expiry</code> (Warning) and <code>certificate_failed</code> (Error), and Pilot sends them there. A customer without webhooks or email recipients now learns that a certificate does not renew.</p></div>
 <div class="box fixed"><h4>One resource ID, clear type names <span class="tag">beacon</span> <span class="tag">atlas#607</span></h4>
 <p>The unused Telemetry IDs source is removed, so Beacon finds a resource by its resource ID only. Atlas lists hosts as <code>Metal Host</code> and VMs as <code>Virtual Machine</code>, and every rule names the registry types of its rows.</p></div>
-<div class="box open"><h4>Open: add the endpoint checks</h4>
-<p>No HTTP or TLS check is configured yet. Candidates: the Central dashboard and API, the Atlas API of each region, a small test site behind each proxy, and the certificates of these hosts.</p></div>
+<div class="box fixed"><h4>Checks from outside <span class="tag">beacon</span> <span class="tag">atlas#607</span> <span class="tag">central#714</span></h4>
+<p>Beacon now calls the Atlas API of each region, the Central dashboard and API, and reads their certificates. See <a href="#endpoints">Endpoint checks</a>.</p></div>
 <div class="box open"><h4>Open: Grove is not covered</h4>
 <p>Grove boxes send as <code>grove:&lt;machine&gt;</code>, and no resource source lists them. Beacon drops their rows. Decide: add a Grove resource source and rules, or leave Grove out of Beacon.</p></div>
 </section>
