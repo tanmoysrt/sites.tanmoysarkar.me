@@ -30,6 +30,8 @@ table.rules td:nth-child(1) { white-space: nowrap; }
 .box.fixed { border-left: 4px solid var(--good); }
 .box.open { border-left: 4px solid var(--warn); }
 .box h4 { margin: 0 0 4px; font-size: 1rem; }
+pre { background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 0.84rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre code { background: none; padding: 0; font-size: inherit; }
 .box p { margin: 4px 0; }
 figure { margin: 16px 0; }
 figure svg { width: 100%; height: auto; max-width: 980px; display: block; }
@@ -45,7 +47,7 @@ figcaption { color: var(--muted); font-size: 0.88rem; }
 <p class="lede">Beacon is the incident manager and status page of Frappe Cloud V2. Each product sends its telemetry to the Datum of its region. Beacon reads Datum, matches each row to a resource, and turns failing rows into alerts, incidents and pages. This page shows what each product sends, how Beacon maps it, the services and their SLOs, and the 59 alert rules (Atlas 32, Cargo 15, Central 7, Pilot 5).</p>
 <p class="meta">State of Beacon develop and the open pull requests on 14 November 2026: <a href="https://github.com/frappe/beacon">beacon</a>, <a href="https://github.com/frappe/datum/pull/20">datum#20</a>, <a href="https://github.com/frappe/atlas/pull/607">atlas#607</a>, <a href="https://github.com/frappe/cargo/pull/141">cargo#141</a>, <a href="https://github.com/frappe/central/pull/714">central#714</a>, <a href="https://github.com/frappe/pilot/pull/828">pilot#828</a>. The contract is <code>docs/telemetry.md</code> in frappe/beacon.</p>
 <nav>
-<a href="#flow">How it fits</a><a href="#resources">Resource map</a><a href="#services">Services and SLOs</a><a href="#severity">Severity</a><a href="#endpoints">Endpoint checks</a><a href="#customer">Customer or infrastructure</a><a href="#atlas">Atlas</a><a href="#cargo">Cargo and Datum</a><a href="#central">Central</a><a href="#pilot">Pilot</a><a href="#datum">Datum agent</a><a href="#gaps">Review status</a>
+<a href="#flow">How it fits</a><a href="#resources">Resource map</a><a href="#services">Services and SLOs</a><a href="#severity">Severity</a><a href="#endpoints">Endpoint checks</a><a href="#customer">Customer or infrastructure</a><a href="#atlas">Atlas</a><a href="#cargo">Cargo and Datum</a><a href="#central">Central</a><a href="#pilot">Pilot</a><a href="#datum">Datum agent</a><a href="#gaps">Review status</a><a href="#guide">Developer guide</a>
 </nav>
 
 <section id="flow">
@@ -226,6 +228,102 @@ figcaption { color: var(--muted); font-size: 0.88rem; }
 <p>The Datum agent makes the field names of a JSON journal line valid attribute names and sends at most 64, so one line cannot make Datum refuse its batch.</p></div>
 <div class="box open"><h4>Open: Grove is not covered</h4>
 <p>Grove boxes send as <code>grove:&lt;machine&gt;</code>, and no resource source lists them. Beacon drops their rows. Decide: add a Grove resource source and rules, or leave Grove out of Beacon.</p></div>
+</section>
+<section id="guide">
+<h2>Developer guide: add a service</h2>
+<p>Do these steps to connect a new service to Datum and Beacon. The full guide is <code>docs/integration.md</code> in frappe/beacon.</p>
+
+<h3>1. Decide what to watch</h3>
+<ul>
+<li><strong>The symptom:</strong> what a customer sees when the service fails, as good events of valid events, such as requests without a 5xx. It becomes the SLI. A fast burn of its error budget pages.</li>
+<li><strong>The cause:</strong> a part that breaks and has one fix, such as a full disk or a stuck queue. It becomes a cause rule.</li>
+<li>Send counts, not items. A site, a VM, a request, a job or a user is never a label value. Each label value adds one series.</li>
+</ul>
+
+<h3>2. Get a token from the issuer that already trusts you</h3>
+<p>Do not make a new key set. A machine sends as its Atlas Virtual Machine or Metal Server name, and an application as its own name. See <a href="#issuers">Who signs the token</a>. The token is for one region and has an expiry, so renew it before it expires. Beacon keeps only the rows whose resource ID it knows, so the ID must be in a resource list (step 6).</p>
+
+<h3>3. Send metrics and logs</h3>
+<p>Name a metric <code>namespace_subsystem_target_unit</code>, with <code>_total</code> at the end of a counter. Use base units: seconds and bytes. Send a gauge for a value that goes up and down, and the running total for a counter. Give all series of one collection the same timestamp, so a rule can read the newest collection only.</p>
+<pre><code>from datum_client import Batch, Datum
+
+batch = Batch("cargo", "object_storage")
+batch.gauge("backup_age", age_seconds, unit="seconds", cluster="garage-1")
+batch.counter("backups", completed, cluster="garage-1")  # cargo_object_storage_backups_total
+
+with Datum(url, token) as datum:
+    datum.send(batch)</code></pre>
+<p>A machine with the Datum agent sends its journal already. Add a role file for an exporter (<code>metrics_&lt;name&gt;</code>) or a log file (<code>logs_&lt;name&gt;</code>). A Frappe app sends its Error Logs from a scheduled job with <code>source = 'error_log'</code>. Limits: 12 requests a minute for each resource and endpoint, 10,000 samples a request, 64 labels a sample.</p>
+
+<h3>4. Write a rule and a runbook</h3>
+<p>Put one file in <code>beacon/rules/&lt;rule-key&gt;.sql</code> of your repository. The header sets the timing, and the query returns only failing rows: <code>resource_id</code>, <code>alert_key</code>, <code>value</code>, <code>detail</code>, and an optional <code>severity</code>.</p>
+<pre><code>-- title: Object storage backup stale
+-- severity: Medium
+-- resource_type: Cargo Server
+-- interval: 900
+-- pending_for: 900
+-- resolve_after: 3600
+-- runbook_url: https://github.com/frappe/cargo/blob/develop/beacon/runbooks/object-storage-backup-stale.md
+SELECT 'cargo' AS resource_id, cluster AS alert_key, age AS value,
+       concat('the newest metadata backup of ', cluster, ' is ', toString(round(age / 3600)), ' h old') AS detail
+FROM (
+    SELECT labels['cluster'] AS cluster, argMax(value, ts) AS age
+    FROM datum.samples_recent
+    WHERE metric = 'cargo_object_storage_metadata_backup_age_seconds'
+      AND resource_id = 'cargo' AND ts &gt; now() - INTERVAL 3 HOUR
+    GROUP BY cluster
+)
+WHERE age &gt; 86400</code></pre>
+<ul>
+<li><strong>Filter on the sender.</strong> Only <code>resource_id</code> comes from the token. Any token of the region can send any metric name and labels, so read <code>resource_id = 'cargo'</code>, not the name alone.</li>
+<li><strong>Filter in a subquery.</strong> <code>SELECT 'cargo' AS resource_id ... WHERE resource_id = ...</code> compares the constant, not the column.</li>
+<li><strong>Name the types.</strong> <code>resource_type</code> lists the registry types of the rows. Beacon drops a row of any other type.</li>
+<li><strong>Leave out disabled resources.</strong> A query that adds many resources into one row filters <code>resource_id NOT IN {excluded:Array(String)}</code>. Beacon drops the rows of such a resource itself.</li>
+<li><strong>Use rates.</strong> Compare failures with the total, such as 5 failed of 20 attempts or more.</li>
+<li><strong>Choose the times.</strong> <code>interval</code> is how often the data changes. <code>pending_for</code> is how long a problem must stay before a person must know. <code>resolve_after</code> is at least 2 intervals.</li>
+<li><strong>Page only for customer impact.</strong> Each High or Critical rule has a runbook in <code>beacon/runbooks/&lt;rule-key&gt;.md</code>: what failed, what each <code>alert_key</code> means, the steps to fix, and when to escalate.</li>
+</ul>
+<p>Test the query before you merge it, with rows that fail and rows that do not:</p>
+<pre><code>clickhouse-client --param_region=blr1 --param_excluded="[]" &lt; beacon/rules/object-storage-backup-stale.sql</code></pre>
+
+<h3>5. Define an SLI</h3>
+<p>When customers use the service, add <code>beacon/services/&lt;service&gt;.sql</code>. It returns one row for each reporter: <code>resource_id</code>, <code>good</code>, <code>valid</code> and <code>last_ts</code>, and sets <code>slo_target</code> in its header. Count only the failures that the platform causes. A global service reports as the region, <code>{region:String} AS resource_id</code>, and sets its Query Region.</p>
+
+<h3>6. Serve a resource list</h3>
+<p>A regional service that runs infrastructure serves <code>GET &lt;base&gt;/beacon/resources</code> with an <code>ETag</code>. Beacon signs in with a Frappe API key and reads it each minute.</p>
+<pre><code>{"resources": [{"resource_id": "h12", "resource_type": "Metal Host", "parent_id": "", "title": "h12", "status": "Active"}]}</code></pre>
+<p>A Suspended resource gives no alerts. A resource that is missing from 2 good fetches becomes Terminated. When one fetch removes more than 10% of the resources, Beacon holds the removal until an admin applies it.</p>
+
+<h3>7. Sync</h3>
+<p>Add the repository as a Definition Source in Beacon Settings, with its branch and the folder <code>beacon</code>, and select Sync Definitions. A sync applies all files of a source or none: one bad header or one failing query stops it. Desk can only turn a file rule on or off and set its regions. Change everything else in the file.</p>
+
+<h3>How Beacon runs the rule</h3>
+<p>Each minute, Beacon queues one job for each region with due rules. For each due rule:</p>
+<ol>
+<li>Run the query as the <code>beacon</code> user, with <code>{region}</code> and <code>{excluded}</code>. A query error changes nothing. 3 errors in a row mark the rule Broken.</li>
+<li>Drop the rows of unknown resources, of other types, of resources that are not checked, and of resources that are new in the last 10 minutes.</li>
+<li>Compare the rows with the open alerts and write only the changes.</li>
+</ol>
+<div class="scroll"><table>
+<thead><tr><th>From</th><th>When</th><th>To</th></tr></thead>
+<tbody>
+<tr><td>None</td><td>A new failing row</td><td>Pending</td></tr>
+<tr><td>Pending</td><td>The row fails for <code>pending_for</code></td><td>Firing. The alert joins an open incident, which pages.</td></tr>
+<tr><td>Pending</td><td>A good run without the row</td><td>Resolved (Cleared)</td></tr>
+<tr><td>Firing</td><td>No row for <code>resolve_after</code></td><td>Resolved (Recovered). A job closes the incident when all its alerts recover.</td></tr>
+<tr><td>Pending, Firing</td><td>The resource is removed, or monitoring is disabled</td><td>Resolved</td></tr>
+</tbody></table></div>
+<p>A silence, a maintenance or a held removal suppresses an alert: it keeps its state, but it does not join an incident and does not page. Beacon never publishes an incident. A person decides what the status page shows.</p>
+
+<h3>Before you merge</h3>
+<ul>
+<li>Each metric name follows the pattern, and each counter ends in <code>_total</code>.</li>
+<li>No label has a value for each site, VM, request, job or user.</li>
+<li>The data shows in <code>samples_recent</code> from a real sender, with the resource ID that the registry has.</li>
+<li>Each rule reads only its own sender and points to one fix. You ran it on data that fails and data that does not.</li>
+<li>Each High or Critical rule has a runbook.</li>
+<li>No log line or label holds a secret.</li>
+</ul>
 </section>
 <p class="meta">Made from the rule and service files of each repository and the pull request descriptions.</p>
 </main>
