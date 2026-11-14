@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon Telemetry Rollout</title>
+<meta name="description" content="How to roll out the Beacon telemetry contract on the Frappe Cloud V2 regions that run now: order, steps, checks, rollback and open gaps.">
+<style>
+:root { --text: #1d1d1f; --muted: #5f6368; --line: #e3e3e3; --soft: #f6f6f4; --accent: #2f5fd0; --warn: #a15c00; --bad: #b3261e; --good: #1e7a3c; --bg: #fff; }
+@media (prefers-color-scheme: dark) { :root { --text: #e8e8e6; --muted: #a0a3a8; --line: #33363a; --soft: #1c1e21; --accent: #8fb0ff; --warn: #f0b45a; --bad: #ff8a80; --good: #7fd49b; --bg: #121314; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+h2 { font-size: 1.4rem; margin: 56px 0 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+p, li { max-width: 72ch; }
+.lede { color: var(--muted); font-size: 1.05rem; }
+nav { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 20px 0 0; font-size: 0.92rem; }
+a { color: var(--accent); }
+code { font: 0.86em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 1px 4px; border-radius: 4px; }
+p code, li code, td code { white-space: nowrap; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { background: var(--soft); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+.box { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 12px 0; background: var(--soft); }
+.box.open { border-left: 4px solid var(--warn); }
+.box.bad { border-left: 4px solid var(--bad); }
+.box.good { border-left: 4px solid var(--good); }
+.box h4 { margin: 0 0 4px; font-size: 1rem; }
+.box p { margin: 6px 0; }
+pre { background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 0.84rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre code { background: none; padding: 0; font-size: inherit; white-space: pre; }
+figure { margin: 16px 0; }
+figcaption { color: var(--muted); font-size: 0.88rem; }
+#order { width: 100%; height: auto; display: block; }
+.step { border: 1px solid var(--line); border-radius: 8px; padding: 4px 16px 12px; margin: 16px 0; }
+.step h3 { margin-top: 12px; }
+.step .who { color: var(--muted); font-size: 0.88rem; margin: 0; }
+.tag { display: inline-block; font-size: 0.78rem; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); }
+.tag.bad { color: var(--bad); border-color: var(--bad); }
+.tag.warn { color: var(--warn); border-color: var(--warn); }
+.tag.good { color: var(--good); border-color: var(--good); }
+.meta { color: var(--muted); font-size: 0.88rem; }
+ol.checks li, ul.checks li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Beacon telemetry rollout</h1>
+<p class="lede">How to move the Frappe Cloud V2 regions that run now to the Beacon telemetry contract. This plan gives the order, the steps, a check for each step, the rollback, and the gaps to close first.</p>
+<p class="meta">Plan written on 14 November 2026. Nothing is deployed yet. Related page: <a href="../../research/beacon-telemetry-map/">Beacon telemetry map</a>.</p>
+<nav>
+  <a href="#context">Context</a>
+  <a href="#gaps">Gaps to close first</a>
+  <a href="#order">Order</a>
+  <a href="#steps">Steps</a>
+  <a href="#rollback">Rollback</a>
+  <a href="#cleanup">Cleanup</a>
+  <a href="#done">Done when</a>
+</nav>
+
+<h2 id="context">Context</h2>
+<p>Five pull requests change how each product sends telemetry to Datum, the telemetry service of each region. Beacon reads that data from ClickHouse and sends the alerts. Each product keeps its Beacon rules in its own <code>beacon/</code> folder.</p>
+<p>The regions already run Datum, Atlas, Cargo, object storage clusters, Central and Pilot. So the rollout must change machines that run now, with data that exists now. Two changes make the order strict:</p>
+<ul>
+  <li><strong>The token issuer changes.</strong> Cargo now signs the Datum tokens of its own services with its own key. Before, Central gave these tokens through a route that the Central pull request removes. So each Cargo machine must get the new Cargo token before Central removes the old route.</li>
+  <li><strong>The Datum schema changes.</strong> Migration <code>006_beacon.sql</code> adds the Beacon tables, views and user, and it changes how long ClickHouse keeps old rows. It runs when Cargo sets up the Datum host again.</li>
+</ul>
+
+<div class="scroll"><table>
+<tr><th>Pull request</th><th>Base</th><th>State on 14 November 2026</th><th>Rollout effect</th></tr>
+<tr><td>frappe/datum#20</td><td><code>main</code></td><td>Open. CI passes.</td><td>New schema, the Datum agent, the Cargo issuer, the <code>beacon</code> ClickHouse user</td></tr>
+<tr><td>frappe/cargo#141</td><td><code>develop</code></td><td>Open. CI fails until Datum #20 is on <code>main</code>.</td><td>Cargo key, machine tokens, new agent on Cargo machines, Datum host points at the Cargo key set</td></tr>
+<tr><td>frappe/atlas#607</td><td><code>develop</code></td><td>Open. CI fails until Datum #20 is on <code>main</code>.</td><td>New agent on hosts and service VMs, new metald series, the resource list for Beacon</td></tr>
+<tr><td>frappe/pilot#828</td><td><code>develop</code></td><td>Open.</td><td>Pilot sends only what Beacon reads. Fluent Bit is removed from the code.</td></tr>
+<tr><td>frappe/central#714</td><td><code>develop</code></td><td>Open. The test fix is pushed.</td><td>Central errors and gauges to Datum. Removes the Cargo token route.</td></tr>
+</table></div>
+
+<h2 id="gaps">Gaps to close first</h2>
+<p>I read the setup code of each product to see what a second setup run does on a machine that runs now. Three gaps make the rollout text in the pull requests wrong or incomplete. Close them before step 1.</p>
+
+<div class="box bad">
+<h4><span class="tag bad">Blocker</span> Object storage setup skips the healthy nodes</h4>
+<p>The pull request says: run setup again on each object storage cluster, so each machine gets a Cargo machine token. But <code>ObjectStorageCluster._setup</code> sets up only the machines that are not healthy Garage nodes (<code>discover_machines_to_setup</code>). The agent and the token timer install in <code>start_setup_on_machine</code>, so a healthy node gets neither.</p>
+<p><strong>Effect:</strong> every node of an Active cluster keeps the old agent and the old timer. The old timer calls the Central route. When Central #714 removes that route, the nodes cannot renew their token, and their telemetry stops when the token expires.</p>
+<p><strong>Recommendation:</strong> in <code>_setup</code>, call <code>install_metrics_exporter</code> for every Running machine, also the healthy ones. The method is safe to repeat, and the Datum Server setup already works this way. Add a test in Cargo.</p>
+</div>
+
+<div class="box open">
+<h4><span class="tag warn">Decision</span> Migration 006 deletes old rows on its first run</h4>
+<p><code>006_beacon.sql</code> runs <code>ALTER TABLE ... MODIFY TTL</code> on <code>samples</code> and <code>logs</code>. Before, these tables had no TTL. ClickHouse applies a new TTL to the existing parts by default, so the first run deletes:</p>
+<ul>
+  <li><code>system_*</code> samples that are older than 15 days</li>
+  <li>other samples that are older than 90 days</li>
+  <li>log lines that are older than 30 days</li>
+</ul>
+<p><code>samples_5m</code> is filled by a materialized view, which sees only new rows. So after the migration, a chart of a machine metric has no data older than 15 days. The TTL also starts a mutation that rewrites the parts of both tables. On a large table this takes much disk I/O.</p>
+<p><strong>Recommendation:</strong> in <code>006_beacon.sql</code>, copy the <code>system_*</code> rows of the last 90 days into <code>samples_5m</code> on the first run, before the TTL change. Use the same guard as the <code>samples_recent</code> copy. Before the rollout, read the size of both tables in each region, and run step 2 at a time of low traffic. If the old history has no use, accept the loss and only plan for the I/O.</p>
+</div>
+
+<div class="box open">
+<h4><span class="tag warn">Gap</span> Fluent Bit stays on the Pilot servers</h4>
+<p>Pilot #828 removes Fluent Bit and <code>pilot remove logs</code> from the code. On a server where <code>pilot setup telemetry</code> ran, the user service <code>pilot-fluent-bit.service</code> continues to run after the Pilot update. Nothing stops or removes it, and it continues to send log lines in the old format.</p>
+<p>Also, <code>[telemetry]</code> now reads only <code>enabled</code>, which is true by default. A server with <code>metrics_enabled = false</code> starts to send telemetry after the update.</p>
+<p><strong>Recommendation:</strong> make the Pilot update stop and remove <code>pilot-fluent-bit.service</code> and its files one time. Read <code>metrics_enabled</code> as <code>enabled</code> when <code>enabled</code> is not set.</p>
+</div>
+
+<h2 id="order">Order</h2>
+<figure>
+<svg id="order" viewBox="0 0 820 560" role="img" aria-label="Rollout order. 0: close the gaps. 1: merge Datum to main. 2: deploy Cargo and set up each Datum Server again. 3: set up each object storage cluster again. 4: deploy Atlas and release Pilot, in parallel. 5: deploy Central. 6: configure Beacon and sync. 7: watch, then turn paging on and clean up."></svg>
+<figcaption>Each arrow means "must be done before". Atlas and Pilot can go at the same time. Central goes last of the products, because it removes the old token route.</figcaption>
+</figure>
+
+<h2 id="steps">Steps</h2>
+<p>Do each step in every region before you go to the next step, except where the step says otherwise.</p>
+
+<div class="step" id="step-0">
+<h3>0. Close the gaps and get the code ready</h3>
+<p class="who">Code. No change on a machine.</p>
+<ol>
+  <li>Fix the three gaps above in Cargo #141, Datum #20 and Pilot #828.</li>
+  <li>In each region, read the size of <code>datum.samples</code> and <code>datum.logs</code> with the ClickHouse <code>default</code> user on the Datum host:
+<pre><code>SELECT table, formatReadableSize(sum(bytes_on_disk)) AS size, sum(rows) AS rows
+FROM system.parts
+WHERE database = 'datum' AND active AND table IN ('samples', 'logs')
+GROUP BY table;</code></pre></li>
+  <li>Get a review of all five pull requests.</li>
+  <li>In Beacon, turn on <strong>Paging Paused</strong> in Beacon Settings. The first syncs make many alerts, and nobody must be paged for them.</li>
+</ol>
+<p><strong>Check:</strong> CI of Datum #20 passes. The other four wait for step 1.</p>
+</div>
+
+<div class="step" id="step-1">
+<h3>1. Merge Datum to <code>main</code></h3>
+<p class="who">GitHub. No change on a machine.</p>
+<p>Cargo and Atlas install Datum and the Datum agent from <code>main</code>. A Datum host changes only when Cargo sets it up or updates it, so this merge changes nothing in a region.</p>
+<p><strong>Check:</strong> run CI again on Cargo #141 and Atlas #607. Both pass. Then merge Cargo, Atlas and Pilot to <code>develop</code>. Do not merge Central yet.</p>
+</div>
+
+<div class="step" id="step-2">
+<h3>2. Deploy Cargo, then set up each Datum Server again</h3>
+<p class="who">Each region. Do the two parts in one session, one region at a time.</p>
+<ol>
+  <li>Deploy Cargo. The patch <code>cargo.patches.create_signing_key</code> makes the Cargo Ed25519 key. From now, Cargo signs the token of the Cargo site with this key.</li>
+  <li>On the Datum Server, select <strong>Set Up Again</strong>. The save fills the new <code>beacon_user_password</code>. Setup then installs Datum from <code>main</code>, writes <code>DATUM_JWKS_URL</code> as the Cargo key set, runs <code>datum-migrate</code> with migration 006, installs the Datum agent with a Cargo machine token, and installs the <code>datum-refresh.timer</code>.</li>
+</ol>
+<p><strong>Gap in data:</strong> between the two parts, the Datum host still reads the Atlas key set, so it refuses the new Cargo-signed token of the Cargo site. Setup also restarts ClickHouse, so all senders of the region fail for about one minute. Vector keeps the data of the agents in its buffer, but the Pilot and product gauges of that minute are lost.</p>
+<p><strong>Check:</strong></p>
+<ul class="checks">
+  <li>The Datum Server is Active, and the Setup Log shows no error.</li>
+  <li><code>https://telemetry-svc.&lt;wildcard domain&gt;/health</code> returns 200.</li>
+  <li>With the <code>beacon</code> user: <code>SELECT count() FROM datum.samples_recent WHERE ts &gt; now() - INTERVAL 5 MINUTE</code> is more than 0.</li>
+  <li>Rows arrive with <code>resource_id = 'cargo'</code> again.</li>
+  <li>On the Datum host, <code>systemctl list-timers datum-refresh.timer</code> shows the timer.</li>
+  <li>Datum logs no <code>request refused</code> line with status 401 after the setup.</li>
+</ul>
+</div>
+
+<div class="step" id="step-3">
+<h3>3. Set up each object storage cluster again</h3>
+<p class="who">Each region, each cluster. Needs the blocker fix.</p>
+<p>Select <strong>Set Up Again</strong> on the Object Storage Cluster. With the fix, each Running node gets a Cargo machine token in its Atlas metadata, the <code>datum-refresh.timer</code> that calls <code>cargo.api.telemetry.datum_token</code> each day, and the new agent with the Garage, gateway nginx and ClickHouse role files. Setup also applies Caddy on the gateway again.</p>
+<p><strong>Check:</strong></p>
+<ul class="checks">
+  <li>The cluster is Active.</li>
+  <li>Each node sends <code>system_boot_time_seconds</code> under its Atlas Virtual Machine name.</li>
+  <li><code>garage_cluster_available</code> arrives from the gateway and storage nodes.</li>
+  <li>On one node, run the timer one time: <code>systemctl start datum-refresh.service</code>. It writes a new token, and the agent continues to send.</li>
+</ul>
+</div>
+
+<div class="step" id="step-4">
+<h3>4. Deploy Atlas and release Pilot</h3>
+<p class="who">Each region for Atlas. All Pilot servers for Pilot. The two can go at the same time.</p>
+<p><strong>Atlas:</strong> deploy Atlas. The daily jobs <code>renew_telemetry_credentials</code> and <code>renew_service_telemetry_credentials</code> install the new agent on each host, each service VM and the Cargo VM. To do it now, select <strong>Configure Telemetry</strong> on each Metal Server, and queue the telemetry setup of each service node. Then upgrade metald on each host, so the hosts send the new, smaller set of series. The old <code>/etc/vector/vector.yaml</code> stays on the machine, but the new unit does not read it.</p>
+<p><strong>Pilot:</strong> release Pilot through the normal Pilot update. A Pilot sends under its server name until it gets a new token from Central. The token gives the Atlas Virtual Machine name only after step 5.</p>
+<p><strong>Check:</strong></p>
+<ul class="checks">
+  <li><code>atlas_machine</code> arrives each minute from <code>atlas</code>.</li>
+  <li>Each host sends logs with product <code>metal</code>, and metald sends fewer series than before.</li>
+  <li><code>datum_agent_dropped_events_total</code> arrives from each machine with the new agent.</li>
+  <li>Pilot servers send <code>pilot_info</code> and <code>pilot_sites</code>.</li>
+  <li>No <code>pilot-fluent-bit.service</code> runs on an updated Pilot server.</li>
+</ul>
+</div>
+
+<div class="step" id="step-5">
+<h3>5. Deploy Central</h3>
+<p class="who">Global. Only when steps 2 and 3 are done in every region.</p>
+<ol>
+  <li>Make sure that no Cargo machine still calls the old route. Every Datum host and every object storage node must have the new <code>datum-refresh.timer</code>.</li>
+  <li>Deploy Central. The migration adds new indexes. Read the size of the tables first, and deploy at a time of low traffic.</li>
+  <li>Set <strong>Central Telemetry Region</strong> on one Region. Until then, Central sends nothing.</li>
+</ol>
+<p><strong>Check:</strong> rows arrive with <code>resource_id = 'central'</code>. A Pilot that renews its token sends under its Atlas Virtual Machine name.</p>
+</div>
+
+<div class="step" id="step-6">
+<h3>6. Configure Beacon and sync</h3>
+<p class="who">Beacon, with Paging Paused still on.</p>
+<ol>
+  <li>For each region, make or update the Beacon Region. Set URL to the read endpoint of ClickHouse, Database to <code>datum</code>, User to <code>beacon</code>, and Password to the beacon password of the Datum Server. Get the password with <strong>Show Password</strong> on the Datum Server. Set the Wildcard Domain.</li>
+  <li>Add the Atlas resource list of each region as a Beacon Resource Source.</li>
+  <li>In Beacon Settings, set <strong>Central URL</strong> and the GitHub Token.</li>
+  <li>Add frappe/atlas, frappe/cargo, frappe/central and frappe/pilot as Definition Sources, with branch <code>develop</code> and folder <code>beacon</code>. Select <strong>Sync Definitions</strong>.</li>
+  <li>Set the Query Region of the Dashboard and API and the Server actions services, and the Regions of the 3 Central checks, to the Region that has Central Telemetry Region set. Then turn the checks on.</li>
+</ol>
+<p><strong>Check:</strong> the sync applies every source. No rule is Broken. Each Beacon Region shows Hosts Reporting near 100%.</p>
+</div>
+
+<div class="step" id="step-7">
+<h3>7. Watch, then turn paging on</h3>
+<p class="who">Beacon. One day or more.</p>
+<p>Read each Firing alert. Each alert must be a real problem, or a rule to fix. Fix the noisy rules in the repository of their product, then sync again. When the alerts are correct, turn off <strong>Paging Paused</strong>.</p>
+</div>
+
+<h2 id="rollback">Rollback</h2>
+<div class="scroll"><table>
+<tr><th>Step</th><th>How to go back</th><th>Limit</th></tr>
+<tr><td>2. Cargo and Datum</td><td>Run <strong>Update Datum</strong> with the old commit. Datum ignores the new tables and views.</td><td>The migration cannot be reversed. Deleted rows do not come back. Do not deploy an older Cargo after this step: the Datum host reads the Cargo key set, and an older Cargo does not serve it, so Datum refuses every token. Instead, set <code>DATUM_JWKS_URL</code> back to the Atlas key set first.</td></tr>
+<tr><td>3. Object storage</td><td>None needed. The old agent configuration is replaced, and the new one is safe to install again.</td><td>The old timer is replaced on each node.</td></tr>
+<tr><td>4. Atlas and Pilot</td><td>Deploy the previous version. The next daily renewal installs the old agent again.</td><td>A Pilot server without Fluent Bit stays without it.</td></tr>
+<tr><td>5. Central</td><td>Deploy the previous version. The old route comes back.</td><td>The new indexes stay. They do no harm.</td></tr>
+<tr><td>6. Beacon</td><td>Turn on Paging Paused, or remove a Definition Source.</td><td>None.</td></tr>
+</table></div>
+
+<h2 id="cleanup">Cleanup</h2>
+<ul>
+  <li>On each Insights site, delete the old Insights Alert records by hand. Beacon sends the alerts now.</li>
+  <li>In Insights, delete the six Cargo charts that have no data.</li>
+  <li>When all is stable, remove <code>/etc/vector/vector.yaml</code> from the machines. The new agent does not read it.</li>
+</ul>
+
+<h2 id="done">Done when</h2>
+<ul class="checks">
+  <li>Every Datum host, object storage node, host, service VM and Pilot server sends under its Beacon resource ID.</li>
+  <li>No Cargo machine calls the Central route, and the route is gone.</li>
+  <li>Datum logs no 401 lines from a known sender.</li>
+  <li>Beacon has no Broken rule, and paging is on.</li>
+  <li>The old Insights alerts and charts are deleted.</li>
+</ul>
+
+<h2 id="sources">Sources</h2>
+<ul>
+  <li>frappe/datum#20: <code>datum/migrations/006_beacon.sql</code>, <code>datum_client/agent/install.sh</code></li>
+  <li>frappe/cargo#141: <code>cargo/telemetry/doctype/datum_server/datum_server.py</code>, <code>cargo/object_storage/doctype/object_storage_cluster/object_storage_cluster.py</code>, <code>cargo/telemetry/conf/datum/install.sh</code>, <code>cargo/issuer.py</code></li>
+  <li>frappe/atlas#607: <code>atlas/atlas/core/telemetry/agent.py</code>, <code>atlas/service/core/telemetry.py</code>, <code>atlas/metal_server/core/host_installation.py</code></li>
+  <li>frappe/pilot#828: <code>pilot/config/telemetry.py</code>, <code>pilot/commands/setup/telemetry.py</code></li>
+  <li>frappe/central#714: the pull request description</li>
+  <li>frappe/beacon: <code>docs/integration.md</code></li>
+</ul>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function () {
+  var svg = document.getElementById("order");
+  if (!svg || typeof rough === "undefined") return;
+  var css = getComputedStyle(document.documentElement);
+  var ink = css.getPropertyValue("--text").trim();
+  var muted = css.getPropertyValue("--muted").trim();
+  var accent = css.getPropertyValue("--accent").trim();
+  var warn = css.getPropertyValue("--warn").trim();
+  var rc = rough.svg(svg);
+  var ns = "http://www.w3.org/2000/svg";
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function text(x, y, value, size, color, weight) {
+    var t = document.createElementNS(ns, "text");
+    t.setAttribute("x", x); t.setAttribute("y", y);
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("font-family", "system-ui, sans-serif");
+    t.setAttribute("font-size", size); t.setAttribute("fill", color);
+    if (weight) t.setAttribute("font-weight", weight);
+    t.textContent = value;
+    svg.appendChild(t);
+  }
+  function box(x, y, w, h, title, note, color) {
+    svg.appendChild(rc.rectangle(x, y, w, h, { stroke: color, strokeWidth: 1.4, roughness: reduced ? 0.4 : 1.1, seed: x + y }));
+    text(x + w / 2, y + 26, title, 16, ink, 600);
+    text(x + w / 2, y + 46, note, 13, muted);
+  }
+  function arrow(x1, y1, x2, y2) {
+    svg.appendChild(rc.line(x1, y1, x2, y2, { stroke: muted, strokeWidth: 1.3, seed: x1 + y2 }));
+    var a = Math.atan2(y2 - y1, x2 - x1), s = 9;
+    svg.appendChild(rc.line(x2, y2, x2 - s * Math.cos(a - 0.45), y2 - s * Math.sin(a - 0.45), { stroke: muted, strokeWidth: 1.3 }));
+    svg.appendChild(rc.line(x2, y2, x2 - s * Math.cos(a + 0.45), y2 - s * Math.sin(a + 0.45), { stroke: muted, strokeWidth: 1.3 }));
+  }
+
+  var w = 300, h = 60, cx = 410 - w / 2;
+  box(cx, 10, w, h, "0. Close the gaps", "Cargo, Datum and Pilot code", warn);
+  box(cx, 100, w, h, "1. Merge Datum to main", "no change in a region", accent);
+  box(cx, 190, w, h, "2. Cargo + Datum Server setup", "each region; migration 006 runs", accent);
+  box(cx, 280, w, h, "3. Object storage setup", "each cluster; Cargo machine tokens", accent);
+  box(60, 370, w, h, "4a. Deploy Atlas", "new agent, new metald", accent);
+  box(460, 370, w, h, "4b. Release Pilot", "Fluent Bit removed", accent);
+  box(cx, 460, w, h, "5. Deploy Central", "removes the old token route", accent);
+  arrow(410, 70, 410, 98);
+  arrow(410, 160, 410, 188);
+  arrow(410, 250, 410, 278);
+  arrow(360, 340, 220, 368);
+  arrow(460, 340, 600, 368);
+  arrow(410, 340, 410, 458);
+  text(410, 548, "then 6. configure Beacon and sync, and 7. watch, then turn paging on", 14, muted);
+})();
+</script>
+</body>
+</html>
