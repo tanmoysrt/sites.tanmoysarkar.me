@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Beacon Overnight Report</title>
-<meta name="description" content="End-to-end monitoring for Frappe Cloud V2 with Beacon: what changed, what was tested, and what is still open.">
+<meta name="description" content="End-to-end monitoring for Frappe Cloud V2 with Beacon: what changed, what the reporting path audit found, what was tested, and what is still open.">
 <style>
 :root { --text:#1d1f23; --muted:#5d636b; --line:#e2e4e8; --accent:#2457c5; --ok:#1f7a4d; --warn:#9a5b00; --bg:#fff; --code:#f4f5f7; }
 @media (prefers-color-scheme: dark) { :root { --text:#e8eaed; --muted:#a6adb6; --line:#363b42; --accent:#7ea6ff; --ok:#5fc38f; --warn:#e0a84a; --bg:#16181b; --code:#23262b; } }
@@ -34,8 +34,8 @@ figcaption { color:var(--muted); font-size:.88rem; }
 <body>
 <main>
 <h1>Beacon: end-to-end monitoring for Frappe Cloud V2</h1>
-<p class="lead">Overnight report, 14 November 2026. Beacon is the incident manager, SLO panel and public status page. This note records what changed, what was tested on a local region, and what is still open.</p>
-<p class="pills"><a href="https://github.com/frappe/atlas/pull/607">Atlas #607</a><a href="https://github.com/frappe/pilot/pull/828">Pilot #828</a><a href="https://github.com/frappe/central/pull/714">Central #714</a><span> Beacon: uncommitted, because it has no GitHub repository yet.</span></p>
+<p class="lead">Report of 14 November 2026, updated the same day after an audit of the reporting path. Beacon is the incident manager, SLO panel and public status page. This note records what changed, what the audit found, what was tested on a local region, and what is still open.</p>
+<p class="pills"><a href="https://github.com/frappe/atlas/pull/607">Atlas #607</a><a href="https://github.com/frappe/pilot/pull/828">Pilot #828</a><a href="https://github.com/frappe/central/pull/714">Central #714</a><a href="https://github.com/frappe/cargo/pull/141">Cargo #141</a><a href="https://github.com/frappe/datum/pull/20">Datum #20</a><a href="https://github.com/frappe/beacon">Beacon</a></p>
 
 <h2>The problem</h2>
 <p>Beacon reads telemetry from Datum, the regional ClickHouse store. It raises an alert when a rule query returns a row. A person sees an incident, and customers see the status page.</p>
@@ -58,17 +58,46 @@ figcaption { color:var(--muted); font-size:.88rem; }
 <tr><td>Atlas</td><td><code>service_proxy_requests_total</code> gets an <code>origin</code> label from <code>upstream_header_time</code>.</td><td>A site can send its own 502. Only a 5xx that the proxy made counts against the Networking SLO.</td></tr>
 <tr><td>Pilot</td><td><code>pilot_sites{state}</code> after each round of uptime pings, with zeroes.</td><td>The Sites SLI read a metric that did not exist.</td></tr>
 <tr><td>Pilot</td><td><code>notifications.json.log</code>: one line for each delivery to Central, with <code>delivered</code> and <code>error</code>.</td><td>Beacon can now alert when Pilot events do not reach Central.</td></tr>
-<tr><td>Central</td><td>Each minute, new Error Logs go to the Datum of the region in <code>telemetry_region</code>, as resource <code>central</code>.</td><td>Central is global and has no Datum. Its errors were visible only in Desk.</td></tr>
+<tr><td>Central</td><td>Each minute, new Error Logs and health gauges go to the Datum of the Region with <b>Central Telemetry Region</b> set, as resource <code>central</code>. Only one Region can have the checkbox.</td><td>Central is global and has no Datum. Its errors, stuck work, failed payments and failed webhooks were visible only in Desk.</td></tr>
 </table>
 
 <h3>Beacon</h3>
 <ul>
-<li><b>25 rules and 3 services</b> as files, with a runbook for each High and Critical rule (15 runbooks). Areas: Atlas control plane, hosts, regional services, Cargo builds, object storage, Central errors and Pilot delivery.</li>
+<li><b>54 rules and 4 services</b> as files in the repository of the app that sends the data, with a runbook for each High and Critical rule. Areas: Atlas control plane, hosts, regional services, Cargo builds, object storage, Central health and webhooks, Pilot sites, backups and delivery.</li>
 <li><b>Incident subscriptions.</b> A visitor subscribes to one incident by email (confirm link first) or reads its RSS feed. A public update sends one email to each confirmed subscriber. A replayed job sends nothing, because the update row records that subscribers were told.</li>
 <li><b>SLO paging.</b> A burn alert pages only when, in one minute of its short window, 3 reporters were bad, or every reporter when fewer than 3 reported. Before, a service with 2 proxies could never page.</li>
 <li>Resource Source paths are relative to an API root, and Beacon signs in with a Frappe API key.</li>
 <li>Links in customer emails come from the configured status page domain, never from the request host, which a guest controls.</li>
 </ul>
+
+<h2>Reporting path audit</h2>
+<p>A second pass checked the whole path: the producers, the Datum API, the ClickHouse schema, <code>datum_client</code> and every rule. Three Codex audits (gpt-6.1-sol, high effort) read the code. Each finding below was checked on a local ClickHouse 26.10 before the fix.</p>
+<h3>What would have stopped all alerts</h3>
+<table>
+<tr><th>Finding</th><th>Effect</th><th>Fix</th></tr>
+<tr><td><code>samples_recent</code>, <code>latest_value</code> and <code>counter_increase</code> existed only in the local ClickHouse.</td><td>No Beacon rule could run on a deployed Datum.</td><td>Datum migration <code>006_beacon.sql</code> (Datum #20), with a backfill of the last 2 days on its first run.</td></tr>
+<tr><td>No ClickHouse user for Beacon.</td><td>Beacon had no safe way to read.</td><td>A select-only <code>beacon</code> user with a fixed profile: 20 s, 4 GB, 4 threads, 100,000 rows. Cargo generates its password and sends it to the migration (Cargo #141).</td></tr>
+<tr><td>Pilot posts Fluent Bit logs as a bare array.</td><td>Datum refused every Pilot log batch.</td><td>Already fixed on Datum <code>main</code> (Datum #19). It needs a deploy of each Datum host.</td></tr>
+</table>
+<h3>What would have given wrong alerts</h3>
+<table>
+<tr><th>Finding</th><th>Fix</th></tr>
+<tr><td>Atlas marked any stopped VM as Suspended, so a crashed VM lost its alerts.</td><td>Only a sleeping VM is Suspended.</td></tr>
+<tr><td><code>cargo-silent</code>: the alias <code>'cargo' AS resource_id</code> replaced the column in its filter.</td><td>Filter in a subquery. The rule fired always unless the token id was exactly <code>cargo</code>.</td></tr>
+<tr><td>Central gauges: a cleared problem kept its old value for 5 minutes.</td><td>Each collection has one timestamp, and the rules read only the newest one.</td></tr>
+<tr><td>Central request counts were lost when a push failed.</td><td>They go back to Redis and leave with the next push.</td></tr>
+<tr><td>A sample from a fast clock stayed the newest value.</td><td>The views and the Pilot queries leave out samples more than 1 minute in the future.</td></tr>
+<tr><td>One broken site on each of 5 servers looked like a regional backup failure.</td><td>A server counts only when half or more of its sites failed.</td></tr>
+<tr><td>One new Atlas exception opened an alert for an hour.</td><td>A new error must repeat 3 times.</td></tr>
+</table>
+<h3>New coverage</h3>
+<ul>
+<li><b>Central health</b>: API requests by group and status, resource actions, payments, gateway webhooks, billing runs, proxy routes, snapshots, emails, queues and late scheduled jobs. 7 rules with runbooks.</li>
+<li><b>Outgoing webhooks</b>: <code>frappe_webhook_requests_last_day{webhook,status}</code>. <code>central-webhooks-failing</code> pages when 10 requests of one webhook gave up after their retries, and they are 20% of its requests.</li>
+<li><b>Object Storage SLO</b>: 99.9% of S3 requests succeed. A 5xx is bad; 403 and 404 are normal answers. It reports the region as one reporter, <code>cargo</code>, because Beacon drops rows whose resource ID is not in its registry, and the Garage node IDs are not.</li>
+<li><b>Docs</b>: Beacon now has a <a href="https://github.com/frappe/beacon/blob/develop/docs/telemetry.md">telemetry page</a> and a <a href="https://github.com/frappe/beacon/blob/develop/docs/integration.md">developer guide</a>, with diagrams, for a team that connects a new service. Codex (gpt-6-luna) reviewed them against the code.</li>
+</ul>
+<p>Verification: 58 rule and SLI definitions pass the Beacon header check, and all 58 queries run on ClickHouse. Datum, Cargo, Central, Atlas and Pilot tests pass.</p>
 
 <h2>Rule fixes from review</h2>
 <p>Codex (gpt-6.1-sol, high effort) reviewed every rule and every code change. These are the defects that would have hidden a real outage:</p>
@@ -103,14 +132,20 @@ figcaption { color:var(--muted); font-size:.88rem; }
 </ul>
 
 <h2>Still open</h2>
+<h3>Decisions for the team</h3>
 <ul>
-<li>Data-plane probes: a request through the proxy, traffic through the WireGuard gateway, and routed IPv6. Atlas does not probe IPv6 routers.</li>
-<li>A real failed-job counter and an oldest queued-job age in Atlas. The queue rules use registry size and queue length today.</li>
-<li>Register Cargo telemetry IDs (<code>cargo:&lt;machine&gt;</code>) in Central, so Cargo rules can name the node.</li>
-<li>Durable Central delivery state in Pilot, with retry counts and the oldest undelivered age.</li>
-<li>Central forwarding events to customers is not measured yet.</li>
+<li><b>Silence alerts as outage evidence.</b> A stale reporter counts as bad under any firing non-burn alert, also <code>pilot-silent</code>. A crashed Pilot can burn the Sites budget while the sites are up. Proposal: a rule header <code>is_outage_evidence: 0</code> for silence rules. It changes the Beacon Alert Rule DocType, so it needs a mockup first.</li>
+<li><b>A Dashboard and API SLO for Central.</b> The data is there (<code>central_requests</code>). The global service needs the Beacon name of the Central telemetry region.</li>
+<li><b>Datum delivery signals.</b> Rejected, throttled and failed inserts leave no data that Beacon can read. Proposal: a small per-minute ingest outcome table in Datum.</li>
+</ul>
+<h3>Known gaps</h3>
+<ul>
+<li>Datum returns 400 for some ClickHouse server errors, so a sender drops a batch that it could send again.</li>
+<li><code>datum_client.flush()</code> reports samples as sent when the post failed.</li>
+<li>The Sites SLI drops a server that is silent for more than 30 minutes.</li>
+<li>Pilot does not report a stopped bench process as 0, and its uptime pings run one site at a time.</li>
+<li>Data-plane probes: a request through the proxy, traffic through the WireGuard gateway, and routed IPv6.</li>
 <li>The site ping runs app request hooks, so an app fault can count against the Sites SLO.</li>
-<li>The status page design gets a refactor later; the functions are in place.</li>
 </ul>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
