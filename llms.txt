@@ -12,7 +12,7 @@ Use a lowercase kebab-case slug. Write a self-contained `index.html` at `researc
 
 If a tool generates the published HTML or assets, keep the editable source files, configuration, and source assets in `raw/<section>/<slug>/`. Put generated files in `<section>/<slug>/`. Record the build command in `raw/<section>/<slug>/README.md` unless the repository already provides a build script. Commit source and output together. A direct HTML page does not need a duplicate raw copy. The Pages workflow does not deploy `raw/`.
 
-Use Rough.js for custom diagrams with a hand-drawn look; D2 is an option for ordinary static diagrams. Keep diagrams focused on the requested topic and label the data or action they show.
+Use Pele for standard diagrams: write Mermaid in `<script type="text/mermaid" data-label="...">` blocks in `raw/<section>/<slug>/index.html`, run `npm install` once, then `npm run build:page -- <section> <slug>` to inline static SVG in `<section>/<slug>/index.html`. Use Rough.js for custom diagrams with a hand-drawn look. Keep diagrams focused on the requested topic and label the data or action they show.
 
 ## Add a presentation
 

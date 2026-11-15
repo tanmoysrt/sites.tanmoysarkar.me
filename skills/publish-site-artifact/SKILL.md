@@ -30,9 +30,20 @@ Write like a clear engineering note. Start with the concrete situation and why t
 
 Use short paragraphs, direct headings, and specific examples. Show the relevant lines of code or configuration, a real UI state, or a measured before/after result when that makes the idea easier to verify. Give numbers units and measurement conditions. Distinguish what exists, what was tested, what is proposed, and what remains uncertain; include meaningful tradeoffs and failed approaches. Edit repetitions and rough phrasing rather than imitating the source posts verbatim.
 
-Use diagrams to answer one question at a time. Use Rough.js for custom diagrams with a hand-drawn look; D2 is an option for ordinary static diagrams. Draw simple labeled components and directional arrows; show ownership or network boundaries when they matter. Label the data or action on important arrows, and use before/after diagrams for a redesign. Place each diagram next to its explanation and give it useful alternative text. Use plain lines and little color. Treat private reference posts as style examples; do not copy their text, screenshots, or infrastructure details into public artifacts.
+Use diagrams to answer one question at a time. Use Pele for standard diagrams (Mermaid rendered to static SVG); use Rough.js for custom diagrams with a hand-drawn look. Draw simple labeled components and directional arrows; show ownership or network boundaries when they matter. Label the data or action on important arrows, and use before/after diagrams for a redesign. Place each diagram next to its explanation and give it useful alternative text. Use plain lines and little color. Treat private reference posts as style examples; do not copy their text, screenshots, or infrastructure details into public artifacts.
 
 For a guide, give actionable steps and expected results. For research, compare options using evidence and state a conclusion. For a plan, show sequence, dependencies, and how success will be checked.
+
+### Pele diagrams
+
+[Pele](https://pele.run) renders Mermaid to themeable SVG at build time, so the page needs no script. Pick the diagram type by the question: `flowchart` for a path or a decision, `sequenceDiagram` for messages between actors, `stateDiagram-v2` for a lifecycle, `gantt` for a timeline, `sankey-beta` for a distribution, and `pie` or `xychart-beta` for a few numbers.
+
+- Write the page at `raw/<section>/<slug>/index.html`. Put each diagram in `<script type="text/mermaid" data-label="...">`; `data-label` is the alternative text and is required.
+- Run `npm install` once, then `npm run build:page -- <section> <slug>`. The build replaces each block with inline SVG in `<section>/<slug>/index.html` and copies the other files of the raw folder.
+- Theme with the `--pele-*` CSS variables on `:root`, and set them again for dark mode. Set `--pele-bg` to the color behind the diagram, because edge labels use it to mask lines.
+- To mark a node, add `classDef name stroke-width:1px` and `class node name` in the diagram, then style `.pele .name rect` in the page CSS with `!important`. Inline `classDef` colors do not follow dark mode.
+- Keep each diagram narrow enough to read at page width: use `TB` for more than about 5 steps, and short labels. The build sets `--diagram-width` on each `.diagram` wrapper, so `.diagram svg { min-width: min(var(--diagram-width), 520px) }` lets a wide diagram scroll on a phone instead of shrinking. Check the rendered page in light, dark and phone widths.
+- Do not use Mermaid keywords such as `call`, `end` or `class` as node IDs.
 
 ## Presentations
 
