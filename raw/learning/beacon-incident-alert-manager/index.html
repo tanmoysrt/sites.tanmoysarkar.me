@@ -1,0 +1,1133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon Incident and Alert Manager</title>
+<meta name="description" content="How Frappe Cloud V2 tracks events, raises alerts, opens incidents, calls responders and tells customers. A design guide for new engineers.">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fbfaf7;
+  --panel: #ffffff;
+  --ink: #23262b;
+  --muted: #676b73;
+  --faint: #8d9098;
+  --line: #e4e0d8;
+  --line-strong: #cfc9bd;
+  --code: #f3f1ec;
+  --accent: #4f6fb3;
+  --accent-soft: #eaf0fb;
+  --critical: #a33a32; --critical-soft: #fbe9e6;
+  --high: #9a5310;    --high-soft: #fcefdf;
+  --medium: #7d6400;  --medium-soft: #faf4d8;
+  --low: #3c629a;     --low-soft: #e9f0fa;
+  --ok: #2f7a55;      --ok-soft: #e5f3ec;
+  --customer: #2f7a55; --customer-soft: #e7f4ed;
+  --platform: #5f4fa8; --platform-soft: #efecfa;
+  --pele-bg: #ffffff;
+  --pele-fg: #23262b;
+  --pele-muted: #676b73;
+  --pele-line: #8d8a83;
+  --pele-surface: #f6f4ef;
+  --pele-surface-alt: #eeebe4;
+  --pele-border: #cfc9bd;
+  --pele-accent: #8fa8dc;
+  --pele-critical: #d98c84;
+  --pele-error: #d98c84;
+  --pele-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --pele-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --pele-radius: 6px;
+  /* The sankey colours nodes in order of first use: Atlas, Critical, High, Medium, Low, then the other sources. */
+  --pele-series-1: #c9c4ba; --pele-series-2: #e3a39b; --pele-series-3: #ecc08f; --pele-series-4: #e6d27f;
+  --pele-series-5: #a9c1e6; --pele-series-6: #bfbab0; --pele-series-7: #b3aea4; --pele-series-8: #cfcac0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181b; --panel: #1e2024; --ink: #e6e4df; --muted: #a2a5ab; --faint: #7c7f86;
+    --line: #2d3036; --line-strong: #3b3f46; --code: #24272c;
+    --accent: #93acdf; --accent-soft: #232c3d;
+    --critical: #f0a59d; --critical-soft: #3a2422;
+    --high: #f0bd85;    --high-soft: #382a1b;
+    --medium: #e6cf72;  --medium-soft: #33301c;
+    --low: #9dbbe8;     --low-soft: #1f2a3a;
+    --ok: #8fd1ae;      --ok-soft: #1d3127;
+    --customer: #8fd1ae; --customer-soft: #1d3127;
+    --platform: #bcb1ec; --platform-soft: #2a2640;
+    --pele-bg: #1e2024; --pele-fg: #e6e4df; --pele-muted: #a2a5ab; --pele-line: #8a8d94;
+    --pele-surface: #23262b; --pele-surface-alt: #2b2e34; --pele-border: #464a52;
+    --pele-accent: #93acdf;
+  }
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); scroll-behavior: smooth; scroll-padding-top: 24px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.65 var(--pele-font);
+  -webkit-font-smoothing: antialiased; overflow-wrap: break-word;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+code, kbd { font: 0.86em/1.4 var(--pele-font-mono); background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; white-space: nowrap; }
+pre { font: 13px/1.55 var(--pele-font-mono); background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; padding: 0; white-space: pre; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 1100px) { .layout { grid-template-columns: 220px minmax(0, 1fr); gap: 56px; padding: 0 32px; } }
+.toc { display: none; }
+@media (min-width: 1100px) {
+  .toc { display: block; position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; padding: 40px 0 40px; font-size: 13.5px; }
+  .toc p { margin: 0 0 10px; color: var(--faint); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+  .toc li { counter-increment: toc; }
+  .toc a { display: block; padding: 4px 0 4px 12px; border-left: 2px solid var(--line); color: var(--muted); text-decoration: none; }
+  .toc a::before { content: counter(toc) ". "; color: var(--faint); }
+  .toc a:hover { color: var(--ink); border-left-color: var(--line-strong); }
+}
+main { min-width: 0; max-width: 860px; padding: 48px 0 96px; }
+
+header.hero { padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.eyebrow { margin: 0 0 10px; color: var(--faint); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+h1 { margin: 0 0 14px; font-size: clamp(30px, 5vw, 42px); line-height: 1.12; letter-spacing: -0.02em; font-weight: 650; }
+.lede { margin: 0; max-width: 680px; color: var(--muted); font-size: 18px; line-height: 1.55; }
+.meta { margin: 18px 0 0; color: var(--faint); font-size: 13px; }
+
+h2 { margin: 72px 0 6px; font-size: 25px; line-height: 1.25; letter-spacing: -0.01em; font-weight: 650; }
+h2 .n { color: var(--faint); font-weight: 500; margin-right: 6px; }
+h2 + .sub { margin: 0 0 22px; color: var(--muted); }
+h3 { margin: 36px 0 8px; font-size: 18px; font-weight: 620; }
+p { margin: 12px 0; }
+ul, ol { padding-left: 22px; }
+li { margin: 5px 0; }
+strong { font-weight: 620; }
+
+.bluf { margin: 32px 0 0; display: grid; gap: 10px; padding: 0; list-style: none; }
+.bluf li { margin: 0; padding: 14px 16px 14px 18px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; }
+.bluf b { display: block; margin-bottom: 2px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 26px 0 0; }
+.stat { padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.stat b { display: block; font-size: 26px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13px; }
+
+.diagram { margin: 22px 0 8px; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; text-align: center; }
+.diagram svg { max-width: 100%; height: auto; min-width: min(var(--diagram-width, 0px), 520px); }
+.pele .crit rect, .pele .crit polygon { fill: var(--critical-soft) !important; stroke: var(--critical) !important; }
+.pele .high rect, .pele .high polygon { fill: var(--high-soft) !important; stroke: var(--high) !important; }
+.pele .med rect, .pele .med polygon { fill: var(--medium-soft) !important; stroke: var(--medium) !important; }
+.pele .low rect, .pele .low polygon { fill: var(--low-soft) !important; stroke: var(--low) !important; }
+.pele .focus rect, .pele .focus polygon, .pele .focus path { fill: var(--accent-soft) !important; stroke: var(--accent) !important; }
+.pele .crit text { fill: var(--critical) !important; } .pele .high text { fill: var(--high) !important; }
+.pele .med text { fill: var(--medium) !important; } .pele .low text { fill: var(--low) !important; }
+.pele .focus text { fill: var(--ink) !important; }
+.caption { margin: 0 0 22px; color: var(--faint); font-size: 13px; text-align: center; }
+
+.table-wrap { margin: 18px 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.5; }
+th, td { padding: 9px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: 12.5px; letter-spacing: 0.02em; background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.sev { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.sev.c { color: var(--critical); background: var(--critical-soft); }
+.sev.h { color: var(--high); background: var(--high-soft); }
+.sev.m { color: var(--medium); background: var(--medium-soft); }
+.sev.l { color: var(--low); background: var(--low-soft); }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tag.customer { color: var(--customer); background: var(--customer-soft); }
+.tag.platform { color: var(--platform); background: var(--platform-soft); }
+.tag.state { color: var(--muted); background: var(--code); }
+.yes { color: var(--ok); font-weight: 600; }
+.no { color: var(--faint); }
+
+.callout { margin: 20px 0; padding: 14px 18px; border-radius: 10px; background: var(--accent-soft); border: 1px solid transparent; }
+.callout.warn { background: var(--high-soft); }
+.callout.note { background: var(--code); }
+.callout p:first-child { margin-top: 0; } .callout p:last-child { margin-bottom: 0; }
+
+.cards { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 18px 0; }
+@media (min-width: 700px) { .cards { grid-template-columns: 1fr 1fr; } }
+.card { padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.card h4 { margin: 0 0 6px; font-size: 15px; font-weight: 620; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; }
+.card ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+
+details { margin: 10px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+details > summary { cursor: pointer; padding: 13px 16px; list-style: none; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "+"; width: 14px; color: var(--faint); font-weight: 600; }
+details[open] > summary::before { content: "\2212"; }
+details > summary b { font-weight: 620; }
+details > summary .counts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+details .table-wrap { margin: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; }
+details > p { margin: 0; padding: 0 16px 12px 42px; color: var(--muted); font-size: 14px; }
+
+.mock { margin: 18px 0 8px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel); overflow-x: auto; font-size: 13px; }
+.mock-bar, .mock-row { display: flex; align-items: center; gap: 8px; min-width: 600px; }
+.mock-bar { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.mock-title { font-weight: 620; font-size: 15px; }
+.mock-tag { padding: 1px 8px; border-radius: 999px; background: var(--code); color: var(--muted); font-size: 12px; }
+.mock-spacer { flex: 1; }
+.mock-btn { padding: 3px 10px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--ink); white-space: nowrap; }
+.mock-btn.primary { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+.mock-banner { padding: 8px 14px; background: var(--high-soft); color: var(--high); min-width: 600px; }
+.mock-block { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.mock-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.mock-row { padding: 6px 0; }
+.mock-row + .mock-row { border-top: 1px dashed var(--line); }
+.mock-muted { color: var(--muted); }
+.mock-tabs { display: flex; gap: 18px; padding: 10px 14px; color: var(--muted); min-width: 600px; }
+.mock-tabs .on { color: var(--ink); font-weight: 600; }
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps > li { counter-increment: step; position: relative; padding: 2px 0 2px 38px; margin: 12px 0; }
+.steps > li::before { content: counter(step); position: absolute; left: 0; top: 2px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; font-weight: 650; display: grid; place-items: center; }
+
+footer { margin-top: 80px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--faint); font-size: 13px; }
+footer ul { padding-left: 18px; }
+@media (max-width: 640px) {
+  main { padding-top: 32px; }
+  table { min-width: 680px; }
+  details table { min-width: 720px; }
+  .fit table { min-width: 0; }
+  h2 { margin-top: 56px; font-size: 22px; }
+  .diagram { padding: 12px; }
+  th, td { padding: 8px 10px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#goals">Goals</a></li>
+    <li><a href="#system">The whole system</a></li>
+    <li><a href="#ownership">Who owns what</a></li>
+    <li><a href="#telemetry">How data gets in</a></li>
+    <li><a href="#catalog">What we track</a></li>
+    <li><a href="#alerts">How a rule alerts</a></li>
+    <li><a href="#noise">How we limit noise</a></li>
+    <li><a href="#slo">SLI, SLO and outages</a></li>
+    <li><a href="#incidents">Alerts to incidents</a></li>
+    <li><a href="#severity">Severity and channels</a></li>
+    <li><a href="#paging">Calls and acknowledge</a></li>
+    <li><a href="#customers">Telling customers</a></li>
+    <li><a href="#regressions">Finding regressions</a></li>
+    <li><a href="#example">Example: a host fails</a></li>
+    <li><a href="#desk">Working in Desk</a></li>
+    <li><a href="#gaps">Gaps and next steps</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <p class="eyebrow">Design guide &middot; Frappe Cloud V2</p>
+  <h1>Beacon: the Incident and Alert Manager</h1>
+  <p class="lede">This guide is for a new engineer. It tells what we track, how we alert and who gets the call. It also tells how customers learn about a problem, and who fixes what. It covers every app that sends data to Beacon: Atlas, metald, Cargo, Datum, Central and Pilot.</p>
+  <p class="meta">State on 16 November 2026, read from the <code>develop</code> branch of each repository. Production rollout of Beacon is a later phase. Until then, the old Insights alerts stay on.</p>
+
+  <ul class="bluf">
+    <li><b>We page on symptoms and explain with causes.</b> A fast burn of a service's error budget calls a person. About 70 cause rules name the broken host, node or app, so the responder knows where to start.</li>
+    <li><b>One problem gives one incident and one escalation.</b> Beacon writes an alert only when its state changes. It groups related alerts into one incident. It calls a person only for High and Critical.</li>
+    <li><b>Each layer tells its own owner.</b> One down site is the customer's problem, and Pilot tells the customer through Central. Many down sites on one server is ours, and Beacon calls the on-call responder.</li>
+    <li><b>A person decides what customers see.</b> The status page shows the measured service status automatically. A person publishes an incident as Unlisted (link only) or Public. Beacon never publishes by itself.</li>
+  </ul>
+
+  <div class="stats">
+    <div class="stat"><b>6</b><span>apps send data</span></div>
+    <div class="stat"><b>70</b><span>rule files, plus 2 built-in rules</span></div>
+    <div class="stat"><b>10</b><span>services with an SLO</span></div>
+    <div class="stat"><b>4</b><span>severity levels</span></div>
+    <div class="stat"><b>3</b><span>channels: chat, email, call</span></div>
+  </div>
+</header>
+
+<!-- 1 -->
+<h2 id="goals"><span class="n">1</span>Goals</h2>
+<p class="sub">Four goals pull against each other. Every rule in Beacon is a choice between them.</p>
+<div class="cards">
+  <div class="card"><h4>Find problems before customers do</h4><p>Measure what customers feel (the SLI) and watch the parts that break (cause rules). Probe public endpoints from outside the region.</p></div>
+  <div class="card"><h4>Do not overwhelm engineers</h4><p>Call a person only for customer impact. One problem gives one incident. Everything else goes to chat or email at a lower severity.</p></div>
+  <div class="card"><h4>Find regressions</h4><p>Catch new kinds of errors (error fingerprints), release-wide failures, error spikes against a baseline, and slow budget burn.</p></div>
+  <div class="card"><h4>Communicate simply</h4><p>One incident has one update stream and one link. Customers see the status page, an Unlisted link or an email from Central.</p></div>
+</div>
+<p><strong>Non-goals.</strong> Beacon does not watch each site or each VM. Their own layer does that and tells the owner. Beacon does not write to ClickHouse. Beacon does not publish incidents or decide customer messages.</p>
+
+<!-- 2 -->
+<h2 id="system"><span class="n">2</span>The whole system</h2>
+<p class="sub">Each region has its own Datum and ClickHouse. Beacon is one global Frappe site outside the regions.</p>
+
+<script type="text/mermaid" data-label="System map. In each region, Pilot, metald, the Datum agent, Atlas, Cargo and Central send data to Datum, which writes to ClickHouse. Atlas serves the resource list to Beacon, and Cargo does the same. Beacon reads ClickHouse, keeps alerts and incidents, and sends chat, email and phone calls. Beacon serves the status page. Pilot also reports customer events to Central, which emails the customer team. An external heartbeat service watches Beacon.">
+flowchart TB
+  subgraph region["One region"]
+    pilot["Pilot<br/>customer VMs"]
+    metald["metald<br/>hosts"]
+    agent["Datum agent<br/>service VMs"]
+    atlas["Atlas"]
+    cargo["Cargo"]
+    datum[("Datum + ClickHouse")]
+  end
+  pilot --> datum
+  metald --> datum
+  agent --> datum
+  atlas --> datum
+  cargo --> datum
+  central["Central (global)"] -- "metrics" --> datum
+  datum -- "SELECT" --> beacon["Beacon (global)"]
+  atlas -. "resource list" .-> beacon
+  cargo -. "resource list" .-> beacon
+  pilot -- "customer events" --> central
+  heartbeat["External heartbeat"] -. "watches" .-> beacon
+  beacon -- "chat, email, call" --> oncall(["On-call responder"])
+  beacon -- "status page" --> customer(["Customer"])
+  central -- "in-app, email" --> customer
+  classDef focus stroke-width:1px
+  class beacon focus
+</script>
+<p class="caption">Two paths reach a customer: Beacon (platform problems) and Pilot through Central (problems of one site or server).</p>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Part</th><th>Job</th><th>Repository</th></tr></thead>
+<tbody>
+<tr><td><b>Pilot</b></td><td>Runs in each customer VM. Pings each site each minute, takes backups, applies updates. Tells the customer about one site or server. Sends counts to Datum.</td><td><code>frappe/pilot</code></td></tr>
+<tr><td><b>metald</b></td><td>Runs on each host. Compares wanted and actual VM state. Sends host metrics, VM states, storage and hardware data.</td><td><code>frappe/atlas</code> (<code>metal/</code>)</td></tr>
+<tr><td><b>Datum agent</b></td><td>Vector with one configuration, on each Atlas service VM and Cargo machine. Sends machine metrics, journal lines and role metrics, such as proxy requests.</td><td><code>datum_client/agent</code></td></tr>
+<tr><td><b>Atlas</b></td><td>Controls hosts, VMs and service nodes in a region. Sends inventory, sync age, readiness probes and Error Logs. Serves the resource list to Beacon.</td><td><code>frappe/atlas</code></td></tr>
+<tr><td><b>Cargo</b></td><td>Builds images and runs object storage (Garage). Deploys Datum. Sends build, storage and backup data.</td><td><code>frappe/cargo</code></td></tr>
+<tr><td><b>Central</b></td><td>The global dashboard, API and billing. Sends API, payment, resource action and webhook data to one region's Datum. Delivers customer notifications.</td><td><code>frappe/central</code></td></tr>
+<tr><td><b>Datum + ClickHouse</b></td><td>Stores samples, logs and traces for one region. Owns the schema. Beacon reads with a read-only user.</td><td><code>frappe/Datum</code></td></tr>
+<tr><td><b>Beacon</b></td><td>Runs rules, keeps alert and incident state, measures SLOs, calls responders and serves the status page.</td><td><code>frappe/beacon</code></td></tr>
+</tbody></table></div>
+
+<!-- 3 -->
+<h2 id="ownership"><span class="n">3</span>Who owns what</h2>
+<p class="sub">Each layer watches the layer below it and tells its owner when one item fails. Beacon acts when a failure is too wide for one owner, or when a watcher stops.</p>
+
+<script type="text/mermaid" data-label="Watch chain. Pilot watches sites. metald watches VMs. Atlas watches hosts and service nodes. Beacon watches Atlas, Datum and the region by a probe and by the newest sample. An external heartbeat service watches Beacon.">
+flowchart BT
+  sites["Sites"] -- "ping each minute" --> pilot["Pilot"]
+  vms["VMs"] -- "wanted vs actual" --> metald["metald"]
+  hosts["Hosts"] -- "sync each minute" --> atlas["Atlas"]
+  nodes["Service nodes<br/>proxy, VPN, IPv6"] -- "readiness probe" --> atlas
+  pilot -- "counts" --> beacon["Beacon"]
+  metald -- "counts" --> beacon
+  atlas -- "sync age, readiness" --> beacon
+  region["Datum and region network"] -- "probe each minute" --> beacon
+  beacon -- "heartbeat each minute" --> hb["External heartbeat service"]
+</script>
+<p class="caption">A failure is always visible one level up. So Beacon needs no "not reporting" check for each site or VM.</p>
+
+<h3>Our problem or the customer's problem</h3>
+<p>Use this table to decide who is told and who fixes. "Platform" means the Frappe Cloud team. The producer team owns the rule, its runbook (the steps for a responder) and the fix. The on-call responder acts first and hands over to that team.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Problem</th><th>Owner</th><th>Found by</th><th>Who is told, and how</th><th>Who fixes</th></tr></thead>
+<tbody>
+<tr><td>One site is down, or its app code fails</td><td><span class="tag customer">Customer</span></td><td>Pilot uptime ping, held 5 min</td><td>Customer team: Central feed and email, bench webhooks</td><td>Customer</td></tr>
+<tr><td>One site's backups keep failing (6 failures since the last good one)</td><td><span class="tag customer">Customer</span></td><td>Pilot</td><td>Customer team through Central</td><td>Customer; support helps on request</td></tr>
+<tr><td>A customer VM uses more CPU, memory or disk than its limit (90% by default)</td><td><span class="tag customer">Customer</span></td><td>Pilot, held 5 min</td><td>Customer team through Central</td><td>Customer: resize or clean up</td></tr>
+<tr><td>3 or more sites, and 20%, down on one server</td><td><span class="tag platform">Platform</span></td><td><code>pilot-sites-down</code></td><td>On-call: call, chat, email</td><td>On-call, then Pilot team</td></tr>
+<tr><td>Backups fail on many servers</td><td><span class="tag platform">Platform</span></td><td><code>pilot-backups-failing</code></td><td>On-call (Medium, or call at half of servers)</td><td>Often object storage: Cargo team</td></tr>
+<tr><td>One app release fails on 3 or more servers</td><td><span class="tag platform">Platform</span></td><td><code>pilot-updates-failing</code></td><td>Chat (Low)</td><td>Owner of the release</td></tr>
+<tr><td>A host, its storage or hardware fails</td><td><span class="tag platform">Platform</span></td><td>Host rules</td><td>On-call: call</td><td>Atlas and Metal team</td></tr>
+<tr><td>A proxy, VPN gateway or IPv6 router fails</td><td><span class="tag platform">Platform</span></td><td>Service node rules, Networking SLOs</td><td>On-call: call</td><td>Atlas team</td></tr>
+<tr><td>Object storage or image builds fail</td><td><span class="tag platform">Platform</span></td><td>Object storage and Cargo rules</td><td>On-call (Critical, High) or chat and email</td><td>Cargo team</td></tr>
+<tr><td>Telemetry stops: no data reaches Datum</td><td><span class="tag platform">Platform</span></td><td><code>datum-ingest-stopped</code>, HTTP probe</td><td>On-call: call</td><td>Cargo team (deploys Datum)</td></tr>
+<tr><td>Central API, payments or server actions fail</td><td><span class="tag platform">Platform</span></td><td>Central rules and SLOs</td><td>On-call: call</td><td>Central team</td></tr>
+<tr><td>Pilot cannot send customer alerts to Central</td><td><span class="tag platform">Platform</span></td><td><code>pilot-central-delivery</code></td><td>On-call: call</td><td>Pilot and Central teams</td></tr>
+<tr><td>Beacon itself stops</td><td><span class="tag platform">Platform</span></td><td>External heartbeat stops</td><td>The heartbeat service calls the team</td><td>Beacon owner</td></tr>
+<tr><td>A customer reports a problem first</td><td><span class="tag platform">Platform</span></td><td>Support</td><td>Support opens an incident with Detected By = Customer</td><td>On-call. A postmortem is required, and the team adds a rule or SLI.</td></tr>
+</tbody></table></div>
+
+<div class="callout note"><p><strong>Roles in one incident.</strong> Beacon records who acknowledged it (<em>Acknowledged By</em>). The person who acknowledges owns the incident until it resolves or they hand it over in the incident updates. Support sends Unlisted links to customers. The producer team writes the postmortem and its action items. This hand-off rule is our working agreement; Beacon does not enforce it.</p></div>
+
+<!-- 4 -->
+<h2 id="telemetry"><span class="n">4</span>How data gets in</h2>
+<p class="sub">Almost every signal is a metric sample or a log line in the ClickHouse of one region. SQL rules and SLI queries read it there. HTTP and TLS rules are the exception: Beacon calls the endpoint directly.</p>
+
+<script type="text/mermaid" data-label="Data path. A producer posts samples or log lines with a token to the Datum API. Datum writes the resource ID of the token on each row, into ClickHouse tables samples and logs. Views copy samples into samples_recent. Beacon selects from them as the read-only beacon user. Atlas and Cargo issue tokens; Central issues tokens for Pilot VMs.">
+flowchart LR
+  producer["Producer<br/>with a token"] -- "POST" --> api["Datum API"]
+  api --> samples[("samples")]
+  api --> logs[("logs")]
+  samples -- "view" --> recent[("samples_recent")]
+  recent -- "SELECT" --> beacon["Beacon"]
+  logs -- "SELECT" --> beacon
+  classDef focus stroke-width:1px
+  class beacon focus
+</script>
+
+<ol class="steps">
+  <li>A producer sends a value to the Datum of its region with a token (a signed JSON Web Token, JWT). The token names the sender's <strong>resource ID</strong>, such as the Metal Server name of a host. The sender cannot change it.</li>
+  <li>Datum checks the token and writes the rows. Datum refuses a whole request when one sample is not valid. No sender retries, so a failed request is a gap.</li>
+  <li>Each Resource Source (the Atlas and Cargo of each region) serves a resource list each minute. Beacon keeps only rows whose resource ID is in this list, with its type and parent.</li>
+  <li>Beacon runs each rule at its interval and each SLI query each minute, as the read-only <code>beacon</code> user. ClickHouse limits each query to 20 seconds, 4 GB and 100,000 rows.</li>
+</ol>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Producer</th><th>Runs on</th><th>Sends</th></tr></thead>
+<tbody>
+<tr><td>metald</td><td>Each host</td><td>Machine metrics, VM states, storage, hardware, BMC (the management chip), its own info logs</td></tr>
+<tr><td>Datum agent</td><td>Atlas service VMs, Cargo machines, hosts (logs only)</td><td>Machine metrics, journal at warning and higher, role metrics (proxy, Garage, WireGuard, IPv6 router)</td></tr>
+<tr><td>Pilot</td><td>Each Pilot VM</td><td>Heartbeat (<code>pilot_info</code>), site counts by state (<code>pilot_sites</code>), backups, database state, disk space, calls to Central, update events</td></tr>
+<tr><td>Atlas</td><td>The Atlas site of the region</td><td>Inventory of expected machines (<code>atlas_machine</code>), host sync age, readiness of service nodes, jobs, API calls, Error Logs</td></tr>
+<tr><td>Cargo</td><td>The Cargo site of the region</td><td>Image builds, object storage health and backups, Cargo inventory, Error Logs</td></tr>
+<tr><td>Central</td><td>The global Central site</td><td>API requests, payments, resource actions, webhooks, background work, Error Logs</td></tr>
+</tbody></table></div>
+
+<p>Rules and services live with the producer, in <code>beacon/</code> of each repository: <code>rules/*.sql</code>, <code>rules/*.http</code>, <code>rules/*.tls</code>, <code>services/*.sql</code> and <code>runbooks/*.md</code>. An admin selects <em>Sync Definitions</em> in Beacon Settings to load them. A sync applies all files of a source or none.</p>
+<div class="callout warn"><p><strong>Two settings stay manual after a sync.</strong> A global service, such as Dashboard and API, needs its <em>Query Region</em> set in Desk. An HTTP or TLS file without a <code>region</code> line loads turned off; an admin sets its Regions and turns it on. The sync result warns about both. Until then, those checks do not run.</p></div>
+
+<!-- 5 -->
+<h2 id="catalog"><span class="n">5</span>What we track</h2>
+<p class="sub">70 rule files in 4 repositories, and 2 rules built into Beacon. Open a group to see each rule.</p>
+
+<script type="text/mermaid" data-label="Rules by area and highest severity. Atlas: 2 Critical, 18 High, 13 Medium, 1 Low. Cargo and object storage: 1 Critical, 5 High, 8 Medium. Datum and telemetry: 2 High, 3 Medium, 2 Low. Central: 7 High, 3 Medium. Pilot: 3 High, 1 Medium, 1 Low.">
+sankey-beta
+Atlas,Critical,2
+Atlas,High,18
+Atlas,Medium,13
+Atlas,Low,1
+Cargo and object storage,Critical,1
+Cargo and object storage,High,5
+Cargo and object storage,Medium,8
+Datum and telemetry,High,2
+Datum and telemetry,Medium,3
+Datum and telemetry,Low,2
+Central,High,7
+Central,Medium,3
+Pilot,High,3
+Pilot,Medium,1
+Pilot,Low,1
+</script>
+<p class="caption">The chart counts the severity in each rule's header. 20 rules also return a lower severity at a lower limit, so many alerts are lower than this.</p>
+
+<p><b>How to read the tables.</b> <em>Wait</em> is <code>pending_for</code>: how long a problem must stay before the alert fires. <em>Clear</em> is <code>resolve_after</code>: how long without the problem before it recovers. One rule can return a lower severity at a lower limit, such as Low at 25% disk free and High at 10%. The <em>Lower levels</em> column lists these. HTTP and TLS rules run from the Beacon site, outside the region.</p>
+
+<details open>
+<summary><b>Metal hosts</b><span class="counts"><span class="sev c">1 Critical</span><span class="sev h">7 High</span><span class="sev m">5 Medium</span></span></summary>
+<p>Resource: Metal Host. Repository: Atlas. metald and Atlas send the data.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td><code>host-down</code></td><td>A Running host has no Atlas sync for 5 min and metald is silent. The incident covers all VMs on the host.</td><td><span class="sev c">Critical</span></td><td></td><td class="num">1 / 2 min</td></tr>
+<tr><td><code>atlas-cannot-sync-host</code></td><td>Atlas cannot sync a Running host.</td><td><span class="sev h">High</span></td><td></td><td class="num">1 / 2 min</td></tr>
+<tr><td><code>vms-unavailable-on-host</code></td><td>3 VMs and 20% of wanted VMs, or every wanted VM, are not available.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> fewer VMs</td><td class="num">5 / 2 min</td></tr>
+<tr><td><code>metald-unhealthy</code></td><td>A metald loop stalled, a change waits too long, or VMs fail.</td><td><span class="sev h">High</span></td><td><span class="sev l">Low</span> dropped telemetry</td><td class="num">2 / 5 min</td></tr>
+<tr><td><code>host-storage-failed</code></td><td>A pool, array or mount can lose data or stop writes now.</td><td><span class="sev h">High</span></td><td></td><td class="num">1 / 10 min</td></tr>
+<tr><td><code>host-hardware-degraded</code></td><td>An uncorrected memory error.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> failing disk, CPU over 85 &deg;C; <span class="sev l">Low</span> worn parts</td><td class="num">5 / 60 min</td></tr>
+<tr><td><code>bmc-problems</code></td><td>A critical BMC event.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> bad component or BMC (the server's management chip) unreachable; <span class="sev l">Low</span> warning</td><td class="num">5 / 15 min</td></tr>
+<tr><td><code>host-pool-capacity</code></td><td>A ZFS pool is over 90% used.</td><td><span class="sev h">High</span></td><td><span class="sev l">Low</span> over 80%</td><td class="num">10 / 10 min</td></tr>
+<tr><td><code>host-limits</code></td><td>Conntrack or open file table near full, or the clock is not synced.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">10 / 15 min</td></tr>
+<tr><td><code>host-network-errors</code></td><td>A link is up with no carrier.</td><td><span class="sev m">Medium</span></td><td><span class="sev l">Low</span> over 10 NIC errors in 1 h</td><td class="num">5 / 60 min</td></tr>
+<tr><td><code>host-stress</code></td><td>CPU, memory or I/O pressure for 15 min.</td><td><span class="sev m">Medium</span></td><td><span class="sev l">Low</span> memory allocation over 90%</td><td class="num">15 / 15 min</td></tr>
+<tr><td><code>host-systemd-units</code></td><td>A systemd unit failed.</td><td><span class="sev m">Medium</span></td><td><span class="sev l">Low</span> 3 restarts in 1 h</td><td class="num">5 / 60 min</td></tr>
+<tr><td><code>vm-migrations-failed</code></td><td>VM migrations fail on the host.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">5 / 60 min</td></tr>
+</tbody></table></div>
+</details>
+
+<details>
+<summary><b>Every machine</b><span class="counts"><span class="sev h">1 High</span><span class="sev m">2 Medium</span><span class="sev l">2 Low</span></span></summary>
+<p>Resource: Metal Host or Virtual Machine (service VMs and Cargo machines). Tenant VMs are the customer's and do not alert here.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td><code>machine-disk-full</code></td><td>A file system has under 10% free.</td><td><span class="sev h">High</span></td><td><span class="sev l">Low</span> under 25%</td><td class="num">5 / 15 min</td></tr>
+<tr><td><code>machine-silent</code></td><td>A machine that Atlas expects has sent nothing for 3 min.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">2 / 2 min</td></tr>
+<tr><td><code>machine-stress</code></td><td>Memory over 90%, or load over 1.5 for each core, for 15 min.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">10 / 15 min</td></tr>
+<tr><td><code>repeated-errors</code></td><td>The same log message 10 times in 1 h.</td><td><span class="sev l">Low</span></td><td></td><td class="num">5 / 60 min</td></tr>
+<tr><td><code>telemetry-dropped</code> (Cargo)</td><td>The Datum agent dropped 100 events in 1 h.</td><td><span class="sev l">Low</span></td><td></td><td class="num">5 / 60 min</td></tr>
+</tbody></table></div>
+</details>
+
+<details>
+<summary><b>Regional network services</b><span class="counts"><span class="sev h">5 High</span><span class="sev m">1 Medium</span></span></summary>
+<p>Proxies, WireGuard VPN gateways, IPv6 routers, certificates and public IPs. Repository: Atlas.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td><code>service-node-not-ready</code></td><td>A proxy, VPN gateway or IPv6 router fails 2 readiness probes, and a third run confirms (about 3 min).</td><td><span class="sev h">High</span></td><td></td><td class="num">1 / 2 min</td></tr>
+<tr><td><code>atlas-service-nodes-failed</code></td><td>A service node is in Failed status.</td><td><span class="sev h">High</span></td><td></td><td class="num">2 / 5 min</td></tr>
+<tr><td><code>ipv6-router-detached</code></td><td>The router's eBPF program (kernel packet code) is not attached, so region IPv6 stops.</td><td><span class="sev h">High</span></td><td></td><td class="num">2 / 2 min</td></tr>
+<tr><td><code>tls-certificate-expiring</code></td><td>The wildcard certificate has under 3 days left. Beacon drops the rows for metald certificates today: see <a href="#gaps">gaps</a>.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> under 21 days</td><td class="num">15 / 30 min</td></tr>
+<tr><td><code>atlas-public-ips-exhausted</code></td><td>No free public IPv4 address.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> under 5 or 10% free</td><td class="num">5 / 10 min</td></tr>
+<tr><td><code>proxy-error-spike</code></td><td>Proxy-made 5xx at 5 times the 70-min baseline, or over 5% for 70 min.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">2 / 5 min</td></tr>
+</tbody></table></div>
+</details>
+
+<details>
+<summary><b>Atlas application</b><span class="counts"><span class="sev c">1 Critical</span><span class="sev h">5 High</span><span class="sev m">5 Medium</span></span></summary>
+<p>The Atlas site of each region. Resource: Atlas, or the Region for <code>atlas-silent</code>.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td><code>atlas-silent</code></td><td>Atlas sent no per-minute sample.</td><td><span class="sev c">Critical</span></td><td></td><td class="num">1 / 2 min</td></tr>
+<tr><td><code>atlas-api-unreachable</code> (HTTP)</td><td>Beacon cannot load the Atlas public key set from outside.</td><td><span class="sev h">High</span></td><td></td><td class="num">3 / 5 min</td></tr>
+<tr><td><code>atlas-api-errors</code></td><td>One operation has 5 errors and 5% in 10 min, or all calls over 1% in 15 min.</td><td><span class="sev h">High</span></td><td></td><td class="num">2 / 5 min</td></tr>
+<tr><td><code>atlas-metal-errors</code></td><td>A burst of failures to reach metald.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> repeats for 1 h, or 401/403</td><td class="num">3 / 5 min</td></tr>
+<tr><td><code>atlas-queue-backlog</code></td><td>The job queue backs up.</td><td><span class="sev h">High</span></td><td></td><td class="num">10 / 5 min</td></tr>
+<tr><td><code>atlas-disk-full</code></td><td>Under 10% disk free.</td><td><span class="sev h">High</span></td><td><span class="sev l">Low</span> under 25%</td><td class="num">5 / 10 min</td></tr>
+<tr><td><code>atlas-failed-jobs</code></td><td>3 or more new failed jobs in one queue in 1 h.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">1 / 15 min</td></tr>
+<tr><td><code>atlas-error-logs</code></td><td>A new error fingerprint (one kind of error) repeats 3 times in 1 h. Or any fingerprint repeats 5 times in 15 min, or 20 times in 1 h.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">1 / 15 min</td></tr>
+<tr><td><code>atlas-stuck-work</code></td><td>A VM migration runs, or a draft VM waits, for 1 h.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">5 / 10 min</td></tr>
+<tr><td><code>warpgate-sync-failing</code></td><td>No full Warpgate sync for 15 min.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">5 / 2 min</td></tr>
+<tr><td><code>atlas-certificate</code> (TLS)</td><td>The Atlas API certificate has under 14 days left.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">15 / 30 min</td></tr>
+</tbody></table></div>
+</details>
+
+<details>
+<summary><b>Cargo and object storage</b><span class="counts"><span class="sev c">1 Critical</span><span class="sev h">5 High</span><span class="sev m">8 Medium</span></span></summary>
+<p>Resource: Cargo Server, or the Region for HTTP and TLS checks. Repository: Cargo.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td><code>object-storage-unavailable</code></td><td>A partition has no write quorum (too few nodes agree to accept a write), or a node has not reported for 5 min.</td><td><span class="sev c">Critical</span></td><td></td><td class="num">2 / 5 min</td></tr>
+<tr><td><code>object-storage-health</code></td><td>A cluster reports Critical health.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> Degraded, Unknown or silent</td><td class="num">3 / 5 min</td></tr>
+<tr><td><code>object-storage-unreachable</code> (HTTP)</td><td>The Garage health route through the gateway does not answer 200.</td><td><span class="sev h">High</span></td><td></td><td class="num">3 / 5 min</td></tr>
+<tr><td><code>object-storage-api-unreachable</code> (HTTP)</td><td>An unsigned S3 request does not get the expected 403.</td><td><span class="sev h">High</span></td><td></td><td class="num">3 / 5 min</td></tr>
+<tr><td><code>object-storage-errors</code></td><td>S3 answers with 5xx.</td><td><span class="sev h">High</span></td><td></td><td class="num">5 / 10 min</td></tr>
+<tr><td><code>object-storage-disk-full</code></td><td>A storage node disk is almost full.</td><td><span class="sev h">High</span></td><td></td><td class="num">10 / 15 min</td></tr>
+<tr><td><code>object-storage-redundancy</code></td><td>A storage node is down or blocks failed to copy. Data is still served.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">10 / 10 min</td></tr>
+<tr><td><code>object-storage-backup-stale</code></td><td>No metadata backup in 1 day.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">15 / 60 min</td></tr>
+<tr><td><code>object-storage-certificate</code> (TLS)</td><td>The S3 certificate has under 14 days left.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">15 / 30 min</td></tr>
+<tr><td><code>cargo-build-failed</code></td><td>The newest build of a listed image failed.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">5 / 60 min</td></tr>
+<tr><td><code>cargo-build-stuck</code></td><td>An image build does not finish.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">5 / 60 min</td></tr>
+<tr><td><code>cargo-images-stale</code></td><td>The newest usable image is over 2 days old, while Cargo tracks Pilot releases.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">15 / 60 min</td></tr>
+<tr><td><code>cargo-errors</code></td><td>A Cargo error fingerprint repeats.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">1 / 15 min</td></tr>
+<tr><td><code>cargo-silent</code></td><td>No Cargo sample for 3 h.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">15 / 30 min</td></tr>
+</tbody></table></div>
+</details>
+
+<details>
+<summary><b>Datum and telemetry</b><span class="counts"><span class="sev h">2 High</span><span class="sev m">3 Medium</span><span class="sev l">2 Low</span></span></summary>
+<p>If telemetry stops, every other rule goes quiet. These rules catch that. Repository: Cargo, which deploys Datum.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td><code>datum-ingest-stopped</code></td><td>No new sample in the region for 3 min.</td><td><span class="sev h">High</span></td><td></td><td class="num">1 / 3 min</td></tr>
+<tr><td><code>telemetry-unreachable</code> (HTTP)</td><td>The Datum health route does not answer 200 from outside.</td><td><span class="sev h">High</span></td><td></td><td class="num">3 / 5 min</td></tr>
+<tr><td><code>datum-writes-refused</code></td><td>Datum refuses requests. A 5xx returns High.</td><td><span class="sev m">Medium</span></td><td>see <a href="#gaps">gaps</a></td><td class="num">5 / 15 min</td></tr>
+<tr><td><code>telemetry-certificate</code> (TLS)</td><td>The ingest certificate has under 14 days left.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">15 / 30 min</td></tr>
+<tr><td><code>telemetry-read-certificate</code> (TLS)</td><td>The ClickHouse read certificate has under 14 days left.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">15 / 30 min</td></tr>
+<tr><td><code>telemetry-volume</code></td><td>A sender sent 2 times its 7-day median, and over 100,000 rows.</td><td><span class="sev l">Low</span></td><td></td><td class="num">60 min / 1 day</td></tr>
+<tr><td><code>telemetry-dropped</code></td><td>Listed under Every machine.</td><td><span class="sev l">Low</span></td><td></td><td class="num">5 / 60 min</td></tr>
+</tbody></table></div>
+</details>
+
+<details>
+<summary><b>Central</b><span class="counts"><span class="sev h">7 High</span><span class="sev m">3 Medium</span></span></summary>
+<p>Central is global, but it sends to the Datum of one region (Central Telemetry Region). Resource: Region.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td><code>central-silent</code></td><td>Central stopped its per-minute gauges for 5 min.</td><td><span class="sev h">High</span></td><td></td><td class="num">3 / 2 min</td></tr>
+<tr><td><code>central-api-unreachable</code> (HTTP)</td><td><code>/api/method/ping</code> does not answer <code>pong</code>.</td><td><span class="sev h">High</span></td><td></td><td class="num">3 / 5 min</td></tr>
+<tr><td><code>central-dashboard-unreachable</code> (HTTP)</td><td>The dashboard does not load.</td><td><span class="sev h">High</span></td><td></td><td class="num">3 / 5 min</td></tr>
+<tr><td><code>central-api-errors</code></td><td>Over 5% 5xx in 10 min (at least 50 requests).</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> over 1% in 1 h, or one group</td><td class="num">2 / 5 min</td></tr>
+<tr><td><code>central-payments</code></td><td>5 failed payments that are half of a gateway's attempts in 1 h, or a gateway webhook waits 15 min.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> failed webhook; <span class="sev l">Low</span> no capture for 1 day</td><td class="num">2 / 10 min</td></tr>
+<tr><td><code>central-resource-actions</code></td><td>3 failed server or site actions that are 20% in 1 h, or an action open for 2 h.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> open for 30 min</td><td class="num">2 / 10 min</td></tr>
+<tr><td><code>central-webhooks-failing</code></td><td>10 exhausted webhook requests that are 20% of one webhook in 1 day.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> one exhausted, or 10 retrying</td><td class="num">10 / 30 min</td></tr>
+<tr><td><code>central-background-work</code></td><td>Billing run, proxy routes, snapshots, emails or scheduled jobs are stuck or late.</td><td><span class="sev m">Medium</span></td><td><span class="sev l">Low</span> invoice sync</td><td class="num">10 / 15 min</td></tr>
+<tr><td><code>central-errors</code></td><td>An unhandled error fingerprint repeats 5 times in 15 min.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">1 / 15 min</td></tr>
+<tr><td><code>central-certificate</code> (TLS)</td><td>The Central certificate has under 14 days left.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">15 / 30 min</td></tr>
+</tbody></table></div>
+</details>
+
+<details>
+<summary><b>Pilot</b><span class="counts"><span class="sev h">3 High</span><span class="sev m">1 Medium</span><span class="sev l">1 Low</span></span></summary>
+<p>These rules look across many servers. One site or one server is the customer's, and Pilot tells them directly.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td><code>pilot-sites-down</code></td><td>3 sites and 20% of checked sites are down on one server. App errors count, because a shared app can break after an update.</td><td><span class="sev h">High</span></td><td></td><td class="num">5 / 5 min</td></tr>
+<tr><td><code>pilot-central-delivery</code></td><td>3 or more customer alerts from one Pilot did not reach Central in 15 min.</td><td><span class="sev h">High</span></td><td></td><td class="num">5 / 15 min</td></tr>
+<tr><td><code>pilot-backups-failing</code></td><td>At least 5 servers and 10% of the servers that take backups are failing (Medium). High when half of them fail. A server fails when the newest backup failed for half or more of its sites.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> 5 servers and 10%</td><td class="num">30 / 60 min</td></tr>
+<tr><td><code>pilot-silent</code></td><td>A Pilot that Atlas expects to run sent no <code>pilot_info</code> or no <code>pilot_sites</code> for 10 min.</td><td><span class="sev m">Medium</span></td><td></td><td class="num">5 / 2 min</td></tr>
+<tr><td><code>pilot-updates-failing</code></td><td>The same release of one repository fails on 3 or more servers.</td><td><span class="sev l">Low</span></td><td></td><td class="num">5 / 60 min</td></tr>
+</tbody></table></div>
+</details>
+
+<details>
+<summary><b>Built into Beacon</b><span class="counts"><span class="sev c">1 Critical</span><span class="sev h">1 High</span></span></summary>
+<p>These rules need no file. Beacon creates them.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Rule</th><th>Fires when</th><th>Severity</th><th>Lower levels</th><th class="num">Wait / clear</th></tr></thead>
+<tbody>
+<tr><td>Region unreachable</td><td>2 ClickHouse probes in a row fail. Beacon skips the region's SQL rules and shows its services as Unknown. HTTP and TLS rules still run.</td><td><span class="sev c">Critical</span></td><td></td><td class="num">0 / after 2 good probes</td></tr>
+<tr><td>SLO burn (one per service)</td><td>The service uses its error budget faster than a set rate. See <a href="#slo">section 8</a>.</td><td><span class="sev h">High</span></td><td><span class="sev m">Medium</span> Page On Burn off; <span class="sev l">Low</span> slow burn or one bad reporter</td><td class="num">0 / 5 min</td></tr>
+<tr><td>Region Suspect (no alert)</td><td>More than half of the hosts are silent in Datum. Rules still run. Services show as Unknown.</td><td><span class="tag state">State</span></td><td></td><td class="num"></td></tr>
+</tbody></table></div>
+</details>
+
+<h3>Services (what customers feel)</h3>
+<p>A service is one line on the status page. Its SLI query returns good and valid events for each reporter each minute.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Service</th><th>Good event</th><th>Scope</th><th class="num">SLO</th><th>Repo</th></tr></thead>
+<tbody>
+<tr><td>Sites <span class="tag state">hidden</span></td><td>Pilot pings a site and it answers. The SLI excludes app errors.</td><td>Region</td><td class="num">99.9%</td><td>Pilot</td></tr>
+<tr><td>Servers</td><td>A VM that should run is running.</td><td>Region</td><td class="num">99.9%</td><td>Atlas</td></tr>
+<tr><td>Proxy</td><td>A request has no proxy-made 5xx. Major Outage below 50%.</td><td>Region</td><td class="num">99.9%</td><td>Atlas</td></tr>
+<tr><td>Object Storage</td><td>An S3 request has no 5xx.</td><td>Region</td><td class="num">99.9%</td><td>Cargo</td></tr>
+<tr><td>Public networking</td><td>A host's public link is up; an IPv6 router forwards.</td><td>Region</td><td class="num">99.9%</td><td>Atlas</td></tr>
+<tr><td>Private networking</td><td>A WireGuard tunnel between hosts had a recent handshake.</td><td>Region</td><td class="num">99.9%</td><td>Atlas</td></tr>
+<tr><td>Customer VPN gateway</td><td>A gateway node passes its health check.</td><td>Region</td><td class="num">99.9%</td><td>Atlas</td></tr>
+<tr><td>Dashboard and API</td><td>A Central request has no 5xx.</td><td>Global</td><td class="num">99.9%</td><td>Central</td></tr>
+<tr><td>Server actions <span class="tag state">no call</span></td><td>Create, start, stop, restart or resize finishes.</td><td>Global</td><td class="num">99%</td><td>Central</td></tr>
+<tr><td>Billing <span class="tag state">declared</span></td><td>No metric yet. Published incidents set its status.</td><td>Global</td><td class="num">&mdash;</td><td>Central</td></tr>
+</tbody></table></div>
+
+<!-- 6 -->
+<h2 id="alerts"><span class="n">6</span>How a rule alerts</h2>
+<p class="sub">A rule is one query that returns only failing rows. Each row is one problem on one resource.</p>
+
+<pre><code>-- title: Host disk almost full        &lt;- alert title
+-- severity: High                     &lt;- highest severity of this rule
+-- resource_type: Metal Host          &lt;- rows for other types are dropped
+-- interval: 300                      &lt;- run every 5 min
+-- pending_for: 300                   &lt;- must fail 5 min before it fires
+-- resolve_after: 600                 &lt;- 10 min clean before it recovers
+-- runbook_url: https://...           &lt;- required for High and Critical
+SELECT resource_id, alert_key, value, detail, severity FROM ...</code></pre>
+
+<script type="text/mermaid" data-label="One evaluation. If the region is Unreachable, skip. Run the query. On error, count it; after 3 errors the rule is Broken; nothing changes. Drop rows of unknown, unchecked or new resources. Compare rows with open alerts and write only changes. A newly firing or more severe alert goes to the incident coordinator. Recovered alerts start a recovery job.">
+flowchart TD
+  due["SQL rule is due in a region"] --> reach{"Region<br/>reachable?"}
+  reach -- "no" --> skip["Skip. The region alert<br/>covers it"]
+  reach -- "yes" --> run["Run query as beacon user"]
+  run --> ok{"Query<br/>succeeded?"}
+  ok -- "no" --> err["Error count + 1.<br/>3 in a row: rule is Broken.<br/>No alert changes"]
+  ok -- "yes" --> drop["Drop rows of unknown, unchecked<br/>or new (10 min) resources"]
+  drop --> diff["Compare with open alerts.<br/>Write only transitions"]
+  diff --> fire["Fires, or severity rises"] --> coord["Incident coordinator"]
+  diff --> rec["Recovers"] --> job["Recovery job checks<br/>the incident"]
+</script>
+<p class="caption">A query error never resolves an alert. A firing alert that stays the same causes no database write. An <em>unchecked</em> resource is one with monitoring disabled, or a Suspended or Terminated one.</p>
+
+<h3>Alert states</h3>
+<script type="text/mermaid" data-label="Alert state machine. A new row makes a Pending alert. Pending becomes Firing after pending_for, or Resolved as Cleared after a good run without the row. Firing becomes Resolved as Recovered after resolve_after with no row. Either state becomes Resolved as Resource Removed or Disabled.">
+stateDiagram-v2
+  [*] --> Pending: new failing row
+  Pending --> Firing: still failing after pending_for
+  Pending --> Resolved: Cleared (good run)
+  Firing --> Resolved: Recovered (no row for resolve_after)
+  Pending --> Resolved: Resource Removed / Disabled
+  Firing --> Resolved: Resource Removed / Disabled
+  Resolved --> [*]
+</script>
+<ul>
+  <li><strong>Severity can change.</strong> A Pending alert takes the severity of its current row. A Firing alert only goes up, and then Beacon announces it and calls again.</li>
+  <li><strong>Timers restart after a gap.</strong> When the last good run is older than 3 intervals, Beacon restarts the pending and clean timers.</li>
+  <li><strong>Retention.</strong> Beacon keeps Cleared alerts for 7 days and other resolved alerts for 90 days.</li>
+</ul>
+
+<!-- 7 -->
+<h2 id="noise"><span class="n">7</span>How we limit noise</h2>
+<p class="sub">Each step removes alerts that a person does not need. Only the last step can wake someone up.</p>
+
+<script type="text/mermaid" data-label="Noise funnel. Rule rows lose unknown and new resources, then wait for pending_for. Suppression removes alerts under a silence or maintenance. The coordinator groups the rest into incidents. Only High and Critical incidents call a person; Medium goes to chat and email; Low goes to chat.">
+flowchart TB
+  rows["Rule rows, every run"] --> f1["Drop unknown, unchecked and new resources"]
+  f1 --> f2["Wait for pending_for"]
+  f2 --> f3["Suppress: silence, maintenance"]
+  f3 --> f4["Group into one incident"]
+  f4 --> low["Low: chat"]
+  f4 --> med["Medium: chat and email"]
+  f4 --> paged["High or Critical: call"]
+  classDef low stroke-width:1px
+  classDef med stroke-width:1px
+  classDef high stroke-width:1px
+  class low low
+  class med med
+  class paged high
+</script>
+
+<div class="cards">
+  <div class="card"><h4>Rule design</h4><ul>
+    <li>Watch one level up. No rule for one site or one VM.</li>
+    <li>Send counts, not items. A site is never a label value.</li>
+    <li>Use a rate, such as 5 failed of 20, not a bare count.</li>
+    <li>Return a lower severity at a lower limit, such as Low at 25% disk free.</li>
+    <li>Each rule points to one fix and has a runbook.</li>
+  </ul></div>
+  <div class="card"><h4>Timing</h4><ul>
+    <li><code>pending_for</code> is at least one interval, so an alert fires on the second failing run at the earliest.</li>
+    <li><code>resolve_after</code> is at least 2 intervals, so it does not flap.</li>
+    <li>A new or returned resource is not checked for 10 minutes.</li>
+    <li>A child resource waits 90 s before a call, so its parent's incident can take it.</li>
+  </ul></div>
+  <div class="card"><h4>Suppression</h4><ul>
+    <li><strong>Silence:</strong> mutes a known problem for up to 30 days, with a reason.</li>
+    <li><strong>Maintenance:</strong> mutes its scope, plus 10 min after the end.</li>
+    <li><strong>Held removal:</strong> a resource list that would remove over 10% waits for an admin.</li>
+    <li><strong>Region Unreachable:</strong> one Critical alert; the region's SQL rules are skipped.</li>
+  </ul></div>
+  <div class="card"><h4>Feedback</h4><ul>
+    <li>A failure that repeats each minute writes one Error Log.</li>
+    <li>One chat message for each incident in each run.</li>
+    <li>Each week, review the alerts of each rule. Beacon Health lists the noisiest rules.</li>
+  </ul></div>
+</div>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Mute</th><th>Use it for</th><th>Alerts</th><th>Counts against SLO</th></tr></thead>
+<tbody>
+<tr><td>Maintenance</td><td>Planned work with a start and an end</td><td>Suppressed in scope</td><td>No, only when Public and published before its start</td></tr>
+<tr><td>Silence</td><td>A known problem, for a set time</td><td>Suppressed, still visible</td><td>Yes</td></tr>
+<tr><td>Monitoring disabled</td><td>A resource we never want to check</td><td>Not evaluated</td><td>Its rows are dropped</td></tr>
+</tbody></table></div>
+<p><strong>Maintenance lifecycle.</strong> A maintenance is an incident of type Maintenance. It goes Scheduled, then In Progress at its start (or with <em>Start Maintenance</em>), then Completed at its end. A Scheduled maintenance can be cancelled. You can extend the end while it runs. A maintenance mutes the resources in its scope. To also mute the SLO burn alerts of its regions, set <em>Mute SLO Burn</em>.</p>
+
+<!-- 8 -->
+<h2 id="slo"><span class="n">8</span>SLI, SLO and outages</h2>
+<p class="sub">The SLO is the symptom side. It calls a person when customers feel a problem, even when no cause rule knows why. This section shows every number Beacon computes, with a worked example.</p>
+
+<h3>The four terms</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Term</th><th>Meaning</th><th>Example: Proxy service</th></tr></thead>
+<tbody>
+<tr><td><b>SLI</b> (service level indicator)</td><td>Good events divided by valid events, measured.</td><td>1,998 good requests of 2,000 valid requests = 99.9%</td></tr>
+<tr><td><b>SLO</b> (service level objective)</td><td>Our target for the SLI over 30 days. Default 99.9%.</td><td>99.9%</td></tr>
+<tr><td><b>Error budget</b></td><td>The share of valid events that may fail in 30 days: 100% minus the SLO.</td><td>0.1% of requests</td></tr>
+<tr><td><b>SLA</b> (service level agreement)</td><td>A promise to customers. It must be equal to or lower than the SLO. Beacon reports on it and alerts before we break it.</td><td>99.5%</td></tr>
+</tbody></table></div>
+<p>A <b>good event</b> and a <b>valid event</b> depend on the service. Its SLI query in <code>beacon/services/*.sql</code> defines them. For Proxy, a valid event is a request, and a bad event is a 5xx error that the proxy made itself. A 5xx error from the site's own code is good for Proxy, because the customer owns that code. The rule: <strong>count only failures that the platform causes</strong>. Else a few broken customer apps use the whole budget of a region.</p>
+
+<h3>One measurement, each minute</h3>
+<script type="text/mermaid" data-label="One SLI measurement. Each minute Beacon runs the SLI query, which returns good and valid events for each reporter seen in the last 30 minutes. It drops unchecked reporters, and reporters in an In Progress Public maintenance that was published before its start. A reporter silent for 3 minutes counts as all bad only when it or a parent has a firing cause alert; else Beacon leaves it out. Beacon sums good and valid, stores a Service Minute, adds to the Service Day, then computes the status, the burn alerts and the budget left.">
+flowchart TB
+  q["SLI query: good, valid<br/>for each reporter (30 min)"] --> drop["Drop unchecked reporters, and reporters<br/>in an In Progress Public maintenance<br/>published before its start"]
+  drop --> silent{"Reporter silent<br/>for 3 min?"}
+  silent -- "no" --> sum["Sum good and valid"]
+  silent -- "yes" --> cause{"Cause alert firing on it<br/>or a parent?"}
+  cause -- "yes: count its usual<br/>events as bad" --> sum
+  cause -- "no: leave it out" --> sum
+  sum --> minute["Service Minute<br/>(kept 3 days)"]
+  minute --> day["Service Day<br/>(daily totals)"]
+  minute --> status["Status"]
+  minute --> burn["Burn alerts"]
+  day --> budget["Budget left, 30 days"]
+  class sum focus
+</script>
+<p class="caption">A dead host makes its VMs silent, and the Host down alert makes them count as bad. A Pilot restart or a gap in Datum leaves the reporter out, so it never looks like an outage. When the query fails or returns no valid events, Beacon stores nothing for that minute and the status is Unknown.</p>
+
+<h3>Error budget: a worked example</h3>
+<p>The Proxy service of one region gets 2,000 valid requests each minute. 30 days have 43,200 minutes.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Step</th><th>Calculation</th><th class="num">Result</th></tr></thead>
+<tbody>
+<tr><td>Valid events in 30 days</td><td>2,000 &times; 43,200</td><td class="num">86,400,000</td></tr>
+<tr><td>Error budget, in events</td><td>86,400,000 &times; 0.1%</td><td class="num">86,400 failed requests</td></tr>
+<tr><td>Same budget, as a full outage</td><td>43,200 min &times; 0.1%</td><td class="num">43.2 min</td></tr>
+<tr><td>Bad events so far (10 days measured)</td><td>from Service Days</td><td class="num">14,400</td></tr>
+<tr><td>Valid events so far</td><td>from Service Days</td><td class="num">28,800,000</td></tr>
+<tr><td>Valid events projected to 30 days</td><td>28,800,000 &times; (30 / 10)</td><td class="num">86,400,000</td></tr>
+<tr><td><b>Budget left</b></td><td>1 &minus; 14,400 / (0.1% &times; 86,400,000)</td><td class="num"><b>83.3%</b></td></tr>
+</tbody></table></div>
+<p>Formula: <code>budget left = 1 &minus; (valid &minus; good) / (error budget &times; valid projected to 30 days)</code>. Beacon projects only until 30 days are measured. The value shows as <em>Budget left, 30 days</em> on the service form and in Service health. It can go below zero: then we broke the SLO.</p>
+
+<h3>Burn rate</h3>
+<p>The <strong>burn rate</strong> is how fast we use the budget: <code>(1 &minus; SLI) / (1 &minus; SLO)</code>. A burn rate of 1 uses the whole budget in exactly 30 days.</p>
+<div class="table-wrap"><table>
+<thead><tr><th class="num">Burn rate</th><th>Error rate at SLO 99.9%</th><th>The whole 30-day budget lasts</th></tr></thead>
+<tbody>
+<tr><td class="num">1</td><td>0.1%</td><td>30 days</td></tr>
+<tr><td class="num">6</td><td>0.6%</td><td>5 days</td></tr>
+<tr><td class="num">14.4</td><td>1.44%</td><td>50 hours</td></tr>
+<tr><td class="num">1,000</td><td>100% (full outage)</td><td>43 minutes</td></tr>
+</tbody></table></div>
+<p>Each burn alert checks two windows. It fires only when the burn rate meets its limit in <strong>both</strong>. The long window shows that the problem is real. The short window lets the alert resolve a few minutes after the fix. Each limit comes from <code>budget share &times; 720 h / long window</code>: for <code>fast</code>, 2% &times; 720 / 1 = 14.4.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Alert key</th><th class="num">Budget used</th><th class="num">Long window</th><th class="num">Short window</th><th class="num">Burn rate</th><th>Severity</th></tr></thead>
+<tbody>
+<tr><td><code>fast</code></td><td class="num">2%</td><td class="num">1 h</td><td class="num">5 min</td><td class="num">14.4</td><td><span class="sev h">High</span> calls</td></tr>
+<tr><td><code>medium</code></td><td class="num">5%</td><td class="num">6 h</td><td class="num">30 min</td><td class="num">6</td><td><span class="sev h">High</span> calls</td></tr>
+<tr><td><code>slow</code></td><td class="num">10%</td><td class="num">3 days</td><td class="num">6 h</td><td class="num">1</td><td><span class="sev l">Low</span></td></tr>
+<tr><td><code>sla</code>, only with an SLA Target</td><td class="num">&mdash;</td><td class="num">1 h</td><td class="num">15 min</td><td class="num">error rate at or above 100 &minus; SLA</td><td><span class="sev h">High</span> calls</td></tr>
+</tbody></table></div>
+<div class="callout note"><p><strong>Example.</strong> In the last hour, 2.0% of Proxy requests failed. The 1 h burn rate is 2.0% / 0.1% = 20. In the last 5 minutes, 1.8% failed: burn rate 18. Both are at or above 14.4, so <code>fast</code> fires. The fix lands. The 5-minute window drops below 14.4 within a few minutes, so the burn stops, although the 1 h window still shows errors. After 5 more minutes without a burn, the alert recovers.</p></div>
+<p>Four guards stop false calls:</p>
+<ul>
+  <li>A window with fewer than 100 valid events does not alert.</li>
+  <li>Service Minutes must cover half of the window, so a new service does not call on its first bad minutes.</li>
+  <li>A burn calls only when 3 reporters were bad in one minute of the short window (or all, when fewer than 3 report). Else it is Low, because one bad reporter has its own cause alert.</li>
+  <li>A service with <em>Page On Burn</em> off gets Medium instead of High.</li>
+</ul>
+<p>A burn alert is a normal alert. Its resource is the region (or the global resource for a global service). It fires at once (no wait) and recovers after 5 minutes without a burn.</p>
+
+<h3>Status of a service</h3>
+<script type="text/mermaid" data-label="Service status, checked in order. If the worst impact of the open Public incidents and maintenances is Maintenance, the status is Maintenance. Else if the region is not OK or there is no measurement, Unknown. Else the SLI of the last minute sets it: 99.5% or more is Operational; else 95% or more is Degraded; else at or above the service's Major Outage Below value, 80% by default and 50% for Proxy, is Partial Outage; else Major Outage.">
+flowchart TB
+  start["Each minute"] --> m{"Worst published<br/>impact is Maintenance?"}
+  m -- "yes" --> maint["Maintenance"]
+  m -- "no" --> r{"Region OK and<br/>measured?"}
+  r -- "no" --> unk["Unknown (grey)"]
+  r -- "yes" --> s1{"SLI &ge; 99.5%?"}
+  s1 -- "yes" --> op["Operational"]
+  s1 -- "no" --> s2{"SLI &ge; 95%?"}
+  s2 -- "yes" --> deg["Degraded"]
+  s2 -- "no" --> s3{"SLI &ge; Major Outage Below?<br/>(80% default, Proxy 50%)"}
+  s3 -- "yes" --> po["Partial Outage"]
+  s3 -- "no" --> mo["Major Outage"]
+  class unk low
+  class deg med
+  class po high
+  class mo crit
+</script>
+<p class="caption">A worse status must hold 3 min and a better one 2 min before it shows. Maintenance shows at once. A published outage on the same service outranks Maintenance. The status page shows the worse of this status and the impact of open published incidents. A published impact never makes the status better.</p>
+<p><strong>Example.</strong> A region has 3 proxies with equal traffic. One proxy is down and its node has a firing cause alert. The SLI is about 67%. That is under 95% and above 50%, so after 3 minutes Proxy shows Partial Outage. When a second proxy fails, the SLI is about 33% and Proxy shows Major Outage.</p>
+
+<h3>Uptime and outage minutes on the status page</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Number</th><th>How Beacon computes it</th></tr></thead>
+<tbody>
+<tr><td><b>Uptime</b> of a day, and of 90 days</td><td>Measured SLI: sum of good / sum of valid from Service Days.</td></tr>
+<tr><td><b>Coverage</b> of a day</td><td>Minutes that Beacon measured / minutes of the day. Low coverage means the uptime is less certain.</td></tr>
+<tr><td><b>Downtime</b> of a day</td><td>Major Outage minutes + 0.3 &times; Partial Outage minutes (the Atlassian Statuspage method).</td></tr>
+<tr><td><b>Bar color</b> of a day</td><td>Red: 15 or more downtime minutes. Orange: some downtime, under 15 min. Yellow: no downtime, some Degraded minutes. Blue: Maintenance minutes. Empty (No data): Beacon has no measurement for the day. Else green.</td></tr>
+</tbody></table></div>
+<div class="callout note"><p><strong>Example.</strong> A day has 10 Major Outage minutes and 20 Partial Outage minutes. Downtime = 10 + 0.3 &times; 20 = 16 min, so the bar is red. A bad minute that does not hold 3 minutes lowers the uptime. It does not change the status, so it is not downtime.</p></div>
+<p>A declared outage (a Public incident with an impact) changes the status and the bar color. It does not change good and valid, so uptime and the error budget stay measured. A <b>Declared</b> service, such as Billing, has no SLI: its status comes only from published incidents, and the page says <em>Set by incidents, not measured</em>.</p>
+
+<!-- 9 -->
+<h2 id="incidents"><span class="n">9</span>Alerts to incidents</h2>
+<p class="sub">An incident is the record people work on. The rule: after each evaluation and region run, every firing, unsuppressed alert belongs to an open incident.</p>
+
+<script type="text/mermaid" data-label="Incident coordinator. For each firing alert with no incident, try in order: Cover, if an open incident's scope covers the resource or a parent. Pair, if a burn alert and a cause alert share a bad reporter. Group, if an open incident has the same rule and region and is Triggered or younger than 30 minutes. Reopen, if a Beacon-made internal incident of the same group resolved in the last 30 minutes. Else Create a new internal incident in Triggered.">
+flowchart TB
+  a["Firing alert,<br/>no incident"] --> c1{"Cover?"}
+  c1 -- "no" --> c2{"Pair?"}
+  c2 -- "no" --> c3{"Group?"}
+  c3 -- "no" --> c4{"Reopen?"}
+  c4 -- "no" --> cr["Create new<br/>incident"]
+  c1 -- "yes" --> j["Join open<br/>incident"]
+  c2 -- "yes" --> j
+  c3 -- "yes" --> j
+  c4 -- "yes" --> ro["Reopen,<br/>call again"]
+  classDef focus stroke-width:1px
+  class cr focus
+</script>
+<p class="caption">A join is never silent. Beacon posts one chat message for each incident in each run. A higher severity calls again.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Step</th><th>The alert joins when</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><b>Cover</b></td><td>An open incident has a scope row that covers the alert's resource or a parent of it. Never for an alert on the region resource.</td><td>A host incident takes the alerts of its VMs.</td></tr>
+<tr><td><b>Pair</b></td><td>A burn alert joins an incident with a cause alert on one of its bad reporters (or a parent). A cause alert on a bad reporter joins an incident that has only burn alerts.</td><td>The symptom and its cause share one incident.</td></tr>
+<tr><td><b>Group</b></td><td>An open incident has the same rule and region, and is Triggered or under 30 min old.</td><td>One rule failing in many places is one outage.</td></tr>
+<tr><td><b>Reopen</b></td><td>An Internal incident that Beacon made, with the same rule and region, resolved in the last 30 min.</td><td>A flapping problem does not open a new incident each time.</td></tr>
+<tr><td><b>Create</b></td><td>No step above matched. Beacon creates an Internal incident in Triggered.</td><td>A resource without a parent calls at once. A child waits 90 s.</td></tr>
+</tbody></table></div>
+
+<p><strong>Scope.</strong> An incident starts with the scope of its first alert, such as "host h12 and everything under it". Beacon computes affected resources only when a person asks. When a new incident covers alerts of another open, Internal, unacknowledged incident, those alerts move, and the empty incident closes as Merged.</p>
+
+<h3>Incident states</h3>
+<script type="text/mermaid" data-label="Incident state machine. Created as Triggered. Acknowledge, an answered call or an update moves it to Investigating. An update can set any open status: Investigating, Identified or Monitoring. A new alert moves Monitoring back to Investigating. Any open incident can be resolved or merged. Beacon reopens an Internal incident it made within 30 minutes; staff can reopen within 7 days.">
+stateDiagram-v2
+  [*] --> Triggered: coordinator creates
+  Triggered --> Open: acknowledge, call answered, or update
+  state Open {
+    Investigating --> Identified
+    Identified --> Monitoring
+    Monitoring --> Investigating
+    Investigating --> Monitoring
+    Monitoring --> Identified
+    Identified --> Investigating
+  }
+  Triggered --> Resolved: resolve
+  Open --> Resolved: resolve
+  Triggered --> Merged: merge
+  Open --> Merged: merge
+  Resolved --> Triggered: auto reopen (Internal, made by Beacon, 30 min)
+  Resolved --> Open: staff reopen (7 days)
+</script>
+<p class="caption">Inside Open, <em>Post Update</em> can set any of the three statuses from any other. A new alert moves Monitoring back to Investigating.</p>
+<ul>
+  <li><strong>Auto resolve.</strong> When all alerts recover, Beacon resolves an Internal incident that it made. For an Unlisted or Public incident, Beacon posts to chat that a person must resolve it, so the customer gets a final update.</li>
+  <li><strong>Beacon refuses Resolve</strong> while unsuppressed alerts still fire, unless the person sets Silence Hours.</li>
+  <li><strong>Beacon requires a postmortem</strong> when the incident was Public or Critical, took over 1 hour, or a customer found it first. Beacon reminds in chat each day from day 3 to day 30.</li>
+</ul>
+
+<!-- 10 -->
+<h2 id="severity"><span class="n">10</span>Severity and channels</h2>
+<p class="sub">Severity decides who hears about a problem, and how loud.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Severity</th><th>Meaning</th><th>Chat</th><th>Email to responders</th><th>Phone call</th><th>Next responder</th><th>Stops</th></tr></thead>
+<tbody>
+<tr><td><span class="sev c">Critical</span></td><td>Customers are down now. Act at once.</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td><td>after 2 min</td><td>Only when someone acknowledges</td></tr>
+<tr><td><span class="sev h">High</span></td><td>Customers are affected, or will be if nobody acts.</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="yes">Yes</td><td>after 5 min</td><td>After 3 rounds, with a chat post</td></tr>
+<tr><td><span class="sev m">Medium</span></td><td>A person must look today.</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">No</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td><span class="sev l">Low</span></td><td>Good to know.</td><td class="yes">Yes</td><td class="no">No</td><td class="no">No</td><td>&mdash;</td><td>&mdash;</td></tr>
+</tbody></table></div>
+<p>The times are defaults in Beacon Settings. <em>Paging Paused</em> stops all calls and emails, for example after a database restore. Chat messages are Markdown with the severity, the linked incident name, the region and a table of alerts. Emails use the subject <code>[Severity][Incident] Title</code>.</p>
+
+<!-- 11 -->
+<h2 id="paging"><span class="n">11</span>Calls and acknowledge</h2>
+<p class="sub">Beacon calls one responder at a time from an ordered list. An answered call acknowledges the incident.</p>
+
+<script type="text/mermaid" data-label="Escalation sequence. The coordinator writes notification rows in its transaction. After commit, a job calls the responder through Twilio. If the responder answers, Twilio posts a callback with a token, and Beacon acknowledges the incident. If not, after the backup time Beacon calls the next responder. After the last, Beacon waits 15 minutes and starts a new round.">
+sequenceDiagram
+  participant C as Coordinator
+  participant B as Beacon job
+  participant T as Twilio
+  participant R1 as Responder 1
+  participant R2 as Responder 2
+  C->>B: notification rows (same transaction)
+  Note over B: sends after commit, short queue
+  B->>T: call Responder 1
+  T->>R1: voice call, said twice
+  alt Responder 1 answers
+    R1-->>T: answers
+    T-->>B: callback with call token
+    B->>B: acknowledge, escalation Done
+  else no answer in 2 min (Critical) or 5 min (High)
+    B->>T: call Responder 2
+    T->>R2: voice call
+    Note over B: after the last responder, wait 15 min and start a new round
+    Note over B: High stops after 3 rounds. Critical repeats until acknowledged
+  end
+</script>
+<ul>
+  <li>Beacon calls the <strong>primary override</strong> until its end time, else the first active responder. Each responder must be an enabled user with the Beacon Responder or Beacon Admin role.</li>
+  <li>Staff can also acknowledge in Desk, or with <code>POST /api/v2/document/Beacon%20Incident/&lt;name&gt;/method/acknowledge</code>.</li>
+  <li>A failed call or email posts to chat who did not get it.</li>
+  <li><strong>Notification states.</strong> Each call, email or chat post is one Beacon Notification row: Queued, then Sending, then Sent, Failed or Cancelled. Cancelled means notifications were paused, or the channel or responder was disabled. A row that stays in Sending means the worker stopped during the call to the provider. Beacon does not send it again, because the provider may have it. For email, Sent means Frappe accepted it into its Email Queue; check the Email Queue for delivery errors.</li>
+  <li>Each minute Beacon sends a heartbeat to an external service. Beacon holds the heartbeat when a rule evaluation or a notification is over 5 min late. Then the external service calls the team, because Beacon or its workers stopped.</li>
+</ul>
+
+<!-- 12 -->
+<h2 id="customers"><span class="n">12</span>Telling customers</h2>
+<p class="sub">Customers hear about problems on three paths. Two are automatic; one needs a person.</p>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Path</th><th>What the customer sees</th><th>Who starts it</th><th>Automatic</th></tr></thead>
+<tbody>
+<tr><td><b>Service status</b></td><td>The status of each service on the status page, from its SLI. Unknown shows grey, never the last green.</td><td>Beacon, each minute</td><td class="yes">Yes</td></tr>
+<tr><td><b>Pilot through Central</b></td><td>An in-app notification about their own site or server, and an email when their preferences allow it.</td><td>Pilot, when a condition holds</td><td class="yes">Yes</td></tr>
+<tr><td><b>Published incident</b></td><td>An incident with updates: on the status page (Public) or by a private link (Unlisted). Email or RSS for followers.</td><td>A person</td><td class="no">No</td></tr>
+</tbody></table></div>
+
+<h3>A platform incident, from alert to customer</h3>
+<script type="text/mermaid" data-label="Communication sequence. Beacon opens an Internal incident and calls the responder. The responder acknowledges and decides visibility. For a few customers, the responder publishes Unlisted and support sends the link. For a wide problem, the responder publishes Public on the status page. Each public update emails followers. On resolve, a final update and a postmortem follow.">
+sequenceDiagram
+  participant B as Beacon
+  participant R as Responder
+  participant S as Support
+  participant P as Status page
+  participant C as Customers
+  B->>R: Internal incident: call, chat, email
+  R->>B: acknowledge
+  alt few customers affected
+    R->>B: Publish as Unlisted
+    B-->>S: private link /incidents/id
+    S->>C: send link to affected customers
+  else wide impact
+    R->>B: Publish as Public
+    B->>P: listed on status page
+    C->>P: follow by email or RSS
+  end
+  R->>B: post updates
+  B-->>C: email each follower (one thread)
+  R->>B: resolve with final update
+  Note over R,B: postmortem and public RCA when required
+</script>
+<ul>
+  <li><strong>Visibility</strong> is Internal (staff only), Unlisted (anyone with the link) or Public (listed). Every incident starts Internal. Beacon never publishes and never reopens a public incident.</li>
+  <li><strong>The link</strong> has a random public ID, so no one can guess it or count incidents. <em>Regenerate Link</em> stops the old one.</li>
+  <li><strong>Followers</strong> confirm by email. Confirm and stop links open a page with a button, so link scanners change nothing.</li>
+  <li><strong>Status page methods</strong> are guest methods. They return only published data and cache each result for 60 s, so outage traffic never reaches ClickHouse.</li>
+</ul>
+
+<h3>Customer alerts from Pilot</h3>
+<script type="text/mermaid" data-label="Pilot customer alert path. Pilot raises a customer alert. It sends the event to the bench webhooks, to the bench mail recipients, and to Central with report_pilot_event. Central checks the Pilot credential and the event type, skips the same event for the same team and bench within 60 minutes unless a different event for that bench came after it, writes a team notification, and emails members who hold server view capability as their preferences allow. Pilot counts failed calls to Central, which feeds the pilot-central-delivery rule.">
+flowchart TB
+  cond["Customer alert on one server<br/>(see the table below)"] --> pilot["Pilot Notifier"]
+  pilot --> hooks["Bench webhooks"]
+  pilot --> mail["Bench mail recipients"]
+  pilot -- "report_pilot_event" --> central["Central"]
+  pilot -. "failed calls counted" .-> rule["pilot-central-delivery<br/>rule in Beacon"]
+  central --> dedup{"Same team, event and bench<br/>in 60 min, and no other<br/>event for it since?"}
+  dedup -- "yes" --> drop["Skip"]
+  dedup -- "no" --> feed["Team feed"]
+  feed --> email["Email members with server:view,<br/>as their preferences allow"]
+  classDef focus stroke-width:1px
+  class email focus
+</script>
+<div class="table-wrap"><table>
+<thead><tr><th>Pilot event</th><th>Central event type</th><th>When Pilot raises it</th><th>Emails even when a member turned it off</th></tr></thead>
+<tbody>
+<tr><td><code>site_down</code></td><td><code>site_unavailable</code></td><td>Sites down for 5 min, not in maintenance</td><td class="yes">Yes</td></tr>
+<tr><td><code>backups_failing</code></td><td><code>backup_failure</code></td><td>6 failures since the last good backup</td><td class="no">No</td></tr>
+<tr><td><code>resource_limit_breached</code></td><td><code>resource_limit_breached</code></td><td>CPU, memory or disk over the limit (90% default) for 5 min</td><td class="no">No</td></tr>
+<tr><td><code>certificate_expiry</code></td><td><code>certificate_expiry</code></td><td>A site certificate nears expiry</td><td class="no">No</td></tr>
+<tr><td><code>certificate_failed</code></td><td><code>certificate_failed</code></td><td>A certificate cannot be issued</td><td class="no">No</td></tr>
+<tr><td>Failed update task</td><td><code>migration_failure</code></td><td>An update task fails</td><td class="yes">Yes</td></tr>
+</tbody></table></div>
+<p>A Critical event in Central emails at once and ignores member preferences. Other events follow each member's settings, and a digest event waits for the digest. Central refuses Billing and Team events from a Pilot, so a broken bench cannot email a whole team. Central has more event types than these six, such as provisioning, resize, snapshot and billing events. Central raises those itself; this Pilot sends only the six above.</p>
+
+<!-- 13 -->
+<h2 id="regressions"><span class="n">13</span>Finding regressions</h2>
+<p class="sub">A regression is a change that made things worse. These signals catch one within an hour of a deploy or a release, or within days for slow burn.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Signal</th><th>Catches</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td>New error fingerprint</td><td>An error absent the day before that repeats in the last hour</td><td><code>atlas-error-logs</code></td></tr>
+<tr><td>Repeating unhandled error</td><td>One error that repeats 5 times in 15 min</td><td><code>atlas-error-logs</code>, <code>cargo-errors</code>, <code>central-errors</code></td></tr>
+<tr><td>Same release fails on many servers</td><td>A bad app release, not a bad server</td><td><code>pilot-updates-failing</code></td></tr>
+<tr><td>Many app errors on one server</td><td>A shared app broken by a bench update</td><td><code>pilot-sites-down</code></td></tr>
+<tr><td>Error share against a baseline</td><td>A proxy change that raises 5xx</td><td><code>proxy-error-spike</code></td></tr>
+<tr><td>API error rate by operation</td><td>One endpoint broken by a deploy</td><td><code>atlas-api-errors</code>, <code>central-api-errors</code></td></tr>
+<tr><td>Telemetry volume doubles</td><td>A new version that logs too much or sends a new metric</td><td><code>telemetry-volume</code></td></tr>
+<tr><td>Slow burn</td><td>A small, steady loss of quality over days</td><td>SLO <code>slow</code> burn</td></tr>
+<tr><td>Image builds</td><td>A broken build pipeline</td><td><code>cargo-build-failed</code>, <code>cargo-images-stale</code></td></tr>
+</tbody></table></div>
+<p><strong>Beacon Health</strong> (Desk, under Health) covers the last 30 days. It shows incidents, time to acknowledge and resolve, notification delay and failures, the noisiest rules and the SLI of each service. Use it in the weekly review:</p>
+<div class="table-wrap fit"><table>
+<thead><tr><th>Question</th><th>When the answer is yes</th></tr></thead>
+<tbody>
+<tr><td>Did it fire without a fix?</td><td>Raise the limit, make <code>pending_for</code> longer, or lower the severity.</td></tr>
+<tr><td>Did another alert already show the problem?</td><td>Remove the rule, or merge it into the other rule.</td></tr>
+<tr><td>Did it flap?</td><td>Make <code>resolve_after</code> longer.</td></tr>
+<tr><td>Did customers see a problem that no alert showed?</td><td>Add a metric or a rule, or make the SLI cover it.</td></tr>
+<tr><td>Did the responder not know what to do?</td><td>Improve the runbook.</td></tr>
+</tbody></table></div>
+
+<!-- 14 -->
+<h2 id="example"><span class="n">14</span>Example: a host fails</h2>
+<p class="sub">A host with 30 VMs and 400 sites loses power at 10:00. The times are approximate.</p>
+
+<script type="text/mermaid" data-label="Timeline of a host failure. At 10:00 the host loses power. Until 10:05 the Atlas sync age is under 5 minutes, so no row. From 10:05 the Host down alert is Pending; at 10:06 it fires, the incident opens and Beacon calls responder 1. At 10:08 the responder acknowledges and publishes Unlisted at 10:12. The host returns at 10:40, the alert recovers at 10:42, and the responder resolves at 10:45.">
+gantt
+  dateFormat HH:mm
+  axisFormat %H:%M
+  section Host
+  Power lost, host off        :crit, h1, 10:00, 40m
+  Host back                   :milestone, 10:40, 0m
+  section Host down alert
+  No row yet (sync under 5 min) :a1, 10:00, 5m
+  Pending                     :a2, 10:05, 1m
+  Firing                      :crit, a3, 10:06, 36m
+  section Incident
+  Triggered, calling          :i1, 10:06, 2m
+  Investigating               :i2, 10:08, 37m
+  Publish Unlisted            :milestone, 10:12, 0m
+  Resolved                    :milestone, 10:45, 0m
+</script>
+
+<ol class="steps">
+  <li>Pilots in the VMs go silent. No cause alert covers them yet, so the Sites SLI leaves them out. A Pilot restart looks the same and must not call.</li>
+  <li>After 5 min the Atlas sync is old and metald is silent. <code>host-down</code> returns the host. After one more run it fires.</li>
+  <li>Beacon opens an incident with scope "this host and everything under it". The host has no parent, so the call starts at once.</li>
+  <li>Now a cause alert covers the silent reporters, so the SLIs count them as bad. A burn alert that fires later joins the same incident by pairing.</li>
+  <li>The responder answers. Beacon acknowledges. The responder publishes as Unlisted and gives the link to support.</li>
+  <li>The host comes back. The alert recovers after 2 min. The incident is Unlisted, so Beacon asks a person to resolve it. The responder posts a final update and resolves.</li>
+</ol>
+
+<!-- desk -->
+<h2 id="desk"><span class="n">15</span>Working in Desk</h2>
+<p class="sub">Engineers do all Beacon work in Frappe Desk. Each flow below shows what Desk does today and what we propose to make it easier. Proposals are not built yet. Each needs a mockup and approval first.</p>
+
+<p><strong>Five rules for every Beacon form.</strong></p>
+<ol class="steps">
+  <li>The next step is the one primary button. Today Acknowledge does this while an incident is Triggered.</li>
+  <li>The runbook is one click from the call.</li>
+  <li>A field that drives a state machine is read-only. Only an action changes it, and the action dialog asks only for what it needs.</li>
+  <li>A confirmation says what happens next, such as "Phone calls cost money".</li>
+  <li>A problem with Beacon itself shows on the Beacon home screen, not only in a log list.</li>
+</ol>
+
+<h3>Flows, today and proposed</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Flow</th><th>Who</th><th>Today in Desk</th><th>Proposed change</th><th>Priority</th></tr></thead>
+<tbody>
+<tr><td><b>Answer a call</b></td><td>On-call responder</td><td>The chat message links to the incident. <em>Acknowledge</em> is the primary button, and an orange banner shows the next call time. The runbook is on the alert and rule forms, not on the incident: Alerts tab, open the alert, then Runbook.</td><td>Add a <em>What fired</em> block at the top of the Overview tab: each firing alert with its resource, detail, <em>Runbook</em> and <em>Silence</em> buttons.</td><td><span class="sev c">P1</span></td></tr>
+<tr><td><b>See open work</b></td><td>On-call responder</td><td>The workspace has an <em>Open incidents</em> quick list. The full Incidents list filters only by type, and shows severity, status and visibility as plain fields with no color.</td><td>Color the list indicator by severity. Default the full list to open incidents, sorted Critical, High, Medium, Low, then by age. Add a saved filter <em>Acknowledged by me</em>.</td><td><span class="sev c">P1</span></td></tr>
+<tr><td><b>Check Beacon itself</b></td><td>Beacon owner</td><td>Rule evaluation errors, failed notifications and unreachable regions are in separate lists under Logs and Health.</td><td>Add a <em>Needs attention</em> block on the Beacon workspace. It lists Triggered incidents, rule evaluations in error, and unreachable regions. It also lists notifications Failed or in Sending for over 5 min, and synced checks that still need Regions or a Query Region.</td><td><span class="sev c">P1</span></td></tr>
+<tr><td><b>Tell customers</b></td><td>Responder or support</td><td><em>Publish</em> shows the title, explains the visibility, and asks for the impact for each service. <em>Post Update</em> prefills a message for each status.</td><td>Show the status page entry as customers will see it in the Publish dialog. For a Public incident, show "Last public update 35 min ago" and post a chat reminder after 30 min without one.</td><td><span class="sev h">P2</span></td></tr>
+<tr><td><b>Mute noise</b></td><td>On-call responder</td><td><em>Create Silence</em> on the alert form prefills region, resource, rule and alert key. The reason is required, and the form previews the matching resources and open alerts.</td><td>Offer 1 h, 4 h and 24 h presets for the end time. Add a <em>Silence</em> button to each firing alert on the incident form.</td><td><span class="sev h">P2</span></td></tr>
+<tr><td><b>Resolve and learn</b></td><td>Responder, producer team</td><td><em>Resolve</em> asks for a message and Silence Hours. The RCA section has the RCA, public RCA and action items.</td><td>When <em>Postmortem Required</em> is set, Resolve asks for an owner and a due date. Add a list filter <em>Postmortem due</em>.</td><td><span class="sev h">P2</span></td></tr>
+<tr><td><b>Tune a rule</b></td><td>Producer team</td><td>The rule form shows evaluations per region and a <em>Test Rule</em> button. Noise data is only in Beacon Health.</td><td>Show 30-day numbers on the rule form: times fired, median firing time, and the share of alerts that recovered within 10 min (short-lived alerts).</td><td><span class="sev h">P2</span></td></tr>
+<tr><td><b>Plan maintenance</b></td><td>Producer team</td><td>A Maintenance incident with scope, <em>Start Maintenance</em>, <em>Extend Maintenance</em>, <em>Complete Maintenance</em> and <em>Cancel Maintenance</em>, and the <em>Mute SLO Burn</em> check box.</td><td>Before start, show the resources, open alerts and services that the scope covers. Add a calendar view of maintenances.</td><td><span class="sev m">P3</span></td></tr>
+<tr><td><b>Change a rule in code</b></td><td>Producer team</td><td>Edit the file in the producer repository and merge it. Then use <em>Sync Definitions</em> in Beacon Settings, which loads every source and lists warnings. For a synced SQL rule, the query is read-only in Desk and only <em>Enabled</em> changes. <em>Test Rule</em> runs the rule as it is in Desk, so test a file change after the sync.</td><td>After a sync, show for each changed rule its first evaluation result in each region, so the author sees at once that it runs.</td><td><span class="sev h">P2</span></td></tr>
+<tr><td><b>Open an incident by hand</b></td><td>Support or responder</td><td>Create a Beacon Incident, set severity, scope and Detected By (such as Customer). Use <em>Merge Into Another Incident</em> for a duplicate.</td><td>Add a <em>Report a problem</em> button on the workspace that asks for title, severity, region and resource, and shows open incidents that cover that resource first.</td><td><span class="sev h">P2</span></td></tr>
+<tr><td><b>Fix notification delivery</b></td><td>Beacon owner</td><td>Open the Failed Beacon Notification for the error. For email, check the Email Queue. In Beacon Settings, use <em>Send Test Notification</em> and <em>Resume Notifications</em>.</td><td>Show a red banner on Beacon Settings while notifications are paused or the last test failed.</td><td><span class="sev m">P3</span></td></tr>
+<tr><td><b>Find who is on call</b></td><td>Anyone</td><td>Open Beacon Settings to read the responder list and the override.</td><td>Show "On call now" and the escalation order on the Beacon workspace, with <em>Change Primary On-call</em> next to it.</td><td><span class="sev m">P3</span></td></tr>
+</tbody></table></div>
+
+<h3>Proposed: the incident form for a responder</h3>
+<p>The responder opens one form and sees what fired, where to start, and the next button. This is a sketch, not a final layout.</p>
+<div class="mock" role="img" aria-label="Sketch of the proposed incident form. An orange banner says Beacon calls the next responder at 10:42 and to acknowledge to stop it. Buttons: Acknowledge (primary), Post Update, Actions. A What fired block lists two alerts: host-down Critical on host n3-fsn, and vms-unavailable-on-host High, each with Runbook and Silence buttons.">
+  <div class="mock-bar"><span class="mock-title">Host down: n3-fsn</span><span class="sev c">Critical</span><span class="mock-tag">Triggered</span><span class="mock-spacer"></span><span class="mock-btn">Actions &#9662;</span><span class="mock-btn">Post Update</span><span class="mock-btn primary">Acknowledge</span></div>
+  <div class="mock-banner">Beacon calls the next responder at 10:42. Acknowledge to stop it.</div>
+  <div class="mock-block">
+    <div class="mock-label">What fired</div>
+    <div class="mock-row"><span class="sev c">Critical</span><code>host-down</code><span class="mock-muted">n3-fsn: no Atlas sync for 6 min, metald silent</span><span class="mock-spacer"></span><span class="mock-btn">Runbook</span><span class="mock-btn">Silence</span></div>
+    <div class="mock-row"><span class="sev h">High</span><code>vms-unavailable-on-host</code><span class="mock-muted">n3-fsn: 14 of 14 VMs not available</span><span class="mock-spacer"></span><span class="mock-btn">Runbook</span><span class="mock-btn">Silence</span></div>
+  </div>
+  <div class="mock-tabs"><span class="on">Overview</span><span>Updates and RCA</span><span>Alerts (2)</span><span>Notifications</span></div>
+</div>
+<p class="caption">Example names. The tabs stay as they are today; only the top of Overview changes.</p>
+
+<!-- 16 -->
+<h2 id="gaps"><span class="n">16</span>Gaps and next steps</h2>
+<p class="sub">These flows are missing or weak today. Each item says what exists, the risk and a proposal.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Gap</th><th>Risk</th><th>Proposal</th></tr></thead>
+<tbody>
+<tr><td>No check reaches a customer site from outside the region. Public networking is measured inside the region.</td><td>A provider or DNS cut shows only when a person publishes an incident.</td><td>Add an HTTP rule per region for a canary site behind the proxy.</td></tr>
+<tr><td>Beacon incidents do not reach the Central dashboard. Affected customers get an Unlisted link only when support sends it.</td><td>Customers on a broken server may not hear about our incident.</td><td>Show published incidents in Central for the affected servers, from the incident scope.</td></tr>
+<tr><td>The status page lets a visitor follow one incident only.</td><td>No warning for a new incident in a customer's region.</td><td>Add a follow option for a region or a service.</td></tr>
+<tr><td>Billing is a declared service with no SLI.</td><td>Billing problems show only through rules and published incidents.</td><td>Send good and valid counts for invoices and payments.</td></tr>
+<tr><td>The Sites service is measured but hidden. Its file comment says a customer's app fault counts as down, but the query already leaves out <code>app_error</code>.</td><td>The status page shows no site availability, for a reason that is no longer true.</td><td>Check the Sites SLI for a few weeks, then show it. Fix the comment in the Pilot repository.</td></tr>
+<tr><td><code>datum-writes-refused</code> says Medium in its header, but its query returns High for a 5xx.</td><td>The runbook check and the sync warnings read the header, so the rule looks lower than it is.</td><td>Set the header to High in the Cargo repository.</td></tr>
+<tr><td><code>tls-certificate-expiring</code> returns host rows for metald certificates, but its header lists only the Atlas resource type. Beacon drops those rows.</td><td>An expiring metald certificate gives no alert. Atlas then loses access to the host.</td><td>Set <code>resource_type: Atlas, Metal Host</code> in the Atlas repository.</td></tr>
+<tr><td>39 of 70 rules can call at their highest level.</td><td>Too many calls in the first weeks.</td><td>Review the noisiest rules in Beacon Health each week after rollout.</td></tr>
+<tr><td>On-call is one ordered list with a primary override. There is no rotation schedule.</td><td>Someone must change the override by hand each shift.</td><td>Add a weekly rotation, or sync it from a calendar.</td></tr>
+<tr><td>Datum and its senders do not retry.</td><td>A failed request is a gap. Rules see silence, not an error.</td><td>Keep the silence rules. Watch <code>telemetry-dropped</code> and <code>datum-writes-refused</code>.</td></tr>
+<tr><td>A support ticket is not linked to an incident.</td><td>Detected By = Customer depends on a person.</td><td>Let support open or join a Beacon incident from the ticket.</td></tr>
+<tr><td>When Beacon is down, the status page is down too.</td><td>No public status during a Beacon outage. (Accepted risk.)</td><td>The external heartbeat calls the team. Consider a static fallback page.</td></tr>
+<tr><td>Traces are stored, but no rule reads them.</td><td>Slow requests show only as errors or timeouts.</td><td>Add a latency SLI when a service needs one.</td></tr>
+</tbody></table></div>
+
+<!-- 17 -->
+<h2 id="glossary"><span class="n">17</span>Glossary</h2>
+<div class="table-wrap fit"><table>
+<tbody>
+<tr><td><b>Region</b></td><td>One Frappe Cloud region, with its own Datum and ClickHouse.</td></tr>
+<tr><td><b>Resource</b></td><td>One thing Beacon watches: a host, a VM, a service node, an app such as Atlas, or the region.</td></tr>
+<tr><td><b>Resource ID</b></td><td>The name of the sender, written by Datum from the token.</td></tr>
+<tr><td><b>Rule</b></td><td>A SQL, HTTP or TLS check that returns failing rows.</td></tr>
+<tr><td><b>Alert</b></td><td>One problem on one resource, from start to end.</td></tr>
+<tr><td><b>Incident</b></td><td>The record people work on. It holds alerts, updates, calls and the postmortem.</td></tr>
+<tr><td><b>Scope</b></td><td>The part of the region an incident covers, such as a host and its VMs.</td></tr>
+<tr><td><b>Service</b></td><td>One line on the status page, with an SLI and an SLO.</td></tr>
+<tr><td><b>Reporter</b></td><td>A resource that sends SLI events, such as a Pilot VM.</td></tr>
+<tr><td><b>Bad reporter</b></td><td>A reporter that sent bad events in the last minute. Used to pair burn and cause alerts.</td></tr>
+<tr><td><b>Burn rate</b></td><td>How fast a service uses its error budget. 1 means the budget lasts exactly 30 days.</td></tr>
+<tr><td><b>Silence</b></td><td>A time-limited mute for a known problem.</td></tr>
+<tr><td><b>Maintenance</b></td><td>Planned work with a start, an end and a scope. Mutes alerts in its scope.</td></tr>
+<tr><td><b>Runbook</b></td><td>The steps for a responder. Required for each High or Critical rule.</td></tr>
+<tr><td><b>JWT</b></td><td>A signed token. Datum reads the sender's resource ID from it.</td></tr>
+<tr><td><b>Error fingerprint</b></td><td>One kind of error: the same exception at the same place, counted together.</td></tr>
+<tr><td><b>BMC</b></td><td>The management chip of a physical server. It reports hardware events.</td></tr>
+<tr><td><b>eBPF</b></td><td>A small program in the Linux kernel. The IPv6 router uses one to forward traffic.</td></tr>
+<tr><td><b>Quorum</b></td><td>The minimum number of storage nodes that must agree before object storage accepts a write.</td></tr>
+<tr><td><b>Unchecked resource</b></td><td>A resource with monitoring disabled, or one that is Suspended or Terminated. Beacon drops its rows.</td></tr>
+<tr><td><b>Coverage</b></td><td>The share of a day's minutes that Beacon measured.</td></tr>
+</tbody></table></div>
+
+<footer>
+  <p><strong>Sources.</strong> Read on 16 November 2026 from the <code>develop</code> branch of each repository.</p>
+  <ul>
+    <li>Beacon design and code contract: <code>frappe/beacon</code> <code>docs/</code> and <code>SPEC.md</code></li>
+    <li>Rules, services and runbooks: <a href="https://github.com/frappe/atlas/tree/develop/beacon">frappe/atlas</a>, <a href="https://github.com/frappe/cargo/tree/develop/beacon">frappe/cargo</a>, <a href="https://github.com/frappe/central/tree/develop/beacon">frappe/central</a>, <a href="https://github.com/frappe/pilot/tree/develop/beacon">frappe/pilot</a></li>
+    <li>Customer alerts: <code>pilot/core/notification/notifier.py</code>, <code>central/notification/api.py</code>, <code>central/notification/engine.py</code></li>
+    <li>Related: <a href="../../research/beacon-telemetry-map/">Beacon telemetry map</a></li>
+  </ul>
+  <p>Diagrams are Mermaid, rendered to SVG with <a href="https://pele.run">Pele</a>.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>
