@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon Staging Rollout</title>
+<meta name="description" content="How Beacon was brought to a working state on the Frappe Cloud V2 staging region: what was broken, what changed, how the alert path was tested from start to end, and what is still open.">
+<style>
+:root { --text:#1d1f23; --muted:#5d636b; --line:#e2e4e8; --accent:#2457c5; --ok:#1f7a4d; --warn:#9a5b00; --bad:#b3261e; --bg:#fff; --code:#f4f5f7; }
+@media (prefers-color-scheme: dark) { :root { --text:#e8eaed; --muted:#a6adb6; --line:#363b42; --accent:#7ea6ff; --ok:#5fc38f; --warn:#e0a84a; --bad:#f28b82; --bg:#16181b; --code:#23262b; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width:50rem; margin:0 auto; padding:2.5rem 1rem 5rem; }
+h1 { font-size:1.75rem; line-height:1.25; margin:0 0 .5rem; }
+h2 { font-size:1.2rem; margin:2.5rem 0 .75rem; padding-top:1rem; border-top:1px solid var(--line); }
+h3 { font-size:1rem; margin:1.5rem 0 .5rem; }
+p, li { max-width:44rem; }
+.lead { color:var(--muted); font-size:1.05rem; }
+code { background:var(--code); padding:.1rem .3rem; border-radius:4px; font-size:.88em; }
+table { border-collapse:collapse; width:100%; font-size:.92rem; margin:.75rem 0; display:block; overflow-x:auto; }
+th, td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-weight:600; }
+.ok { color:var(--ok); font-weight:600; }
+.warn { color:var(--warn); font-weight:600; }
+.bad { color:var(--bad); font-weight:600; }
+a { color:var(--accent); }
+figure { margin:1.25rem 0; }
+figcaption { color:var(--muted); font-size:.88rem; }
+svg text { fill:var(--text); font:13px system-ui, sans-serif; }
+svg .box { fill:none; stroke:var(--text); stroke-width:1.4; }
+svg .line { stroke:var(--text); stroke-width:1.4; fill:none; }
+svg .accent { stroke:var(--accent); }
+svg .note { fill:var(--muted); font-size:12px; }
+.pills a { display:inline-block; margin:.2rem .4rem .2rem 0; padding:.2rem .65rem; border:1px solid var(--line); border-radius:999px; text-decoration:none; font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Beacon on staging: from Unknown to a tested alert path</h1>
+<p class="lead">Report of the night of 14 to 15 November 2026. Beacon is the incident manager, SLO panel and status page of Frappe Cloud V2. It reads telemetry from Datum, the regional ClickHouse store. This note records why the staging status page showed Unknown, what changed, how the full alert path was tested, and what is still open.</p>
+<p class="pills"><a href="https://github.com/frappe/central/pull/725">Central #725</a><a href="https://github.com/frappe/cargo/pull/144">Cargo #144</a><a href="https://github.com/frappe/cargo/pull/145">Cargo #145</a><a href="https://github.com/frappe/central/pull/726">Central #726</a><a href="https://github.com/frappe/beacon/pull/1">Beacon #1</a></p>
+
+<h2>Result</h2>
+<p>At 00:40 UTC on 15 November the staging status page said "All systems operational". All six services had measured data and were Operational. A failure was made on purpose and followed through every step, from the Pilot to the status page, and each step worked. No alert fires without a silence, and each silence has a written reason and an expiry.</p>
+<table>
+<tr><th>Service</th><th>Before</th><th>After</th></tr>
+<tr><td>Sites</td><td class="warn">Unknown</td><td class="ok">Operational</td></tr>
+<tr><td>Servers</td><td class="ok">Operational</td><td class="ok">Operational</td></tr>
+<tr><td>Networking</td><td class="ok">Operational</td><td class="ok">Operational</td></tr>
+<tr><td>Object Storage</td><td class="warn">Unknown</td><td class="ok">Operational</td></tr>
+<tr><td>Dashboard and API</td><td class="warn">Unknown</td><td class="ok">Operational</td></tr>
+<tr><td>Server actions</td><td class="warn">Unknown</td><td class="ok">Operational</td></tr>
+</table>
+
+<h2>The starting point</h2>
+<p>A Beacon service has a status only when its query finds valid events. When a query finds none, the status is Unknown. This is on purpose: grey "Status unavailable" is more honest than an old green.</p>
+<p>At the start, four of six services on staging were Unknown. Each one had a different cause:</p>
+<table>
+<tr><th>Service</th><th>What it reads</th><th>Why it was Unknown</th></tr>
+<tr><td>Sites</td><td>Uptime pings that each Pilot sends</td><td>No Pilot sent telemetry. The Pilots were old, and Central had no Datum address to give them.</td></tr>
+<tr><td>Object Storage</td><td>S3 requests that Garage counts</td><td>Staging has almost no S3 traffic, so most 3-minute windows had no request.</td></tr>
+<tr><td>Dashboard and API</td><td>Request counts that Central sends</td><td>Central could not reach Datum.</td></tr>
+<tr><td>Server actions</td><td>Server actions that finished in the last hour</td><td>Central could not reach Datum, and staging has few actions.</td></tr>
+</table>
+
+<h2>Who can reach Datum</h2>
+<p>The telemetry host reports one address to Central: an <code>internal-</code> name on the WireGuard mesh. Central gives that address to each Pilot. Two problems were in this path.</p>
+<figure>
+<svg viewBox="0 0 720 230" role="img" aria-label="Pilot VMs reach the internal Datum name over the mesh only when the Datum host VM is privileged. Central is outside the mesh and sends to the public name.">
+  <rect class="box" x="20" y="30" width="150" height="50" rx="6"/><text x="38" y="60">Pilot (tenant VM)</text>
+  <rect class="box" x="20" y="150" width="150" height="50" rx="6"/><text x="40" y="180">Central (outside)</text>
+  <rect class="box" x="520" y="30" width="180" height="50" rx="6"/><text x="548" y="60">Datum host VM</text>
+  <rect class="box" x="520" y="150" width="180" height="50" rx="6"/><text x="545" y="173">public telemetry</text><text x="560" y="190">name (TLS)</text>
+  <path class="line accent" d="M170 55 H520"/><text x="230" y="45">http://internal-telemetry-svc</text><text class="note" x="230" y="75">mesh: works only when the host VM is privileged</text>
+  <path class="line" d="M170 175 H520"/><text x="230" y="165">https://telemetry-svc</text><text class="note" x="230" y="195">Central #725</text>
+  <path class="line" d="M610 150 V80"/>
+</svg>
+<figcaption>Pilots use the mesh. Central is not on the mesh, so it uses the public name of the same Datum.</figcaption>
+</figure>
+<ul>
+<li><b>Tenant VMs could not reach the mesh name.</b> A request from a Pilot VM to the internal name got no answer. Atlas lets a tenant VM reach a platform VM only when the platform VM is privileged. The Datum host VM and the S3 gateway VM were not. Both are now privileged, and the same request answers 200.</li>
+<li><b>Central is not on the mesh.</b> Central runs outside the region, so the internal name never works for it. <a href="https://github.com/frappe/central/pull/725">Central #725</a> makes Central send its own telemetry to <code>https://telemetry-svc.&lt;region domain&gt;</code>. It still sends nothing while the telemetry host does not report itself Available. Pilots keep the internal address.</li>
+<li><b>The Cargo webhooks had an old secret.</b> Cargo copies the Central webhook secret into its webhooks only when it sets them up. After Cargo was enrolled with the staging Central again, the two webhooks were rebuilt, and Central recorded the telemetry and storage services.</li>
+</ul>
+
+<h2>What changed</h2>
+<h3>Code (pull requests)</h3>
+<table>
+<tr><th>Pull request</th><th>Change</th><th>State</th></tr>
+<tr><td><a href="https://github.com/frappe/central/pull/725">Central #725</a></td><td>Central sends its telemetry to the public Datum name. Tests for the address and for the Available check.</td><td>Applied on staging</td></tr>
+<tr><td><a href="https://github.com/frappe/central/pull/726">Central #726</a></td><td>A new Pilot gets the Datum endpoint at boot, but no token. It fetches the token from Central after Atlas creates the VM, so the token names the Atlas VM.</td><td>Ready</td></tr>
+<tr><td><a href="https://github.com/frappe/cargo/pull/144">Cargo #144</a></td><td>A new HTTP rule sends an unsigned S3 request each minute and expects 403. It checks the S3 path that customers use. Garage counts the request, so Object Storage has valid events on a quiet region.</td><td>Staging reads its branch until merge</td></tr>
+<tr><td><a href="https://github.com/frappe/cargo/pull/145">Cargo #145</a></td><td>The stale-image rule checks Base and Site images only. Cargo builds an Apps image only when the app makes a release, so an old Apps image is normal.</td><td>Ready</td></tr>
+<tr><td><a href="https://github.com/frappe/beacon/pull/1">Beacon #1</a></td><td>The held-removal limit counts only resources that a list terminates or leaves out. A sleeping VM is Suspended, which is not a removal.</td><td>Patched in place on staging</td></tr>
+</table>
+
+<h3>Staging operations</h3>
+<table>
+<tr><th>Area</th><th>What was done</th></tr>
+<tr><td>Pilots</td><td>Started the stopped Pilot VMs, updated Pilot to v0.0.101, and fetched each telemetry credential from Central. Seven Pilots now send telemetry. One VM had a clock 13 days behind, so TLS to Central failed. Six old test VMs that could not be repaired went back to stopped.</td></tr>
+<tr><td>Hosts</td><td>Unmounted a leftover read-only diagnostic mount. Ran the two failed GRUB units again; both pass.</td></tr>
+<tr><td>Cargo</td><td>Terminated two builder VMs of 8 GB each that stayed after their images were retired. They came from an older version; the current code releases a builder after each build. The busiest host went from 1.3 GB to 8.3 GB of free memory.</td></tr>
+<tr><td>Central</td><td>Closed nine old test actions that had no region. They raised an error each minute.</td></tr>
+<tr><td>Server actions</td><td>Made one small probe server. A timer restarts it through the Central API every 20 minutes, so the Server actions service always has an event in its 1-hour window.</td></tr>
+<tr><td>Silences</td><td>Silenced, each with a reason and an expiry: the Apps-image keys until Cargo #145 merges, an old test billing run, and the object storage backup (see open items).</td></tr>
+</table>
+
+<h2>Testing the alert path</h2>
+<p>A chat webhook can show whether Beacon sends notifications, but only if someone receives them. A small local request logger was put behind a temporary tunnel and set as the Beacon chat webhook. Then one real failure was made on purpose: the Pilot monitor on a VM with no sites was stopped.</p>
+<table>
+<tr><th>Step</th><th>What Beacon did</th><th>Result</th></tr>
+<tr><td>Pilot stops sending</td><td><code>pilot-silent</code> went Pending after 10 minutes, then Firing after 5 more</td><td class="ok">OK</td></tr>
+<tr><td>Incident</td><td>Beacon opened an internal incident. The chat logger received "New incident"</td><td class="ok">OK</td></tr>
+<tr><td>Acknowledge and update</td><td>Status changed to Investigating. The internal update stayed internal</td><td class="ok">OK</td></tr>
+<tr><td>Publish</td><td>The status page showed the incident and Sites as Degraded at once. The guest method for an internal incident answered "not found"</td><td class="ok">OK</td></tr>
+<tr><td>Pilot sends again</td><td>The alert resolved. Beacon did not close the public incident, and the chat said a person must resolve it</td><td class="ok">OK</td></tr>
+<tr><td>Resolve</td><td>The public resolve message reached chat, the status page, and the history</td><td class="ok">OK</td></tr>
+</table>
+
+<h3>A bug the test found</h3>
+<p>The first time the alert fired, Beacon muted it. The reason was "held removal". Small staging Pilot VMs sleep after 10 idle minutes, and Atlas then lists them as Suspended. Four VMs fell asleep in the same minute that two builders were terminated. That was 6 of 41 resources, more than the 10% limit, so Beacon held the whole change for an admin. A held resource mutes its alerts.</p>
+<p>The limit is there to stop a broken resource list from removing everything. A Suspended VM is not a removal: the source reports it on purpose, and the VM comes back. <a href="https://github.com/frappe/beacon/pull/1">Beacon #1</a> counts only terminations and missing resources. Without it, every group of sleeping trial servers in production would mute real alerts.</p>
+
+<h3>A second bug: the wrong name on a new server</h3>
+<p>The probe server sent its site samples, but Beacon dropped them. Datum had them under the Central name of the server, not the Atlas name of its VM. Central builds the boot settings of a new server before Atlas creates the VM, so the first Datum token could only name the Central server. Beacon matches telemetry by the Atlas name, and the first token lasts 7 days. <a href="https://github.com/frappe/central/pull/726">Central #726</a> gives the endpoint at boot and lets Pilot fetch the token later. Pilot already treats a missing token as one to fetch.</p>
+
+<h2>Open items</h2>
+<ul>
+<li><b>Object storage backup.</b> The staging cluster has no offsite bucket for its metadata backups, so the backup alert is correct. It needs bucket credentials from the team. Production needs the same setting.</li>
+<li><b>Merge and revert.</b> After Cargo #144 merges, set the staging Cargo definition source back to <code>develop</code>. After Beacon #1 merges, deploy Beacon on staging; the bench has the patch in place now.</li>
+<li><b>Temporary test parts.</b> The chat webhook points to a temporary tunnel. Replace it with a real channel, and add responders.</li>
+<li><b>Admin API key.</b> The probe timer uses a new API secret of the staging Central administrator. Any old use of that key stops working.</li>
+</ul>
+
+<h2>Checklist for production</h2>
+<ol>
+<li>Make the Datum host VM and the S3 gateway VM privileged. From one tenant VM, check that the internal telemetry name answers 200 on <code>/health</code>.</li>
+<li>Deploy Central #725. Check that Datum has <code>central_requests</code> samples from Central.</li>
+<li>After Enroll Cargo, rebuild the two Cargo webhooks and send each once. Check that the request log says "recorded".</li>
+<li>Update the Pilots and run <code>pilot setup telemetry</code>. Check <code>pilot_info</code> and <code>pilot_sites</code> in Datum.</li>
+<li>Merge Central #726, Cargo #144, Cargo #145 and Beacon #1 before go-live.</li>
+<li>Set an offsite metadata backup bucket on the object storage cluster.</li>
+</ol>
+</main>
+</body>
+</html>
