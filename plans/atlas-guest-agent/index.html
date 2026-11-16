@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atlas Guest Agent Plan</title>
-<meta name="description" content="Plan for the atlas-guest-agent: usage report, file system freeze, online root file system growth, clean stop, boot state and self-update. Methods on each side, timeouts and fallbacks.">
+<meta name="description" content="Plan for the atlas-guest-agent: usage report, file system freeze, online root file system growth, clean stop and boot state. Methods on each side, timeouts and fallbacks.">
 <style>
 :root {
   color-scheme: light dark;
@@ -51,7 +51,7 @@ nav ol { padding-left: 20px; columns: 2; font-size: 14.5px; }
 <body>
 <main>
 <h1>Atlas guest agent plan</h1>
-<p class="lead">One small Go program inside each VM gives Metal what the hypervisor cannot see: guest load, free memory and disk use. This plan adds five guest jobs to it. For each job it shows the methods on each side, the timeouts and the fallback when the agent is missing or stops.</p>
+<p class="lead">One small Go program inside each VM gives Metal what the hypervisor cannot see: guest load, free memory and disk use. This plan adds four guest jobs to it. For each job it shows the methods on each side, the timeouts and the fallback when the agent is missing or stops.</p>
 
 <nav><ol>
 <li><a href="#context">Context</a></li>
@@ -60,7 +60,7 @@ nav ol { padding-left: 20px; columns: 2; font-size: 14.5px; }
 <li><a href="#freeze">Freeze for clean snapshots</a></li>
 <li><a href="#grow">Grow the root file system</a></li>
 <li><a href="#stop">Clean stop and boot state</a></li>
-<li><a href="#update">Self-update</a></li>
+<li><a href="#update">Upgrades</a></li>
 <li><a href="#methods">All methods</a></li>
 <li><a href="#timeouts">Timeouts: nothing waits forever</a></li>
 <li><a href="#compatibility">Compatibility</a></li>
@@ -71,7 +71,7 @@ nav ol { padding-left: 20px; columns: 2; font-size: 14.5px; }
 <h2 id="context">Context</h2>
 <p>Metal runs each VM in Firecracker. From the host, Metal can read CPU time and disk counters from the VM cgroup. It cannot read the guest load average, the guest page cache or how full the guest file system is. Those values exist only inside the guest kernel.</p>
 <p>The guest agent is one static binary, <code>atlas-guest-agent</code>. The image builder installs it in every Atlas image. Because it is static, it does not depend on the guest distribution or on Python. It also replaces the two Python guest scripts: the metadata service poller and the SSH key lookup.</p>
-<p>The agent never starts work by itself, except the metadata poller and the self-update check. Metal asks, the agent answers, and Metal always has a fallback when there is no answer.</p>
+<p>The agent never starts work by itself, except the metadata poller. Metal asks, the agent answers, and Metal always has a fallback when there is no answer.</p>
 
 <h2 id="transport">One transport for all jobs</h2>
 <p>Metal talks to the agent over <b>vsock</b>. vsock is a socket between a VM and its host. It does not use the guest network, so a guest firewall, Docker rules or a broken network configuration cannot block it. Only the host can open a connection to the guest, so the agent needs no token.</p>
@@ -192,47 +192,9 @@ func (m *machine) shutdownGuest(ctx context.Context) error
 <p>The usage report adds <code>system_state</code>, the output of <code>systemctl is-system-running</code>. Values include <code>starting</code>, <code>running</code> and <code>degraded</code>. It shows when the guest finished boot, and whether a unit failed.</p>
 <p>If the command fails or takes more than 2 seconds, the field is empty and the rest of the report is unchanged. In this plan, metald only reports the value. It does not change any decision, such as the SSH check after a migration. That can follow when the value proves reliable.</p>
 
-<h2 id="update">Self-update</h2>
-<p><b>Problem.</b> The agent ships inside the image. A new image gives new VMs a new agent, but running VMs keep their old agent until a person rebuilds them.</p>
-<p><b>Change.</b> Atlas publishes the agent binary like metald. metald puts its address and SHA-256 in the metadata service (MMDS). The agent already polls MMDS every 250 ms, so it sees a new version and replaces itself. Only the host can write MMDS, so the guest can trust the checksum.</p>
-
-<div class="diagram" role="img" aria-label="Self-update path: Atlas builds and publishes the binary, install or upgrade writes it to metald.toml, metald publishes it in MMDS, the agent downloads, verifies and replaces itself" style="--diagram-width: 522px"><svg xmlns="http://www.w3.org/2000/svg" class="pele pele-flowchart" viewBox="0 0 522 910" width="522" height="910" style="max-width:100%;height:auto;--_bg:var(--pele-bg,#fff);--_fg:var(--pele-fg,#1f1f1f);--_m:var(--pele-muted,#6e6e6e);--_l:var(--pele-line,#1f1f1f);--_s:var(--pele-surface,#f3f3f3);--_a:var(--pele-surface-alt,#e6e6e6);--_b:var(--pele-border,#8a8a8a);--_c:var(--pele-accent,#5b7bd5);color:var(--_fg);--_r:var(--pele-radius,4px);--_fm:var(--pele-font-mono,monospace);font:14px sans-serif;letter-spacing:normal;word-spacing:normal;text-transform:none;direction:ltr;font-family:var(--pele-font,sans-serif)" fill="var(--_fg)" role="graphics-document document" aria-roledescription="flowchart"><g class="pele-edges" fill="none" stroke="var(--_l)" stroke-linecap="round"><g class="pele-edge" data-id="L_B_S_0"><path d="M161.2,68L161.2,109"/><path class="pele-marker" d="M161.2,116L157.84,108L164.56,108Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge" data-id="L_S_T_0"><path d="M161.2,176L161.2,239"/><path class="pele-marker" d="M161.2,246L157.84,238L164.56,238Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge" data-id="L_T_D_0"><path d="M161.2,306L161.2,347"/><path class="pele-marker" d="M161.2,354L157.84,346L164.56,346Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge" data-id="L_D_G_0"><path d="M161.2,432L161.2,495"/><path class="pele-marker" d="M161.2,502L157.84,494L164.56,494Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge" data-id="L_G_N_0"><path d="M127.2,634.92C127.2,655.79 61.54,655.79 61.54,676.67L61.54,719.17"/><path class="pele-marker" d="M61.54,726.17L58.18,718.17L64.9,718.17Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge" data-id="L_G_L_0"><path d="M195.2,634.92C195.2,655.79 260.86,655.79 260.86,676.67L260.86,719.17"/><path class="pele-marker" d="M260.86,726.17L257.5,718.17L264.22,718.17Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge" data-id="L_L_R_0"><path d="M205.39,771.17C205.39,781.42 124.43,781.42 124.43,791.67L124.43,834.17"/><path class="pele-marker" d="M124.43,841.17L121.07,833.17L127.79,833.17Z" fill="var(--_l)" stroke="none"/></g><g class="pele-edge" data-id="L_L_W_0"><path d="M316.34,771.17C316.34,781.42 397.3,781.42 397.3,791.67L397.3,834.17"/><path class="pele-marker" d="M397.3,841.17L393.94,833.17L400.66,833.17Z" fill="var(--_l)" stroke="none"/></g></g><g class="pele-edge-labels" font-size="12"><g class="pele-edge-label" data-id="L_S_T_0"><rect x="90.17" y="198.5" width="142.05" height="18" rx="3" fill="var(--_bg)"/><text x="161.2" y="211.7" text-anchor="middle">Install or Upgrade metald</text></g><g class="pele-edge-label" data-id="L_D_G_0"><rect x="110.18" y="454.5" width="102.03" height="18" rx="3" fill="var(--_bg)"/><text x="161.2" y="467.7" text-anchor="middle">poll every 250 ms</text></g><g class="pele-edge-label" data-id="L_G_N_0"><rect x="50.86" y="678.67" width="21.34" height="18" rx="3" fill="var(--_bg)"/><text x="61.54" y="691.87" text-anchor="middle">no</text></g><g class="pele-edge-label" data-id="L_G_L_0"><rect x="247.53" y="678.67" width="26.67" height="18" rx="3" fill="var(--_bg)"/><text x="260.86" y="691.87" text-anchor="middle">yes</text></g><g class="pele-edge-label" data-id="L_L_R_0"><rect x="107.76" y="793.67" width="33.34" height="18" rx="3" fill="var(--_bg)"/><text x="124.43" y="806.87" text-anchor="middle">pass</text></g><g class="pele-edge-label" data-id="L_L_W_0"><rect x="385.63" y="793.67" width="23.34" height="18" rx="3" fill="var(--_bg)"/><text x="397.3" y="806.87" text-anchor="middle">fail</text></g></g><g class="pele-nodes"><g class="pele-node pele-shape-rect" data-id="B" transform="translate(161.2,38)"><rect x="-89.98" y="-30" width="179.96" height="60" fill="var(--_s)" stroke="var(--_b)" style="rx:var(--_r)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-4.1">Atlas: build and publish</tspan><tspan x="0" y="13.9">atlas-guest-agent</tspan></text></g><g class="pele-node pele-shape-rect" data-id="S" transform="translate(161.2,146)"><rect x="-107.87" y="-30" width="215.75" height="60" fill="var(--_s)" stroke="var(--_b)" style="rx:var(--_r)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-4.1">Atlas Settings: file, SHA-256,</tspan><tspan x="0" y="13.9">version</tspan></text></g><g class="pele-node pele-shape-rect" data-id="T" transform="translate(161.2,276)"><rect x="-98.16" y="-30" width="196.31" height="60" fill="var(--_s)" stroke="var(--_b)" style="rx:var(--_r)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-4.1">metald.toml: guest_agent</tspan><tspan x="0" y="13.9">download_url and sha256</tspan></text></g><g class="pele-node pele-shape-rect" data-id="D" transform="translate(161.2,393)"><rect x="-111.77" y="-39" width="223.54" height="78" fill="var(--_s)" stroke="var(--_b)" style="rx:var(--_r)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-13.1">MMDS:</tspan><tspan x="0" y="4.9">meta-data/guest-agent/url and</tspan><tspan x="0" y="22.9">sha256</tspan></text></g><g class="pele-node pele-shape-diam" data-id="G" transform="translate(161.2,579.09)"><polygon points="0,-77.08 123.34,0 0,77.08 -123.34,0" fill="var(--_s)" stroke="var(--_b)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-4.1">SHA-256 differs from own</tspan><tspan x="0" y="13.9">binary?</tspan></text></g><g class="pele-node pele-shape-rect" data-id="N" transform="translate(61.54,748.67)"><rect x="-51.85" y="-22.5" width="103.7" height="45" fill="var(--_s)" stroke="var(--_b)" style="rx:var(--_r)"/><text class="pele-label" x="0" y="4.9" text-anchor="middle">Do nothing</text></g><g class="pele-node pele-shape-rect" data-id="L" transform="translate(260.86,748.67)"><rect x="-107.47" y="-22.5" width="214.95" height="45" fill="var(--_s)" stroke="var(--_b)" style="rx:var(--_r)"/><text class="pele-label" x="0" y="4.9" text-anchor="middle">Download, verify, smoke test</text></g><g class="pele-node pele-shape-rect" data-id="R" transform="translate(124.43,871.17)"><rect x="-116.43" y="-30" width="232.85" height="60" fill="var(--_s)" stroke="var(--_b)" style="rx:var(--_r)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-4.1">Rename over the binary, restart</tspan><tspan x="0" y="13.9">atlas-metadata.service</tspan></text></g><g class="pele-node pele-shape-rect" data-id="W" transform="translate(397.3,871.17)"><rect x="-116.44" y="-30" width="232.88" height="60" fill="var(--_s)" stroke="var(--_b)" style="rx:var(--_r)"/><text class="pele-label" text-anchor="middle" xml:space="preserve"><tspan x="0" y="-4.1">Keep the old binary, try again in</tspan><tspan x="0" y="13.9">10 minutes</tspan></text></g></g></svg></div>
-
-<h3>Methods on each side</h3>
-<table>
-<tr><th>Side</th><th>Change</th></tr>
-<tr><td>Atlas build</td><td><code>HostBinary</code> gets a <code>make_target</code> field, default <code>build</code>. A new entry <code>guest-agent</code> uses <code>make guest-agent</code>. The image builder uses the same entry, so one build path makes the agent.</td></tr>
-<tr><td>Atlas Settings</td><td>Four read-only fields in the Metal Daemon section. See the mockup below.</td></tr>
-<tr><td>Install and Upgrade metald</td><td>Pass <code>GUEST_AGENT_DOWNLOAD_URL</code> and <code>GUEST_AGENT_SHA256</code> to the host scripts, as for metald. The scripts write them to <code>metald.toml</code>. Both are optional.</td></tr>
-<tr><td>metald</td><td>New optional config <code>[guest_agent] download_url, sha256</code>. <code>MetadataServiceData</code> adds <code>meta-data/guest-agent/url</code> and <code>sha256</code> when both are set. Running VMs get the keys by the same refresh path that publishes a new mesh MTU.</td></tr>
-<tr><td>Agent</td><td><code>func (updater *selfUpdater) check(ctx context.Context, client *metadataClient)</code>, called from the metadata poll loop. A <code>version</code> command prints the build version for the smoke test.</td></tr>
-</table>
-
-<h3>Safety rules in the agent</h3>
-<ol>
-<li>Compute the SHA-256 of its own binary once at start. Do nothing when MMDS has no key or the same checksum.</li>
-<li>Try each new checksum at most once every 10 minutes. A failure never blocks the metadata loop, because the download runs in its own goroutine with a 2-minute limit and a 64 MiB size limit.</li>
-<li>Download to a temporary file in the same folder. Check the SHA-256. Run the new file with <code>version</code>; it must exit with code 0 in 5 seconds.</li>
-<li>Keep the old binary as <code>atlas-guest-agent.previous</code>. Rename the new file over the binary in one step, so no reader sees a partial file.</li>
-<li>Run <code>systemctl restart --no-block atlas-metadata.service</code>. The socket jobs use the new binary on their next connection.</li>
-<li>A guest can turn off updates with the file <code>/etc/atlas/guest-agent-no-update</code>.</li>
-</ol>
-<table>
-<tr><th>Case</th><th>What happens</th></tr>
-<tr><td>Download fails or the checksum is wrong</td><td>The old binary keeps running. The agent tries again in 10 minutes.</td></tr>
-<tr><td>The new binary fails the smoke test</td><td>The agent deletes it and keeps the old one.</td></tr>
-<tr><td>The guest cannot reach the download address</td><td>Same as a failed download. Metrics and metadata keep working.</td></tr>
-<tr><td>metald has no agent config</td><td>MMDS has no keys and no update runs.</td></tr>
-</table>
-
-<div class="ask"><strong>Approval needed: DocType change.</strong> Self-update adds four read-only fields to Atlas Settings, in the Metal Daemon section, next to the metald and WG Mesh fields:
-<pre><code>Metal Daemon
- ...existing metald and WG Mesh fields...
- Guest Agent Binary (x86_64)   Link to File, read only
- Guest Agent Source Hash       Data, read only
- Guest Agent Binary SHA-256    Data, read only
- Guest Agent Version           Data, read only</code></pre>
-<code>Metald Update</code> records also store the binaries for a fleet upgrade, so it needs the same binary and SHA-256 fields. No patch is needed, because the new fields start empty and an empty value turns self-update off.</div>
+<h2 id="update">Upgrades</h2>
+<p>The agent ships inside the image. A new image gives new VMs a new agent. A running VM keeps its agent until it is rebuilt from a new image. There is no self-update.</p>
+<p>This is safe because the contract only grows. New fields in the usage report are optional, and each new job uses a new port. So any metald works with any agent version, and an old agent only misses the newer jobs.</p>
 
 <h2 id="methods">All methods</h2>
 <table>
@@ -241,7 +203,7 @@ func (m *machine) shutdownGuest(ctx context.Context) error
 <tr><td>guestagent</td><td><code>FreezeFilesystems(connection io.ReadWriter) error</code></td><td>thaws, replies <code>error</code></td></tr>
 <tr><td>guestagent</td><td><code>GrowRootFilesystem(ctx context.Context) error</code></td><td>replies <code>error</code></td></tr>
 <tr><td>guestagent</td><td><code>RequestReboot(ctx context.Context, connection io.Writer) error</code></td><td>error, process exits 1</td></tr>
-<tr><td>guestagent</td><td><code>RunMetadata(ctx context.Context)</code> with self-update check</td><td>never returns early</td></tr>
+<tr><td>guestagent</td><td><code>RunMetadata(ctx context.Context)</code></td><td>never returns early</td></tr>
 <tr><td>guestagent</td><td><code>WriteAuthorizedKeys(ctx context.Context, writer io.Writer) error</code></td><td>error, sshd uses no keys</td></tr>
 <tr><td>firecracker.Runtime</td><td><code>GetGuestUsage(ctx, machine) *guestagent.Usage</code></td><td>nil</td></tr>
 <tr><td>firecracker.Runtime</td><td><code>FreezeGuestFilesystems(ctx, machine) (thaw func())</code></td><td>no-op thaw</td></tr>
@@ -249,7 +211,6 @@ func (m *machine) shutdownGuest(ctx context.Context) error
 <tr><td>firecracker machine</td><td><code>shutdownGuest(ctx)</code>, agent first</td><td>Ctrl-Alt-Del, then SIGKILL</td></tr>
 <tr><td>vm.Manager</td><td><code>CreateSnapshot</code>, <code>applyDesiredSpecification</code>, <code>Metrics</code></td><td>work as today without an agent</td></tr>
 <tr><td>Metal API</td><td>metrics sample: optional <code>guest</code> object</td><td>field absent</td></tr>
-<tr><td>Atlas</td><td><code>HostBinary.make_target</code>, <code>guest-agent</code> entry, install and upgrade environment</td><td>empty settings turn self-update off</td></tr>
 </table>
 
 <h2 id="timeouts">Timeouts: nothing waits forever</h2>
@@ -262,8 +223,6 @@ func (m *machine) shutdownGuest(ctx context.Context) error
 <tr><td>Reboot request reply</td><td>2 s</td><td>Ctrl-Alt-Del</td></tr>
 <tr><td>Guest exit after a stop</td><td><code>stopTimeout</code> (existing)</td><td>SIGKILL</td></tr>
 <tr><td><code>systemctl is-system-running</code></td><td>2 s</td><td>empty <code>system_state</code></td></tr>
-<tr><td>Self-update download</td><td>2 min, 64 MiB</td><td>keep old binary, try in 10 min</td></tr>
-<tr><td>New binary smoke test</td><td>5 s</td><td>delete new binary</td></tr>
 <tr><td>MMDS request</td><td>3 s</td><td>next poll in 250 ms</td></tr>
 </table>
 <p>No metald call to the agent holds a database lock. The freeze and the grow run inside the VM operation lock, so each has a fixed limit.</p>
@@ -282,7 +241,6 @@ func (m *machine) shutdownGuest(ctx context.Context) error
 <h3>Focused tests</h3>
 <ul>
 <li>Guest: parse <code>/proc/self/mounts</code> for freeze targets (bind mounts, read-only mounts, non-block mounts), and parse <code>/proc/self/mountinfo</code> for the root device.</li>
-<li>Guest: self-update rejects a wrong checksum and a failed smoke test, and keeps the old binary.</li>
 <li>Host: <code>CreateSnapshot</code> calls thaw after resume, and works when the freeze is unavailable.</li>
 <li>Host: the vsock handshake reads a reply and treats a refused port as unavailable (exists).</li>
 </ul>
@@ -293,20 +251,17 @@ func (m *machine) shutdownGuest(ctx context.Context) error
 <li>Kill metald during a freeze: the guest thaws within 30 seconds.</li>
 <li>Grow the disk of a running VM: <code>df /</code> shows the new size without a reboot.</li>
 <li>Mask <code>ctrl-alt-del.target</code>, then stop the VM: it stops before the timeout.</li>
-<li>Publish a new agent build: running VMs replace the agent; a wrong checksum keeps the old one.</li>
 <li>Live migration with a memory snapshot: the usage report continues on the destination.</li>
 </ol>
 <h3>Rollout</h3>
 <ol>
 <li>Upgrade metald. Nothing changes for running VMs.</li>
 <li>Rebuild images. New VMs get the agent. Existing VMs get the vsock device at their next cold boot.</li>
-<li>Publish the agent binary to turn on self-update for VMs that already have an agent.</li>
 </ol>
 
-<h2 id="decisions">Decisions to approve</h2>
+<h2 id="decisions">Decisions</h2>
 <ol>
-<li>The four Atlas Settings fields and the two <code>Metald Update</code> fields for self-update.</li>
-<li>Self-update on by default, with the guest opt-out file <code>/etc/atlas/guest-agent-no-update</code>.</li>
+<li>Agent upgrades only through a new image. No self-update.</li>
 <li>Ports 100000 to 100003, one systemd socket for each job.</li>
 <li>Timeouts in the table above, especially the 30-second automatic thaw.</li>
 </ol>
