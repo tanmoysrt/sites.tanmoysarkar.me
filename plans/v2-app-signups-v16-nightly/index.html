@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V2 app sign-ups on Frappe v16 and nightly</title>
+<meta name="description" content="Test plan for ERPNext, CRM, Helpdesk, Learning, Gameplan and Builder on Pilot with Frappe v16 and nightly.">
+<style>
+:root { --bg:#fff; --fg:#1f2328; --muted:#656d76; --line:#d8dee4; --head:#f6f8fa; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --bad:#cf222e; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8d96a0; --line:#30363d; --head:#161b22; --accent:#4493f8; --ok:#3fb950; --warn:#d29922; --bad:#f85149; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+main { max-width:1040px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:1.6rem; margin:0 0 4px; }
+h2 { font-size:1.15rem; margin:36px 0 8px; padding-top:8px; border-top:1px solid var(--line); }
+.lead, .note { color:var(--muted); }
+.lead { margin:0 0 8px; }
+.note { font-size:.9rem; }
+a { color:var(--accent); }
+code { font-size:.85em; overflow-wrap:anywhere; }
+.scroll { overflow-x:auto; margin:8px 0 12px; }
+table { border-collapse:collapse; width:100%; font-size:.88rem; }
+th, td { border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+th { background:var(--head); font-weight:600; white-space:nowrap; }
+td.c { text-align:center; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .todo { color:var(--muted); }
+ol li, ul li { margin:4px 0; }
+.legend span { margin-right:14px; }
+</style></head>
+<body><main>
+<h1>V2 app sign-ups on Frappe v16 and nightly</h1>
+<p class="lead">On V2, users can sign up for ERPNext, CRM, Helpdesk, Learning, Gameplan and Builder. Pilot must install each app on a Frappe v16 bench and on a nightly bench. This plan lists the branch to use for each app and Frappe version, the release pipeline for each branch, and the checks we will do on Pilot.</p>
+<p class="lead">Rules: test the latest commit of each branch, not a marketplace release. Fix each problem we find, in Pilot or in the app repository. Each branch must build prebuilt assets and must open a release PR in <a href="https://github.com/frappe/marketplace">frappe/marketplace</a>.</p>
+<p class="note">Updated 2026-11-17. Data comes from each repository on GitHub on that date. Nightly means Frappe <code>develop</code>, version <code>17.0.0-dev</code>.</p>
+
+<h2>1. Frappe versions</h2>
+<div class="scroll"><table>
+<tr><th>Target</th><th>Frappe branch</th><th>Version on 2026-11-17</th><th>Python</th><th>Node</th></tr>
+<tr><td>v15 (not in scope)</td><td><a href="https://github.com/frappe/frappe/tree/version-15">version-15</a></td><td>15.126.1</td><td>&gt;=3.10,&lt;3.15</td><td>&gt;=18</td></tr>
+<tr><td><b>v16</b></td><td><a href="https://github.com/frappe/frappe/tree/version-16">version-16</a></td><td>16.56.0</td><td>&gt;=3.14,&lt;3.15</td><td>&gt;=24</td></tr>
+<tr><td><b>Nightly</b></td><td><a href="https://github.com/frappe/frappe/tree/develop">develop</a></td><td>17.0.0-dev</td><td>&gt;=3.14,&lt;3.15</td><td>&gt;=24</td></tr>
+</table></div>
+
+<h2>2. Branch to test for each app</h2>
+<p>The range is <code>[tool.bench.frappe-dependencies].frappe</code> in the branch's <code>pyproject.toml</code>. Pilot uses this range to decide if an app can go on a bench.</p>
+<div class="scroll"><table>
+<tr><th>App</th><th>Frappe v16</th><th>Nightly</th><th>Required apps</th><th>Other branches</th></tr>
+<tr><td><a href="https://github.com/frappe/erpnext">ERPNext</a></td>
+<td><a href="https://github.com/frappe/erpnext/tree/version-16">version-16</a><br><code>&gt;=16.55.0,&lt;17.0.0</code></td>
+<td><a href="https://github.com/frappe/erpnext/tree/develop">develop</a><br><code>&gt;=17.0.0-dev,&lt;18.0.0</code></td>
+<td>none</td><td>version-15, version-15-hotfix, version-16-hotfix</td></tr>
+<tr><td><a href="https://github.com/frappe/crm">CRM</a></td>
+<td><a href="https://github.com/frappe/crm/tree/version-16">version-16</a><br><code>&gt;=16.0.0,&lt;17.0.0</code><br>or <a href="https://github.com/frappe/crm/tree/main">main</a> <code>&gt;=15.0.0,&lt;17.0.0</code></td>
+<td><a href="https://github.com/frappe/crm/tree/develop">develop</a><br><code>&gt;=16.0.0-dev,&lt;=17.0.0-dev</code></td>
+<td><code>whatsapp</code> on develop only</td><td>version-15, main-hotfix, *-hotfix</td></tr>
+<tr><td><a href="https://github.com/frappe/helpdesk">Helpdesk</a></td>
+<td><a href="https://github.com/frappe/helpdesk/tree/version-16">version-16</a><br><code>&gt;=16.0.0,&lt;17.0.0</code><br>or <a href="https://github.com/frappe/helpdesk/tree/main">main</a> <code>&gt;=15.123.1,&lt;17.0.0</code></td>
+<td><a href="https://github.com/frappe/helpdesk/tree/develop">develop</a><br><code>&gt;=17.0.0-dev,&lt;18.0.0</code></td>
+<td><code>telephony</code></td><td>version-15, main-hotfix, *-hotfix</td></tr>
+<tr><td><a href="https://github.com/frappe/lms">Learning (lms)</a></td>
+<td><a href="https://github.com/frappe/lms/tree/version-16">version-16</a><br><code>&gt;=16.0.0,&lt;17.0.0</code><br>or <a href="https://github.com/frappe/lms/tree/main">main</a> <code>&gt;=15.121.0,&lt;17.0.0</code></td>
+<td><a href="https://github.com/frappe/lms/tree/develop">develop</a><br><code>&gt;=17.0.0-dev,&lt;18.0.0</code></td>
+<td><code>payments</code></td><td>version-15, main-hotfix, *-hotfix</td></tr>
+<tr><td><a href="https://github.com/frappe/gameplan">Gameplan</a></td>
+<td colspan="2"><a href="https://github.com/frappe/gameplan/tree/develop">develop</a> for both <code>&gt;=16.0.0-dev</code> (no upper limit)</td>
+<td>none</td><td><code>main</code> has no commits since 2026-06-08 and no Frappe range</td></tr>
+<tr><td><a href="https://github.com/frappe/builder">Builder</a></td>
+<td colspan="2"><a href="https://github.com/frappe/builder/tree/master">master</a> (stable) or <a href="https://github.com/frappe/builder/tree/develop">develop</a> for both <code>&gt;=15.121.3,&lt;18.0.0</code></td>
+<td>none</td><td>A comment says v16 needs Frappe 16.36.1 or later for the asset build</td></tr>
+</table></div>
+
+<p><b>Required apps.</b> Pilot must also install these apps when it installs the app above.</p>
+<div class="scroll"><table>
+<tr><th>App</th><th>Needed by</th><th>Frappe v16</th><th>Nightly</th><th>Frontend assets</th></tr>
+<tr><td><a href="https://github.com/frappe/whatsapp">whatsapp</a></td><td>CRM develop</td><td colspan="2"><a href="https://github.com/frappe/whatsapp/tree/main">main</a> / <a href="https://github.com/frappe/whatsapp/tree/develop">develop</a> <code>&gt;=16.0.0-dev,&lt;18.0.0</code>, Python &gt;=3.14</td><td>none</td></tr>
+<tr><td><a href="https://github.com/frappe/telephony">telephony</a></td><td>Helpdesk</td><td colspan="2"><a href="https://github.com/frappe/telephony/tree/develop">develop</a> only <code>&gt;=14.101.0,&lt;=17.0.0-dev</code></td><td>none</td></tr>
+<tr><td><a href="https://github.com/frappe/payments">payments</a></td><td>Learning</td><td><a href="https://github.com/frappe/payments/tree/version-16">version-16</a> <code>&gt;=16.0.0,&lt;17.0.0</code></td><td><a href="https://github.com/frappe/payments/tree/develop">develop</a> <code>&gt;=17.0.0-dev,&lt;18.0.0</code></td><td>none</td></tr>
+</table></div>
+
+<h2>3. How a release gets to Pilot</h2>
+<ol>
+<li>A push to a release branch runs <code>on_release.yml</code>. semantic-release makes a <code>chore(release):</code> commit and a GitHub release.</li>
+<li><code>assets.yml</code> calls Pilot's <a href="https://github.com/frappe/pilot/blob/develop/.github/workflows/app-assets.yml">app-assets.yml</a>. It builds the frontend for the commit and uploads the archive to the GitHub release <code>assets-&lt;branch&gt;</code>. Pilot downloads this archive, so the bench does not build the frontend.</li>
+<li>After a release commit, the job calls <code>frappe/marketplace/.github/workflows/publish-release.yml</code>. It opens a PR that adds the commit to <code>apps/&lt;app&gt;.json</code>.</li>
+<li>The marketplace check installs the app on a real bench. If it passes, the PR merges, and Pilot can offer the release.</li>
+</ol>
+
+<h2>4. Release pipeline status for each branch</h2>
+<p class="legend note"><span class="ok">Yes</span><span class="warn">Behind or partial</span><span class="bad">Missing</span></p>
+<div class="scroll"><table>
+<tr><th>App / branch</th><th>Assets build on push</th><th>Head commit has assets</th><th>Marketplace PR job</th><th>Version in code</th><th>Latest in marketplace</th></tr>
+<tr><td>ERPNext version-16</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td>16.55.0</td><td class="warn">16.37.0. PR <a href="https://github.com/frappe/marketplace/pull/184">#184</a> open, semgrep-check fails</td></tr>
+<tr><td>ERPNext develop</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td>17.0.0-dev</td><td class="warn">Older nightly. PR <a href="https://github.com/frappe/marketplace/pull/140">#140</a> open since 2026-11-04, semgrep-check fails</td></tr>
+<tr><td>CRM version-16</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td>16.0.4</td><td class="ok">16.0.4</td></tr>
+<tr><td>CRM main</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td>1.92.0</td><td class="warn">1.90.0</td></tr>
+<tr><td>CRM develop</td><td class="c bad">No. Build needs <code>whatsapp</code>, and the Pilot build does not check it out</td><td class="c bad">No</td><td class="c bad">No</td><td>2.0.0-dev</td><td>Nightly entry 76903e44</td></tr>
+<tr><td>Helpdesk version-16</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td>16.1.0</td><td class="ok">16.1.0</td></tr>
+<tr><td>Helpdesk main</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c warn">Not in assets.yml. Check release.yml</td><td>1.32.0</td><td class="ok">1.32.0</td></tr>
+<tr><td>Helpdesk develop</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c warn">Check</td><td>17.0.0-dev range</td><td class="warn">Nightly entry labelled 1.22.2</td></tr>
+<tr><td>Learning version-16</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td>16.1.1</td><td class="ok">16.1.1</td></tr>
+<tr><td>Learning main</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td>2.69.0</td><td class="ok">2.69.0</td></tr>
+<tr><td>Learning develop</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c warn">Check</td><td>17.0.0-dev range</td><td>Nightly entry c10c9b9c</td></tr>
+<tr><td>Gameplan develop</td><td class="c ok">Yes (release.yml)</td><td class="c ok">Yes</td><td class="c ok">Yes (release.yml)</td><td>0.1.33</td><td class="warn">Channel is <code>stable</code> on develop. PR <a href="https://github.com/frappe/marketplace/pull/134">#134</a> open, semgrep-check fails</td></tr>
+<tr><td>Builder master</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c warn">Not in assets.yml. Check</td><td>1.39.0</td><td class="ok">1.39.0</td></tr>
+<tr><td>Builder develop</td><td class="c ok">Yes</td><td class="c ok">Yes</td><td class="c warn">Check</td><td>1.0.0-dev</td><td>Nightly entry 6fd5fd4f, range <code>&gt;=15.0.0</code> is old</td></tr>
+<tr><td>whatsapp main</td><td class="c">Not needed</td><td class="c">Not needed</td><td class="c warn">Check</td><td>1.3.0</td><td class="warn">1.1.1</td></tr>
+<tr><td>telephony develop</td><td class="c">Not needed</td><td class="c">Not needed</td><td class="c bad">No release workflow</td><td>0.0.1</td><td>0.0.1</td></tr>
+<tr><td>payments version-16 / develop</td><td class="c">Not needed</td><td class="c">Not needed</td><td class="c warn">marketplace.yml. Check</td><td>0.0.1</td><td>0.0.1</td></tr>
+</table></div>
+<p class="note">"Head commit has assets" means the newest commit of the branch has an archive in its <code>assets-&lt;branch&gt;</code> GitHub release.</p>
+
+<h2>5. Checks on Pilot</h2>
+<p>We do each check on two fresh benches: one with Frappe <code>version-16</code> and one with Frappe <code>develop</code>. We install each app from the latest commit of the branch in section 2. We do not use the marketplace release.</p>
+<div class="scroll"><table>
+<tr><th>#</th><th>Check</th><th>Pass when</th></tr>
+<tr><td>C1</td><td>Version range</td><td>Pilot accepts the app's Frappe range for the bench. This includes <code>-dev</code> bounds such as <code>&lt;=17.0.0-dev</code> and <code>&gt;=17.0.0-dev</code>.</td></tr>
+<tr><td>C2</td><td>get-app</td><td>Pilot clones the branch at the head commit. The Python install works on Python 3.14.</td></tr>
+<tr><td>C3</td><td>Required apps</td><td>Pilot finds the required app (whatsapp, telephony, payments), picks the branch that fits the bench, and installs it first.</td></tr>
+<tr><td>C4</td><td>Prebuilt assets</td><td>Pilot downloads the <code>assets-&lt;branch&gt;</code> archive for the head commit and checks its sha256. It does not build the frontend on the bench.</td></tr>
+<tr><td>C5</td><td>Asset build fallback</td><td>If no archive exists, Pilot builds the frontend on the bench and the build passes.</td></tr>
+<tr><td>C6</td><td>New site with the app</td><td>new-site with the app installs with no error. The required apps are installed too.</td></tr>
+<tr><td>C7</td><td>Migrate</td><td>A second migrate on the site passes and makes no changes.</td></tr>
+<tr><td>C8</td><td>App UI</td><td>The app page loads with no console error and no missing asset (404): <code>/app</code>, <code>/crm</code>, <code>/helpdesk</code>, <code>/lms</code>, <code>/g</code>, <code>/builder</code>.</td></tr>
+<tr><td>C9</td><td>V2 sign-up</td><td>The V2 sign-up for the app makes a site, and the user can log in and see the app.</td></tr>
+<tr><td>C10</td><td>Update</td><td>After a new commit on the branch, Pilot finds the update, pulls it, gets new assets and migrates.</td></tr>
+<tr><td>C11</td><td>Marketplace release</td><td>The release PR for the branch passes the marketplace check and merges.</td></tr>
+</table></div>
+
+<h2>6. Results</h2>
+<p class="legend note"><span class="ok">Pass</span><span class="bad">Fail</span><span class="todo">Not done</span></p>
+<div class="scroll"><table>
+<tr><th>App</th><th>Bench</th><th>C1</th><th>C2</th><th>C3</th><th>C4</th><th>C5</th><th>C6</th><th>C7</th><th>C8</th><th>C9</th><th>C10</th><th>C11</th></tr>
+<tr><td rowspan="2">ERPNext</td><td>v16</td><td class="c todo">–</td><td class="c todo">–</td><td class="c">n/a</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td>Nightly</td><td class="c todo">–</td><td class="c todo">–</td><td class="c">n/a</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td rowspan="2">CRM</td><td>v16</td><td class="c todo">–</td><td class="c todo">–</td><td class="c">n/a</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td>Nightly</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td rowspan="2">Helpdesk</td><td>v16</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td>Nightly</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td rowspan="2">Learning</td><td>v16</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td>Nightly</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td rowspan="2">Gameplan</td><td>v16</td><td class="c todo">–</td><td class="c todo">–</td><td class="c">n/a</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td>Nightly</td><td class="c todo">–</td><td class="c todo">–</td><td class="c">n/a</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td rowspan="2">Builder</td><td>v16</td><td class="c todo">–</td><td class="c todo">–</td><td class="c">n/a</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+<tr><td>Nightly</td><td class="c todo">–</td><td class="c todo">–</td><td class="c">n/a</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td><td class="c todo">–</td></tr>
+</table></div>
+
+<h2>7. Known problems before testing</h2>
+<div class="scroll"><table>
+<tr><th>#</th><th>Problem</th><th>Where to fix</th><th>Status</th></tr>
+<tr><td>P1</td><td>CRM <code>develop</code> has no prebuilt assets. Its frontend build needs <code>whatsapp</code>, and <code>scripts/build-app-assets.sh</code> does not check out required apps.</td><td>Pilot build script, then CRM <code>assets.yml</code></td><td class="todo">Open</td></tr>
+<tr><td>P2</td><td>Marketplace release PRs fail <code>semgrep-check</code>: ERPNext <a href="https://github.com/frappe/marketplace/pull/184">#184</a>, <a href="https://github.com/frappe/marketplace/pull/185">#185</a>, <a href="https://github.com/frappe/marketplace/pull/140">#140</a>, Gameplan <a href="https://github.com/frappe/marketplace/pull/134">#134</a>. ERPNext v16 in the marketplace is 16.37.0; the branch is 16.55.0.</td><td>Marketplace check or app code</td><td class="todo">Open</td></tr>
+<tr><td>P3</td><td>The marketplace is behind for CRM <code>main</code> (1.90.0, code 1.92.0) and whatsapp <code>main</code> (1.1.1, code 1.3.0).</td><td>App release workflow</td><td class="todo">Open</td></tr>
+<tr><td>P4</td><td>Ranges with <code>-dev</code> bounds: <code>&lt;=17.0.0-dev</code> (CRM develop, whatsapp, telephony) and <code>&gt;=17.0.0-dev</code> (Helpdesk, Learning, ERPNext, payments develop). Pilot must compare them correctly with the nightly version.</td><td>Pilot version check</td><td class="todo">Verify (C1)</td></tr>
+<tr><td>P5</td><td>Gameplan, Builder and telephony have one branch for all Frappe versions. Gameplan has no upper Frappe limit, and its develop release uses the <code>stable</code> channel.</td><td>Pilot branch selection, app pyproject</td><td class="todo">Verify (C1, C3)</td></tr>
+<tr><td>P6</td><td>Builder needs Frappe 16.36.1 or later for its asset build. The range <code>&gt;=15.121.3</code> does not enforce this.</td><td>Builder pyproject or Pilot</td><td class="todo">Verify (C5)</td></tr>
+<tr><td>P7</td><td>telephony has no release workflow, and payments has no GitHub release. Their marketplace entries are all 0.0.1.</td><td>telephony, payments repos</td><td class="todo">Open</td></tr>
+<tr><td>P8</td><td>Release PR job is not in <code>assets.yml</code> for Helpdesk <code>main</code>/<code>develop</code> and Builder. Find which workflow opens their marketplace PRs.</td><td>App workflows</td><td class="todo">Verify</td></tr>
+</table></div>
+
+<h2>8. Order of work</h2>
+<ol>
+<li>Make two fresh benches on the test server: Frappe <code>version-16</code> and Frappe <code>develop</code>, Python 3.14.</li>
+<li>Do C1 to C8 for each app on both benches. Record each result in section 6.</li>
+<li>For each failure, find the root cause. Fix it in Pilot with tests, or open a PR in the app repository. Add the problem to section 7.</li>
+<li>Fix the release pipeline problems P1, P2, P3, P7 and P8, so each branch has assets and a merged marketplace entry (C11).</li>
+<li>Do C9 (V2 sign-up) and C10 (update) after the install checks pass.</li>
+</ol>
+
+<h2>Sources</h2>
+<ul class="note">
+<li>Frappe: <a href="https://github.com/frappe/frappe">frappe/frappe</a>. Apps: <a href="https://github.com/frappe/erpnext">erpnext</a>, <a href="https://github.com/frappe/crm">crm</a>, <a href="https://github.com/frappe/helpdesk">helpdesk</a>, <a href="https://github.com/frappe/lms">lms</a>, <a href="https://github.com/frappe/gameplan">gameplan</a>, <a href="https://github.com/frappe/builder">builder</a>, <a href="https://github.com/frappe/whatsapp">whatsapp</a>, <a href="https://github.com/frappe/telephony">telephony</a>, <a href="https://github.com/frappe/payments">payments</a>.</li>
+<li>Marketplace registry: <a href="https://github.com/frappe/marketplace">frappe/marketplace</a>, <a href="https://github.com/frappe/marketplace/tree/main/apps">apps/*.json</a>.</li>
+<li>Pilot asset workflow: <a href="https://github.com/frappe/pilot/blob/develop/.github/workflows/app-assets.yml">app-assets.yml</a>.</li>
+</ul>
+</main></body></html>
