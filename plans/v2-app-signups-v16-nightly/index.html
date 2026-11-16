@@ -156,18 +156,19 @@ ol li, ul li { margin:4px 0; }
 <tr><td>P11</td><td>whatsapp 1.3.0 is not listed (marketplace has 1.1.1), and nothing publishes new releases.</td><td>Marketplace: list <code>b32dfe27</code>. whatsapp <code>main</code>: assets and marketplace job.</td><td class="ok">Fixed locally</td></tr>
 <tr><td>P12</td><td>Two <code>pilot init</code> runs at once both ran <code>mariadb-install-db</code> on the shared data directory, and one failed.</td><td>Pilot: <code>fix/mariadb-concurrent-provision</code>, a host-wide provision lock.</td><td class="ok">Fixed locally</td></tr>
 <tr><td>P13</td><td>get-app on a bench that is not initialised cloned the whole app (2 GB for ERPNext), then failed with "App frappe not found in bench".</td><td>Pilot: <code>fix/get-app-needs-initialised-bench</code>.</td><td class="ok">Fixed locally</td></tr>
-<tr><td>P14</td><td>Two benches initialised at once also build the shared Admin frontend at once. One build failed with <code>Failed to resolve vue/compiler-sfc</code>.</td><td>Not fixed. Initialise benches one at a time.</td><td class="warn">Open, low</td></tr>
+<tr><td>P14</td><td>Two benches initialised at once also built the shared Admin frontend at once. One build failed with <code>Failed to resolve vue/compiler-sfc</code>. This happens only on dev installs; releases ship the Admin UI prebuilt.</td><td>Pilot: <code>fix/admin-frontend-build-lock</code>, a host-wide build lock.</td><td class="ok">Fixed locally</td></tr>
 <tr><td>P15</td><td>Gameplan PR <a href="https://github.com/frappe/marketplace/pull/134">#134</a> is out of date. #197 already lists a newer commit.</td><td>Close #134.</td><td class="warn">Needs a maintainer</td></tr>
 </table></div>
 
 <h2>8. Local fixes, ready for PRs</h2>
-<p>Nothing is pushed. Pilot fixes are local branches from <code>develop</code>, each with tests. <code>uv run pytest tests/pilot tests/admin</code> passes: 4768 tests. App and marketplace fixes are <code>git format-patch</code> files. Each file name ends with the target branch.</p>
+<p>Nothing is pushed. Pilot fixes are local branches from <code>develop</code>, each with tests. <code>uv run pytest tests/pilot tests/admin</code> passes on each branch and on all of them merged: 4772 tests. App and marketplace fixes are <code>git format-patch</code> files. Each file name ends with the target branch.</p>
 <div class="scroll"><table>
 <tr><th>Repository</th><th>Branch or patch</th><th>Fixes</th></tr>
 <tr><td>frappe/pilot</td><td><code>fix/asset-build-required-apps</code></td><td>P1</td></tr>
 <tr><td>frappe/pilot</td><td><code>fix/dependencies-from-checkout</code></td><td>P9</td></tr>
 <tr><td>frappe/pilot</td><td><code>fix/mariadb-concurrent-provision</code></td><td>P12</td></tr>
 <tr><td>frappe/pilot</td><td><code>fix/get-app-needs-initialised-bench</code></td><td>P13</td></tr>
+<tr><td>frappe/pilot</td><td><code>fix/admin-frontend-build-lock</code></td><td>P14</td></tr>
 <tr><td>frappe/marketplace</td><td><code>let-listed-apps-skip-the-semgrep-scan.main</code></td><td>P2</td></tr>
 <tr><td>frappe/marketplace</td><td><code>advertise-b32dfe27-from-main</code> (whatsapp 1.3.0)</td><td>P11</td></tr>
 <tr><td>frappe/marketplace</td><td><code>advertise-94475775-from-develop</code> (telephony)</td><td>P7</td></tr>
