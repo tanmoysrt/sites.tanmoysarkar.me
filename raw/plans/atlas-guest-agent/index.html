@@ -153,6 +153,7 @@ func (runtime *Runtime) FreezeGuestFilesystems(ctx context.Context, machine vm.R
 <li>Freeze in mount order with the <code>FIFREEZE</code> ioctl. If one freeze fails, thaw the ones that are frozen and reply <code>error &lt;reason&gt;</code>.</li>
 <li>Reply <code>frozen</code>. Then wait until metald closes the connection, or 30 seconds, whichever comes first.</li>
 <li>Thaw in reverse order with <code>FITHAW</code>. The thaw also runs on SIGTERM.</li>
+<li>Start the thaw timer before the first freeze. A freeze can block while the kernel writes cached data, so a watchdog thaws the frozen file systems also when a later freeze is still in progress.</li>
 <li>Write no log line while frozen. A log write to a frozen disk would block the agent.</li>
 </ol>
 
@@ -190,7 +191,7 @@ func (runtime *Runtime) GrowGuestRootFilesystem(ctx context.Context, machine vm.
 <table>
 <tr><th>Case</th><th>What happens</th></tr>
 <tr><td>No agent, error reply or no reply in 30 seconds</td><td>metald logs a warning. The disk change still succeeds. The file system grows at the next boot, when cloud-init runs its resize step.</td></tr>
-<tr><td>metald disconnects during a long resize</td><td>The agent lets the command finish. An online grow is safe to run again.</td></tr>
+<tr><td>The resize takes too long</td><td>The agent stops the command after 25 seconds, before metald stops waiting. An online grow is safe to run again.</td></tr>
 </table>
 <p>The 30-second limit keeps the reconcile pass short, because it runs while metald holds the VM operation lock.</p>
 
@@ -198,7 +199,7 @@ func (runtime *Runtime) GrowGuestRootFilesystem(ctx context.Context, machine vm.
 <h3>Clean stop</h3>
 <p><b>Today.</b> To stop a VM, metald sends Ctrl-Alt-Del. systemd in the guest shuts down the services, then reboots. Firecracker exits on a guest reboot, because it has no power-off. After a timeout, metald kills the process.</p>
 <p><b>Gap.</b> An image can mask <code>ctrl-alt-del.target</code>. Then Ctrl-Alt-Del does nothing and every stop waits for the full timeout, then kills the guest.</p>
-<p><b>Change.</b> metald asks the agent first. The agent replies <code>ok</code>, then runs <code>systemctl reboot --no-block</code>. The reply comes first, so metald does not wait for the shutdown to answer.</p>
+<p><b>Change.</b> metald asks the agent first. The agent runs <code>systemctl reboot --no-block</code>, then replies <code>ok</code>. The command only queues the reboot, so the reply comes before the shutdown. If systemd refuses, the agent replies <code>error</code> and metald sends Ctrl-Alt-Del.</p>
 <pre><code>// guest side
 func RequestReboot(ctx context.Context, connection io.Writer) error
 
@@ -211,7 +212,7 @@ func (m *machine) shutdownGuest(ctx context.Context) error
 
 <h3>Boot state</h3>
 <p>The usage report adds <code>system_state</code>, the output of <code>systemctl is-system-running</code>. Values include <code>starting</code>, <code>running</code> and <code>degraded</code>. It shows when the guest finished boot, and whether a unit failed.</p>
-<p>If the command fails or takes more than 2 seconds, the field is empty and the rest of the report is unchanged. In this plan, metald only reports the value. It does not change any decision, such as the SSH check after a migration. That can follow when the value proves reliable.</p>
+<p>If the command fails or takes more than 0.5 seconds, the field is empty and the rest of the report is unchanged. In this plan, metald only reports the value. It does not change any decision, such as the SSH check after a migration. That can follow when the value proves reliable.</p>
 
 <h2 id="update">Upgrades</h2>
 <p>The agent ships inside the image. A new image gives new VMs a new agent. A running VM keeps its agent until it is rebuilt from a new image. There is no self-update.</p>
@@ -243,7 +244,7 @@ func (m *machine) shutdownGuest(ctx context.Context) error
 <tr><td>Grow reply</td><td>30 s</td><td>log warning, grow at next boot</td></tr>
 <tr><td>Reboot request reply</td><td>2 s</td><td>Ctrl-Alt-Del</td></tr>
 <tr><td>Guest exit after a stop</td><td><code>stopTimeout</code> (existing)</td><td>SIGKILL</td></tr>
-<tr><td><code>systemctl is-system-running</code></td><td>2 s</td><td>empty <code>system_state</code></td></tr>
+<tr><td><code>systemctl is-system-running</code></td><td>0.5 s</td><td>empty <code>system_state</code></td></tr>
 <tr><td>MMDS request</td><td>3 s</td><td>next poll in 250 ms</td></tr>
 </table>
 <p>No metald call to the agent holds a database lock. The freeze and the grow run inside the VM operation lock, so each has a fixed limit.</p>
