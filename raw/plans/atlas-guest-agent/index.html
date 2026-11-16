@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas Guest Agent Plan</title>
+<meta name="description" content="Plan for the atlas-guest-agent: usage report, file system freeze, online root file system growth, clean stop, boot state and self-update. Methods on each side, timeouts and fallbacks.">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfa; --ink: #22252a; --muted: #686c74; --line: #e3e1db; --code: #f2f1ed;
+  --accent: #3f6aa8; --soft: #edf2fa; --warn: #8a5a12; --warn-soft: #fbf1e1;
+  --pele-bg: #fcfcfa; --pele-fg: #22252a; --pele-muted: #686c74; --pele-line: #8b8f96;
+  --pele-surface: #f4f3ef; --pele-surface-alt: #ecebe6; --pele-border: #cfccc4; --pele-accent: #8ca7d6;
+  --pele-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --pele-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; --pele-radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181b; --ink: #e5e3de; --muted: #a0a3a9; --line: #2e3137; --code: #23262b;
+    --accent: #93b0e2; --soft: #1f2838; --warn: #f0c27e; --warn-soft: #33281a;
+    --pele-bg: #17181b; --pele-fg: #e5e3de; --pele-muted: #a0a3a9; --pele-line: #8a8d94;
+    --pele-surface: #22252a; --pele-surface-alt: #2a2d33; --pele-border: #454951; --pele-accent: #93b0e2;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 var(--pele-font); overflow-wrap: break-word; }
+main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; }
+h2 { font-size: 22px; margin: 48px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 28px 0 6px; }
+p, li { max-width: 72ch; }
+.lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+a { color: var(--accent); }
+code { font: 0.86em/1.4 var(--pele-font-mono); background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
+pre { font: 13px/1.55 var(--pele-font-mono); background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 12px 0; display: block; overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; white-space: nowrap; }
+.note { background: var(--soft); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+.ask { background: var(--warn-soft); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+.ask strong { color: var(--warn); }
+.diagram { margin: 16px 0; overflow-x: auto; }
+.diagram svg { min-width: min(var(--diagram-width, 520px), 520px); max-width: 100%; height: auto; }
+.status { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--code); color: var(--muted); }
+nav ol { padding-left: 20px; columns: 2; font-size: 14.5px; }
+@media (max-width: 600px) { nav ol { columns: 1; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Atlas guest agent plan</h1>
+<p class="lead">One small Go program inside each VM gives Metal what the hypervisor cannot see: guest load, free memory and disk use. This plan adds five guest jobs to it. For each job it shows the methods on each side, the timeouts and the fallback when the agent is missing or stops.</p>
+
+<nav><ol>
+<li><a href="#context">Context</a></li>
+<li><a href="#transport">One transport for all jobs</a></li>
+<li><a href="#usage">Usage report (built)</a></li>
+<li><a href="#freeze">Freeze for clean snapshots</a></li>
+<li><a href="#grow">Grow the root file system</a></li>
+<li><a href="#stop">Clean stop and boot state</a></li>
+<li><a href="#update">Self-update</a></li>
+<li><a href="#methods">All methods</a></li>
+<li><a href="#timeouts">Timeouts: nothing waits forever</a></li>
+<li><a href="#compatibility">Compatibility</a></li>
+<li><a href="#rollout">Tests and rollout</a></li>
+<li><a href="#decisions">Decisions to approve</a></li>
+</ol></nav>
+
+<h2 id="context">Context</h2>
+<p>Metal runs each VM in Firecracker. From the host, Metal can read CPU time and disk counters from the VM cgroup. It cannot read the guest load average, the guest page cache or how full the guest file system is. Those values exist only inside the guest kernel.</p>
+<p>The guest agent is one static binary, <code>atlas-guest-agent</code>. The image builder installs it in every Atlas image. Because it is static, it does not depend on the guest distribution or on Python. It also replaces the two Python guest scripts: the metadata service poller and the SSH key lookup.</p>
+<p>The agent never starts work by itself, except the metadata poller and the self-update check. Metal asks, the agent answers, and Metal always has a fallback when there is no answer.</p>
+
+<h2 id="transport">One transport for all jobs</h2>
+<p>Metal talks to the agent over <b>vsock</b>. vsock is a socket between a VM and its host. It does not use the guest network, so a guest firewall, Docker rules or a broken network configuration cannot block it. Only the host can open a connection to the guest, so the agent needs no token.</p>
+<p>Firecracker exposes the vsock device as a Unix socket in the VM jail. metald dials a short link to it, <code>/run/metal/&lt;vm-id&gt;.vsock</code>, because a jail path can be longer than the 108-byte Unix socket limit. metald sends <code>CONNECT &lt;port&gt;</code>, and Firecracker answers <code>OK &lt;host port&gt;</code> when the guest accepts.</p>
+<p>In the guest, systemd holds one socket for each job (<i>socket activation</i>). systemd starts one short agent process for each connection. No agent daemon runs between requests, and no unit blocks boot.</p>
+
+<script type="text/mermaid" data-label="metald dials the jail vsock socket, Firecracker forwards the connection to the guest, and systemd starts one agent process for each connection">
+flowchart LR
+  M[metald] -- "CONNECT port" --> F[Firecracker vsock device]
+  F -- "vsock" --> S[systemd socket in guest]
+  S -- "starts one process" --> A[atlas-guest-agent command]
+  A -- "one reply" --> M
+</script>
+
+<p>Each job has its own port. A port above 65535 cannot clash with a service that reuses a TCP port number.</p>
+<table>
+<tr><th>Port</th><th>Job</th><th>Agent command</th><th>Guest units</th></tr>
+<tr><td>100000</td><td>Usage report</td><td><code>report-usage</code></td><td><code>atlas-guest-agent-usage.socket</code></td></tr>
+<tr><td>100001</td><td>Freeze file systems</td><td><code>freeze-filesystems</code></td><td><code>atlas-guest-agent-freeze.socket</code></td></tr>
+<tr><td>100002</td><td>Grow root file system</td><td><code>grow-root-filesystem</code></td><td><code>atlas-guest-agent-grow.socket</code></td></tr>
+<tr><td>100003</td><td>Clean stop</td><td><code>reboot</code></td><td><code>atlas-guest-agent-reboot.socket</code></td></tr>
+</table>
+<div class="note">An old agent does not listen on a new port, so the guest refuses the connection at once. metald reads that refusal as "this agent cannot do this job" and uses the fallback. No version field and no protocol change are necessary.</div>
+
+<h3>Shared metald transport</h3>
+<pre><code>// firecracker/guest_agent.go
+func (runtime *Runtime) dialGuestAgent(ctx context.Context, vmID string, port uint32) (*guestAgentConnection, error)
+type guestAgentConnection struct { net.Conn; reader *bufio.Reader }
+func (connection *guestAgentConnection) readLine(timeout time.Duration) (string, error)</code></pre>
+<p>Each caller sets its own deadline. Every error, such as no socket, a refused port, a timeout or a bad reply, means "agent unavailable" for that call.</p>
+
+<h2 id="usage">Usage report <span class="status">built and tested on a development host</span></h2>
+<p>The metrics sampler reads one JSON line every 10 seconds from each running VM. metald does not ask a paused VM, because a paused guest cannot answer.</p>
+<pre><code>{"load_average":[0.42,0.31,0.25],
+ "memory":{"total_bytes":..,"free_bytes":..,"available_bytes":..,"cached_bytes":..,"swap_total_bytes":..,"swap_free_bytes":..},
+ "root_filesystem":{"size_bytes":..,"used_bytes":..,"inodes_total":..,"inodes_used":..},
+ "system_state":"running"}</code></pre>
+<p>The metrics store and the Metal metrics API carry it as an optional <code>guest</code> object. <code>system_state</code> is new in this plan, see <a href="#stop">clean stop and boot state</a>.</p>
+<table>
+<tr><th>Failure</th><th>Result</th></tr>
+<tr><td>No agent, old image, or no vsock device</td><td><code>guest</code> is absent. The rest of the sample is unchanged.</td></tr>
+<tr><td>Guest does not answer in 1 second</td><td><code>guest</code> is absent for this sample only.</td></tr>
+<tr><td>Reply over 64 KiB or not valid JSON</td><td><code>guest</code> is absent. The guest controls the reply, so metald limits its size and time.</td></tr>
+</table>
+
+<h2 id="freeze">Freeze for clean snapshots</h2>
+<p><b>Problem.</b> To capture a running VM, Metal pauses the vCPUs, takes a ZFS snapshot and resumes. The image is <i>crash-consistent</i>: it is equal to a disk after a power loss. Writes that the guest still holds in its page cache are not in the image, and the first boot replays the file system journal.</p>
+<p><b>Change.</b> Before the pause, the agent asks the guest kernel to <i>freeze</i> each file system. A freeze writes all cached data and the journal to disk, then blocks new writes. After the snapshot, the agent <i>thaws</i> the file systems and writes continue.</p>
+
+<script type="text/mermaid" data-label="Sequence of a clean snapshot: freeze, pause, ZFS snapshot, resume, then close the connection to thaw">
+sequenceDiagram
+  participant V as vm.Manager
+  participant R as firecracker.Runtime
+  participant A as Guest agent
+  V->>R: FreezeGuestFilesystems
+  R->>A: CONNECT 100001
+  A->>A: FIFREEZE each file system
+  A-->>R: frozen
+  V->>R: Pause
+  V->>V: ZFS snapshot
+  V->>R: Resume
+  V->>R: thaw()
+  R->>A: close connection
+  A->>A: FITHAW in reverse order
+</script>
+
+<h3>Methods</h3>
+<pre><code>// guest side: guestagent/freeze.go
+func FreezeFilesystems(connection io.ReadWriter) error
+
+// host side: firecracker/guest_agent.go
+func (runtime *Runtime) FreezeGuestFilesystems(ctx context.Context, machine vm.RuntimeMachine) (thaw func())
+
+// vm.Runtime interface: same signature. Caller: vm.Manager.CreateSnapshot</code></pre>
+
+<h3>Agent behavior</h3>
+<ol>
+<li>Read <code>/proc/self/mounts</code>. Select each writable mount on a <code>/dev/</code> block device. Freeze each device only once, because a bind mount shares the same file system.</li>
+<li>Freeze in mount order with the <code>FIFREEZE</code> ioctl. If one freeze fails, thaw the ones that are frozen and reply <code>error &lt;reason&gt;</code>.</li>
+<li>Reply <code>frozen</code>. Then wait until metald closes the connection, or 30 seconds, whichever comes first.</li>
+<li>Thaw in reverse order with <code>FITHAW</code>. The thaw also runs on SIGTERM.</li>
+<li>Write no log line while frozen. A log write to a frozen disk would block the agent.</li>
+</ol>
+
+<h3>Fallbacks</h3>
+<table>
+<tr><th>Case</th><th>What happens</th></tr>
+<tr><td>No agent, or the guest refuses port 100001</td><td><code>thaw</code> is a no-op. The snapshot continues as today: pause and snapshot, crash-consistent.</td></tr>
+<tr><td>Agent replies <code>error</code></td><td>Same as above. metald logs one warning with the reason.</td></tr>
+<tr><td>No <code>frozen</code> reply in 10 seconds</td><td>metald closes the connection, which thaws anything that is frozen, and continues without a freeze.</td></tr>
+<tr><td>metald stops or the host connection drops</td><td>Firecracker resets the guest connection. The agent reads end of file and thaws.</td></tr>
+<tr><td>The reset does not reach the guest</td><td>The agent thaws after 30 seconds by itself.</td></tr>
+<tr><td>VM is paused or stopped</td><td>metald does not freeze. A stopped disk is already clean.</td></tr>
+</table>
+<p>Not in scope: live migration with a memory snapshot does not need a freeze, because memory and disk move together.</p>
+
+<h2 id="grow">Grow the root file system</h2>
+<p><b>Problem.</b> Atlas can make a VM disk larger while the VM runs. The guest kernel sees the larger disk, but the root file system keeps its old size until a reboot.</p>
+<p><b>Change.</b> After metald applies a new disk size to a running VM, it asks the agent to grow the root file system online.</p>
+<h3>Methods</h3>
+<pre><code>// guest side: guestagent/root_filesystem.go
+func GrowRootFilesystem(ctx context.Context) error
+
+// host side
+func (runtime *Runtime) GrowGuestRootFilesystem(ctx context.Context, machine vm.RuntimeMachine) error
+
+// vm.Runtime interface: same signature.
+// Caller: vm.Manager.applyDesiredSpecification, after RefreshDisk, only when the VM is running.</code></pre>
+<h3>Agent behavior</h3>
+<ol>
+<li>Find the root mount in <code>/proc/self/mountinfo</code>. Read its device number and file system type. <code>/proc/mounts</code> can show <code>/dev/root</code>, which has no device file, so the agent uses <code>/dev/block/&lt;major&gt;:&lt;minor&gt;</code>.</li>
+<li>Run <code>resize2fs</code> for ext4, or <code>xfs_growfs /</code> for XFS. A disk that is already full size is a quick no-op.</li>
+<li>Reply <code>ok</code>, or <code>error &lt;reason&gt;</code> for another file system type or a failed command.</li>
+</ol>
+<h3>Fallbacks</h3>
+<table>
+<tr><th>Case</th><th>What happens</th></tr>
+<tr><td>No agent, error reply or no reply in 30 seconds</td><td>metald logs a warning. The disk change still succeeds. The file system grows at the next boot, when cloud-init runs its resize step.</td></tr>
+<tr><td>metald disconnects during a long resize</td><td>The agent lets the command finish. An online grow is safe to run again.</td></tr>
+</table>
+<p>The 30-second limit keeps the reconcile pass short, because it runs while metald holds the VM operation lock.</p>
+
+<h2 id="stop">Clean stop and boot state</h2>
+<h3>Clean stop</h3>
+<p><b>Today.</b> To stop a VM, metald sends Ctrl-Alt-Del. systemd in the guest shuts down the services, then reboots. Firecracker exits on a guest reboot, because it has no power-off. After a timeout, metald kills the process.</p>
+<p><b>Gap.</b> An image can mask <code>ctrl-alt-del.target</code>. Then Ctrl-Alt-Del does nothing and every stop waits for the full timeout, then kills the guest.</p>
+<p><b>Change.</b> metald asks the agent first. The agent replies <code>ok</code>, then runs <code>systemctl reboot --no-block</code>. The reply comes first, so metald does not wait for the shutdown to answer.</p>
+<pre><code>// guest side
+func RequestReboot(ctx context.Context, connection io.Writer) error
+
+// host side, firecracker/machine.go
+func (m *machine) shutdownGuest(ctx context.Context) error
+    // 1. agent reboot request, 2 second limit
+    // 2. if that fails: Ctrl-Alt-Del, as today
+    // 3. wait for the process to exit, up to stopTimeout
+    // 4. SIGKILL, as today</code></pre>
+
+<h3>Boot state</h3>
+<p>The usage report adds <code>system_state</code>, the output of <code>systemctl is-system-running</code>. Values include <code>starting</code>, <code>running</code> and <code>degraded</code>. It shows when the guest finished boot, and whether a unit failed.</p>
+<p>If the command fails or takes more than 2 seconds, the field is empty and the rest of the report is unchanged. In this plan, metald only reports the value. It does not change any decision, such as the SSH check after a migration. That can follow when the value proves reliable.</p>
+
+<h2 id="update">Self-update</h2>
+<p><b>Problem.</b> The agent ships inside the image. A new image gives new VMs a new agent, but running VMs keep their old agent until a person rebuilds them.</p>
+<p><b>Change.</b> Atlas publishes the agent binary like metald. metald puts its address and SHA-256 in the metadata service (MMDS). The agent already polls MMDS every 250 ms, so it sees a new version and replaces itself. Only the host can write MMDS, so the guest can trust the checksum.</p>
+
+<script type="text/mermaid" data-label="Self-update path: Atlas builds and publishes the binary, install or upgrade writes it to metald.toml, metald publishes it in MMDS, the agent downloads, verifies and replaces itself">
+flowchart TB
+  B[Atlas: build and publish atlas-guest-agent] --> S[Atlas Settings: file, SHA-256, version]
+  S -- "Install or Upgrade metald" --> T[metald.toml: guest_agent download_url and sha256]
+  T --> D[MMDS: meta-data/guest-agent/url and sha256]
+  D -- "poll every 250 ms" --> G{SHA-256 differs from own binary?}
+  G -- no --> N[Do nothing]
+  G -- yes --> L[Download, verify, smoke test]
+  L -- pass --> R[Rename over the binary, restart atlas-metadata.service]
+  L -- fail --> W[Keep the old binary, try again in 10 minutes]
+</script>
+
+<h3>Methods on each side</h3>
+<table>
+<tr><th>Side</th><th>Change</th></tr>
+<tr><td>Atlas build</td><td><code>HostBinary</code> gets a <code>make_target</code> field, default <code>build</code>. A new entry <code>guest-agent</code> uses <code>make guest-agent</code>. The image builder uses the same entry, so one build path makes the agent.</td></tr>
+<tr><td>Atlas Settings</td><td>Four read-only fields in the Metal Daemon section. See the mockup below.</td></tr>
+<tr><td>Install and Upgrade metald</td><td>Pass <code>GUEST_AGENT_DOWNLOAD_URL</code> and <code>GUEST_AGENT_SHA256</code> to the host scripts, as for metald. The scripts write them to <code>metald.toml</code>. Both are optional.</td></tr>
+<tr><td>metald</td><td>New optional config <code>[guest_agent] download_url, sha256</code>. <code>MetadataServiceData</code> adds <code>meta-data/guest-agent/url</code> and <code>sha256</code> when both are set. Running VMs get the keys by the same refresh path that publishes a new mesh MTU.</td></tr>
+<tr><td>Agent</td><td><code>func (updater *selfUpdater) check(ctx context.Context, client *metadataClient)</code>, called from the metadata poll loop. A <code>version</code> command prints the build version for the smoke test.</td></tr>
+</table>
+
+<h3>Safety rules in the agent</h3>
+<ol>
+<li>Compute the SHA-256 of its own binary once at start. Do nothing when MMDS has no key or the same checksum.</li>
+<li>Try each new checksum at most once every 10 minutes. A failure never blocks the metadata loop, because the download runs in its own goroutine with a 2-minute limit and a 64 MiB size limit.</li>
+<li>Download to a temporary file in the same folder. Check the SHA-256. Run the new file with <code>version</code>; it must exit with code 0 in 5 seconds.</li>
+<li>Keep the old binary as <code>atlas-guest-agent.previous</code>. Rename the new file over the binary in one step, so no reader sees a partial file.</li>
+<li>Run <code>systemctl restart --no-block atlas-metadata.service</code>. The socket jobs use the new binary on their next connection.</li>
+<li>A guest can turn off updates with the file <code>/etc/atlas/guest-agent-no-update</code>.</li>
+</ol>
+<table>
+<tr><th>Case</th><th>What happens</th></tr>
+<tr><td>Download fails or the checksum is wrong</td><td>The old binary keeps running. The agent tries again in 10 minutes.</td></tr>
+<tr><td>The new binary fails the smoke test</td><td>The agent deletes it and keeps the old one.</td></tr>
+<tr><td>The guest cannot reach the download address</td><td>Same as a failed download. Metrics and metadata keep working.</td></tr>
+<tr><td>metald has no agent config</td><td>MMDS has no keys and no update runs.</td></tr>
+</table>
+
+<div class="ask"><strong>Approval needed: DocType change.</strong> Self-update adds four read-only fields to Atlas Settings, in the Metal Daemon section, next to the metald and WG Mesh fields:
+<pre><code>Metal Daemon
+ ...existing metald and WG Mesh fields...
+ Guest Agent Binary (x86_64)   Link to File, read only
+ Guest Agent Source Hash       Data, read only
+ Guest Agent Binary SHA-256    Data, read only
+ Guest Agent Version           Data, read only</code></pre>
+<code>Metald Update</code> records also store the binaries for a fleet upgrade, so it needs the same binary and SHA-256 fields. No patch is needed, because the new fields start empty and an empty value turns self-update off.</div>
+
+<h2 id="methods">All methods</h2>
+<table>
+<tr><th>Owner</th><th>Method</th><th>Returns on failure</th></tr>
+<tr><td>guestagent</td><td><code>ReadUsage(procRoot string) (Usage, error)</code></td><td>error, process exits 1</td></tr>
+<tr><td>guestagent</td><td><code>FreezeFilesystems(connection io.ReadWriter) error</code></td><td>thaws, replies <code>error</code></td></tr>
+<tr><td>guestagent</td><td><code>GrowRootFilesystem(ctx context.Context) error</code></td><td>replies <code>error</code></td></tr>
+<tr><td>guestagent</td><td><code>RequestReboot(ctx context.Context, connection io.Writer) error</code></td><td>error, process exits 1</td></tr>
+<tr><td>guestagent</td><td><code>RunMetadata(ctx context.Context)</code> with self-update check</td><td>never returns early</td></tr>
+<tr><td>guestagent</td><td><code>WriteAuthorizedKeys(ctx context.Context, writer io.Writer) error</code></td><td>error, sshd uses no keys</td></tr>
+<tr><td>firecracker.Runtime</td><td><code>GetGuestUsage(ctx, machine) *guestagent.Usage</code></td><td>nil</td></tr>
+<tr><td>firecracker.Runtime</td><td><code>FreezeGuestFilesystems(ctx, machine) (thaw func())</code></td><td>no-op thaw</td></tr>
+<tr><td>firecracker.Runtime</td><td><code>GrowGuestRootFilesystem(ctx, machine) error</code></td><td>error, caller logs only</td></tr>
+<tr><td>firecracker machine</td><td><code>shutdownGuest(ctx)</code>, agent first</td><td>Ctrl-Alt-Del, then SIGKILL</td></tr>
+<tr><td>vm.Manager</td><td><code>CreateSnapshot</code>, <code>applyDesiredSpecification</code>, <code>Metrics</code></td><td>work as today without an agent</td></tr>
+<tr><td>Metal API</td><td>metrics sample: optional <code>guest</code> object</td><td>field absent</td></tr>
+<tr><td>Atlas</td><td><code>HostBinary.make_target</code>, <code>guest-agent</code> entry, install and upgrade environment</td><td>empty settings turn self-update off</td></tr>
+</table>
+
+<h2 id="timeouts">Timeouts: nothing waits forever</h2>
+<table>
+<tr><th>Wait</th><th>Limit</th><th>After the limit</th></tr>
+<tr><td>Usage reply</td><td>1 s</td><td>no <code>guest</code> in this sample</td></tr>
+<tr><td><code>frozen</code> reply</td><td>10 s</td><td>close, snapshot without freeze</td></tr>
+<tr><td>Frozen time in the guest</td><td>30 s</td><td>agent thaws by itself</td></tr>
+<tr><td>Grow reply</td><td>30 s</td><td>log warning, grow at next boot</td></tr>
+<tr><td>Reboot request reply</td><td>2 s</td><td>Ctrl-Alt-Del</td></tr>
+<tr><td>Guest exit after a stop</td><td><code>stopTimeout</code> (existing)</td><td>SIGKILL</td></tr>
+<tr><td><code>systemctl is-system-running</code></td><td>2 s</td><td>empty <code>system_state</code></td></tr>
+<tr><td>Self-update download</td><td>2 min, 64 MiB</td><td>keep old binary, try in 10 min</td></tr>
+<tr><td>New binary smoke test</td><td>5 s</td><td>delete new binary</td></tr>
+<tr><td>MMDS request</td><td>3 s</td><td>next poll in 250 ms</td></tr>
+</table>
+<p>No metald call to the agent holds a database lock. The freeze and the grow run inside the VM operation lock, so each has a fixed limit.</p>
+
+<h2 id="compatibility">Compatibility</h2>
+<table>
+<tr><th>metald</th><th>Guest</th><th>Result</th></tr>
+<tr><td>New</td><td>Old image, no agent</td><td>All features use their fallback. Metrics have no <code>guest</code>.</td></tr>
+<tr><td>New</td><td>VM not cold-booted since the vsock device was added</td><td>No vsock socket. Same as no agent until the next cold boot.</td></tr>
+<tr><td>New</td><td>Agent from an earlier release</td><td>Jobs the agent has work. New jobs see a refused port and fall back.</td></tr>
+<tr><td>Old</td><td>New image</td><td>metald never connects. The agent still does metadata and SSH keys. Socket units wait without cost.</td></tr>
+</table>
+<p>The Metal API change adds one optional field. The usage JSON only gets new optional fields. No stored record changes shape, so no metald patch is needed.</p>
+
+<h2 id="rollout">Tests and rollout</h2>
+<h3>Focused tests</h3>
+<ul>
+<li>Guest: parse <code>/proc/self/mounts</code> for freeze targets (bind mounts, read-only mounts, non-block mounts), and parse <code>/proc/self/mountinfo</code> for the root device.</li>
+<li>Guest: self-update rejects a wrong checksum and a failed smoke test, and keeps the old binary.</li>
+<li>Host: <code>CreateSnapshot</code> calls thaw after resume, and works when the freeze is unavailable.</li>
+<li>Host: the vsock handshake reads a reply and treats a refused port as unavailable (exists).</li>
+</ul>
+<h3>Development host checks</h3>
+<ol>
+<li>Build an Ubuntu 24.04 image from the branch. Create a VM.</li>
+<li>Machine image of a running VM: check <code>frozen</code> in the guest journal, and a clean mount without journal replay.</li>
+<li>Kill metald during a freeze: the guest thaws within 30 seconds.</li>
+<li>Grow the disk of a running VM: <code>df /</code> shows the new size without a reboot.</li>
+<li>Mask <code>ctrl-alt-del.target</code>, then stop the VM: it stops before the timeout.</li>
+<li>Publish a new agent build: running VMs replace the agent; a wrong checksum keeps the old one.</li>
+<li>Live migration with a memory snapshot: the usage report continues on the destination.</li>
+</ol>
+<h3>Rollout</h3>
+<ol>
+<li>Upgrade metald. Nothing changes for running VMs.</li>
+<li>Rebuild images. New VMs get the agent. Existing VMs get the vsock device at their next cold boot.</li>
+<li>Publish the agent binary to turn on self-update for VMs that already have an agent.</li>
+</ol>
+
+<h2 id="decisions">Decisions to approve</h2>
+<ol>
+<li>The four Atlas Settings fields and the two <code>Metald Update</code> fields for self-update.</li>
+<li>Self-update on by default, with the guest opt-out file <code>/etc/atlas/guest-agent-no-update</code>.</li>
+<li>Ports 100000 to 100003, one systemd socket for each job.</li>
+<li>Timeouts in the table above, especially the 30-second automatic thaw.</li>
+</ol>
+
+<p style="color:var(--muted);font-size:14px;margin-top:40px">References: <a href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md">Firecracker vsock</a> · <a href="https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html">systemd.socket</a> · <a href="https://man7.org/linux/man-pages/man8/fsfreeze.8.html">fsfreeze(8)</a> · <a href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/mmds/mmds-user-guide.md">Firecracker MMDS</a></p>
+</main>
+</body>
+</html>
