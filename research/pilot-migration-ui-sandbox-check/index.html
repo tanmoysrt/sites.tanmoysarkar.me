@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pilot migration UI and sandbox: scenario check for v1.0.0-beta</title>
+<style>
+  :root { --ink:#1f2328; --muted:#59636e; --line:#d8dee4; --bg:#fff; --soft:#f6f8fa;
+          --ok:#1a7f37; --okbg:#dafbe1; --fix:#0969da; --fixbg:#ddf4ff; --gap:#9a6700; --gapbg:#fff8c5; --bad:#cf222e; --badbg:#ffebe9; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#e6edf3; --muted:#9198a1; --line:#30363d; --bg:#0d1117; --soft:#161b22;
+            --ok:#3fb950; --okbg:#12261e; --fix:#58a6ff; --fixbg:#121d2f; --gap:#d29922; --gapbg:#272115; --bad:#f85149; --badbg:#2d1214; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:40px 20px 80px; }
+  h1 { font-size:28px; line-height:1.25; margin:0 0 8px; }
+  h2 { font-size:21px; margin:44px 0 10px; padding-top:8px; border-top:1px solid var(--line); }
+  h3 { font-size:17px; margin:28px 0 8px; }
+  p, li { max-width:72ch; }
+  .meta { color:var(--muted); font-size:14px; margin-bottom:24px; }
+  code { font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--soft); padding:1px 5px; border-radius:4px; }
+  a { color:var(--fix); }
+  .table { overflow-x:auto; margin:12px 0 4px; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { font-weight:600; color:var(--muted); background:var(--soft); white-space:nowrap; }
+  td.n { color:var(--muted); width:2.5em; }
+  .tag { display:inline-block; font-size:12px; font-weight:600; padding:1px 8px; border-radius:10px; white-space:nowrap; }
+  .ok { color:var(--ok); background:var(--okbg); }
+  .fix { color:var(--fix); background:var(--fixbg); }
+  .gap { color:var(--gap); background:var(--gapbg); }
+  .bad { color:var(--bad); background:var(--badbg); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin:16px 0; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .card b { display:block; font-size:26px; line-height:1.2; }
+  .card span { color:var(--muted); font-size:13px; }
+  .note { border-left:3px solid var(--line); padding:4px 14px; color:var(--muted); }
+  ul.tight li { margin:3px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Pilot migration UI and sandbox: scenario check for v1.0.0-beta</h1>
+<div class="meta">Checked on 2026-11-17 against Pilot <code>develop</code> at <code>f2459a11</code>. Live tests ran on an Ubuntu 26.04 test server (4 vCPU, 15 GB RAM).</div>
+
+<p>Pilot has a new update and migration UI, and a new workload sandbox. Before the v1.0.0-beta release, this page checks two things:</p>
+<ul class="tight">
+  <li>Does the migration workflow handle every case that a user can reach, and does the UI give the right action in each case?</li>
+  <li>Do the main apps work when the sandbox is on?</li>
+</ul>
+<p>Each problem that I found has a pull request. A few problems need a decision first. They are in <a href="#open">Open items</a>.</p>
+
+<h2 id="summary">Summary</h2>
+<div class="cards">
+  <div class="card"><b>36</b><span>migration scenarios checked</span></div>
+  <div class="card"><b>5</b><span>of them run live on the test server</span></div>
+  <div class="card"><b>12 / 12</b><span>sites pass with the sandbox on (6 apps × v16 and nightly)</span></div>
+  <div class="card"><b>13</b><span>Pilot pull requests open (#850–#862)</span></div>
+</div>
+<p><span class="tag ok">Live pass</span> means that I ran the case on the test server. <span class="tag ok">Unit test</span> means that a test in the Pilot suite covers the case. <span class="tag fix">Fixed</span> means that the case was broken and a pull request fixes it. <span class="tag gap">Gap</span> means that the case is not handled yet.</p>
+
+<h2 id="how">How the migration workflow works</h2>
+<p>An update or a site migration is a <b>migration operation</b>. The operation is a JSON record in <code>&lt;bench&gt;/migrations/</code>. It holds the state, the sites, the app revisions and the recovery data. Small <b>tasks</b> do the work, one step at a time. After each step, the operation selects the next task.</p>
+<p>The normal path is: <code>preparing</code> → <code>backing_up</code> (one task per site) → <code>updating</code> (one task) → <code>migrating</code> (one task per site) → <code>completed</code>. When a step fails, the operation stops in <code>needs_attention</code>. The user can then choose Retry, Skip patch, Restore or Dismiss. While the backups run, the user can also choose Stop.</p>
+<p>Sources: <a href="https://github.com/frappe/pilot/blob/develop/docs/migration.md">docs/migration.md</a>, <code>pilot/core/bench/migration/</code>, and the UI in <code>admin/frontend/dashboard/src/pages/updates/</code>.</p>
+
+<h2 id="migration">Migration scenarios</h2>
+
+<h3>Normal path</h3>
+<div class="table"><table>
+<tr><th>#</th><th>Scenario</th><th>What Pilot does</th><th>Status</th></tr>
+<tr><td class="n">1</td><td>Update apps that change the schema</td><td>Backs up each affected site, updates the apps, migrates each site, restarts the services.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">2</td><td>Update apps with no migrate changes</td><td>Skips backup and migrate. Updates the apps, rebuilds assets, restarts. The dialog hides the backup option.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">3</td><td>Update some apps on a bench with many sites</td><td>Backs up and migrates only the sites that have a selected app. A site whose apps are unknown is included.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">4</td><td>Migrate one site with safeguards</td><td>Backup, migrate, complete. The site leaves maintenance mode.</td><td><span class="tag ok">Live pass</span> (sandboxed v16, CRM)</td></tr>
+<tr><td class="n">5</td><td>Migrate one site in place (no safeguards)</td><td>No backup, so no Restore later.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">6</td><td>Switch an app's branch on a bench with sites</td><td>Switches the code, then queues a site migration with backups. The migration takes over the switch task's locks.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">7</td><td>The disk cannot hold the backups</td><td>Refuses before any site enters maintenance (HTTP 507).</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">8</td><td>Backups go to S3</td><td>Streams the MariaDB table dumps to the bucket. The disk check counts only local backups.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">9</td><td>Background jobs are still running</td><td>Waits up to 300 s before each step. If the jobs do not finish, it pauses before the step starts.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">10</td><td>Web restart around maintenance mode</td><td>Restarts web once after maintenance turns on and once after it turns off. A failed restart pauses the operation.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">11</td><td>A second update while one is unresolved</td><td>Refuses the second update (409).</td><td><span class="tag ok">Unit test</span></td></tr>
+</table></div>
+
+<h3>Failures</h3>
+<div class="table"><table>
+<tr><th>#</th><th>Scenario</th><th>What Pilot does</th><th>Status</th></tr>
+<tr><td class="n">12</td><td>A backup fails</td><td>Pauses in <code>needs_attention</code> and returns every site to its old maintenance settings. Retry takes all backups again.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">13</td><td>App fetch, validation, install or build fails</td><td>No site data has changed, so Pilot reverts the apps by itself and ends in <code>reverted</code>.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">14</td><td>A site migrate fails on a patch</td><td>Pauses in <code>needs_attention</code>. The site stays in maintenance. The UI shows the failing patch and the output.</td><td><span class="tag ok">Live pass</span> (v16 and nightly, LMS, test patch)</td></tr>
+<tr><td class="n">15</td><td>The final service restart fails</td><td>Pauses. Retry restarts the services again and does not migrate the sites again.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">16</td><td>A task is killed, or its process dies</td><td>The task's callback pauses the operation with "The task stopped before it finished".</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">17</td><td>A killed migrate had changed some tables</td><td>Keeps the list of touched tables, so Restore puts them back.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">18</td><td>The operation fails to start (for example, a branch switch with too little disk space)</td><td>Before the fix: the record stayed in <code>preparing</code>. That blocked every new update and every backup of its sites. No UI action could close it. The app also stayed on the new branch.</td><td><span class="tag fix">Fixed: <a href="https://github.com/frappe/pilot/pull/859">#859</a></span></td></tr>
+<tr><td class="n">19</td><td>A backup fails after a branch switch</td><td>Before the fix: Pilot took the sites out of maintenance. They then served the new code on a database that was not migrated.</td><td><span class="tag fix">Fixed: <a href="https://github.com/frappe/pilot/pull/860">#860</a></span></td></tr>
+</table></div>
+
+<h3>Recovery actions</h3>
+<div class="table"><table>
+<tr><th>#</th><th>Scenario</th><th>What Pilot does</th><th>Status</th></tr>
+<tr><td class="n">20</td><td>Retry</td><td>Runs the failed step again. Sites that already succeeded are not migrated again.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">21</td><td>Skip patch</td><td>Only for the diagnosed patch. Marks the patch as done, and the migration continues by itself.</td><td><span class="tag ok">Live pass</span> (nightly, LMS)</td></tr>
+<tr><td class="n">22</td><td>Skip patch with an old patch name</td><td>Refuses (409). The name must match the current diagnosis.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">23</td><td>Restore</td><td>Reverts the apps, restores the touched tables, drops the tables that the migration made, then restarts. The site leaves maintenance.</td><td><span class="tag ok">Live pass</span> (v16, LMS: the table that the test patch made was removed)</td></tr>
+<tr><td class="n">24</td><td>Restore with a missing or bad backup file</td><td>Checks every dump before it imports any.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">25</td><td>Restore fails part way</td><td>Goes to <code>revert_failed</code>. Restore again resumes from the last checkpoint.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">26</td><td>Restore when the list of touched tables is not trusted</td><td>Restores every table in the backup.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">27</td><td>Restore after a site was dropped or an app was removed</td><td>Skips them. Nothing is left to restore.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">28</td><td>Dismiss</td><td>Restarts on the code that is on disk, lifts maintenance, deletes the backups, and keeps the record as history.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">29</td><td>Dismiss while the update runs, or when the restart fails</td><td>Refuses while it runs. A failed restart keeps the operation open.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">30</td><td>Stop during backups</td><td>Cancels the backup task, deletes the backups taken so far, lifts maintenance and ends in <code>stopped</code>.</td><td><span class="tag ok">Live pass</span> (nightly, ERPNext)</td></tr>
+<tr><td class="n">31</td><td>Stop after the update started, or after a branch switch</td><td>Refuses (409). The code has changed.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">32</td><td>Stop while the chain queues its next task</td><td>Cancels the queued task too, or withdraws the stop if that task already runs.</td><td><span class="tag ok">Unit test</span></td></tr>
+<tr><td class="n">33</td><td>A stopped update's detail page</td><td>Shows the interrupted backup as stopped, not as running.</td><td><span class="tag ok">Code check</span> (<code>UpdateFlow.vue</code>)</td></tr>
+<tr><td class="n">34</td><td>Buttons shown in each state</td><td>Retry only in <code>needs_attention</code>. Skip patch only with a diagnosed patch. Restore only when every site has a backup. Stop only while backing up. Dismiss from the alert.</td><td><span class="tag ok">Code check</span></td></tr>
+<tr><td class="n">35</td><td>Restore after a branch-switch backup failure</td><td>Restore needs a backup of every site, so it is not offered. The user can only Retry or Dismiss. They cannot return the app to its old branch from the UI.</td><td><span class="tag gap">Gap</span></td></tr>
+<tr><td class="n">36</td><td>Docs for the UI</td><td><code>docs/migration.md</code> pointed to the removed <code>pages/migrations/</code>, and its Closed tab did not include <code>stopped</code>.</td><td><span class="tag fix">Fixed: <a href="https://github.com/frappe/pilot/pull/862">#862</a></span></td></tr>
+</table></div>
+
+<h2 id="sandbox">Sandbox</h2>
+<p>The sandbox runs each workload process (web, workers, redis) with an empty home folder, without the other benches, and with a read-only system. A new systemd bench has the sandbox on by default. Before Pilot writes the units, it starts a trial unit. If the trial fails, Pilot runs the bench without the sandbox and only logs a warning.</p>
+
+<h3>Finding: the sandbox never runs on Ubuntu 24.04 and later</h3>
+<p>Ubuntu 24.04 and 26.04 set <code>kernel.apparmor_restrict_unprivileged_userns = 1</code>. systemd then cannot make the user namespace that the sandbox needs, and the trial fails with exit code 226. On the test server both benches ran without the sandbox, and no one saw a warning.</p>
+<p>An AppArmor profile that lets <code>systemd-executor</code> make user namespaces fixes this. With that profile, both benches started in the sandbox. <a href="https://github.com/frappe/pilot/pull/861">#861</a> adds the profile to <code>install.sh</code>. It is a draft, because the profile applies to the whole host. See <a href="#open">Open items</a>.</p>
+
+<h3>Apps with the sandbox on</h3>
+<p>Both benches are in production mode (systemd, nginx, lite mode) with <code>sandbox = true</code>. Each check ran on each site:</p>
+<ul class="tight">
+  <li><b>Pages:</b> <code>/api/method/ping</code>, <code>/login</code>, the app page, and the first JS or CSS asset on that page, served by nginx.</li>
+  <li><b>Logged in:</b> the app page as Administrator, and the installed apps from <code>get_versions</code>.</li>
+  <li><b>Background job:</b> a database backup queued from outside. In lite mode it runs in the sandboxed web process and writes to <code>sites/&lt;site&gt;/private/backups</code>.</li>
+  <li><b>Migrate:</b> <code>pilot -b &lt;bench&gt; frappe --site &lt;site&gt; migrate</code>. It runs outside the sandbox, through <code>unsandboxed_entry.py</code>.</li>
+</ul>
+<div class="table"><table>
+<tr><th>App</th><th>Bench</th><th>Pages</th><th>Logged in</th><th>Job</th><th>Migrate</th><th>Apps on the site</th></tr>
+<tr><td>ERPNext</td><td>v16</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, erpnext</td></tr>
+<tr><td>ERPNext</td><td>nightly</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, erpnext</td></tr>
+<tr><td>CRM</td><td>v16</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, crm</td></tr>
+<tr><td>CRM</td><td>nightly</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, crm, whatsapp</td></tr>
+<tr><td>Helpdesk</td><td>v16</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, helpdesk, telephony</td></tr>
+<tr><td>Helpdesk</td><td>nightly</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, helpdesk, telephony</td></tr>
+<tr><td>Learning (LMS)</td><td>v16</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, lms, payments</td></tr>
+<tr><td>Learning (LMS)</td><td>nightly</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, lms, payments</td></tr>
+<tr><td>Gameplan</td><td>v16</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, gameplan</td></tr>
+<tr><td>Gameplan</td><td>nightly</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, gameplan</td></tr>
+<tr><td>Builder</td><td>v16</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, builder</td></tr>
+<tr><td>Builder</td><td>nightly</td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td><span class="tag ok">pass</span></td><td>frappe, builder</td></tr>
+</table></div>
+<p class="note">CRM's <code>/crm</code> gives 403 and ERPNext's <code>/app</code> gives 301 to a guest. These are the normal login redirects. As Administrator, all pages load. ERPNext v16 sends <code>/app</code> to <code>/desk</code>.</p>
+<p>The migration workflow also works with the sandbox on: rows 4, 14, 21, 23 and 30 above ran on the sandboxed benches.</p>
+
+<h3>Finding: Helpdesk article search fails on Pilot</h3>
+<p>Helpdesk's knowledge-base search uses the RediSearch module (<code>FT.SEARCH</code>, <code>FT.CREATE</code>). Ubuntu 26.04 ships Redis 8.0.5 without that module, so <code>helpdesk.api.article.search</code> gives HTTP 500, and the search index job fails. The sandbox does not cause this. Article saves still work, because Helpdesk checks for the index first. To fix it, Pilot must run a Redis build that has the search module, for example from packages.redis.io. That choice affects licensing, so this page lists it as an open item.</p>
+
+<h2 id="prs">Pull requests</h2>
+<div class="table"><table>
+<tr><th>PR</th><th>What it fixes</th><th>Found by</th></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/850">#850</a></td><td>Ubuntu's mariadbd AppArmor profile blocks Pilot's MariaDB, so <code>pilot init</code> fails (issue #844). Keeps admin rules in <code>local/mariadbd</code>.</td><td>Issue</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/851">#851</a></td><td>The stdlib-only CLI has no PyMySQL, so every site-database read returned nothing (clone-site, install-app, restore, backups; issue #845). Queries now run with the bench's own driver. No new CLI dependency.</td><td>Issue</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/852">#852</a></td><td>clone-site writes no <code>db_socket</code>, so a clone can reach a system MariaDB (issue #846).</td><td>Issue</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/853">#853</a></td><td>Admin SQL batches time out after 5 s under load (issue #847).</td><td>Issue</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/854">#854</a></td><td>The prebuilt asset build does not check out required apps, so CRM <code>develop</code> has no prebuilt assets.</td><td>App tests</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/855">#855</a></td><td>get-app takes dependency ranges from an old marketplace entry, so nightly CRM installs whatsapp 1.1.1 and fails.</td><td>App tests</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/856">#856</a></td><td>Two benches that initialise at once race on MariaDB setup.</td><td>App tests</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/857">#857</a></td><td>Two benches that initialise at once race on the Admin frontend build (dev installs).</td><td>App tests</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/858">#858</a></td><td>get-app clones the whole app before it finds that the bench is not initialised.</td><td>App tests</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/859">#859</a></td><td>A migration that fails to start stays in <code>preparing</code> and blocks all updates (row 18).</td><td>This check</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/860">#860</a></td><td>A branch switch's sites leave maintenance when a backup fails (row 19).</td><td>This check</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/861">#861</a> (draft)</td><td>The sandbox never runs on Ubuntu 24.04 and later.</td><td>This check</td></tr>
+<tr><td><a href="https://github.com/frappe/pilot/pull/862">#862</a></td><td>Migration docs point to the old UI files (row 36).</td><td>This check</td></tr>
+</table></div>
+<p class="note">#853 and #856 both add a test at the end of <code>tests/pilot/managers/test_mariadb_manager.py</code>. The PR that merges second gets a small conflict.</p>
+
+<h2 id="open">Open items</h2>
+<div class="table"><table>
+<tr><th>Item</th><th>Why it needs a decision</th></tr>
+<tr><td><span class="tag bad">Decide</span> Sandbox on Ubuntu (#861)</td><td>The profile lets every service that systemd starts on the host make user namespaces again. That reopens part of what Ubuntu's restriction closes. The other options: leave the sandbox off on Ubuntu and document it, or make the installer step opt-in.</td></tr>
+<tr><td><span class="tag bad">Decide</span> Redis search module</td><td>Helpdesk article search needs it. Ubuntu's Redis does not have it. A Redis build with the module comes with different license terms.</td></tr>
+<tr><td><span class="tag gap">Gap</span> Restore after a branch-switch backup failure</td><td>Row 35. Restore could revert the app when no site has been migrated, without site backups. This needs a small change to <code>can_revert</code> and the restore chain.</td></tr>
+<tr><td><span class="tag gap">Gap</span> No CLI key for the sandbox</td><td><code>pilot set-bench-config</code> has no <code>production.sandbox</code> key, so the only way to turn the sandbox on or off is to edit <code>bench.toml</code>.</td></tr>
+</table></div>
+
+<p class="meta" style="margin-top:40px">The app branches and release checks are on the earlier plan page: <a href="../../plans/v2-app-signups-v16-nightly/">V2 app sign-ups on v16 and nightly</a>.</p>
+</main>
+</body>
+</html>
