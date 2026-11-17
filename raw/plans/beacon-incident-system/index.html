@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon incident system</title>
+<meta name="description" content="How Beacon turns a failing check into an alert, an incident, chat messages and phone calls, with the state machines, the noise rules and the failure tests of the refactor.">
+<style>
+:root {
+  --bg: #ffffff; --text: #1d1f23; --muted: #5f6570; --line: #e3e5e8; --soft: #f5f6f7; --accent: #2457c5; --warn: #a15c00;
+  --pele-bg: #ffffff; --pele-fg: #1d1f23; --pele-line: #8a9099; --pele-accent: #2457c5; --pele-muted: #f5f6f7; --pele-surface: #ffffff; --pele-border: #c9cdd3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a; --text: #e6e7e9; --muted: #a0a6ae; --line: #2c3036; --soft: #1d2024; --accent: #7aa2ff; --warn: #f0a94a;
+    --pele-bg: #15171a; --pele-fg: #e6e7e9; --pele-line: #7c838c; --pele-accent: #7aa2ff; --pele-muted: #1d2024; --pele-surface: #15171a; --pele-border: #3a3f46;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 8px; }
+h2 { font-size: 1.3rem; margin: 48px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+p, li { color: var(--text); }
+.lead { color: var(--muted); font-size: 1.05rem; margin: 0 0 24px; }
+.muted { color: var(--muted); }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: .92rem; display: block; overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; background: var(--soft); white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.diagram { margin: 16px 0 24px; overflow-x: auto; }
+.diagram svg { min-width: min(var(--diagram-width, 100%), 520px); max-width: 100%; height: auto; }
+.note { border-left: 3px solid var(--warn); background: var(--soft); padding: 10px 14px; margin: 16px 0; }
+.toc { columns: 2; font-size: .92rem; padding-left: 18px; }
+.pass { color: #1f7a3a; font-weight: 600; }
+.fail { color: #b3261e; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .pass { color: #6fd38d; } .fail { color: #ff8a80; } }
+@media (max-width: 560px) { .toc { columns: 1; } h1 { font-size: 1.5rem; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Beacon incident system</h1>
+<p class="lead">How Beacon turns a failing check into an alert, an incident, chat messages and phone calls. This page is for the review of the state machine refactor. It shows each state machine, the rules that keep the noise low for the on-call engineers, and the results of the failure tests.</p>
+
+<ul class="toc">
+  <li><a href="#context">Context</a></li>
+  <li><a href="#numbers">Size before and after</a></li>
+  <li><a href="#objects">The objects</a></li>
+  <li><a href="#flow">One outage, start to end</a></li>
+  <li><a href="#alert">Alert states</a></li>
+  <li><a href="#incident">Incident states</a></li>
+  <li><a href="#escalation">Escalation states</a></li>
+  <li><a href="#notification">Notification states</a></li>
+  <li><a href="#noise">Noise rules</a></li>
+  <li><a href="#failures">Failure tests</a></li>
+  <li><a href="#rules">Rule titles</a></li>
+  <li><a href="#left">What is left</a></li>
+</ul>
+
+<h2 id="context">Context</h2>
+<p>Beacon is the incident manager of Frappe Cloud V2. It runs checks on each region every minute. A check is a ClickHouse query or an HTTP or TLS probe. Each row that a check returns is a problem on one resource, such as a host or a proxy.</p>
+<p>The engineers work mostly on two screens: the alert and the incident. When the phone rings at 3 am, the engineer must see at once what is broken, where, and how bad it is. Beacon must also not send messages that nobody needs, because people stop reading a noisy channel.</p>
+<p>The refactor had three goals:</p>
+<ul>
+  <li>Put each state change in one place. Each record with a lifecycle has one <code>StateMachine</code> that lists the allowed moves. Every other move is refused with a clear message.</li>
+  <li>Make the code smaller and simpler, with fewer DocTypes and the same features.</li>
+  <li>Make every chat message, email and call easy to read, and send fewer of them.</li>
+</ul>
+<p class="muted">Beacon is not in production yet. So the refactor has no data patches and no code for old setups.</p>
+
+<h2 id="numbers">Size before and after</h2>
+<p>Code lines count Python, JavaScript, Vue, CSS, HTML and SQL in the app, without built files.</p>
+<table>
+  <tr><th>Point</th><th class="num">Code lines</th><th class="num">DocTypes</th></tr>
+  <tr><td>Before the refactor</td><td class="num">8,925</td><td class="num">22</td></tr>
+  <tr><td>After the refactor</td><td class="num">8,494</td><td class="num">18</td></tr>
+  <tr><td>Change</td><td class="num">−431 (−4.8%)</td><td class="num">−4</td></tr>
+</table>
+<p>Four DocTypes are gone:</p>
+<ul>
+  <li><b>Service</b>. An SLO Burn alert rule is now the service. It holds the public title, the SLO target and the burn alert in one record.</li>
+  <li><b>Service Day</b>. Daily uptime is now calculated from the minute rows when someone reads it.</li>
+  <li><b>Incident Action Item</b>. Action items are now a checklist in the RCA text: <code>[ ] Title - @assignee - issue link</code>.</li>
+  <li><b>Notification Outbox</b>. The Notification record now writes, sends and records each message itself.</li>
+</ul>
+<p>The line count went down less than the DocType count. Most of the lines that were removed went back in as clearer messages and as the checks that stop duplicate messages.</p>
+
+<h2 id="objects">The objects</h2>
+<p>Each box is a record type. An arrow shows which record makes or owns the next one.</p>
+<script type="text/mermaid" data-label="Object map: a Region has Resources from Resource Sources. Alert Rules check Resources and make Alerts. Alerts join Incidents. Incidents make Notifications and have Updates, Scope rows and Subscribers. SLO Burn rules are the services and have minute rows.">
+flowchart TB
+  Region --> Resource
+  Source[Resource Source] -- lists --> Resource
+  Definition[Definition Source] -- syncs --> Rule[Alert Rule]
+  Rule -- checks --> Resource
+  Rule -- makes --> Alert
+  Alert -- joins --> Incident
+  Incident -- makes --> Notification
+  Incident --- Parts[Updates, Scope, Subscribers]
+  Rule -. SLO Burn rule is the service .-> Minute[Service Minute]
+</script>
+<table>
+  <tr><th>Record</th><th>What it is</th></tr>
+  <tr><td>Resource</td><td>One thing that Beacon checks: a host, a VM, a proxy, a region. A Resource Source lists them. A failed fetch never removes a resource.</td></tr>
+  <tr><td>Alert Rule</td><td>One check. A file in the repository of the team that owns the component defines it. The rule title must say what is wrong.</td></tr>
+  <tr><td>Alert</td><td>One problem on one resource, from its start to its end. Beacon writes it only when its state changes.</td></tr>
+  <tr><td>Incident</td><td>The record that people work on. It holds the alerts of one cause, the updates, the call state and the postmortem. A Maintenance is an incident of another type.</td></tr>
+  <tr><td>Notification</td><td>One chat post, email or call. Beacon writes it in the same transaction as the change that caused it, and a job sends it after the commit.</td></tr>
+</table>
+
+<h2 id="flow">One outage, start to end</h2>
+<p>Example: a host in Mumbai stops answering. Its VMs stop too.</p>
+<script type="text/mermaid" data-label="Sequence: the rule check fails, the alert goes from Pending to Firing, the coordinator makes an incident, Beacon posts to chat and calls the first responder, the responder answers and the incident is acknowledged.">
+sequenceDiagram
+  participant R as Rule check
+  participant A as Alert
+  participant C as Coordinator
+  participant I as Incident
+  participant N as Notification
+  participant E as Engineer
+  R->>A: row for host h12 (Pending)
+  R->>A: row still there after pending_for (Firing)
+  C->>I: no open incident covers h12, so create one
+  I->>N: chat post, email, call
+  N->>E: phone rings
+  E->>I: answers the call
+  I->>I: Triggered to Investigating, calls stop
+</script>
+<ol>
+  <li>The rule returns a row for host h12. Beacon makes a Pending alert. One bad minute is not an outage, so nobody hears about it yet.</li>
+  <li>The row is still there after <code>pending_for</code>. The alert goes to Firing.</li>
+  <li>The coordinator looks for an open incident that covers h12, or a parent of it. There is none, so it makes a new Internal incident in Triggered.</li>
+  <li>The incident is High. Beacon posts to chat, emails each active responder and calls the first responder.</li>
+  <li>The VM alerts on h12 fire next. The incident covers h12 and everything under it, so they join it. Beacon posts one chat message with all the alerts that joined. It does not make a new incident or a new call for each VM.</li>
+  <li>The engineer answers the call. The answer acknowledges the incident. The calls stop.</li>
+  <li>The host comes back. Every alert recovers. The incident was made by Beacon and is still Internal, so Beacon resolves it. A person must resolve a public incident.</li>
+</ol>
+
+<h2 id="alert">Alert states</h2>
+<p>An alert has three states. A Resolved alert never fires again. A new problem on the same resource makes a new alert.</p>
+<script type="text/mermaid" data-label="Alert states: Pending goes to Firing after pending_for, or to Resolved when a good run has no row. Firing goes to Resolved after resolve_after with no row. A query error changes nothing.">
+stateDiagram-v2
+  [*] --> Pending: the check returns a row
+  Pending --> Firing: the row stays for pending_for
+  Pending --> Resolved: a good run without the row
+  Firing --> Resolved: no row for resolve_after
+  Firing --> Firing: the row comes back, the clean timer stops
+  Resolved --> [*]
+</script>
+<ul>
+  <li>A query error or an unreachable region changes no state. A failing check never resolves an alert, because a broken check is not a recovered host.</li>
+  <li>A removed resource, or a resource that is no longer checked, resolves its alert as Resource Removed.</li>
+  <li>A Firing alert only goes up in severity. It keeps the row that made it worse.</li>
+  <li>An alert can be silenced for a known problem. A silenced alert keeps its state and stays visible, but it joins no incident and makes no call.</li>
+</ul>
+
+<h2 id="incident">Incident states</h2>
+<p>An incident is open from Triggered to Monitoring. Only an action changes its status. The status field is read-only in Desk.</p>
+<script type="text/mermaid" data-label="Incident states: inside Open, Triggered goes to Investigating on acknowledge, then Identified and Monitoring through updates, and back to Investigating when a new alert joins. Open goes to Resolved or Merged. Staff can reopen a Resolved incident within 7 days.">
+stateDiagram-v2
+  direction TB
+  state Open {
+    [*] --> Triggered: the coordinator makes it
+    Triggered --> Investigating: acknowledge or an answered call
+    Investigating --> Identified: update
+    Identified --> Monitoring: update
+    Monitoring --> Investigating: a new alert joins
+  }
+  [*] --> Open
+  Open --> Resolved: all alerts recover, or a person resolves
+  Open --> Merged: merged into another incident
+  Resolved --> Open: staff reopen in 7 days, as Investigating
+</script>
+<ul>
+  <li><b>Auto resolve.</b> When all alerts recover, Beacon resolves an Internal incident that it made. For an incident that a person made, or one that is Unlisted or Public, Beacon posts to chat one time that a person must resolve it.</li>
+  <li><b>Resolve while alerts fire.</b> Beacon refuses it, unless the person silences those alerts for some hours. Then the incident closes and the alerts stay open and silenced.</li>
+  <li><b>Reopen.</b> Only staff can reopen, in the 7 days after the resolve. A reopen makes no calls. Beacon itself never reopens an incident. A new problem after a resolve makes a new incident.</li>
+  <li><b>Public.</b> Beacon never publishes an incident. A person decides what customers see.</li>
+</ul>
+<h3>Maintenance</h3>
+<script type="text/mermaid" data-label="Maintenance states: Scheduled goes to In Progress at the start or on Start Now, or to Cancelled. In Progress goes to Completed at the end or on Complete.">
+stateDiagram-v2
+  state "In Progress" as InProgress
+  [*] --> Scheduled
+  Scheduled --> InProgress: scheduled start, or Start Now
+  Scheduled --> Cancelled: Cancel
+  InProgress --> Completed: scheduled end, or Complete
+</script>
+<p>While a maintenance is In Progress, and for 10 minutes after it ends, Beacon suppresses the alerts in its scope. The 10 minutes let rebooted hosts come back.</p>
+
+<h2 id="escalation">Escalation states</h2>
+<p>The escalation is the call state of one incident. It is separate from the incident status, because a person can update an incident while Beacon still calls.</p>
+<script type="text/mermaid" data-label="Escalation states: None goes to Waiting when the resource has a parent, or to Calling at once. Waiting goes to Calling after the delay. Calling moves to the next responder after the backup time, and starts a new round after the last one. Calling goes to Done on acknowledge, merge or resolve.">
+stateDiagram-v2
+  [*] --> None
+  None --> Waiting: the resource has a parent
+  None --> Calling: no parent, or Notify On-call
+  Waiting --> Calling: after 90 seconds
+  Calling --> Calling: no acknowledge in the backup time, call the next responder
+  Calling --> Done: acknowledge or an answered call
+  Waiting --> Done: merge or resolve
+  Calling --> Done: merge or resolve
+</script>
+<table>
+  <tr><th>Severity</th><th>Chat</th><th>Email</th><th>Call</th><th>Next responder after</th></tr>
+  <tr><td>Critical</td><td>Yes</td><td>Yes</td><td>Yes</td><td>2 minutes</td></tr>
+  <tr><td>High</td><td>Yes</td><td>Yes</td><td>Yes</td><td>5 minutes</td></tr>
+  <tr><td>Medium</td><td>Yes</td><td>No</td><td>No</td><td>-</td></tr>
+  <tr><td>Low</td><td>Yes</td><td>No</td><td>No</td><td>-</td></tr>
+</table>
+<div class="note"><b>A High or Critical incident calls until a person acknowledges it.</b> There is no limit on rounds. After the last responder, Beacon waits the repeat time (15 minutes) and starts a new round from the first responder. The old setting <code>max_rounds</code> is gone.</div>
+<ul>
+  <li><b>Why wait 90 seconds.</b> When the resource has a parent, such as a VM on a host, the host alert usually comes a little later. The wait lets an incident on the host take the VM alert, so the engineer gets one call for the host and not one for each VM.</li>
+  <li><b>Pause.</b> "Calls and emails paused" in Beacon Settings stops all calls and emails, for example after a database restore. The escalations continue when the pause ends.</li>
+  <li><b>No active responder.</b> The escalation stops and Beacon posts to chat: "Calls stopped. No responder is active. Contact the team directly."</li>
+  <li><b>Answered call.</b> Twilio tells Beacon that the call was answered. The answer acknowledges the incident as the person who was called. If the incident was merged, the answer follows the merge to the open incident.</li>
+</ul>
+
+<h2 id="notification">Notification states</h2>
+<p>A Notification is one chat post, email or call. Beacon writes it as Queued in the same transaction as the change that caused it. A job sends it after the commit. So a rolled-back change never sends a message, and no remote call runs while a database lock is held.</p>
+<script type="text/mermaid" data-label="Notification states: Queued goes to Sending when a job claims it, or to Cancelled or Failed. Sending goes to Sent, Answered, No Answer or Failed. Sent goes to Answered, No Answer or Failed. Answered and the others go to Acknowledged when the incident is acknowledged.">
+stateDiagram-v2
+  direction TB
+  state "No Answer" as NoAnswer
+  [*] --> Queued
+  Queued --> Sending: a job claims it
+  Queued --> Cancelled: paused, disabled, or the incident closed
+  Queued --> Failed: no job for 1 hour
+  Sending --> Sent: the provider took it
+  Sending --> Failed: the provider refused it
+  Sent --> Answered: call answered
+  Sent --> NoAnswer: busy or no answer
+  Sent --> Failed: call failed
+  Answered --> Acknowledged
+  Sent --> Acknowledged: someone acknowledged
+</script>
+<ul>
+  <li><b>Sent once.</b> The job claims the row first (Queued to Sending). A second job for the same row sends nothing.</li>
+  <li><b>Lost job.</b> Each minute, Beacon queues again each row that is Queued for more than 1 minute. A row that is Queued for 1 hour becomes Failed.</li>
+  <li><b>Stopped job.</b> A row that stays in Sending means that the job stopped during the provider call. Beacon does not send it again, because the provider may already have it.</li>
+  <li><b>Stale call.</b> A queued call for an incident that closed, or whose escalation stopped, is Cancelled and never rings.</li>
+  <li><b>Email.</b> Sent means that Frappe accepted the email into its Email Queue. Frappe records a later delivery error on the Email Queue row.</li>
+</ul>
+
+<h2 id="noise">Noise rules</h2>
+<p>Each rule below removes messages that the engineer does not need, and keeps the ones that need an action.</p>
+<table>
+  <tr><th>Event</th><th>What Beacon sends</th></tr>
+  <tr><td>Low or Medium incident</td><td>Chat only. No email, no call.</td></tr>
+  <tr><td>Alerts join an open incident</td><td>One chat message for each incident in each coordinator run, with a table of up to 5 alerts. Not one message for each alert.</td></tr>
+  <tr><td>Alert on a child resource</td><td>Calls wait 90 seconds, so the incident of the parent can take the alert first.</td></tr>
+  <tr><td>Escalation step</td><td>A call and, once for each responder in each round, an email. No Activity log entry for each step.</td></tr>
+  <tr><td>A call or email fails</td><td>One chat message for each incident and channel in an hour, with a link to the notification.</td></tr>
+  <tr><td>A rule query breaks</td><td>One chat message when it breaks and one when it works again. Nothing while it stays broken.</td></tr>
+  <tr><td>All alerts recover on an incident that a person must close</td><td>One chat message, one time.</td></tr>
+  <tr><td>Empty postmortem</td><td>One reminder at 3 days and one at 7 days after the resolve.</td></tr>
+  <tr><td>A resource list would remove many resources</td><td>One chat message when Beacon holds the removal for review. Not one each fetch.</td></tr>
+</table>
+<h3>How a message reads</h3>
+<p>Titles are <code>&lt;rule title&gt; on &lt;resource&gt;</code>, or <code>in &lt;region&gt;</code> for a region-level rule. The incident name in chat links to the incident. Chat messages use Markdown tables. Text that people read never uses the word "page". Example chat message for a new incident:</p>
+<table>
+  <tr><td colspan="3">🟠 <b>High incident</b> <a href="#flow">INC-00031</a> in Mumbai<br><b>Host down on h12</b></td></tr>
+  <tr><th>Resource</th><th>Value</th><th>Detail</th></tr>
+  <tr><td>h12</td><td>312</td><td>no report for 312 s (limit 120 s)</td></tr>
+</table>
+<p class="muted">The example uses made-up names and numbers.</p>
+
+<h2 id="failures">Failure tests</h2>
+<p id="failures-status">The tests ran on a development site, with a separate disabled test region, a fake ClickHouse client and a fake message channel. No real chat post, email or call went out.</p>
+<p>9 scenarios, 56 checks. <span class="pass">All passed.</span> The test deleted every record that it made.</p>
+<table>
+  <tr><th>#</th><th>What went wrong</th><th>What Beacon did</th><th>Result</th></tr>
+  <tr><td>1</td><td>The rule query fails two times, then works.</td><td>The Firing alert stayed Firing. Beacon wrote one Error Log on the first failure and none on the second. The next good run resolved the alert once.</td><td class="pass">Pass</td></tr>
+  <tr><td>2</td><td>Another connection holds the incident row lock for 2 seconds.</td><td>The action waited 1.8 seconds, then wrote one update. No duplicate row.</td><td class="pass">Pass</td></tr>
+  <tr><td>3</td><td>The job for a notification is lost.</td><td>A row Queued for 2 minutes was queued again. A row Queued for 2 hours became Failed. No other row changed.</td><td class="pass">Pass</td></tr>
+  <tr><td>4</td><td>A call is answered after its incident was merged.</td><td>The answer acknowledged the incident that it was merged into. When that incident was already closed, the call became Answered and acknowledged nothing.</td><td class="pass">Pass</td></tr>
+  <tr><td>5</td><td>An alert recovers and fails again inside <code>resolve_after</code>.</td><td>One alert, one incident and one chat message. The clean timer stopped.</td><td class="pass">Pass</td></tr>
+  <tr><td>6</td><td>The region cannot be read.</td><td>No alert resolved and no incident closed. The coordinator stopped with the error, and the new alert stayed without an incident until the next good run.</td><td class="pass">Pass</td></tr>
+  <tr><td>7</td><td>A person resolves an incident while its alert fires.</td><td>Beacon refused it without a silence. With a 1-hour silence, the incident resolved, the alert stayed Firing and silenced, and the next run made no new incident.</td><td class="pass">Pass</td></tr>
+  <tr><td>8</td><td>The same problem comes back after a resolve.</td><td>A new incident opened, both inside and after 30 minutes. A resolved Public incident stayed Resolved and Public.</td><td class="pass">Pass</td></tr>
+  <tr><td>9</td><td>Nobody acknowledges a High incident.</td><td>After 3 full rounds with 2 responders, the escalation was still Calling: 6 calls and 6 emails, one email for each responder in each round. Acknowledge stopped it.</td><td class="pass">Pass</td></tr>
+</table>
+<p class="muted">Limits: the tests call the Beacon classes directly in one process, with a fake ClickHouse client and fake responders. They do not test the real Twilio, email or chat providers, or the timing of the scheduler.</p>
+
+<h2 id="rules">Rule titles</h2>
+<p>An engineer reads the rule title first. Titles such as "Atlas silent" or "Object storage health" did not say what was wrong. Each producer repository now has a draft pull request with clearer titles, a one-line description and details that name the limit.</p>
+<table>
+  <tr><th>Old title</th><th>New title</th></tr>
+  <tr><td>Atlas silent</td><td>Atlas stopped reporting</td></tr>
+  <tr><td>BMC problems</td><td>Host BMC reports a fault</td></tr>
+  <tr><td>Object storage health</td><td>Object storage cluster is unhealthy</td></tr>
+  <tr><td>Central errors</td><td>Central throws unhandled errors</td></tr>
+  <tr><td>Telemetry volume grew</td><td>Telemetry volume more than doubled</td></tr>
+</table>
+<p>Example detail before: <code>no host sync for 312 s</code>. After: <code>no host sync for 312 s (limit 120 s)</code>. No query logic, threshold, severity or alert key changed. Every changed query parses in ClickHouse.</p>
+<p class="muted">Merge these after the refactor is deployed. The refactor adds the <code>-- description:</code> header, and an older Beacon stops the sync of a source with an unknown header.</p>
+
+<h2 id="left">What is left</h2>
+<ul>
+  <li><b>Local services.</b> The service rules on the development site are from the old format. The definition files in the producer repositories must be synced again after the rule pull requests merge.</li>
+  <li><b>Alert Rule form.</b> The service fields on the Alert Rule form need a layout review with a mockup.</li>
+  <li><b>No active responder.</b> The escalation stops when no responder is active. A question for review: should Beacon keep trying, so that calls start when someone is added?</li>
+  <li><b>Smaller code.</b> The code is 4.8% smaller. More cuts need design decisions, for example fewer fields on the incident form.</li>
+</ul>
+</main>
+</body>
+</html>
