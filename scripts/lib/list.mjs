@@ -1,7 +1,7 @@
 import { SECTIONS } from './page.mjs'
 
 const SITE = 'sites.tanmoysarkar.me'
-const INTRO = 'Reports, guides, plans, and demos made with AI, kept here to read and share.'
+const INTRO = 'A dumpyard for LLM-generated static sites.'
 
 // The home page (active = 'all') and each section page: the date and title of
 // each page, newest first, grouped by month.
