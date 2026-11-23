@@ -9,7 +9,7 @@ import { listPage } from './lib/list.mjs'
 import { buildKitPage, SECTIONS } from './lib/page.mjs'
 
 const root = resolve(import.meta.dirname, '..')
-const COPY = ['kit', 'skills', '404.html', 'robots.txt', 'llms.txt', 'CNAME', '.nojekyll', 'install-skills.sh']
+const COPY = ['kit', 'skills', 'styles.css', '404.html', 'robots.txt', 'llms.txt', 'CNAME', '.nojekyll', 'install-skills.sh']
 
 main()
 

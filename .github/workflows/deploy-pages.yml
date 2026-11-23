@@ -19,12 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Prepare static site
-        run: |
-          mkdir _site
-          cp index.html 404.html styles.css robots.txt llms.txt CNAME .nojekyll install-skills.sh _site/
-          cp -R research learning plans demos skills _site/
-          python3 .github/scripts/update_listings.py _site
+        with:
+          fetch-depth: 0 # the lists use git dates
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build the site
+        run: node scripts/site.mjs _site
       - uses: actions/configure-pages@v6
         with:
           enablement: true
