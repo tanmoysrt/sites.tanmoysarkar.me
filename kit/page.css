@@ -198,28 +198,25 @@ figcaption { font-size: 13.5px; line-height: 1.5; color: var(--muted); margin-to
 .end ul { padding-left: 18px; margin-bottom: 24px; }
 .end li + li { margin-top: 3px; }
 
-/* Home and section lists */
-.home { max-width: 720px; margin: 0 auto; padding: 56px 24px 112px; }
-.home h1 { font-size: 24px; letter-spacing: -.015em; margin: 0 0 4px; }
+/* Home and section pages: a plain index of date and title */
+.home { max-width: 640px; margin: 0 auto; padding: 88px 24px 120px; }
+.home h1 { font-size: 21px; line-height: 1.3; font-weight: 650; letter-spacing: -.01em; margin: 0; }
 .home h1 a { color: inherit; text-decoration: none; }
-.home .lead { font-size: 16px; margin: 0 0 32px; }
-.bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 8px; }
-.tabs { display: flex; gap: 2px; }
-.tabs a { font-size: 14px; color: var(--muted); padding: 6px 10px; border-radius: 8px; text-decoration: none; white-space: nowrap; }
-.tabs a:hover { color: var(--text); }
-.tabs a[aria-current] { background: var(--soft); color: var(--text); font-weight: 600; }
-.tabs i { font-style: normal; font-weight: 400; color: var(--faint); margin-left: 5px; font-variant-numeric: tabular-nums; }
-.search { margin-left: auto; width: 200px; font: inherit; font-size: 14px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
-.search:focus { outline: none; border-color: var(--line-strong); box-shadow: 0 0 0 3px var(--soft-2); }
-.month { font-size: 13px; font-weight: 600; color: var(--faint); margin: 32px 0 4px; }
-.entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; padding: 11px 0; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; }
-.entry:hover .t { color: var(--accent); }
-.entry .t { font-weight: 560; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.entry .d { grid-column: 1; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.entry .r { grid-row: 1; grid-column: 2; font-size: 13px; color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 2px; }
-.empty { color: var(--muted); padding: 24px 0; }
-.foot { margin-top: 48px; font-size: 14px; color: var(--faint); }
-.foot a { color: var(--muted); }
+.home header p { margin: 4px 0 0; color: var(--muted); }
+.sections { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 20px; font-size: 15px; }
+.sections a { color: var(--muted); text-decoration: none; }
+.sections a:hover { color: var(--text); }
+.sections a[aria-current] { color: var(--text); font-weight: 600; }
+.sections i { font-style: normal; font-weight: 400; color: var(--faint); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.index { margin-top: 48px; }
+.index h2 { font-size: 14px; line-height: 1.4; font-weight: 600; letter-spacing: 0; color: var(--faint); margin: 32px 0 6px; }
+.index h2:first-child { margin-top: 0; }
+.index a { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 7px 0; color: var(--text); text-decoration: none; }
+.index a:hover span { color: var(--accent); }
+.index time { font-size: 14px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.index span { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home .foot { margin-top: 56px; font-size: 14px; color: var(--faint); }
+.home .foot a { color: var(--muted); }
 
 /* Narrow screens */
 @media (max-width: 1100px) {
@@ -242,14 +239,11 @@ figcaption { font-size: 13.5px; line-height: 1.5; color: var(--muted); margin-to
   .diagram { padding: 20px 8px; margin-left: -16px; margin-right: -16px; border-radius: 0; }
   .diagram .wide-only { display: none; }
   .diagram .narrow { display: block; }
-  .home { padding-top: 32px; }
-  .bar { gap: 8px; }
-  .tabs { overflow-x: auto; width: 100%; scrollbar-width: none; }
-  .search { margin-left: 0; width: 100%; font-size: 16px; }
-  .entry .r .s { display: none; }
+  .home { padding-top: 48px; padding-bottom: 80px; }
+  .index a { grid-template-columns: 56px minmax(0, 1fr); gap: 12px; padding: 9px 0; }
 }
 @media print {
-  .top, .toc, details.contents, .search, .tabs { display: none; }
+  .top, .toc, details.contents { display: none; }
   .layout { display: block; padding: 0; }
   .diagram, .summary, pre, .note { break-inside: avoid; }
 }
