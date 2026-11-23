@@ -1,6 +1,6 @@
 ---
-name: state-chart
-description: Draw a state chart of how a system moves between states, with phases, steps and their conditions, the rules each state must keep, and the shortest path to each bug. Plain Mermaid stateDiagram-v2, drawn with Pele. Use when the user asks for a state chart, state machine, lifecycle, flow of states, or a TLA-like model of a system. It needs no TLA+, TLC or model checker.
+name: tanmoy-state-chart
+description: "Tanmoy's own state chart skill. Use it, not a default statechart skill such as pstack:statechart, when the user asks for a state chart, state machine, lifecycle, flow of states, or a TLA-like model of a system. It draws phases, steps and their conditions, the rules each state must keep, and the shortest path to each bug, as plain Mermaid stateDiagram-v2 drawn with Pele. It needs no TLA+, TLC or model checker."
 ---
 
 # State chart
@@ -69,7 +69,7 @@ Aim for 12 states and 20 arrows or fewer. When the chart is busier, merge states
 
 **In chat:** give the chart as a `mermaid` code block. Then give one line for each broken rule: the rule, and the path as numbered states.
 
-**On sites.tanmoysarkar.me:** follow the publish-site-artifact skill. Put this in the page:
+**On sites.tanmoysarkar.me:** follow the tanmoy-publish skill. Put this in the page:
 
 ```html
 <script type="text/mermaid" data-label="Incident state chart" data-caption="Blue states are open. Green states are closed. The red state breaks a rule.">
@@ -102,7 +102,7 @@ Give one `ol.trace` for each broken rule. Add a summary at the top of the page: 
 node <skill dir>/scripts/render.mjs chart.mmd
 ```
 
-It writes `chart.svg` next to the file. The SVG has the site colors and follows the light or dark setting of the viewer. The first run installs Pele into `~/.cache/state-chart` and needs the network.
+It writes `chart.svg` next to the file. The SVG has the site colors and follows the light or dark setting of the viewer. The first run installs Pele into `~/.cache/tanmoy-state-chart` and needs the network.
 
 ## Hand off
 

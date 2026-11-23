@@ -35,7 +35,7 @@ svg.pele { --pele-bg:var(--soft); --pele-fg:var(--text); --pele-muted:var(--mute
 `
 
 const PELE = '1.13.0'
-const CACHE = join(homedir(), '.cache', 'state-chart')
+const CACHE = join(homedir(), '.cache', 'tanmoy-state-chart')
 
 const [input, output = input.replace(/\.\w+$/, '') + '.svg'] = process.argv.slice(2)
 if (!input) {

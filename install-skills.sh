@@ -7,9 +7,12 @@ set -euo pipefail
 
 site="https://sites.tanmoysarkar.me"
 skills=(
-  "publish-site-artifact:SKILL.md"
-  "state-chart:SKILL.md scripts/render.mjs"
+  "tanmoy-publish:SKILL.md"
+  "tanmoy-state-chart:SKILL.md scripts/render.mjs"
 )
+
+# Old names. The installer removes them, so that an agent sees each skill once.
+old_skills=(publish-site-artifact state-chart)
 
 script_dir=""
 if [[ -n "${BASH_SOURCE[0]-}" && -f "${BASH_SOURCE[0]}" ]]; then
@@ -41,5 +44,15 @@ for entry in "${skills[@]}"; do
     mkdir -p "$target"
     cp -R "$work/$name/." "$target/"
     echo "Installed $target"
+  done
+done
+
+for root in "$agents_root" "$codex_root" "$claude_root"; do
+  for name in "${old_skills[@]}"; do
+    old="$root/skills/$name"
+    if [[ -L "$old" ]] || grep -qs "^name: $name$" "$old/SKILL.md"; then
+      rm -rf "$old"
+      echo "Removed old $old"
+    fi
   done
 done
