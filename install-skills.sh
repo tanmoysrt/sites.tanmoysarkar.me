@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Installs the skills of sites.tanmoysarkar.me for Claude Code and Codex.
+# Installs the skills of sites.tanmoysarkar.me for Claude Code, Codex and Pi.
+# Pi reads ~/.agents/skills, the shared Agent Skills folder, so the skills do not go
+# into ~/.pi/agent/skills too. Two copies would give Pi a name collision.
 # Run it from a clone, or with: curl -fsSL https://sites.tanmoysarkar.me/install-skills.sh | bash
 set -euo pipefail
 
@@ -16,6 +18,7 @@ fi
 
 codex_root="${CODEX_HOME:-$HOME/.codex}"
 claude_root="${CLAUDE_HOME:-$HOME/.claude}"
+agents_root="${AGENTS_HOME:-$HOME/.agents}"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -34,7 +37,7 @@ for entry in "${skills[@]}"; do
     echo "The downloaded file is not the $name skill." >&2
     exit 1
   fi
-  for target in "$codex_root/skills/$name" "$claude_root/skills/$name"; do
+  for target in "$agents_root/skills/$name" "$codex_root/skills/$name" "$claude_root/skills/$name"; do
     mkdir -p "$target"
     cp -R "$work/$name/." "$target/"
     echo "Installed $target"

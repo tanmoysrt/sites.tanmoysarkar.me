@@ -17,13 +17,13 @@ Use lowercase kebab-case slugs. See the [publishing skill](skills/publish-site-a
 - `publish-site-artifact`: write and publish pages for this site.
 - `state-chart`: draw a state chart with phases, rules and the path to each bug. It also renders a chart to an SVG with `scripts/render.mjs`.
 
-Install both globally for Codex and Claude Code:
+Install both globally for Claude Code, Codex and Pi:
 
 ```sh
 curl -fsSL https://sites.tanmoysarkar.me/install-skills.sh | bash
 ```
 
-Or run `bash install-skills.sh` from this checkout.
+Or run `bash install-skills.sh` from this checkout. It writes each skill to `~/.claude/skills`, `~/.codex/skills` and `~/.agents/skills`. Pi reads `~/.agents/skills`. In Pi, run `/reload` or start a new session, then use `/skill:state-chart` to load a skill by name.
 
 ## Publish
 
