@@ -14,6 +14,10 @@ If a tool generates the published HTML or assets, keep the editable source files
 
 Use Pele for standard diagrams: write Mermaid in `<script type="text/mermaid" data-label="...">` blocks in `raw/<section>/<slug>/index.html`, run `npm install` once, then `npm run build:page -- <section> <slug>` to inline static SVG in `<section>/<slug>/index.html`. Use Rough.js for custom diagrams with a hand-drawn look. Keep diagrams focused on the requested topic and label the data or action they show.
 
+## State charts
+
+For a state chart, a state machine, a lifecycle, or a TLA-like model of a flow, read `skills/state-chart/SKILL.md`. Write the chart as Mermaid `stateDiagram-v2` with phases, steps with `[conditions]`, and the marks `breaks` and `bugPath`. Add a Rules table and a Path to the bug list. Check the rules by hand. No TLA+ or model checker is necessary.
+
 ## Add a presentation
 
 Prefer a slideshow for learning material unless the user asks for another format. Choose `research`, `learning`, or `plans` based on the deck's purpose. Use Marp. Set `marp: true` and a meaningful `title` in the frontmatter. Keep editable Markdown at `raw/<section>/<slug>/slides.md` and local assets at `raw/<section>/<slug>/assets/`.

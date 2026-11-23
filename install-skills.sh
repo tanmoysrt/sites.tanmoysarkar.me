@@ -1,32 +1,42 @@
 #!/usr/bin/env bash
+# Installs the skills of sites.tanmoysarkar.me for Claude Code and Codex.
+# Run it from a clone, or with: curl -fsSL https://sites.tanmoysarkar.me/install-skills.sh | bash
 set -euo pipefail
 
-skill_name="publish-site-artifact"
-source_file=""
-temporary_file=""
+site="https://sites.tanmoysarkar.me"
+skills=(
+  "publish-site-artifact:SKILL.md"
+  "state-chart:SKILL.md scripts/render.mjs"
+)
 
+script_dir=""
 if [[ -n "${BASH_SOURCE[0]-}" && -f "${BASH_SOURCE[0]}" ]]; then
   script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-  source_file="$script_dir/skills/$skill_name/SKILL.md"
-fi
-
-if [[ ! -f "$source_file" ]]; then
-  temporary_file="$(mktemp)"
-  trap 'rm -f "$temporary_file"' EXIT
-  curl -fsSL "https://sites.tanmoysarkar.me/skills/$skill_name/SKILL.md" -o "$temporary_file"
-  source_file="$temporary_file"
-fi
-
-if ! head -n 5 "$source_file" | grep -q "^name: $skill_name$"; then
-  echo "The downloaded file is not the $skill_name skill." >&2
-  exit 1
 fi
 
 codex_root="${CODEX_HOME:-$HOME/.codex}"
 claude_root="${CLAUDE_HOME:-$HOME/.claude}"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
 
-for target in "$codex_root/skills/$skill_name" "$claude_root/skills/$skill_name"; do
-  mkdir -p "$target"
-  cp "$source_file" "$target/SKILL.md"
-  echo "Installed $target/SKILL.md"
+for entry in "${skills[@]}"; do
+  name="${entry%%:*}"
+  read -r -a files <<< "${entry#*:}"
+  for file in "${files[@]}"; do
+    mkdir -p "$work/$name/$(dirname "$file")"
+    if [[ -n "$script_dir" && -f "$script_dir/skills/$name/$file" ]]; then
+      cp "$script_dir/skills/$name/$file" "$work/$name/$file"
+    else
+      curl -fsSL "$site/skills/$name/$file" -o "$work/$name/$file"
+    fi
+  done
+  if ! head -n 5 "$work/$name/SKILL.md" | grep -q "^name: $name$"; then
+    echo "The downloaded file is not the $name skill." >&2
+    exit 1
+  fi
+  for target in "$codex_root/skills/$name" "$claude_root/skills/$name"; do
+    mkdir -p "$target"
+    cp -R "$work/$name/." "$target/"
+    echo "Installed $target"
+  done
 done

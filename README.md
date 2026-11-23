@@ -12,12 +12,15 @@ A minimal archive for LLM-generated reports, guides, plans, demos, and Marp deck
 
 Use lowercase kebab-case slugs. See the [publishing skill](skills/publish-site-artifact/SKILL.md) for content guidance.
 
-## Install the skill
+## Install the skills
 
-Install globally for Codex and Claude Code:
+- `publish-site-artifact`: write and publish pages for this site.
+- `state-chart`: draw a state chart with phases, rules and the path to each bug. It also renders a chart to an SVG with `scripts/render.mjs`.
+
+Install both globally for Codex and Claude Code:
 
 ```sh
-npx skills add tanmoysrt/sites.tanmoysarkar.me --skill publish-site-artifact -g -a claude-code -a codex -y
+curl -fsSL https://sites.tanmoysarkar.me/install-skills.sh | bash
 ```
 
 Or run `bash install-skills.sh` from this checkout.

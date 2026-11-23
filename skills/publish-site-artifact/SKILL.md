@@ -36,7 +36,7 @@ For a guide, give actionable steps and expected results. For research, compare o
 
 ### Pele diagrams
 
-[Pele](https://pele.run) renders Mermaid to themeable SVG at build time, so the page needs no script. Pick the diagram type by the question: `flowchart` for a path or a decision, `sequenceDiagram` for messages between actors, `stateDiagram-v2` for a lifecycle, `gantt` for a timeline, `sankey-beta` for a distribution, and `pie` or `xychart-beta` for a few numbers.
+[Pele](https://pele.run) renders Mermaid to themeable SVG at build time, so the page needs no script. Pick the diagram type by the question: `flowchart` for a path or a decision, `sequenceDiagram` for messages between actors, `stateDiagram-v2` for a lifecycle (follow the state-chart skill for states, rules and bug paths), `gantt` for a timeline, `sankey-beta` for a distribution, and `pie` or `xychart-beta` for a few numbers.
 
 - Write the page at `raw/<section>/<slug>/index.html`. Put each diagram in `<script type="text/mermaid" data-label="...">`; `data-label` is the alternative text and is required.
 - Run `npm install` once, then `npm run build:page -- <section> <slug>`. The build replaces each block with inline SVG in `<section>/<slug>/index.html` and copies the other files of the raw folder.
