@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Multi-Tunnel WireGuard Mesh</title>
-<meta name="description" content="Plan to spread VM traffic between two hosts over N WireGuard tunnels: eBPF picks a tunnel per flow, Metal configures the peers, Atlas owns the port plan.">
+<meta name="description" content="Plan to spread traffic between two hosts over N WireGuard tunnels: VM, host-to-VM and host-to-host scenarios, the port plan, rollout and checks.">
 <style>
 :root {
   --bg: #ffffff; --fg: #1d1d1f; --muted: #6b6b70; --line: #e3e3e6; --soft: #f5f5f7;
@@ -18,10 +18,10 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
-main { max-width: 780px; margin: 0 auto; padding: 48px 16px 80px; }
+main { max-width: 800px; margin: 0 auto; padding: 48px 16px 80px; }
 h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
-h2 { font-size: 21px; margin: 46px 0 10px; }
-h3 { font-size: 17px; margin: 26px 0 8px; }
+h2 { font-size: 21px; margin: 48px 0 10px; }
+h3 { font-size: 17px; margin: 30px 0 8px; }
 p { margin: 0 0 14px; }
 .lede { color: var(--muted); font-size: 18px; margin-bottom: 18px; }
 .meta { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
@@ -32,22 +32,29 @@ td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
 code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
 pre { background: var(--soft); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 10px 0 16px; }
 pre code { background: none; padding: 0; }
-.figure { margin: 18px 0 22px; overflow-x: auto; }
-.figure svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.figure { margin: 16px 0 22px; overflow-x: auto; }
+.figure svg { display: block; width: 100%; min-width: 600px; height: auto; }
 .figure svg text { fill: var(--fg); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .figure svg .m { fill: var(--muted); font-size: 12px; }
-.figure svg .box { fill: var(--bg); stroke: var(--fg); stroke-width: 1.2; }
+.figure svg .t { font-weight: 600; }
+.figure svg .box { fill: var(--bg); stroke: var(--fg); stroke-width: 1.1; }
 .figure svg .new { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
-.figure svg .edge { fill: none; stroke: var(--fg); stroke-width: 1.2; }
-.figure svg .edge.a { stroke: var(--accent); stroke-width: 1.6; }
-.figure svg .zone { fill: none; stroke: var(--line); stroke-dasharray: 4 4; }
+.figure svg .old { fill: var(--soft); stroke: var(--muted); stroke-width: 1.1; }
+.figure svg .edge { fill: none; stroke: var(--fg); stroke-width: 1.2; marker-end: url(#arrow); }
+.figure svg .edge.a { stroke: var(--accent); stroke-width: 1.6; marker-end: url(#arrow-a); }
+.figure svg .edge.w { stroke: var(--warn); stroke-width: 1.6; marker-end: url(#arrow-w); }
+.figure svg .wire { fill: none; stroke: var(--muted); stroke-width: 3; stroke-dasharray: 1 5; stroke-linecap: round; }
+.figure svg .sep { stroke: var(--line); }
+.figure svg .ah { fill: var(--fg); }
+.figure svg .ah.a { fill: var(--accent); }
+.figure svg .ah.w { fill: var(--warn); }
 .caption { color: var(--muted); font-size: 14px; margin-top: 6px; }
 ul, ol { padding-left: 22px; margin: 0 0 14px; }
 li { margin-bottom: 6px; }
-.card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
-.card h3 { margin-top: 0; }
-.tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--muted); margin-left: 6px; vertical-align: 2px; font-weight: 500; }
-.callout { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 16px 0; }
+.scenario { border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 6px; margin: 18px 0; }
+.scenario h3 { margin-top: 0; }
+.tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; vertical-align: 2px; font-weight: 600; }
+.tag.same { background: var(--soft); color: var(--muted); }
 .risk { border-left: 3px solid var(--warn); padding: 4px 0 4px 14px; margin: 16px 0; }
 td.up { color: var(--accent); font-weight: 600; }
 td.down { color: var(--warn); font-weight: 600; }
@@ -57,173 +64,247 @@ a { color: var(--accent); }
   h1 { font-size: 25px; }
   table { display: block; overflow-x: auto; font-size: 14px; }
   th, td { padding: 7px 8px; }
+  .scenario { padding: 14px 12px 4px; }
 }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0 0 L10 5 L0 10 z" style="fill: var(--fg)"/></marker>
+    <marker id="arrow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill: var(--accent)"/></marker>
+    <marker id="arrow-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill: var(--warn)"/></marker>
+  </defs>
+</svg>
 <main>
 
 <h1>Plan: multi-tunnel WireGuard mesh</h1>
-<p class="lede">Spread VM traffic between two hosts over N WireGuard tunnels instead of one. Each VM flow uses one tunnel, so many flows can use the full 50 Gbit/s bond.</p>
+<p class="lede">Spread traffic between two hosts over N WireGuard tunnels instead of one. Each flow uses one tunnel, so many flows together can use the full 50 Gbit/s bond.</p>
 <p class="meta">Status: proposed, not built. Measurements: <a href="../../research/wireguard-multi-tunnel-throughput/">WireGuard multi-tunnel throughput</a>.</p>
 
 <h2>Why</h2>
-<p>The mesh sends all VM traffic between two hosts through one WireGuard interface, <code>wg0</code>. One tunnel stops at about 10 Gbit/s, because WireGuard does some per-peer work on one CPU. The bond under it carries 50 Gbit/s.</p>
-<p>Tests with temporary interfaces showed that 16 parallel tunnels with distinct ports carry 45 to 49 Gbit/s. This plan makes the mesh use that design for VM traffic.</p>
+<p>All traffic between two hosts goes through one WireGuard interface, <code>wg0</code>. One tunnel stops at about 10 Gbit/s, because WireGuard does some per-peer work on one CPU. The bond under it carries 50 Gbit/s.</p>
+<p>Tests with temporary interfaces showed that 16 parallel tunnels with distinct ports carry 45 to 49 Gbit/s. This plan uses that design for real traffic.</p>
 
 <h2>Goal and limits</h2>
 <ul>
   <li><b>Goal:</b> traffic between two hosts can use both links and many CPUs. The target is more than 30 Gbit/s between two hosts with many flows.</li>
   <li><b>No change by default:</b> with a tunnel count of 0, hosts work as they do today.</li>
-  <li><b>No packet reordering:</b> all packets of one VM flow use the same tunnel.</li>
-  <li><b>Not a goal:</b> one VM flow stays at about 10 Gbit/s. One flow cannot use more than one tunnel without reordering.</li>
+  <li><b>No packet reordering:</b> all packets of one flow use the same tunnel.</li>
+  <li><b>Not a goal:</b> one flow stays at about 10 Gbit/s. One flow cannot use more than one tunnel without reordering. Clients that need more speed must open parallel connections.</li>
 </ul>
 
-<h2>How a packet moves</h2>
-<p>Today, the VM hook adds an outer IPv6 header to a VM packet. Linux then routes the packet to <code>wg0</code> with the route for the remote host. With this plan, the VM hook also selects a tunnel and sends the packet to it directly.</p>
+<h2>What the plan changes</h2>
+<ol>
+  <li><b>Tunnel interfaces next to wg0.</b> Each host gets <code>wg1</code> to <code>wgN</code>. They use the same private key and MTU as wg0, and each has its own UDP port. wg0 does not change.</li>
+  <li><b>Mesh traffic selects a tunnel for each flow.</b> The eBPF function that adds the outer mesh header also selects the tunnel: <code>i = inner flow hash % N</code>. It then sends the packet directly to <code>wg i</code>.</li>
+  <li><b>Host-to-host traffic uses a multipath route.</b> The route to each peer host lists all tunnels, and the kernel selects one by the TCP or UDP flow.</li>
+  <li><b>An explicit port plan.</b> Atlas computes the tunnel ports of each host and sends them to Metal. Each host has its own pattern, so the bond spreads the tunnels over both links.</li>
+  <li><b>One setting turns it on.</b> A region tunnel count, default 0. Metal uses the tunnels only when every peer has the same count. Set 0 to go back to wg0.</li>
+</ol>
 
+<h2>Scenarios</h2>
+<p>Each scenario shows the path today and the path with the plan. Green boxes are new or changed.</p>
+
+<div class="scenario">
+<h3>1. VM to VM on another host <span class="tag">changed</span></h3>
+<p>Today, the VM hook adds an outer IPv6 header, and Linux routes the packet to wg0. With the plan, the VM hook selects a tunnel from the inner flow and sends the packet to it.</p>
 <div class="figure">
-<svg viewBox="0 0 760 330" role="img" aria-label="Host A: the VM hook adds the outer header, takes a hash of the inner flow, reads the tunnel map, and redirects the packet to tunnel i. The packet crosses the bond and switch to tunnel i on host B. The WireGuard hook on every tunnel removes the outer header, and Linux sends the packet to the VM.">
-  <rect class="zone" x="6" y="6" width="370" height="318" rx="10"/><text class="m" x="18" y="26">Host A</text>
-  <rect class="zone" x="384" y="6" width="370" height="318" rx="10"/><text class="m" x="396" y="26">Host B</text>
+<svg viewBox="0 0 760 186" role="img" aria-label="Today: VM, VM hook adds outer header, Linux route, wg0, network, wg0, VM. Plan: VM, VM hook adds outer header and selects tunnel i, wg i, network, wg i, VM.">
+  <text class="m" x="10" y="14">Host A</text><text class="m" x="600" y="14">Host B</text>
+  <line class="sep" x1="566" y1="4" x2="566" y2="182"/>
+  <text class="t" x="10" y="38">Today</text>
+  <rect class="box" x="10" y="46" width="56" height="34" rx="6"/><text x="26" y="68">VM</text>
+  <rect class="box" x="90" y="46" width="186" height="34" rx="6"/><text x="102" y="68">VM hook: add outer header</text>
+  <rect class="old" x="300" y="46" width="140" height="34" rx="6"/><text x="312" y="68">Linux route to wg0</text>
+  <rect class="box" x="476" y="46" width="56" height="34" rx="6"/><text x="490" y="68">wg0</text>
+  <rect class="box" x="600" y="46" width="56" height="34" rx="6"/><text x="614" y="68">wg0</text>
+  <rect class="box" x="690" y="46" width="60" height="34" rx="6"/><text x="706" y="68">VM</text>
+  <path class="edge" d="M66 63 H86"/><path class="edge" d="M276 63 H296"/><path class="edge" d="M440 63 H472"/>
+  <path class="wire" d="M534 63 H598"/><path class="edge" d="M656 63 H686"/>
+  <text class="m" x="300" y="98">one tunnel for all flows: about 10 Gbit/s</text>
 
-  <rect class="box" x="24" y="40" width="80" height="34" rx="6"/><text x="48" y="62">VM</text>
-  <rect class="box" x="134" y="40" width="222" height="34" rx="6"/><text x="146" y="62">VM hook: add outer IPv6 header</text>
-  <path class="edge" d="M104 57 H130"/>
-
-  <rect class="new" x="134" y="96" width="222" height="34" rx="6"/><text x="146" y="118">i = inner flow hash % N</text>
-  <path class="edge" d="M245 74 V92"/>
-
-  <rect class="new" x="24" y="152" width="140" height="48" rx="6"/><text x="34" y="172">mesh_tunnels map</text><text class="m" x="34" y="190">count, ifindex[ ]</text>
-  <rect class="new" x="194" y="152" width="162" height="48" rx="6"/><text x="206" y="172">bpf_redirect(wg i)</text><text class="m" x="206" y="190">skips Linux routing</text>
-  <path class="edge" d="M245 130 V148 M164 176 H190"/>
-
-  <rect class="box" x="134" y="222" width="222" height="34" rx="6"/><text x="146" y="244">wg i, UDP port P_A[i]</text>
-  <path class="edge" d="M275 200 V218"/>
-  <rect class="box" x="134" y="274" width="222" height="34" rx="6"/><text x="146" y="296">bond0, layer3+4 hash</text>
-  <path class="edge" d="M245 256 V270"/>
-
-  <path class="edge a" d="M356 291 H404"/>
-  <text class="m" x="360" y="282">switch</text>
-
-  <rect class="box" x="404" y="274" width="222" height="34" rx="6"/><text x="416" y="296">wg i, UDP port P_B[i]</text>
-  <rect class="new" x="404" y="196" width="222" height="48" rx="6"/><text x="416" y="216">WireGuard hook on every wg i</text><text class="m" x="416" y="234">remove outer header</text>
-  <path class="edge" d="M515 274 V248"/>
-  <rect class="box" x="404" y="132" width="222" height="34" rx="6"/><text x="416" y="154">Linux routes to the VM</text>
-  <path class="edge" d="M515 196 V170"/>
-  <rect class="box" x="656" y="132" width="80" height="34" rx="6"/><text x="680" y="154">VM</text>
-  <path class="edge" d="M626 149 H652"/>
-
-  <text class="m" x="404" y="60">wg0 keeps the controller peer</text>
-  <text class="m" x="404" y="78">and the Linux routes. It is the</text>
-  <text class="m" x="404" y="96">path when the tunnel count is 0.</text>
+  <text class="t" x="10" y="124">Plan</text>
+  <rect class="box" x="10" y="132" width="56" height="34" rx="6"/><text x="26" y="154">VM</text>
+  <rect class="new" x="90" y="132" width="230" height="34" rx="6"/><text x="102" y="154">VM hook: outer header, select i</text>
+  <rect class="new" x="476" y="132" width="56" height="34" rx="6"/><text x="490" y="154">wg i</text>
+  <rect class="new" x="600" y="132" width="56" height="34" rx="6"/><text x="614" y="154">wg i</text>
+  <rect class="box" x="690" y="132" width="60" height="34" rx="6"/><text x="706" y="154">VM</text>
+  <path class="edge" d="M66 149 H86"/><path class="edge a" d="M320 149 H472"/>
+  <text class="m" x="330" y="142">i = flow hash % N</text>
+  <path class="wire" d="M534 149 H598"/><path class="edge" d="M656 149 H686"/>
 </svg>
-<p class="caption">Green boxes are new. The tunnel number <code>i</code> is the same on both hosts.</p>
+</div>
+<p><b>Example.</b> A VM opens two TCP connections to a VM on another host. The first connection hashes to tunnel 3, and the second to tunnel 11. Each connection stays on its tunnel. The two connections use different CPUs and can use different links.</p>
 </div>
 
-<p><b>Example.</b> A VM opens two TCP connections to a VM on another host. The kernel hash of the first connection gives tunnel 3. The hash of the second gives tunnel 11. All packets of each connection stay on their tunnel. The two connections use different CPUs and can use different links.</p>
+<div class="scenario">
+<h3>2. Host to a VM on another host, such as object storage <span class="tag">changed</span></h3>
+<p>A host reaches a VM through the <code>mesh-host</code> veth pair. The host hook adds the outer header with the same function as the VM hook. The VM can only reply to a host, and the VM hook sends the reply with the same function. So both directions select a tunnel, with no extra work.</p>
+<div class="figure">
+<svg viewBox="0 0 760 190" role="img" aria-label="Host A process to mesh-host veth to host hook which adds the header and selects tunnel i, then wg i, network, wg i, storage VM on host B. The reply goes from the storage VM through the VM hook, which selects tunnel i, then wg i, network, wg i, to the host process on host A.">
+  <text class="t" x="10" y="20">Request: Host A to storage VM on Host B</text>
+  <rect class="box" x="10" y="30" width="96" height="34" rx="6"/><text x="22" y="52">host process</text>
+  <rect class="box" x="128" y="30" width="116" height="34" rx="6"/><text x="140" y="52">mesh-host veth</text>
+  <rect class="new" x="266" y="30" width="190" height="34" rx="6"/><text x="278" y="52">host hook: header, select i</text>
+  <rect class="new" x="480" y="30" width="52" height="34" rx="6"/><text x="492" y="52">wg i</text>
+  <rect class="new" x="600" y="30" width="52" height="34" rx="6"/><text x="612" y="52">wg i</text>
+  <rect class="box" x="672" y="30" width="84" height="34" rx="6"/><text x="682" y="52">storage VM</text>
+  <path class="edge" d="M106 47 H124"/><path class="edge" d="M244 47 H262"/><path class="edge a" d="M456 47 H476"/>
+  <path class="wire" d="M534 47 H598"/><path class="edge" d="M652 47 H668"/>
+
+  <text class="t" x="10" y="110">Reply: storage VM on Host B to Host A</text>
+  <rect class="box" x="10" y="120" width="84" height="34" rx="6"/><text x="20" y="142">storage VM</text>
+  <rect class="new" x="116" y="120" width="210" height="34" rx="6"/><text x="128" y="142">VM hook: reply, header, select i</text>
+  <rect class="new" x="480" y="120" width="52" height="34" rx="6"/><text x="492" y="142">wg i</text>
+  <rect class="new" x="600" y="120" width="52" height="34" rx="6"/><text x="612" y="142">wg i</text>
+  <rect class="box" x="672" y="120" width="84" height="34" rx="6"/><text x="680" y="142">host process</text>
+  <path class="edge" d="M94 137 H112"/><path class="edge a" d="M326 137 H476"/>
+  <text class="m" x="336" y="130">same function</text>
+  <path class="wire" d="M534 137 H598"/><path class="edge" d="M652 137 H668"/>
+  <text class="m" x="10" y="180">The two directions can use different tunnels. Each direction keeps its order.</text>
+</svg>
+</div>
+<p><b>Limits.</b> One connection stays at about 10 Gbit/s. Object storage clients use parallel connections for multipart uploads and ranged reads, and those connections spread. The storage VM's own network device can be a lower limit than WireGuard. We measure it before we expect more.</p>
+</div>
+
+<div class="scenario">
+<h3>3. Host to host <span class="tag">changed</span></h3>
+<p>Plain host traffic between host WireGuard addresses has no mesh header and does not pass an eBPF hook. Today, the route to each peer host points at wg0. With the plan, the route has one next hop for each tunnel. The kernel hashes the TCP or UDP flow to select one.</p>
+<div class="figure">
+<svg viewBox="0 0 760 200" role="img" aria-label="Today: host process, route to peer via wg0, wg0, network, wg0, host process. Plan: host process, multipath route with next hops wg0 to wgN and a flow hash, wg i, network, wg i, host process, where the WireGuard hook passes the packet to Linux.">
+  <text class="m" x="10" y="14">Host A</text><text class="m" x="600" y="14">Host B</text>
+  <line class="sep" x1="566" y1="4" x2="566" y2="196"/>
+  <text class="t" x="10" y="38">Today</text>
+  <rect class="box" x="10" y="46" width="96" height="34" rx="6"/><text x="22" y="68">host process</text>
+  <rect class="old" x="128" y="46" width="200" height="34" rx="6"/><text x="140" y="68">route: peer address dev wg0</text>
+  <rect class="box" x="476" y="46" width="56" height="34" rx="6"/><text x="490" y="68">wg0</text>
+  <rect class="box" x="600" y="46" width="56" height="34" rx="6"/><text x="614" y="68">wg0</text>
+  <rect class="box" x="672" y="46" width="84" height="34" rx="6"/><text x="680" y="68">host process</text>
+  <path class="edge" d="M106 63 H124"/><path class="edge" d="M328 63 H472"/>
+  <path class="wire" d="M534 63 H598"/><path class="edge" d="M656 63 H668"/>
+
+  <text class="t" x="10" y="124">Plan</text>
+  <rect class="box" x="10" y="132" width="96" height="34" rx="6"/><text x="22" y="154">host process</text>
+  <rect class="new" x="128" y="132" width="230" height="34" rx="6"/><text x="140" y="154">multipath route: wg0 … wgN</text>
+  <rect class="new" x="476" y="132" width="56" height="34" rx="6"/><text x="490" y="154">wg i</text>
+  <rect class="new" x="600" y="132" width="56" height="34" rx="6"/><text x="614" y="154">wg i</text>
+  <rect class="box" x="672" y="132" width="84" height="34" rx="6"/><text x="680" y="154">host process</text>
+  <path class="edge" d="M106 149 H124"/><path class="edge a" d="M358 149 H472"/>
+  <text class="m" x="368" y="142">5-tuple hash</text>
+  <path class="wire" d="M534 149 H598"/><path class="edge" d="M656 149 H668"/>
+  <text class="m" x="400" y="186">On Host B, the WireGuard hook passes non-mesh packets to Linux.</text>
+</svg>
+</div>
+<p>The route uses a link-local gateway with <code>onlink</code>, because a WireGuard interface has no real next hop:</p>
+<pre><code>ip -6 route replace fdab:…:b/128 \
+  nexthop via fe80::1 dev wg0 onlink \
+  nexthop via fe80::1 dev wg1 onlink \
+  …
+sysctl net.ipv6.fib_multipath_hash_policy=1   # hash on the TCP/UDP flow</code></pre>
+<p>This path does not depend on eBPF, so host-to-host traffic keeps working when the hooks are detached. Today little bulk traffic uses it, because migration uses the private network with TLS by default. It matters when migration over WireGuard is on, or when new host-to-host transfers use WireGuard.</p>
+</div>
+
+<div class="scenario">
+<h3>4. Paths that do not change <span class="tag same">same</span></h3>
+<table>
+  <tr><th>Traffic</th><th>Path</th><th>Why it stays</th></tr>
+  <tr><td>VM to VM on the same host</td><td>Linux local route</td><td>No WireGuard on this path.</td></tr>
+  <tr><td>Atlas controller to and from hosts</td><td>wg0</td><td>The controller is a peer of wg0 only. Its traffic is small.</td></tr>
+  <tr><td>Migration (default)</td><td>private IPv4 with TLS</td><td>It already skips WireGuard.</td></tr>
+  <tr><td><code>NOT_HERE</code> replies</td><td>the tunnel that received the packet</td><td>The reply goes back on <code>packet-&gt;ifindex</code>.</td></tr>
+  <tr><td>NDP lookup of an unknown VM</td><td>private uplink</td><td>It does not use WireGuard.</td></tr>
+</table>
+</div>
+
+<div class="scenario">
+<h3>5. Tunnel count is not the same on both hosts <span class="tag same">blocked</span></h3>
+<p>Host A has 16 tunnels, and host B has only wg0. If host A sent a flow to wg7, host B would have no wg7 peer, and WireGuard would drop the packet. So Metal fills the tunnel map only when every peer has the same count. Until then, all traffic uses wg0. Atlas turns on the region count only after all hosts are upgraded.</p>
+</div>
 
 <h2>The port plan</h2>
-<p>The bond selects a link from a hash of the IP addresses and the UDP ports. The hash combines the two ports with XOR. If a tunnel uses the same port on both hosts, the ports cancel out. Then all tunnels between two hosts get the same link. The first test showed this: 5 tunnels gave 24.5 Gbit/s on one link.</p>
-<p>A fixed port list on every host has the same problem. If every host uses <code>51840 + N</code> for tunnel N, tunnel N always has equal ports on both ends. So each host needs its own port pattern.</p>
+<p>The bond selects a link from a hash of the IP addresses and the UDP ports. The hash combines the two ports with XOR. If a tunnel uses the same port on both hosts, the ports cancel out, and all tunnels between two hosts get the same link. The first test showed this: 5 tunnels gave 24.5 Gbit/s on one link.</p>
 
-<h3>Rule</h3>
+<div class="figure">
+<svg viewBox="0 0 760 330" role="img" aria-label="Same port on both ends: all four tunnels go to link 0 and link 1 is empty. Distinct ports: tunnels 0 and 3 go to link 1, tunnels 1 and 2 go to link 0.">
+  <text class="t" x="10" y="20">Same port on both ends: the ports cancel out</text>
+  <rect class="box" x="10" y="32" width="200" height="24" rx="5"/><text x="20" y="49">tunnel 0: 51900 ↔ 51900</text>
+  <rect class="box" x="10" y="62" width="200" height="24" rx="5"/><text x="20" y="79">tunnel 1: 51901 ↔ 51901</text>
+  <rect class="box" x="10" y="92" width="200" height="24" rx="5"/><text x="20" y="109">tunnel 2: 51902 ↔ 51902</text>
+  <rect class="box" x="10" y="122" width="200" height="24" rx="5"/><text x="20" y="139">tunnel 3: 51903 ↔ 51903</text>
+  <path class="edge w" d="M210 44 C330 44 380 70 486 70"/>
+  <path class="edge w" d="M210 74 C330 74 380 72 486 72"/>
+  <path class="edge w" d="M210 104 C330 104 380 76 486 76"/>
+  <path class="edge w" d="M210 134 C330 134 380 80 486 80"/>
+  <rect class="box" x="490" y="52" width="150" height="44" rx="6"/><text x="502" y="79">link 0 (25 Gbit/s)</text>
+  <rect class="old" x="490" y="108" width="150" height="44" rx="6"/><text x="502" y="135">link 1 (25 Gbit/s)</text>
+  <text class="m" x="652" y="79">full</text><text class="m" x="652" y="135">empty</text>
+  <text class="m" x="290" y="160">bond0 layer3+4 hash</text>
+
+  <line class="sep" x1="10" y1="176" x2="750" y2="176"/>
+
+  <text class="t" x="10" y="200">Distinct ports: the tunnels spread</text>
+  <rect class="box" x="10" y="212" width="200" height="24" rx="5"/><text x="20" y="229">tunnel 0: 51842 ↔ 51840</text>
+  <rect class="box" x="10" y="242" width="200" height="24" rx="5"/><text x="20" y="259">tunnel 1: 51844 ↔ 51844</text>
+  <rect class="box" x="10" y="272" width="200" height="24" rx="5"/><text x="20" y="289">tunnel 2: 51850 ↔ 51850</text>
+  <rect class="box" x="10" y="302" width="200" height="24" rx="5"/><text x="20" y="319">tunnel 3: 51854 ↔ 51852</text>
+  <path class="edge a" d="M210 224 C330 224 380 312 486 312"/>
+  <path class="edge a" d="M210 254 C330 254 380 252 486 252"/>
+  <path class="edge a" d="M210 284 C330 284 380 256 486 256"/>
+  <path class="edge a" d="M210 314 C330 314 380 316 486 316"/>
+  <rect class="box" x="490" y="232" width="150" height="44" rx="6"/><text x="502" y="259">link 0 (25 Gbit/s)</text>
+  <rect class="box" x="490" y="292" width="150" height="44" rx="6"/><text x="502" y="319">link 1 (25 Gbit/s)</text>
+</svg>
+<p class="caption">Illustrative ports. Tunnels 1 and 2 have equal ports, so they take the link that the IP addresses select. Tunnels 0 and 3 differ in the link bit, so they take the other link. The rule below decides which tunnels differ.</p>
+</div>
+
+<p>A fixed port list on every host has the same problem. If every host uses <code>51840 + N</code> for tunnel N, tunnel N always has equal ports on both ends. So each host needs its own port pattern.</p>
 <pre><code>port(host, N) = base + 4·N + 2·bit(host, N)
 
 bit(host, N)  = bit N of a hash of the host's WireGuard public key</code></pre>
-<p>The <code>4·N</code> part gives each tunnel its own port. The <code>2·bit</code> part changes one bit that the bond hash uses for the link choice. Two hosts have different bits for about half of the tunnels, so about half of the tunnels use each link.</p>
-
-<table>
-  <tr><th>Tunnel N</th><th>Host A bit</th><th>Host A port</th><th>Host B bit</th><th>Host B port</th><th>Link</th></tr>
-  <tr><td class="n">0</td><td class="n">1</td><td class="n">51842</td><td class="n">0</td><td class="n">51840</td><td class="up">link 1</td></tr>
-  <tr><td class="n">1</td><td class="n">0</td><td class="n">51844</td><td class="n">0</td><td class="n">51844</td><td class="down">link 0</td></tr>
-  <tr><td class="n">2</td><td class="n">1</td><td class="n">51850</td><td class="n">1</td><td class="n">51850</td><td class="down">link 0</td></tr>
-  <tr><td class="n">3</td><td class="n">1</td><td class="n">51854</td><td class="n">0</td><td class="n">51852</td><td class="up">link 1</td></tr>
-</table>
-<p class="caption">Illustrative values with base 51840. The real link also depends on the IP addresses, which are the same for all tunnels of a host pair.</p>
-
-<p>Atlas computes the ports and sends them to Metal. The ports are explicit data, not a rule that each host must compute the same way. A unit test applies the kernel bond hash to every host pair and checks that each pair uses both links. The switch selects the link on the receive side with its own hash. More tunnels make that choice more even.</p>
-
-<h2>Changes by component</h2>
-
-<div class="card">
-<h3>WG Mesh dataplane <span class="tag">services/wg-mesh</span></h3>
-<ul>
-  <li>Add a new array map <code>mesh_tunnels</code> with one value: <code>{count, ifindex[32]}</code>. A new map is safe for old programs, because they do not read it.</li>
-  <li>In <code>add_mesh_tunnel()</code>, read <code>bpf_get_hash_recalc()</code> before the outer header is added. This is the kernel hash of the inner flow.</li>
-  <li>After the header is written: if <code>count &gt; 1</code>, return <code>bpf_redirect(ifindex[hash % count], 0)</code>. If not, return <code>TC_ACT_OK</code>, as today.</li>
-  <li>The host hook and gateway tunnels use the same function, so they get the same behavior.</li>
-  <li>Attach the WireGuard ingress hook to every tunnel interface. <code>NOT_HERE</code> replies already use the interface that received the packet.</li>
-  <li>CLI: <code>configure --tunnel wg1 --tunnel wg2 …</code> fills the map and attaches the hooks. Upgrade and rollback attach on every interface.</li>
-</ul>
-</div>
-
-<div class="card">
-<h3>Metal <span class="tag">metal/internal/network</span></h3>
-<ul>
-  <li>The WireGuard manager applies the same peer set to wg0 and to each tunnel interface. For tunnel N, the endpoint is <code>&lt;peer address&gt;:&lt;peer port N&gt;</code>.</li>
-  <li>Linux peer routes stay on wg0 only. Redirected packets do not use routing.</li>
-  <li>The sync request gets an optional <code>tunnel_ports</code> list for each peer. When it is missing, Metal uses only wg0. Old clients keep working.</li>
-  <li>Metal reads its own ports from its own entry in the peer list.</li>
-  <li>Metal fills <code>mesh_tunnels</code> only when every peer has the same tunnel count. A redirect to a tunnel that the peer does not have would drop the packet.</li>
-</ul>
-</div>
-
-<div class="card">
-<h3>Atlas <span class="tag">atlas</span></h3>
-<ul>
-  <li>Add a region setting for the tunnel count. The default is 0.</li>
-  <li>Compute and store the port list for each Metal Server with the rule above. Send it in the sync request.</li>
-  <li>The host WireGuard script creates wg1 to wgN with the same private key and MTU as wg0, and with its own port. They get no address and no peers. With the same key, Atlas keeps one public key for each host.</li>
-  <li>The host firewall accepts the tunnel UDP ports from the private network.</li>
-</ul>
-</div>
-
-<div class="card">
-<h3>Docs and telemetry</h3>
-<ul>
-  <li>Update the WG Mesh design page, the Metal network specification, and the operations page: how to enable it and how to check the link split.</li>
-  <li>Add the transfer of all tunnel interfaces to the host WireGuard metrics, not only wg0.</li>
-</ul>
-</div>
+<p>The <code>4·N</code> part gives each tunnel its own port. The <code>2·bit</code> part changes one bit that the bond hash uses to select the link. Two hosts have different bits for about half of the tunnels, so about half of the tunnels use each link.</p>
+<p>Atlas computes the ports and sends them to Metal as data. A unit test applies the kernel bond hash to every host pair and checks that each pair uses both links. On the receive side, the switch selects the link with its own hash. More tunnels make that choice more even.</p>
 
 <h2>Alternatives we did not choose</h2>
 <table>
   <tr><th>Option</th><th>Why not</th></tr>
-  <tr><td>Linux ECMP routes over wg0..wgN</td><td>IPv6 ECMP routes need gateway next hops, and WireGuard interfaces have none. It also needs a flow label from the inner flow and a sysctl hash policy. In eBPF, the choice is explicit and stays in the mesh.</td></tr>
+  <tr><td>Linux multipath routes for VM traffic</td><td>Possible with an <code>onlink</code> gateway, as in scenario 3. But VM packets carry the outer mesh header, so the kernel hash sees no inner ports. That needs a custom hash policy that we have not verified for IPv6-in-IPv6. The eBPF hook already has the inner flow hash.</td></tr>
+  <tr><td>Host-to-host traffic through the eBPF hook</td><td>Host connectivity would then depend on attached hooks. The multipath route works without them.</td></tr>
   <tr><td>One tunnel with more tuning</td><td>Tested: CPU power states, RPS, NAPI budget, real-time NAPI threads, BBR and <code>skb_defer_max</code>. None removed the per-peer limit.</td></tr>
   <tr><td>wireguard-go</td><td>Tested: 7.7 to 8.0 Gbit/s, slower than kernel WireGuard.</td></tr>
-  <tr><td>One port list on every host</td><td>Each tunnel then has equal ports on both ends. The bond hash puts all tunnels on one link.</td></tr>
+  <tr><td>One port list on every host</td><td>Each tunnel then has equal ports on both ends, and the bond puts all tunnels on one link.</td></tr>
 </table>
 
 <h2>Risks</h2>
 <div class="risk">
 <ul>
-  <li><b>Mixed tunnel counts drop traffic.</b> Metal enables tunnels only when every peer has the same count. Atlas enables the region setting only after all hosts are upgraded.</li>
-  <li><b>A WireGuard restart detaches eBPF hooks.</b> Today this is true for wg0. The same is true for every tunnel interface, so the attach code must cover all of them.</li>
+  <li><b>Mixed tunnel counts drop traffic.</b> Scenario 5 blocks this: Metal and Atlas turn on tunnels only when all hosts match.</li>
+  <li><b>A WireGuard restart detaches eBPF hooks.</b> This is true for wg0 today, and it is true for every tunnel interface. The attach code must cover all of them.</li>
   <li><b>The redirect skips the host FORWARD chain.</b> This is safe: the VM firewall runs in the VM namespace before the hook, and the host firewall covers only INPUT.</li>
+  <li><b>The multipath hash setting is host-wide.</b> <code>fib_multipath_hash_policy=1</code> applies to every IPv6 multipath route on the host. Today the host has no other IPv6 multipath routes.</li>
   <li><b>More peer entries.</b> 16 interfaces with about 100 peers each give about 1,600 peer entries for each host. Keepalives cost about 64 packets per second.</li>
   <li><b>Interfaces without an address.</b> We expect wg1 to wgN to work without an IPv6 address. We check this in development first.</li>
-  <li><b>Link balance is statistical.</b> The port plan balances the send side. The switch balances the receive side with its own hash.</li>
+  <li><b>Link balance is statistical.</b> The port plan balances the send side. The switch balances the receive side.</li>
 </ul>
 </div>
 
 <h2>Rollout</h2>
 <ol>
   <li><b>Ship with the count at 0.</b> Release WG Mesh, Metal and Atlas together. Hosts work as before.</li>
-  <li><b>Development.</b> Enable 16 tunnels on three test hosts. Check NDP lookup, <code>NOT_HERE</code> recovery, VM migration and gateway traffic on the tunnel path.</li>
-  <li><b>Staging.</b> Enable the region setting. Run iperf between VMs on different hosts with many flows.</li>
+  <li><b>Development.</b> Enable 16 tunnels on three test hosts. Check each scenario: VM to VM, host to VM, host to host, NDP lookup, <code>NOT_HERE</code> recovery, VM migration and gateway traffic.</li>
+  <li><b>Staging.</b> Enable the region count. Run iperf between VMs and from hosts to VMs on different hosts with many flows.</li>
   <li><b>Production, one region at a time.</b> Upgrade Atlas and metald in the region, then set the tunnel count.</li>
-  <li><b>Rollback.</b> Set the count to 0. Metal empties the map, and traffic uses wg0 again. No restart is necessary.</li>
+  <li><b>Rollback.</b> Set the count to 0. Metal empties the tunnel map and puts back the single-path routes, so traffic uses wg0 again. No restart is necessary.</li>
 </ol>
 
 <h2>How we check success</h2>
 <table>
   <tr><th>Check</th><th>Pass</th></tr>
-  <tr><td>Throughput between VMs on two hosts, 64 TCP flows</td><td class="n">&gt; 30 Gbit/s each way</td></tr>
-  <tr><td>Bytes on each bond link during the test</td><td>both links carry traffic, split better than 70 / 30</td></tr>
+  <tr><td>VM to VM on two hosts, 64 TCP flows</td><td class="n">&gt; 30 Gbit/s each way</td></tr>
+  <tr><td>Host to object storage VM on another host, 16 connections</td><td>above 10 Gbit/s, or a measured VM device limit</td></tr>
+  <tr><td>Bytes on each bond link during a test</td><td>both links carry traffic, split better than 70 / 30</td></tr>
   <tr><td>Bytes on each wgN interface</td><td>every tunnel carries traffic</td></tr>
-  <tr><td>One VM flow</td><td>about the same as today, no reordering</td></tr>
+  <tr><td>One flow</td><td>about the same as today, no reordering</td></tr>
   <tr><td>Count set to 0</td><td>traffic returns to wg0 with no connection loss</td></tr>
   <tr><td>Port plan unit test</td><td>every host pair uses both links</td></tr>
 </table>
@@ -233,11 +314,13 @@ bit(host, N)  = bit N of a hash of the host's WireGuard public key</code></pre>
   <li><b>Tunnel count.</b> 16 for each region, the same on every host?</li>
   <li><b>Keys.</b> The same private key on all tunnel interfaces, so that Atlas keeps one public key for each host?</li>
   <li><b>Enablement.</b> For the whole region after all hosts are upgraded, or a fallback for each peer? The fallback needs more code.</li>
+  <li><b>Host-to-host step.</b> Ship the multipath route with the first release, or later when a host-to-host transfer needs it?</li>
 </ol>
 
 <footer>
   Related: <a href="../../research/wireguard-multi-tunnel-throughput/">throughput measurements</a> ·
   <a href="https://www.kernel.org/doc/html/latest/networking/bonding.html">Linux bonding, xmit_hash_policy</a> ·
+  <a href="https://docs.kernel.org/networking/ip-sysctl.html">fib_multipath_hash_policy</a> ·
   <a href="https://docs.kernel.org/bpf/redirect.html">BPF redirect</a> ·
   <a href="https://www.wireguard.com/papers/wireguard.pdf">WireGuard paper</a>
 </footer>
