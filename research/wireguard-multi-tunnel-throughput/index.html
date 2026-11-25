@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WireGuard Multi-Tunnel Throughput</title>
+<meta name="description" content="One WireGuard tunnel stops at about 10 Gbit/s between two 50 Gbit/s hosts. 16 parallel tunnels with distinct ports reach 45 to 49 Gbit/s.">
+<style>
+:root {
+  --bg: #ffffff; --fg: #1d1d1f; --muted: #6b6b70; --line: #e3e3e6; --soft: #f5f5f7;
+  --accent: #2f7d4f; --accent-soft: #d8eee0; --warn: #b4542d; --bar: #c9c9ce;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --fg: #ececee; --muted: #9a9aa0; --line: #2c2c30; --soft: #1d1d20;
+    --accent: #5fbf85; --accent-soft: #1f3a2a; --warn: #e08a63; --bar: #46464c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 48px 16px 80px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+h2 { font-size: 20px; margin: 44px 0 10px; }
+p { margin: 0 0 14px; }
+.lede { color: var(--muted); font-size: 18px; margin-bottom: 28px; }
+.result { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0 8px; }
+.result div { border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.result b { display: block; font-size: 26px; line-height: 1.1; }
+.result span { color: var(--muted); font-size: 14px; }
+.result .good b { color: var(--accent); }
+table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: 13px; }
+td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.best td { background: var(--accent-soft); }
+code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+.figure { margin: 18px 0 22px; overflow-x: auto; }
+.figure svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.figure svg text { fill: var(--fg); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.figure svg .m { fill: var(--muted); }
+.figure svg .box { fill: none; stroke: var(--fg); stroke-width: 1.2; }
+.figure svg .hot { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.figure svg .bad { fill: none; stroke: var(--warn); stroke-width: 1.6; }
+.figure svg .ok { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.figure svg .bar { fill: var(--bar); }
+.figure svg .bar.a { fill: var(--accent); }
+.caption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+ul { padding-left: 20px; margin: 0 0 14px; }
+li { margin-bottom: 6px; }
+.note { border-left: 3px solid var(--line); padding: 2px 0 2px 14px; color: var(--muted); }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+a { color: var(--accent); }
+@media (max-width: 560px) { .result { grid-template-columns: 1fr; } h1 { font-size: 25px; } table { display: block; overflow-x: auto; font-size: 14px; } th, td { padding: 7px 8px; } td:first-child { min-width: 120px; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>WireGuard multi-tunnel throughput</h1>
+<p class="lede">Two hosts with a 50 Gbit/s bond moved only about 10 Gbit/s through one WireGuard tunnel. 16 parallel tunnels with distinct ports move 45 to 49 Gbit/s.</p>
+
+<div class="result">
+  <div><b>~10 Gbit/s</b><span>one tunnel, any tuning</span></div>
+  <div class="good"><b>45–49 Gbit/s</b><span>16 tunnels, distinct ports</span></div>
+  <div><b>~0.7%</b><span>TCP retransmits at full load</span></div>
+</div>
+
+<h2>The problem</h2>
+<p>Our hosts connect over a private network. Each host has two 25 Gbit/s links in one bond, so the total is 50 Gbit/s. A bond is a group of links that the kernel uses as one interface.</p>
+<p>Plain TCP between two hosts moves about 49 Gbit/s. One WireGuard tunnel between the same hosts moves only 9 to 11.5 Gbit/s. That is about one fifth of the link.</p>
+
+<h2>Why one tunnel stops at 10 Gbit/s</h2>
+<p>Kernel WireGuard spreads the encryption over many CPUs. But some per-peer work runs on one CPU only:</p>
+<ul>
+  <li><b>Send side:</b> one worker thread puts all packets for a peer on the wire. It used about 70% of one CPU.</li>
+  <li><b>Receive side:</b> all packets of one tunnel have the same UDP source and destination. The network card (NIC) uses these values to select a receive queue, so all packets go to one queue and one CPU. That CPU was 75–92% busy.</li>
+</ul>
+<p>More CPUs do not help, because the tunnel cannot use them. The fix is to make more tunnels, so that each tunnel gets its own worker and its own receive queue.</p>
+
+<div class="figure">
+<svg viewBox="0 0 700 250" role="img" aria-label="One tunnel uses one send worker and one receive queue. Several tunnels use several workers and queues in parallel.">
+  <text x="10" y="22">One tunnel</text>
+  <rect class="box" x="10" y="36" width="130" height="40" rx="6"/><text x="22" y="61">VM traffic</text>
+  <rect class="hot" x="190" y="36" width="140" height="40" rx="6"/><text x="200" y="61">1 send worker</text>
+  <rect class="box" x="380" y="36" width="130" height="40" rx="6"/><text x="392" y="61">1 UDP flow</text>
+  <rect class="hot" x="560" y="36" width="130" height="40" rx="6"/><text x="570" y="61">1 receive queue</text>
+  <path class="bad" d="M140 56 H186 M330 56 H376 M510 56 H556"/>
+  <text class="m" x="190" y="96">one CPU limits the tunnel to ~10 Gbit/s</text>
+
+  <text x="10" y="138">Several tunnels, distinct ports</text>
+  <rect class="box" x="10" y="160" width="130" height="64" rx="6"/><text x="22" y="197">VM traffic</text>
+  <g>
+    <rect class="hot" x="190" y="152" width="140" height="22" rx="5"/><text x="200" y="168">worker 1</text>
+    <rect class="hot" x="190" y="181" width="140" height="22" rx="5"/><text x="200" y="197">worker 2</text>
+    <rect class="hot" x="190" y="210" width="140" height="22" rx="5"/><text x="200" y="226">worker N</text>
+    <rect class="box" x="380" y="152" width="130" height="22" rx="5"/><text x="390" y="168">flow 1, port A</text>
+    <rect class="box" x="380" y="181" width="130" height="22" rx="5"/><text x="390" y="197">flow 2, port B</text>
+    <rect class="box" x="380" y="210" width="130" height="22" rx="5"/><text x="390" y="226">flow N, port …</text>
+    <rect class="hot" x="560" y="152" width="130" height="22" rx="5"/><text x="570" y="168">queue 1</text>
+    <rect class="hot" x="560" y="181" width="130" height="22" rx="5"/><text x="570" y="197">queue 2</text>
+    <rect class="hot" x="560" y="210" width="130" height="22" rx="5"/><text x="570" y="226">queue N</text>
+  </g>
+  <path class="ok" d="M140 192 L186 163 M140 192 H186 M140 192 L186 221 M330 163 H376 M330 192 H376 M330 221 H376 M510 163 H556 M510 192 H556 M510 221 H556"/>
+</svg>
+</div>
+
+<h2>The trap: same port on both ends</h2>
+<p>Our first test used 5 tunnels, and each tunnel used the same port on both hosts. The result was 24.5 Gbit/s, and all traffic used one 25 Gbit/s link. The second link was empty.</p>
+<p>The cause is the bond hash. The bond uses <code>layer3+4</code> mode: it selects a link from a hash of the IP addresses and the ports. The hash combines the two ports with XOR. When the source port and the destination port are the same, XOR makes them cancel out. So every tunnel between two hosts gets the same hash and the same link.</p>
+<p>The fix is simple: each tunnel uses a <b>different port on each end</b>. Then the ports do not cancel, and the tunnels spread over both links.</p>
+<table>
+  <tr><th>Tunnel</th><th>Host A port</th><th>Host B port</th><th>Ports in the hash</th></tr>
+  <tr><td>Same port</td><td class="n">51820</td><td class="n">51820</td><td>cancel out: all tunnels on one link</td></tr>
+  <tr><td>Distinct ports</td><td class="n">51900</td><td class="n">51922</td><td>differ: tunnels spread over both links</td></tr>
+</table>
+
+<h2>Results</h2>
+<p>Each test ran for 30 seconds with 64 TCP streams in total, split evenly over the tunnels. The numbers are averages of two rounds in each direction.</p>
+
+<div class="figure">
+<svg viewBox="0 0 740 240" role="img" aria-label="Throughput in Gbit/s: one tunnel 10, five same-port tunnels 24.5, eight tunnels 38 to 47, sixteen tunnels 45 to 49, plain TCP 46 to 49.">
+  <line x1="200" y1="10" x2="200" y2="210" stroke="var(--line)"/>
+  <line x1="680" y1="10" x2="680" y2="210" stroke="var(--line)" stroke-dasharray="3 4"/>
+  <text class="m" x="640" y="228">50 Gbit/s</text>
+  <text x="10" y="35">1 tunnel</text>
+  <rect class="bar" x="200" y="20" width="96" height="22" rx="3"/><text x="304" y="36">~10</text>
+  <text x="10" y="75">5 tunnels, same port</text>
+  <rect class="bar" x="200" y="60" width="235" height="22" rx="3"/><text x="443" y="76">24.5</text>
+  <text x="10" y="115">8 tunnels, distinct</text>
+  <rect class="bar" x="200" y="100" width="369" height="22" rx="3"/><text x="577" y="116">38.4 / 46.8</text>
+  <text x="10" y="155">16 tunnels, distinct</text>
+  <rect class="bar a" x="200" y="140" width="431" height="22" rx="3"/><text x="639" y="156">44.9 / 48.7</text>
+  <text x="10" y="195">plain TCP, no tunnel</text>
+  <rect class="bar" x="200" y="180" width="444" height="22" rx="3"/><text x="652" y="196" class="m">46–49</text>
+</svg>
+<p class="caption">Bars show the lower direction. Two numbers show each direction.</p>
+</div>
+
+<table>
+  <tr><th>Setup</th><th>Gbit/s (each direction)</th><th>Retransmits</th><th>Link use (receiver)</th></tr>
+  <tr><td>1 tunnel</td><td class="n">9–11.5</td><td class="n">–</td><td>one link</td></tr>
+  <tr><td>5 tunnels, same port</td><td class="n">24.5</td><td class="n">–</td><td>one link, other empty</td></tr>
+  <tr><td>8 tunnels × 8 streams</td><td class="n">38.4 / 46.8</td><td class="n">0.8–1.1%</td><td class="n">23.0 + 15.6 Gbit/s</td></tr>
+  <tr class="best"><td><b>16 tunnels × 4 streams</b></td><td class="n"><b>44.9 / 48.7</b></td><td class="n"><b>~0.7%</b></td><td class="n">24.3 + 21.2 Gbit/s</td></tr>
+  <tr><td>Plain TCP, 64 streams</td><td class="n">46–49</td><td class="n">0.1–0.5%</td><td>both links</td></tr>
+</table>
+
+<h2>Why 16 tunnels are better than 8</h2>
+<p>The bond and the switch place each flow on one link, and they do not know how large a flow is. With 8 large flows, one link often gets more flows than the other. With 16 smaller flows, the random placement is more even.</p>
+<p>The data shows this. With 8 tunnels, the receiver links carried 23.0 and 15.6 Gbit/s. With 16 tunnels, they carried 24.3 and 21.2 Gbit/s. A more even load also means fewer short overloads on one link, so retransmits fell from 0.8–1.1% to about 0.7%.</p>
+
+<h2>What did not help</h2>
+<p>We tested these changes on one tunnel or on 8 tunnels. None of them gave a useful gain:</p>
+<table>
+  <tr><th>Change</th><th>Result</th></tr>
+  <tr><td>CPU performance governor, deep C-states off</td><td>no change</td></tr>
+  <tr><td>RPS (software spread of receive work)</td><td>no change</td></tr>
+  <tr><td>Threaded NAPI</td><td>already the default for WireGuard</td></tr>
+  <tr><td>wireguard-go (userspace WireGuard)</td><td>7.7–8.0 Gbit/s, slower than the kernel</td></tr>
+  <tr><td>Larger NAPI budget (<code>netdev_budget</code>)</td><td>no change in drops</td></tr>
+  <tr><td>BBR congestion control</td><td>much worse: millions of drops</td></tr>
+  <tr><td>Real-time priority for NAPI threads</td><td>within noise</td></tr>
+  <tr><td><code>skb_defer_max=0</code></td><td>no change across two rounds</td></tr>
+</table>
+<p class="note">The per-peer limit is in the WireGuard design, not in a tunable setting. Parallel tunnels are the change that works.</p>
+
+<h2>What production needs</h2>
+<p>The tests used temporary tunnels next to the production tunnel. To use this for VM traffic, the mesh needs these changes:</p>
+<ul>
+  <li><b>N tunnel interfaces on each host</b>, each with its own listen port. Each interface has all peers, so the peer count per interface does not change. 16 interfaces with 99 peers each are enough for a 100-host mesh.</li>
+  <li><b>Distinct ports on each end</b> of a tunnel, so that the bond hash spreads the tunnels over both links.</li>
+  <li><b>The mesh receive hook on every tunnel interface</b>, not only on the first one.</li>
+  <li><b>Flow spread over the tunnels.</b> Today the outer mesh header has a flow label of 0, so ECMP routing cannot spread it. Set the flow label from the inner flow, and add equal-cost routes over the N tunnels. One VM flow stays on one tunnel, so packets stay in order.</li>
+</ul>
+<p><b>Limits.</b> One VM flow still gets at most one tunnel, so about 10 Gbit/s. The gain is for many flows together. At full link load, retransmits stay at about 0.7%. That is normal for TCP on a full link, and it is close to plain TCP.</p>
+
+<h2>Test setup</h2>
+<ul>
+  <li>Two bare-metal hosts: AMD EPYC 7702 (128 threads), Linux kernel 7.0.</li>
+  <li>NIC: Broadcom BCM57454, 2 × 25 Gbit/s in an 802.3ad bond with <code>layer3+4</code> hash.</li>
+  <li>Jumbo frames: MTU 9000 on the network, 8940 on the WireGuard interfaces. Kernel WireGuard.</li>
+  <li>Load: <code>iperf3</code>, 64 TCP streams in total, 30 seconds, CUBIC congestion control.</li>
+  <li>Production VMs ran on the hosts during the tests. Their traffic stayed connected.</li>
+</ul>
+
+<footer>
+  References: <a href="https://www.kernel.org/doc/html/latest/networking/bonding.html">Linux bonding driver, xmit_hash_policy</a> ·
+  <a href="https://www.wireguard.com/papers/wireguard.pdf">WireGuard paper</a> ·
+  <a href="https://www.kernel.org/doc/html/latest/networking/scaling.html">Linux network scaling (RSS, RPS)</a>
+</footer>
+
+</main>
+</body>
+</html>
