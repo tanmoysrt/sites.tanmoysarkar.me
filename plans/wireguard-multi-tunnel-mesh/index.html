@@ -80,7 +80,7 @@ a { color: var(--accent); }
 
 <h1>Plan: multi-tunnel WireGuard mesh</h1>
 <p class="lede">Spread traffic between two hosts over N WireGuard tunnels instead of one. Each flow uses one tunnel, so many flows together can use the full 50 Gbit/s bond.</p>
-<p class="meta">Status: proposed, not built. Measurements: <a href="../../research/wireguard-multi-tunnel-throughput/">WireGuard multi-tunnel throughput</a>.</p>
+<p class="meta">Status: agreed, not built. Measurements: <a href="../../research/wireguard-multi-tunnel-throughput/">WireGuard multi-tunnel throughput</a>.</p>
 
 <h2>Why</h2>
 <p>All traffic between two hosts goes through one WireGuard interface, <code>wg0</code>. One tunnel stops at about 10 Gbit/s, because WireGuard does some per-peer work on one CPU. The bond under it carries 50 Gbit/s.</p>
@@ -89,7 +89,7 @@ a { color: var(--accent); }
 <h2>Goal and limits</h2>
 <ul>
   <li><b>Goal:</b> traffic between two hosts can use both links and many CPUs. The target is more than 30 Gbit/s between two hosts with many flows.</li>
-  <li><b>No change by default:</b> with a tunnel count of 0, hosts work as they do today.</li>
+  <li><b>No change until all hosts are ready:</b> until every host in the region supports tunnels, hosts work as they do today.</li>
   <li><b>No packet reordering:</b> all packets of one flow use the same tunnel.</li>
   <li><b>Not a goal:</b> one flow stays at about 10 Gbit/s. One flow cannot use more than one tunnel without reordering. Clients that need more speed must open parallel connections.</li>
 </ul>
@@ -100,7 +100,7 @@ a { color: var(--accent); }
   <li><b>Mesh traffic selects a tunnel for each flow.</b> The eBPF function that adds the outer mesh header also selects the tunnel: <code>i = inner flow hash % N</code>. It then sends the packet directly to <code>wg i</code>.</li>
   <li><b>Host-to-host traffic uses a multipath route.</b> The route to each peer host lists all tunnels, and the kernel selects one by the TCP or UDP flow.</li>
   <li><b>An explicit port plan.</b> Atlas computes the tunnel ports of each host and sends them to Metal. Each host has its own pattern, so the bond spreads the tunnels over both links.</li>
-  <li><b>One setting turns it on.</b> A region tunnel count, default 0. Metal uses the tunnels only when every peer has the same count. Set 0 to go back to wg0.</li>
+  <li><b>One setting controls it.</b> Atlas Settings has a tunnel count, default 16. Atlas sends the tunnel ports only after every host in the region has its tunnels and an upgraded metald. Metal uses the tunnels only when every peer has the same count. Set 0 to go back to wg0.</li>
 </ol>
 
 <h2>Scenarios</h2>
@@ -219,7 +219,7 @@ sysctl net.ipv6.fib_multipath_hash_policy=1   # hash on the TCP/UDP flow</code><
 
 <div class="scenario">
 <h3>5. Tunnel count is not the same on both hosts <span class="tag same">blocked</span></h3>
-<p>Host A has 16 tunnels, and host B has only wg0. If host A sent a flow to wg7, host B would have no wg7 peer, and WireGuard would drop the packet. So Metal fills the tunnel map only when every peer has the same count. Until then, all traffic uses wg0. Atlas turns on the region count only after all hosts are upgraded.</p>
+<p>Host A has 16 tunnels, and host B has only wg0. If host A sent a flow to wg7, host B would have no wg7 peer, and WireGuard would drop the packet. So Metal fills the tunnel map only when every peer has the same count. Until then, all traffic uses wg0. Atlas sends tunnel ports only after every host reports that its tunnels are ready.</p>
 </div>
 
 <h2>The port plan</h2>
@@ -290,10 +290,10 @@ bit(host, N)  = bit N of a hash of the host's WireGuard public key</code></pre>
 
 <h2>Rollout</h2>
 <ol>
-  <li><b>Ship with the count at 0.</b> Release WG Mesh, Metal and Atlas together. Hosts work as before.</li>
+  <li><b>Ship.</b> Release WG Mesh, Metal and Atlas together. Hosts work as before until all of them are ready.</li>
   <li><b>Development.</b> Enable 16 tunnels on three test hosts. Check each scenario: VM to VM, host to VM, host to host, NDP lookup, <code>NOT_HERE</code> recovery, VM migration and gateway traffic.</li>
-  <li><b>Staging.</b> Enable the region count. Run iperf between VMs and from hosts to VMs on different hosts with many flows.</li>
-  <li><b>Production, one region at a time.</b> Upgrade Atlas and metald in the region, then set the tunnel count.</li>
+  <li><b>Staging.</b> Upgrade metald and configure WireGuard on all hosts, so tunnels turn on. Run iperf between VMs and from hosts to VMs on different hosts with many flows.</li>
+  <li><b>Production, one region at a time.</b> Upgrade Atlas, then upgrade metald and configure WireGuard on each host. Tunnels turn on when the last host is ready.</li>
   <li><b>Rollback.</b> Set the count to 0. Metal empties the tunnel map and puts back the single-path routes, so traffic uses wg0 again. No restart is necessary.</li>
 </ol>
 
@@ -309,13 +309,14 @@ bit(host, N)  = bit N of a hash of the host's WireGuard public key</code></pre>
   <tr><td>Port plan unit test</td><td>every host pair uses both links</td></tr>
 </table>
 
-<h2>Open decisions</h2>
-<ol>
-  <li><b>Tunnel count.</b> 16 for each region, the same on every host?</li>
-  <li><b>Keys.</b> The same private key on all tunnel interfaces, so that Atlas keeps one public key for each host?</li>
-  <li><b>Enablement.</b> For the whole region after all hosts are upgraded, or a fallback for each peer? The fallback needs more code.</li>
-  <li><b>Host-to-host step.</b> Ship the multipath route with the first release, or later when a host-to-host transfer needs it?</li>
-</ol>
+<h2>Decisions</h2>
+<table>
+  <tr><th>Question</th><th>Decision</th></tr>
+  <tr><td>Tunnel count</td><td>A setting in Atlas Settings, default 16, the same on every host in the region.</td></tr>
+  <tr><td>Keys</td><td>The same private key on all tunnel interfaces. Atlas keeps one public key for each host.</td></tr>
+  <tr><td>Enablement</td><td>Region-wide, automatically, after every host is upgraded. No fallback for each peer.</td></tr>
+  <tr><td>Host-to-host route</td><td>Ship it in the first release.</td></tr>
+</table>
 
 <footer>
   Related: <a href="../../research/wireguard-multi-tunnel-throughput/">throughput measurements</a> ·
